@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}{{ ctx.t("nav-calendar") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block filter %}
+<div class="filter"><button class="icon-btn" aria-haspopup="true">⚲ {{ ctx.t("filter") }}</button><div class="pop"><h4>{{ ctx.t("filter-calendars") }}</h4>
+{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="background:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
+<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a></div></div></div>
+{% endblock %}
+{% block content %}
+<div class="toolbar"><h1 id="title">{{ ctx.t("nav-calendar") }}</h1><span class="grow"></span></div>
+<div class="placeholder">
+  <p>{{ ctx.t("phase-calendar-soon") }}</p>
+  <ul class="plain">
+  {% for c in calendars %}<li><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small>{{ c.owner_label }}</small></li>{% endfor %}
+  </ul>
+  <p><a class="btn" href="/settings#collections">{{ ctx.t("manage-collections") }}</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+# Blueprint: https://git.xarif.de/base/dagger-ci-basics
+# Reusable workflow: https://git.xarif.de/base/dagger-modules
+
+name: docker-publish
+on:
+  push:
+    branches: [main, master]
+    tags:     ['v*']
+  workflow_dispatch:
+jobs:
+  publish-image:
+    uses: base/dagger-modules/.forgejo/workflows/dagger-call.yml@main
+    with:
+      dagger-function: publish-image
+      dagger-args: --source=build --tests=tests/tests.yaml
+    secrets:
+      registry-password: ${{ secrets.REGISTRY_TOKEN }}

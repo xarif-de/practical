@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}{{ ctx.t("nav-contacts") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block filter %}
+<div class="filter"><button class="icon-btn" aria-haspopup="true">⚲ {{ ctx.t("filter") }}</button><div class="pop"><h4>{{ ctx.t("filter-addressbooks") }}</h4>
+{% for a in addressbooks %}<label><input type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}"><span class="sw"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{% endfor %}
+</div></div>
+{% endblock %}
+{% block content %}
+<div class="toolbar"><h1>{{ ctx.t("nav-contacts") }}</h1><span class="grow"></span></div>
+<div class="placeholder">
+  <p>{{ ctx.t("phase-contacts-soon") }}</p>
+  <ul class="plain">{% for a in addressbooks %}<li>{{ a.displayname }} <small>{{ a.owner_label }}</small></li>{% endfor %}</ul>
+  <p><a class="btn" href="/settings#collections">{{ ctx.t("manage-collections") }}</a></p>
+</div>
+{% endblock %}

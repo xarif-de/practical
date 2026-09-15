@@ -1,0 +1,17 @@
+# Blueprint: https://git.xarif.de/base/dagger-ci-basics
+# Reusable workflow: https://git.xarif.de/base/dagger-modules
+
+name: docker-build
+on:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!master'
+  workflow_dispatch:
+jobs:
+  build-image:
+    uses: base/dagger-modules/.forgejo/workflows/dagger-call.yml@main
+    with:
+      dagger-function: build-image
+      dagger-args: --source=build --tests=tests/tests.yaml

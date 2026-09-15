@@ -1,0 +1,56 @@
+# Test specification for docker/rustical-ui.
+#
+# The image is a minimal Alpine with the static binary and a CA bundle. Tests assert structural facts
+# (user, entrypoint, port, files, the binary answers) and the ONE contract the
+# deployment depends on: the compiled-in rustical crate tag is reported and
+# `check-rustical-image` rejects a mismatching image reference. Never a version
+# Renovate bumps.
+#
+# Full spec reference: https://git.xarif.de/base/dagger-modules/src/branch/main/docs/docker-testing.md
+
+tests:
+  - name: image-metadata
+    inspect:
+      user: "1000:1000"
+      entrypoint: ["/rustical-ui"]
+      expose: [4001]
+      # alpine (~8 MiB) + static binary (~12 MiB) + CA bundle
+      max_size: 32MiB
+      labels:
+        org.opencontainers.image.source: "https://git.xarif.de/docker/rustical-ui"
+
+  - name: binary-reports-versions
+    timeout: 90s
+    steps:
+      - run:
+          - /rustical-ui --version
+        output:
+          expect:
+            - "rustical-ui "
+            - "rustical crates v"
+
+  - name: rustical-image-check-rejects-mismatch
+    # A wrong image tag next to this UI is the one deployment mistake that
+    # corrupts nothing but silently breaks the schema contract; the verdict
+    # must be a non-zero exit with MISMATCH in the output.
+    timeout: 90s
+    steps:
+      - run:
+          - cmd: /rustical-ui check-rustical-image ghcr.io/lennart-k/rustical:0.0.0-not-the-tag@sha256:0000000000000000000000000000000000000000000000000000000000000000
+            expect_failure: true
+        output:
+          allow:
+            - "MISMATCH"
+          expect:
+            - "MISMATCH"
+
+  - name: runtime-files
+    timeout: 90s
+    steps:
+      - files:
+          - path: /rustical-ui
+            type: file
+          - path: /etc/ssl/certs/ca-certificates.crt
+            type: file
+          - path: /tmp
+            type: directory

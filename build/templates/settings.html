@@ -1,0 +1,213 @@
+{% extends "layout.html" %}
+{% block title %}{{ ctx.t("nav-settings") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block content %}
+<div class="toolbar"><h1>{{ ctx.t("nav-settings") }}</h1><span class="grow"></span>
+<span class="seg tabs" role="tablist">
+<a href="#profile" role="tab">{{ ctx.t("tab-profile") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#tokens" role="tab">{{ ctx.t("tab-tokens") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a><a href="#prefs" role="tab">{{ ctx.t("tab-prefs") }}</a>
+</span></div>
+<div class="settings">
+
+<section class="panel" id="profile">
+  <h2>{{ ctx.t("tab-profile") }}</h2>
+  <dl class="kv">
+    <dt>{{ ctx.t("profile-user") }}</dt><dd><code>{{ ctx.user_id() }}</code></dd>
+    <dt>CalDAV</dt><dd><code>{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code></dd>
+    <dt>CardDAV</dt><dd><code>{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code></dd>
+    <dt>{{ ctx.t("profile-groups") }}</dt><dd>{% for g in groups %}<span class="chip">{{ g.displayname }}</span> {% endfor %}{% if groups.is_empty() %}<span class="muted">–</span>{% endif %}</dd>
+  </dl>
+  <p class="muted small">{{ ctx.t("profile-hint") }}</p>
+</section>
+
+<section class="panel" id="groups">
+  <h2>{{ ctx.t("tab-groups") }}</h2>
+  <p class="muted small">{{ ctx.t("groups-intro") }}</p>
+  <form method="post" action="/settings/groups" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("group-name-placeholder") }}">
+    <button class="btn btn-primary" type="submit">{{ ctx.t("group-create") }}</button>
+  </form>
+  {% for g in groups %}
+  <article class="card">
+    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</small></header>
+    <ul class="members">
+      {% for m in g.members %}
+      <li><span class="chip">{{ m }}</span>
+        {% if m != ctx.user_id() %}
+        <form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ ctx.t("member-remove") }}</button></form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="actions">
+      <form method="post" action="/settings/groups/{{ g.id }}/members" class="inline-form">
+        <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+        <select name="member" required>
+          <option value="">{{ ctx.t("member-pick") }}</option>
+          {% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}
+        </select>
+        <button class="btn" type="submit">{{ ctx.t("member-add") }}</button>
+      </form>
+      <span class="grow"></span>
+      <form method="post" action="/settings/groups/{{ g.id }}/leave" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
+      <details class="danger-zone">
+        <summary class="btn danger">{{ ctx.t("group-delete") }}</summary>
+        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+          <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
+          <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
+          <button class="btn danger" type="submit">{{ ctx.t("group-delete-confirm") }}</button>
+        </form>
+      </details>
+    </div>
+  </article>
+  {% endfor %}
+  {% if groups.is_empty() %}<p class="muted">{{ ctx.t("groups-none") }}</p>{% endif %}
+</section>
+
+<section class="panel" id="collections">
+  <h2>{{ ctx.t("tab-collections") }}</h2>
+  <h3>{{ ctx.t("calendars") }}</h3>
+  <table class="tbl">
+    <thead><tr><th></th><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-owner") }}</th><th>{{ ctx.t("col-components") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for c in calendars %}
+    <tr>
+      <td><span class="sw" style="background:{{ c.color }}"></span></td>
+      <td><details><summary>{{ c.displayname }}</summary>
+        <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/update" class="stack">
+          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+          <label>{{ ctx.t("col-name") }}<input type="text" name="name" value="{{ c.displayname }}" required></label>
+          <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ c.color }}"></label>
+          <label>{{ ctx.t("col-description") }}<input type="text" name="description" value="{{ c.description }}"></label>
+          <div class="muted small">ID <code>{{ c.id }}</code>{% if let Some(u) = c.subscription_url %} · {{ ctx.t("subscription") }} <code>{{ u }}</code>{% endif %}</div>
+          <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
+        </form></details></td>
+      <td>{{ c.owner_label }}{% if c.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
+      <td><small>{{ c.components.join(", ") }}</small></td>
+      <td><form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <details class="create"><summary class="btn">{{ ctx.t("calendar-create") }}</summary>
+  <form method="post" action="/settings/calendars" class="stack">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <label>{{ ctx.t("col-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
+    <label>{{ ctx.t("col-name") }}<input type="text" name="name" required></label>
+    <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ palette[0] }}"></label>
+    <label>{{ ctx.t("col-description") }}<input type="text" name="description"></label>
+    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ default_timezone }}"></label>
+    <fieldset class="row"><legend>{{ ctx.t("col-components") }}</legend>
+      <label class="inl"><input type="checkbox" name="comp_event" checked> VEVENT</label>
+      <label class="inl"><input type="checkbox" name="comp_todo" checked> VTODO</label>
+      <label class="inl"><input type="checkbox" name="comp_journal"> VJOURNAL</label>
+    </fieldset>
+    <div><button class="btn btn-primary" type="submit">{{ ctx.t("create") }}</button></div>
+  </form></details>
+
+  <h3>{{ ctx.t("addressbooks") }}</h3>
+  <table class="tbl">
+    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-owner") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for a in addressbooks %}
+    <tr>
+      <td><details><summary>{{ a.displayname }}</summary>
+        <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/update" class="stack">
+          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+          <label>{{ ctx.t("col-name") }}<input type="text" name="name" value="{{ a.displayname }}" required></label>
+          <label>{{ ctx.t("col-description") }}<input type="text" name="description" value="{{ a.description }}"></label>
+          <div class="muted small">ID <code>{{ a.id }}</code></div>
+          <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
+        </form></details></td>
+      <td>{{ a.owner_label }}{% if a.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
+      <td><form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <details class="create"><summary class="btn">{{ ctx.t("addressbook-create") }}</summary>
+  <form method="post" action="/settings/addressbooks" class="stack">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <label>{{ ctx.t("col-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
+    <label>{{ ctx.t("col-name") }}<input type="text" name="name" required></label>
+    <label>{{ ctx.t("col-description") }}<input type="text" name="description"></label>
+    <div><button class="btn btn-primary" type="submit">{{ ctx.t("create") }}</button></div>
+  </form></details>
+</section>
+
+<section class="panel" id="tokens">
+  <h2>{{ ctx.t("tab-tokens") }}</h2>
+  <p class="muted small">{{ ctx.t("tokens-intro") }}</p>
+  {% if let Some(t) = new_token %}
+  <div class="flash ok token-reveal">
+    <p>{{ ctx.t("token-new-hint") }}</p>
+    <code id="new-token">{{ t }}</code> <button class="btn" type="button" data-copy="#new-token">{{ ctx.t("copy") }}</button>
+  </div>
+  {% endif %}
+  <form method="post" action="/settings/tokens" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("token-name-placeholder") }}">
+    <button class="btn btn-primary" type="submit">{{ ctx.t("token-create") }}</button>
+  </form>
+  <table class="tbl">
+    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-created") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for t in tokens %}
+    <tr><td>{{ t.name }}</td><td><small>{% if let Some(c) = t.created_at %}{{ c.format("%Y-%m-%d %H:%M") }}{% endif %}</small></td>
+      <td><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-delete-token", "name", t.name) }}">{{ ctx.t("delete") }}</button></form></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if tokens.is_empty() %}<p class="muted">{{ ctx.t("tokens-none") }}</p>{% endif %}
+</section>
+
+<section class="panel" id="trash">
+  <h2>{{ ctx.t("tab-trash") }}</h2>
+  <p class="muted small">{{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
+  <h3>{{ ctx.t("tab-groups") }}</h3>
+  {% for g in trashed %}
+  <article class="card">
+    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }} · {{ ctx.t1("deleted-by", "name", g.deleted_by) }} {{ g.deleted_at.format("%Y-%m-%d") }} · {{ ctx.t("expires") }} {{ g.expires_at.format("%Y-%m-%d") }}</small></header>
+    <div class="actions">
+      <form method="post" action="/settings/trash/groups/{{ g.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn btn-primary" type="submit">{{ ctx.t("restore") }}</button></form>
+      <details class="danger-zone"><summary class="btn danger">{{ ctx.t("purge") }}</summary>
+        <form method="post" action="/settings/trash/groups/{{ g.id }}/purge" class="inline-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><input type="text" name="confirm" required placeholder="{{ g.id }}" autocomplete="off"><button class="btn danger" type="submit">{{ ctx.t("purge-confirm") }}</button></form>
+      </details>
+    </div>
+  </article>
+  {% endfor %}
+  {% if trashed.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
+  <h3>{{ ctx.t("calendars") }}</h3>
+  {% for c in deleted_calendars %}
+  <div class="trash-row"><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small class="muted">{{ c.owner_label }}{% if let Some(d) = c.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</small><span class="grow"></span>
+    <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit">{{ ctx.t("restore") }}</button></form>
+    <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", c.displayname) }}">{{ ctx.t("purge") }}</button></form></div>
+  {% endfor %}
+  {% if deleted_calendars.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
+  <h3>{{ ctx.t("addressbooks") }}</h3>
+  {% for a in deleted_addressbooks %}
+  <div class="trash-row">{{ a.displayname }} <small class="muted">{{ a.owner_label }}{% if let Some(d) = a.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</small><span class="grow"></span>
+    <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit">{{ ctx.t("restore") }}</button></form>
+    <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", a.displayname) }}">{{ ctx.t("purge") }}</button></form></div>
+  {% endfor %}
+  {% if deleted_addressbooks.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
+</section>
+
+<section class="panel" id="prefs">
+  <h2>{{ ctx.t("tab-prefs") }}</h2>
+  <form method="post" action="/settings/prefs" class="stack">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <label>{{ ctx.t("pref-language") }}<select name="lang"><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></label>
+    <label>{{ ctx.t("pref-scheme") }}<select name="scheme"><option value="auto"{% if self.scheme_is("auto") %} selected{% endif %}>{{ ctx.t("scheme-auto") }}</option><option value="light"{% if self.scheme_is("light") %} selected{% endif %}>{{ ctx.t("scheme-light") }}</option><option value="dark"{% if self.scheme_is("dark") %} selected{% endif %}>{{ ctx.t("scheme-dark") }}</option></select></label>
+    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}" placeholder="{{ default_timezone }}"></label>
+    <fieldset class="row"><legend>{{ ctx.t("pref-holidays") }} ({{ holidays_country }})</legend>
+      <label class="inl"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-public") }}</label>
+      <label class="inl"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-school") }}</label>
+      <label class="inl">{{ ctx.t("pref-subdivision") }} <input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></label>
+    </fieldset>
+    <label>{{ ctx.t("pref-vacation-days") }}<input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}"></label>
+    <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
+  </form>
+</section>
+</div>
+{% endblock %}

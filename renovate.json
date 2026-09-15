@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>infra/renovate-config"
+  ],
+  "packageRules": [
+    {
+      "description": "The five rustical crates must move as ONE (one workspace tag; build.rs refuses mixed tags) — and only to a tag that kubernetes/rustical will deploy; the image there follows the crate tag, never the other way round.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["rustical_store", "rustical_store_sqlite", "rustical_ical", "rustical_oidc", "rustical_dav_push"],
+      "groupName": "rustical crates"
+    }
+  ]
+}

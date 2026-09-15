@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="{{ ctx.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf" content="{{ ctx.csrf }}">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}{{ ctx.t("app-name") }}{% endblock %}</title>
+<link rel="icon" href="/assets/icon.svg">
+<link rel="stylesheet" href="/assets/style.css?v={{ ctx.asset_v }}">
+<script>(function(){const h=document.documentElement;h.dataset.scheme=localStorage.scheme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");})();</script>
+{% block head %}{% endblock %}
+</head>
+<body data-lang="{{ ctx.lang }}" data-user="{{ ctx.user_id() }}">
+<div class="app">
+<header class="topbar">
+  <a class="brand" href="/calendar">{{ ctx.t("app-name") }}</a>
+  {% if ctx.user.is_some() %}
+  <nav class="nav">
+    <a href="/calendar"{% if ctx.is_active("/calendar") %} aria-current="page"{% endif %}>{{ ctx.t("nav-calendar") }}</a>
+    <a href="/contacts"{% if ctx.is_active("/contacts") %} aria-current="page"{% endif %}>{{ ctx.t("nav-contacts") }}</a>
+    <a href="/tasks"{% if ctx.is_active("/tasks") %} aria-current="page"{% endif %}>{{ ctx.t("nav-tasks") }}</a>
+    <a href="/settings"{% if ctx.is_active("/settings") %} aria-current="page"{% endif %}>{{ ctx.t("nav-settings") }}</a>
+  </nav>
+  <div class="usearch"><input id="q" type="search" placeholder="{{ ctx.t("search-placeholder") }}" autocomplete="off" aria-label="{{ ctx.t("search-placeholder") }}"><div class="sres" id="sres" hidden></div></div>
+  {% block filter %}{% endblock %}
+  {% endif %}
+  <button class="icon-btn" id="scheme" title="{{ ctx.t("scheme-toggle") }}" aria-label="{{ ctx.t("scheme-toggle") }}">◐</button>
+  {% if ctx.user.is_some() %}
+  <div class="filter user">
+    <button class="avatar" aria-haspopup="true" title="{{ ctx.user_id() }}">{{ ctx.initials() }}</button>
+    <div class="pop">
+      <h4>{{ ctx.user_id() }}</h4>
+      <a class="row-link" href="/settings#profile">{{ ctx.t("nav-settings") }}</a>
+      <form method="post" action="/logout" class="row-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button type="submit" class="btn">{{ ctx.t("logout") }}</button></form>
+    </div>
+  </div>
+  {% endif %}
+</header>
+<main class="main">
+{% if let Some(f) = ctx.flash %}<div class="flash {{ f.kind }}" role="status">{{ f.text }}</div>{% endif %}
+{% block content %}{% endblock %}
+</main>
+{% if ctx.user.is_some() %}
+<nav class="tabbar">
+  <a href="/calendar"{% if ctx.is_active("/calendar") %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>{{ ctx.t("nav-calendar") }}</span></a>
+  <a href="/contacts"{% if ctx.is_active("/contacts") %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>{{ ctx.t("nav-contacts") }}</span></a>
+  <a href="/tasks"{% if ctx.is_active("/tasks") %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15l2 2 4-4"/></svg><span>{{ ctx.t("nav-tasks") }}</span></a>
+  <a href="/settings"{% if ctx.is_active("/settings") %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg><span>{{ ctx.t("nav-settings") }}</span></a>
+</nav>
+{% endif %}
+</div>
+<script src="/assets/app.js?v={{ ctx.asset_v }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

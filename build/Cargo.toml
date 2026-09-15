@@ -1,0 +1,69 @@
+[package]
+name = "rustical-ui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Web UI next to RustiCal: groups, collections, app tokens, calendar and contacts views on RustiCal's own SQLite store"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "rustical-ui"
+path = "src/main.rs"
+
+# Dependency policy (plan NFR "wenige Rust-Dependencies"): everything below is
+# either a RustiCal crate, already in RustiCal's own dependency graph (same
+# major version, so it resolves to ONE copy), or carries a one-line reason.
+# `cargo deny check advisories bans sources` (mise run deny) is the gate.
+[dependencies]
+# --- RustiCal itself: the ONLY way we touch its SQLite store. Tag == the
+# rustical image tag deployed in kubernetes/rustical (build.rs exports it;
+# `rustical-ui check-rustical-image <ref>` and the deployment tool_check compare).
+rustical_store = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+rustical_store_sqlite = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+rustical_ical = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+rustical_oidc = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+rustical_dav_push = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+# --- in RustiCal's graph (same versions as its workspace)
+caldata = { version = "0.17", features = ["chrono-tz"] }
+axum = "0.8"
+axum-extra = { version = "0.12", features = ["typed-header"] }
+headers = "0.4"
+http = "1.4"
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tower = "0.5"
+tower-http = { version = "0.7", features = ["trace", "compression-gzip"] }
+tower-sessions = "0.15"
+askama = { version = "0.16", features = ["serde_json"] }
+askama_web = { version = "0.16", features = ["axum-0.8"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.9", default-features = false, features = ["sqlite", "runtime-tokio", "chrono", "json"] }
+sqlx-sqlite = { version = "0.9", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+thiserror = "2.0"
+async-trait = "0.1"
+uuid = { version = "1.19", features = ["v4", "fast-rng"] }
+rand = "0.10"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "http2", "json"] }
+url = "2.5"
+futures-util = "0.3"
+base64ct = { version = "1.8", features = ["alloc"] }
+sha2 = "0.11"
+web-push = { git = "https://github.com/lennart-k/rust-web-push" }
+openidconnect = "4.0"
+# --- new direct crates (each with its reason)
+# D9: translations as Fluent .ftl files. fluent-bundle + unic-langid are the
+# minimal pair; fluent-templates would add ignore/flume/walkdir for a feature
+# (runtime directory scanning) we do not use.
+fluent-bundle = "0.16"
+unic-langid = { version = "0.9", features = ["macros"] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = 3

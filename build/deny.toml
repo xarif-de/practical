@@ -1,0 +1,38 @@
+# cargo-deny — supply-chain guard (run: cargo deny check advisories bans sources; `mise run deny`).
+# `licenses` is intentionally not configured (no curated allowlist) — same scope as the sibling
+# docker/gitops-autorevert. Cargo.lock pins versions; these rules make a bad entry on
+# `cargo update` a hard error.
+
+[graph]
+all-features = true
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+unmaintained = "workspace"
+ignore = [
+  # Marvin attack (timing side channel in the `rsa` crate) — pulled in by
+  # openidconnect, which uses rsa ONLY to verify RS256 ID-token signatures with the
+  # IdP's PUBLIC key; the side channel needs private-key operations, which never
+  # happen here. No fixed release exists ("No safe upgrade is available"); RustiCal
+  # itself ships the same crate. Re-check on every openidconnect bump.
+  { id = "RUSTSEC-2023-0071", reason = "rsa used for public-key signature verification only (openidconnect ID tokens); no private-key operation in this binary" },
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+  { crate = "arrayref:0.3.10", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.3.10" },
+  { crate = "internment:0.8.7", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.8.7" },
+  { crate = "append-only-vec:0.1.9", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.1.9" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# RustiCal's crates are `publish = false` and only reachable as git dependencies; web-push
+# is a git dependency OF RustiCal (lennart-k's fork), so it must resolve to the same source.
+allow-git = ["https://github.com/lennart-k/rustical", "https://github.com/lennart-k/rust-web-push"]

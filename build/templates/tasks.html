@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block title %}{{ ctx.t("nav-tasks") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block content %}
+<div class="toolbar"><h1>{{ ctx.t("nav-tasks") }}</h1><span class="grow"></span></div>
+<div class="placeholder">
+  <p>{{ ctx.t("phase-tasks-soon") }}</p>
+  <ul class="plain">{% for c in calendars %}<li><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small>{{ c.owner_label }}</small></li>{% endfor %}</ul>
+</div>
+{% endblock %}

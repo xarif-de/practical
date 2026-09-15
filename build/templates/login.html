@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block title %}{{ ctx.t("login-title") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block content %}
+<div class="login">
+  <h1>{{ ctx.t("login-title") }}</h1>
+  {% if error %}<div class="flash error">{{ ctx.t("login-failed") }}</div>{% endif %}
+  {% if let Some(name) = oidc_name %}
+  <form method="post" action="/login/oidc" id="oidc-form">
+    {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}
+    <button type="submit" class="btn btn-primary wide">{{ ctx.t1("login-with", "name", name) }}</button>
+  </form>
+  {% if auto_oidc %}<script>document.getElementById('oidc-form').submit();</script>
+  <p class="muted">{{ ctx.t("login-redirecting") }}</p>{% endif %}
+  {% endif %}
+  {% if allow_password_login %}
+  <form method="post" action="/login" class="pwform">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}
+    <label>{{ ctx.t("login-username") }}<input type="text" name="username" autocomplete="username" required></label>
+    <label>{{ ctx.t("login-password") }}<input type="password" name="password" autocomplete="current-password" required></label>
+    <button type="submit" class="btn btn-primary wide">{{ ctx.t("login-submit") }}</button>
+  </form>
+  {% endif %}
+  <p class="muted small">{{ ctx.t1("login-hint", "dav", ctx.public_dav_url) }}</p>
+</div>
+{% endblock %}
