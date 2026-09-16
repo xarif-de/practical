@@ -1,9 +1,25 @@
 {% extends "layout.html" %}
 {% block title %}{{ ctx.t("nav-tasks") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block content %}
-<div class="toolbar"><h1>{{ ctx.t("nav-tasks") }}</h1><span class="grow"></span></div>
-<div class="placeholder">
-  <p>{{ ctx.t("phase-tasks-soon") }}</p>
-  <ul class="plain">{% for c in calendars %}<li><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small>{{ c.owner_label }}</small></li>{% endfor %}</ul>
+<div class="toolbar"><h1>{{ ctx.t("nav-tasks") }}</h1><span class="muted small">{{ open.len() }} {{ ctx.t("tasks-open") }}</span><span class="grow"></span></div>
+<div class="tasks" id="tasks">
+<form class="taskform" id="taskform">
+  <input type="text" name="summary" placeholder="{{ ctx.t("task-new-placeholder") }}" required autocomplete="off">
+  <input type="date" name="due" title="{{ ctx.t("task-due") }}">
+  <select name="calendar">{% for c in calendars %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select>
+  <button class="btn btn-primary" type="submit">{{ ctx.t("task-add") }}</button>
+</form>
+{% if calendars.is_empty() %}<p class="muted">{{ ctx.t("tasks-no-calendar") }}</p>{% endif %}
+<ul class="tasklist">
+{% for t in open %}<li class="task{% if t.overdue(*today) %} overdue{% endif %}" data-key="{{ t.key() }}"><input type="checkbox" data-toggle="{{ t.key() }}" aria-label="{{ ctx.t("task-done") }}"><span class="sw" style="--c:{{ t.color }}"></span><span class="ts">{{ t.summary }}</span>{% if t.priority > 0 && t.priority <= 4 %}<span class="prio">!</span>{% endif %}<small class="muted">{{ t.due_label() }}{% if !t.due_label().is_empty() %} · {% endif %}{{ t.cal_name }}</small><button class="link danger" data-del="{{ t.key() }}">{{ ctx.t("delete") }}</button></li>
+{% endfor %}
+</ul>
+{% if open.is_empty() && !calendars.is_empty() %}<p class="muted">{{ ctx.t("tasks-none-open") }}</p>{% endif %}
+<details class="done"><summary>{{ ctx.t("tasks-done") }} ({{ done.len() }})</summary>
+<ul class="tasklist">
+{% for t in done %}<li class="task completed" data-key="{{ t.key() }}"><input type="checkbox" checked data-toggle="{{ t.key() }}" aria-label="{{ ctx.t("task-reopen") }}"><span class="sw" style="--c:{{ t.color }}"></span><span class="ts">{{ t.summary }}</span><small class="muted">{{ t.due_label() }}{% if !t.due_label().is_empty() %} · {% endif %}{{ t.cal_name }}</small><button class="link danger" data-del="{{ t.key() }}">{{ ctx.t("delete") }}</button></li>
+{% endfor %}
+</ul></details>
 </div>
+<script type="application/json" id="tasks-data">{{ tasks_json|safe }}</script>
 {% endblock %}

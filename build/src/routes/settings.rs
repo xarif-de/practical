@@ -41,6 +41,31 @@ pub struct SettingsPage {
     pub default_timezone: String,
     pub holidays_country: String,
     pub holidays_subdivision: String,
+    pub presets: Vec<Preset>,
+    pub calendars_all: Vec<CalInfo>,
+    pub vacation_kind: String,
+    pub vacation_value: String,
+}
+
+#[derive(serde::Deserialize, Default)]
+pub struct Preset {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub calendar: String,
+    #[serde(default)]
+    pub all_day: bool,
+    #[serde(default)]
+    pub category: String,
+}
+
+fn presets_of(p: &Prefs) -> Vec<Preset> {
+    p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default()
+}
+
+fn vacation_rule(p: &Prefs) -> (String, String) {
+    let v: serde_json::Value = p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(serde_json::json!({}));
+    (v["kind"].as_str().unwrap_or("category").to_string(), v["value"].as_str().unwrap_or("Urlaub").to_string())
 }
 
 impl SettingsPage {
@@ -71,6 +96,10 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         default_timezone: state.config.default_timezone.clone(),
         holidays_country: state.config.holidays_country.clone(),
         holidays_subdivision: state.config.holidays_subdivision.clone(),
+        presets: presets_of(&prefs::get(&state.db, &user.id).await?),
+        calendars_all: collections::calendars_for(&state, &user, false).await?,
+        vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
+        vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
         ctx,
     })
 }
@@ -391,6 +420,10 @@ struct PrefsForm {
     holiday_subdivision: String,
     #[serde(default)]
     vacation_days: String,
+    #[serde(default)]
+    vacation_kind: String,
+    #[serde(default)]
+    vacation_value: String,
 }
 
 async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
@@ -404,10 +437,103 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         p.school_holidays_enabled = f.school_holidays_enabled.is_some();
         p.holiday_subdivision = Some(f.holiday_subdivision.trim().to_uppercase()).filter(|s| !s.is_empty());
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
+        let kind = if f.vacation_kind == "calendar" { "calendar" } else { "category" };
+        p.vacation_rule_json = Some(serde_json::json!({ "kind": kind, "value": f.vacation_value.trim() }).to_string());
         prefs::set(&state.db, &user.id, &p).await?;
         if let Some(l) = &p.lang {
             session.insert(crate::ctx::SESSION_LANG, l).await?;
         }
+        Ok("flash-saved")
+    }
+    .await;
+    finish(&state, &session, &ctx, r, "prefs").await
+}
+
+/// Contact table column choice (JSON array from app.js), stored per user.
+async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::contacts::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    p.contact_columns_json = Some(serde_json::to_string(&cols).unwrap());
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::Json(cols))
+}
+
+fn download(name: &str, ext: &str, mime: &'static str, body: String) -> Response {
+    let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    (
+        [(axum::http::header::CONTENT_TYPE, mime.to_string()), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{safe}.{ext}\""))],
+        body,
+    )
+        .into_response()
+}
+
+async fn export_calendar(State(state): State<SharedState>, user: Principal, Path((owner, id)): Path<(String, String)>) -> AppResult<Response> {
+    let (name, ics) = crate::domain::transfer::export_calendar(&state, &user, &owner, &id).await?;
+    Ok(download(&name, "ics", "text/calendar; charset=utf-8", ics))
+}
+
+async fn export_addressbook(State(state): State<SharedState>, user: Principal, Path((owner, id)): Path<(String, String)>) -> AppResult<Response> {
+    let (name, vcf) = crate::domain::transfer::export_addressbook(&state, &user, &owner, &id).await?;
+    Ok(download(&name, "vcf", "text/vcard; charset=utf-8", vcf))
+}
+
+#[derive(serde::Serialize)]
+struct Imported {
+    imported: usize,
+}
+
+/// Raw .ics body (app.js reads the chosen file and POSTs it — no multipart dependency).
+async fn import_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    Ok(axum::Json(Imported { imported: crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await? }))
+}
+
+async fn import_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    Ok(axum::Json(Imported { imported: crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await? }))
+}
+
+#[derive(Deserialize)]
+struct PresetForm {
+    csrf: String,
+    title: String,
+    #[serde(default)]
+    calendar: String,
+    #[serde(default)]
+    all_day: Option<String>,
+    #[serde(default)]
+    category: String,
+}
+
+/// Event presets (plan D14): quick-fill chips in the editor.
+async fn preset_add(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PresetForm>) -> Response {
+    let r = async {
+        csrf::check(&session, &f.csrf).await?;
+        if f.title.trim().is_empty() {
+            return Err(AppError::BadRequest("title required".into()));
+        }
+        let mut p = prefs::get(&state.db, &user.id).await?;
+        let mut list: Vec<serde_json::Value> = p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
+        list.push(serde_json::json!({ "title": f.title.trim(), "calendar": f.calendar, "all_day": f.all_day.is_some(), "category": f.category.trim() }));
+        p.presets_json = Some(serde_json::to_string(&list).unwrap());
+        prefs::set(&state.db, &user.id, &p).await?;
+        Ok("flash-saved")
+    }
+    .await;
+    finish(&state, &session, &ctx, r, "prefs").await
+}
+
+async fn preset_delete(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path(idx): Path<usize>, Form(f): Form<Csrf>) -> Response {
+    let r = async {
+        csrf::check(&session, &f.csrf).await?;
+        let mut p = prefs::get(&state.db, &user.id).await?;
+        let mut list: Vec<serde_json::Value> = p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
+        if idx < list.len() {
+            list.remove(idx);
+        }
+        p.presets_json = Some(serde_json::to_string(&list).unwrap());
+        prefs::set(&state.db, &user.id, &p).await?;
         Ok("flash-saved")
     }
     .await;
@@ -437,4 +563,11 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
+        .route("/settings/columns", post(columns_save))
+        .route("/settings/export/calendars/{owner}/{id}", get(export_calendar))
+        .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
+        .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
+        .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
+        .route("/settings/presets", post(preset_add))
+        .route("/settings/presets/{idx}/delete", post(preset_delete))
 }

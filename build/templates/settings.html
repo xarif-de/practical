@@ -84,7 +84,7 @@
         </form></details></td>
       <td>{{ c.owner_label }}{% if c.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
       <td><small>{{ c.components.join(", ") }}</small></td>
-      <td><form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
+      <td class="nowrap"><a class="link" href="/settings/export/calendars/{{ c.principal }}/{{ c.id }}">{{ ctx.t("export") }}</a> <label class="link file"><span>{{ ctx.t("import") }}</span><input type="file" accept=".ics,text/calendar" hidden data-import="/settings/import/calendars/{{ c.principal }}/{{ c.id }}"></label> <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
     </tr>
     {% endfor %}
     </tbody>
@@ -120,7 +120,7 @@
           <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
         </form></details></td>
       <td>{{ a.owner_label }}{% if a.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
-      <td><form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
+      <td class="nowrap"><a class="link" href="/settings/export/addressbooks/{{ a.principal }}/{{ a.id }}">{{ ctx.t("export") }}</a> <label class="link file"><span>{{ ctx.t("import") }}</span><input type="file" accept=".vcf,text/vcard" hidden data-import="/settings/import/addressbooks/{{ a.principal }}/{{ a.id }}"></label> <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
     </tr>
     {% endfor %}
     </tbody>
@@ -206,8 +206,34 @@
       <label class="inl">{{ ctx.t("pref-subdivision") }} <input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></label>
     </fieldset>
     <label>{{ ctx.t("pref-vacation-days") }}<input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}"></label>
+    <fieldset class="row"><legend>{{ ctx.t("vacation-rule") }}</legend>
+      <label class="inl"><input type="radio" name="vacation_kind" value="category"{% if vacation_kind != "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-category") }}</label>
+      <label class="inl"><input type="radio" name="vacation_kind" value="calendar"{% if vacation_kind == "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-calendar") }}</label>
+      <label class="inl">{{ ctx.t("vacation-rule-value") }} <input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values" size="28"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></label>
+      <div class="muted small">{{ ctx.t("vacation-rule-hint") }}</div>
+    </fieldset>
     <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
   </form>
+
+  <h3>{{ ctx.t("presets") }}</h3>
+  <p class="muted small">{{ ctx.t("presets-hint") }}</p>
+  {% for p in presets %}<div class="trash-row"><b>{{ p.title }}</b> <small class="muted">{% if p.all_day %}{{ ctx.t("ed-allday") }} · {% endif %}{{ p.calendar }}{% if !p.category.is_empty() %} · {{ p.category }}{% endif %}</small><span class="grow"></span><form method="post" action="/settings/presets/{{ loop.index0 }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit">{{ ctx.t("delete") }}</button></form></div>{% endfor %}
+  {% if presets.is_empty() %}<p class="muted">{{ ctx.t("presets-none") }}</p>{% endif %}
+  <form method="post" action="/settings/presets" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <input type="text" name="title" required placeholder="{{ ctx.t("preset-title") }}">
+    <select name="calendar">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select>
+    <input type="text" name="category" placeholder="{{ ctx.t("col-category") }}" size="12">
+    <label class="inl"><input type="checkbox" name="all_day" checked> {{ ctx.t("ed-allday") }}</label>
+    <button class="btn" type="submit">{{ ctx.t("preset-add") }}</button>
+  </form>
+
+  <h3>{{ ctx.t("push-title") }}</h3>
+  {% if ctx.push_enabled %}
+  <p class="muted small">{{ ctx.t("push-hint") }}</p>
+  <div class="actions"><button class="btn btn-primary" type="button" id="push-enable">{{ ctx.t("push-enable") }}</button><button class="btn" type="button" id="push-disable" hidden>{{ ctx.t("push-disable") }}</button><span class="muted small" id="push-status"></span></div>
+  <ul class="plain" id="push-devices"></ul>
+  {% else %}<p class="muted small">{{ ctx.t("push-unavailable") }}</p>{% endif %}
 </section>
 </div>
 {% endblock %}

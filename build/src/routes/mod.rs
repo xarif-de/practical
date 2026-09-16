@@ -1,4 +1,8 @@
 pub mod api;
 pub mod assets;
+pub mod calendar;
+pub mod contacts;
+pub mod more;
 pub mod pages;
 pub mod settings;
+pub mod tasks;

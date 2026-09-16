@@ -6,6 +6,16 @@ family needs on top: groups you own together, calendars and address books for yo
 group, app tokens for every device, a trash with a grace period, and (phase 2) the actual
 calendar, contacts and tasks views.
 
+**What it does (phase 1 + 2):** groups and memberships · calendars and address books per
+person or group · app tokens · trash with restore · calendar views Day (ledger + document),
+Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
+Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor with reminder,
+recurrence, categories and presets · contacts as letter panels or an inline-editable sheet with a
+detail editor · minimal tasks (VTODO) · universal search incl. "jump to a date" · orbit date
+picker · public/school holidays from the OpenHolidays API · vacation-day counting · browser
+push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German and
+English.
+
 It never talks to RustiCal over HTTP for data. It opens **RustiCal's own SQLite file** through
 RustiCal's store crates (`rustical_store_sqlite`, git dependency pinned to the RustiCal release)
 and keeps its own state in `xui_*` tables of the same file, so one backup covers everything.
@@ -49,6 +59,19 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   (no cookie session involved).
 - **Live updates**: a 2-second poll of the collections' synctokens (microseconds on SQLite)
   fans changes out to browsers over SSE (`/api/changes`).
+- **Recurrence** is caldata's engine (RustiCal's own iCalendar crate). `build/tests/fixtures/
+  recurrence-real.json` holds the 60 recurring series of a real family calendar, anonymised,
+  with the first 60 instances each as computed by python-dateutil (an independent oracle);
+  `cargo test` asserts identical expansion (plan D11).
+- **Views** are rendered server-side (`src/render.rs`, a port of the design prototype); the
+  browser swaps the fragment (`?fragment=1`) on navigation, re-fetches it on SSE change events,
+  and only the editor, picker and search are JavaScript. Per-view CSS/JS budget stays far below
+  60 KB gzip (one shared `style.css` + `app.js`).
+- **Holidays** come from `openholidaysapi.org` (`HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`, per-user
+  region override), cached 30 days in `xui_holidays`; a failed fetch falls back to the stale cache.
+- **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
+  a one-minute loop expands the subscribers' events a few days ahead, sends each VALARM once
+  (`xui_alarms_sent`) and drops subscriptions the push service reports gone (404/410).
 - **i18n**: Fluent `.ftl` files (`build/locales/de.ftl`, `en.ftl`), embedded at compile time.
   Language = user preference → session → `Accept-Language`.
 

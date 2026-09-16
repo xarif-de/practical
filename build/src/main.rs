@@ -7,6 +7,7 @@ mod db;
 mod domain;
 mod error;
 mod i18n;
+mod render;
 mod routes;
 mod state;
 mod tasks;
@@ -90,7 +91,9 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::hours(state.config.session_hours)));
 
     let protected = Router::new()
-        .merge(routes::pages::router())
+        .merge(routes::calendar::router())
+        .merge(routes::contacts::router())
+        .merge(routes::tasks::router())
         .merge(routes::settings::router())
         .merge(routes::api::router())
         .route_layer(axum::middleware::from_fn(auth::require_user));
@@ -145,6 +148,7 @@ async fn serve() -> Result<(), String> {
     let app = build_router(&state)?;
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());
+    domain::push::spawn_reminder_loop(state.clone());
 
     let listener = tokio::net::TcpListener::bind(&state.config.bind).await.map_err(|e| format!("bind {}: {e}", state.config.bind))?;
     info!("rustical-ui {} serving on http://{} (public {})", env!("CARGO_PKG_VERSION"), state.config.bind, state.config.public_url);

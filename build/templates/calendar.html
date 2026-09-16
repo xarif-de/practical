@@ -1,17 +1,41 @@
 {% extends "layout.html" %}
-{% block title %}{{ ctx.t("nav-calendar") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block title %}{{ title }} · {{ ctx.t("nav-calendar") }}{% endblock %}
 {% block filter %}
-<div class="filter"><button class="icon-btn" aria-haspopup="true">⚲ {{ ctx.t("filter") }}</button><div class="pop"><h4>{{ ctx.t("filter-calendars") }}</h4>
-{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="background:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
-<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a></div></div></div>
+<div class="filter"><button class="icon-btn" aria-haspopup="true">⚲ {{ ctx.t("filter") }}</button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
+{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
+<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a><a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a></div></div></div>
 {% endblock %}
 {% block content %}
-<div class="toolbar"><h1 id="title">{{ ctx.t("nav-calendar") }}</h1><span class="grow"></span></div>
-<div class="placeholder">
-  <p>{{ ctx.t("phase-calendar-soon") }}</p>
-  <ul class="plain">
-  {% for c in calendars %}<li><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small>{{ c.owner_label }}</small></li>{% endfor %}
-  </ul>
-  <p><a class="btn" href="/settings#collections">{{ ctx.t("manage-collections") }}</a></p>
+<div id="viewroot" data-view="{{ view }}" data-date="{{ date }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}">
+{% include "calendar_fragment.html" %}
 </div>
+{{ picker|safe }}
+<div class="ed" id="ed" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="edh">
+<form id="edform">
+<header><button class="icon-btn tlt" id="ed-tl" type="button" title="{{ ctx.t("ed-dayline") }}" aria-pressed="true">◧</button><span class="dot" id="ed-dot"></span><h2 id="edh">{{ ctx.t("ed-new") }}</h2><span class="sub" id="ed-when"></span><button class="icon-btn" id="ed-close" type="button" aria-label="✕">✕</button></header>
+<div class="body"><div class="cols3">
+<div class="dayline" id="ed-dayline"></div>
+<div class="mainc">
+<input class="title" type="text" name="summary" placeholder="{{ ctx.t("ed-title") }}" required autocomplete="off">
+<div class="row"><div><label class="l">{{ ctx.t("ed-location") }}</label><input type="text" name="location"></div></div>
+<div class="row"><div><label class="l">{{ ctx.t("ed-categories") }}</label><input type="text" name="categories" placeholder="{{ ctx.t("ed-categories-hint") }}"></div></div>
+<div class="row"><div><label class="l">{{ ctx.t("ed-notes") }}</label><textarea name="description" rows="7"></textarea></div></div>
+<div class="row" id="ed-presets"></div>
+</div>
+<aside class="side">
+<div><label class="l">{{ ctx.t("ed-calendar") }}</label><select name="calendar" id="ed-cal">{% for c in calendars %}<option value="{{ c.principal }}/{{ c.id }}" data-color="{{ c.color }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select></div>
+<div><label class="l">{{ ctx.t("ed-date") }}</label><input type="date" name="date" required></div>
+<div class="row two" style="margin:0"><div><label class="l">{{ ctx.t("ed-from") }}</label><input type="time" name="from" step="300"></div><div><label class="l">{{ ctx.t("ed-to") }}</label><input type="time" name="to" step="300"></div></div>
+<div><label class="l">{{ ctx.t("ed-end-date") }}</label><input type="date" name="end_date"></div>
+<label class="toggle" id="ed-allday"><input type="checkbox" name="all_day" hidden><i></i> {{ ctx.t("ed-allday") }}</label>
+<div><label class="l">{{ ctx.t("ed-reminder") }}</label><select name="alarm"><option value="">{{ ctx.t("ed-reminder-none") }}</option><option value="0">{{ ctx.t("ed-reminder-0") }}</option><option value="15">{{ ctx.t("ed-reminder-15") }}</option><option value="60">{{ ctx.t("ed-reminder-60") }}</option><option value="180">{{ ctx.t("ed-reminder-180") }}</option><option value="1440">{{ ctx.t("ed-reminder-1440") }}</option><option value="2880">{{ ctx.t("ed-reminder-2880") }}</option></select></div>
+<div><label class="l">{{ ctx.t("ed-repeat") }}</label><select name="rrule"><option value="">{{ ctx.t("ed-repeat-never") }}</option><option value="FREQ=DAILY">{{ ctx.t("ed-repeat-daily") }}</option><option value="FREQ=WEEKLY">{{ ctx.t("ed-repeat-weekly") }}</option><option value="FREQ=MONTHLY">{{ ctx.t("ed-repeat-monthly") }}</option><option value="FREQ=YEARLY">{{ ctx.t("ed-repeat-yearly") }}</option><option value="custom">{{ ctx.t("ed-repeat-custom") }}</option></select><input type="text" name="rrule_custom" placeholder="FREQ=WEEKLY;BYDAY=MO,WE" hidden></div>
+<div class="muted small" id="ed-hint"></div>
+</aside></div></div>
+<footer><button class="btn danger" type="button" id="ed-delete" hidden>{{ ctx.t("delete") }}…</button><span class="spacer"></span><span class="muted small" id="ed-error"></span><button class="btn" type="button" id="ed-cancel">{{ ctx.t("cancel") }}</button><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></footer>
+<input type="hidden" name="key"><input type="hidden" name="etag">
+</form>
+</div></div>
+<button class="fab" id="fab" type="button" aria-label="+">+</button>
+<script type="application/json" id="presets-data">{{ presets_json|safe }}</script>
 {% endblock %}

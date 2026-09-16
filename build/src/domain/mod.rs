@@ -1,4 +1,12 @@
 pub mod collections;
+pub mod contacts;
+pub mod events;
 pub mod groups;
+pub mod holidays;
+pub mod ical;
 pub mod prefs;
+pub mod push;
+pub mod search;
+pub mod tasks;
 pub mod tokens;
+pub mod transfer;
