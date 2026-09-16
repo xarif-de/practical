@@ -885,8 +885,9 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .geomap .btn.hot { background: #ff3b30; color: #fff; border-color: transparent; }
 .geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
 .geomap .btn:disabled { opacity: .45; cursor: default; }
-.geomap .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, #ff3b30 10%, var(--bg)); font-size: 13.5px; }
-.geomap .confirm[hidden] { display: none; }
-.geomap .confirm span { flex: 1; }
+.geomap .confirm, .ed .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, #ff3b30 10%, var(--bg)); font-size: 13.5px; }
+.geomap .confirm[hidden], .ed .confirm[hidden] { display: none; }
+.geomap .confirm span, .ed .confirm span { flex: 1; }
+.ed .confirm { position: sticky; bottom: 58px; z-index: 1; border-top: 1px solid var(--line); }
 .leaflet-container { font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }

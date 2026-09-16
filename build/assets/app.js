@@ -245,9 +245,12 @@
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); $('#ed-geo-txt').textContent = geoOf() ? geoOf().map(n => n.toFixed(5)).join(', ') : ''; }
   const tl = $('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
-  function close() { ed.hidden = true; }
-  $('#ed-close').onclick = close; ed.addEventListener('click', e => { if (e.target === ed) close(); });
-  addEventListener('keydown', e => { if (e.key === 'Escape') { close(); pk.hidden = true; } });
+  // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
+  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; }
+  const dirty = () => form.classList.contains('mode-edit') && serialize() !== baseline;
+  function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
+  $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
+  addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
   const fmtD = s => { const d = parse(s.slice(0, 10)); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
   // categories as chips (same widget as the contact editor)
@@ -330,7 +333,6 @@
   $('#gm-close').onclick = () => { if (addrApplied && posApplied) closeMap(); else $('#gm-confirm').hidden = false; };
   $('#gm-back').onclick = () => { $('#gm-confirm').hidden = true; };
   $('#gm-continue').onclick = closeMap;
-  gm.addEventListener('click', e => { if (e.target === gm) $('#gm-close').click(); });
   $('#gm-ok').onclick = () => { const c = centre(); f.lat.value = c[0].toFixed(6); f.lon.value = c[1].toFixed(6); posApplied = true; resolveSync(); gmState(); syncDot(); refresh(); };
   $('#gm-addr').onclick = async () => { const c = centre(); const b = $('#gm-addr'); b.disabled = true; $('#gm-hint').textContent = '…'; try { const r = await fetch(`/api/geo/reverse?lat=${c[0]}&lon=${c[1]}`); if (r.status === 404) { $('#gm-hint').textContent = gm.dataset.tNone; b.disabled = false; return; } if (!r.ok) throw new Error(r.status); const p = await r.json(); f.location.value = p.label; addrApplied = true; $('#gm-hint').textContent = ''; resolveSync(); gmState(); syncDot(); refresh(); } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; b.disabled = false; } };
   addEventListener('keydown', e => { if (e.key === 'Escape' && !gm.hidden) { e.stopImmediatePropagation(); $('#gm-close').click(); } }, true);
