@@ -145,9 +145,12 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
         for (id, obj) in objs {
             let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { continue };
             let recurring = main.has_rruleset();
+            // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
+            // would never remind; an instance without own alarms takes the master's
+            let master_alarms = alarm_offsets(main);
             let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
             for ev in &expanded {
-                let alarms = alarm_offsets(ev);
+                let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
                 let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
                 if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
                     out.push(inst);
