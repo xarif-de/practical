@@ -356,6 +356,7 @@
     $$('[data-key][data-ab]', wrap).forEach(el => el.classList.toggle('hide', abs.includes(el.dataset.ab) || cats.includes(el.dataset.cat)));
     $$('.lpanel', wrap).forEach(p => p.classList.toggle('hide', !$$('li:not(.hide)', p).length));
     $$('.ct-rail [data-jump]', wrap).forEach(b => { const p = $(`.lpanel[data-letter="${CSS.escape(b.dataset.jump)}"]`, wrap); b.classList.toggle('hide', !p || p.classList.contains('hide')); });
+    if (typeof railMark === 'function') setTimeout(railMark, 0);
   }
   if (fb) $$('input', fb).forEach(i => i.addEventListener('change', applyFilter));
   // quick-jump rail: scroll the letter's panel (list) or first row (table) to the top of its scroller
@@ -366,6 +367,18 @@
     if (!target) return; const sc = scrollerOf(target); const head = sc.classList.contains('main') ? ($('.toolbar') || {}).offsetHeight || 0 : ($('thead', sc) || {}).offsetHeight || 0;
     sc.scrollTop += target.getBoundingClientRect().top - sc.getBoundingClientRect().top - head - 6;
   });
+  // rail: ring on the letter whose group is at the top of the scroller (list: .main, table: .sheetwrap)
+  function railMark() {
+    const table = wrap.classList.contains('view-table'); const sc = table ? $('.sheetwrap', wrap) : $('.main');
+    const line = sc.getBoundingClientRect().top + (table ? ($('thead', sc) || {}).offsetHeight || 0 : ($('.toolbar') || {}).offsetHeight || 0) + 8;
+    let cur = null;
+    for (const el of $$(table ? 'tr[data-letter]:not(.hide)' : '.lpanel:not(.hide)', wrap)) { if (el.getBoundingClientRect().top <= line) cur = el.dataset.letter; else break; }
+    $$('.ct-rail [data-jump]', wrap).forEach(b => b.classList.toggle('cur', b.dataset.jump === cur));
+  }
+  const railTick = () => { if (!railTick._q) { railTick._q = true; requestAnimationFrame(() => { railTick._q = false; railMark(); }); } };
+  $('.main').addEventListener('scroll', railTick); $('.sheetwrap', wrap).addEventListener('scroll', railTick);
+  $$('[data-ctview]').forEach(b => b.addEventListener('click', () => setTimeout(railMark, 0)));
+  railMark();
   // detail editor
   const det = $('#detail'), form = $('#ctform'), f = form.elements, multi = $('#ct-multi');
   function row(kind, type, value) { const k = kind === 'phone' ? 'phones' : 'emails'; return `<div class="multi" data-k="${k}"><select>${T.kinds.map(x => `<option${x === type ? ' selected' : ''}>${x}</option>`).join('')}</select><input value="${String(value).replace(/"/g, '&quot;')}" placeholder="${kind === 'phone' ? T.phone : T.email}"><button class="link danger" type="button" data-rm>✕</button></div>`; }
