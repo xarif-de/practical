@@ -843,32 +843,46 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform.mode-view .row.lk .typ { grid-area: t; }
 .ed .cardform.mode-view .row.lk input[data-w=label] { font-size: 13px; color: var(--fg-2); }
 .ed .cardform.mode-view .row.lk input:placeholder-shown { display: none; }
-/* location: suggestions after a typing pause (the ring counts the pause down), map button, map dialog */
-.ed .cardform .row.loc { grid-template-columns: 1fr auto auto; grid-template-areas: "v map acts"; }
-.ed .cardform .row.loc > .edits { grid-area: map; }
-.ed .cardform .row.loc > .acts { grid-area: acts; }
-.ed .cardform.mode-edit .row.loc { grid-template-columns: 1fr auto; grid-template-areas: "v map"; }
-.ed .cardform .locwrap { grid-area: v; position: relative; min-width: 0; }
-.ed .cardform .locwrap .ring { position: absolute; right: 2px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%) rotate(-90deg); pointer-events: none; }
-.ed .cardform .locwrap .ring circle { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 50.27; stroke-dashoffset: 0; }
-.ed .cardform .locwrap .ring.busy circle { stroke-dasharray: 12 38.27; animation: ringspin .8s linear infinite; }
+/* location: suggestions after a typing pause (the ring counts it down), two map buttons, sync state, map dialog */
+.ed .cardform input:not([type=hidden]) { border-radius: 0; } /* the dialog's rounded inputs would bend the underline at its ends */
+.ed .cardform .field.loc { grid-template-columns: 1fr auto auto; grid-template-areas: "v map acts" "l map acts"; }
+.ed .cardform .field.loc > .lbl { grid-area: l; } .ed .cardform .field.loc > .locwrap { grid-area: v; } .ed .cardform .field.loc > .mapbtn { grid-area: map; } .ed .cardform .field.loc > .acts { grid-area: acts; }
+.ed .cardform .field .sync { font-style: normal; color: #ff3b30; margin-left: 6px; }
+.ed .cardform .field .sync[hidden] { display: none; }
+.ed .cardform .field.stale input { color: #ff3b30; border-bottom-color: color-mix(in srgb, #ff3b30 55%, transparent); background: color-mix(in srgb, #ff3b30 6%, transparent); }
+.ed .cardform .field.stale .act.map, .ed .cardform .act.map.stale { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
+.ed .cardform .locwrap { position: relative; min-width: 0; display: block; }
+.ed .cardform .locwrap .ctdown { position: absolute; right: 2px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%) rotate(-90deg); pointer-events: none; z-index: 1; }
+.ed .cardform .locwrap .ctdown[hidden] { display: none; }
+.ed .cardform .locwrap .ctdown circle { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 50.27; stroke-dashoffset: 0; }
+.ed .cardform .locwrap .ctdown.busy circle { stroke-dasharray: 12 38.27; stroke-dashoffset: 0 !important; animation: ringspin .8s linear infinite; }
 @keyframes ringspin { to { stroke-dashoffset: -50.27; } }
 .ed .cardform .locwrap input { padding-right: 24px; }
 .ed .cardform .sugg { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); padding: 4px; max-height: 240px; overflow: auto; }
 .ed .cardform .sugg button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13.5px; line-height: 1.3; }
 .ed .cardform .sugg button:hover, .ed .cardform .sugg button[aria-selected=true] { background: var(--tile); }
 .ed .cardform .sugg .none { padding: 6px 8px; font-size: 13px; color: var(--fg-3); }
+.ed .cardform .field.geo .inl .act.map { margin-left: 4px; }
 .geomap { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
 .geomap[hidden] { display: none; }
 .geomap .gbox { width: min(760px, 100%); background: var(--bg); border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.35); display: grid; grid-template-rows: auto 1fr auto auto; max-height: calc(100dvh - 32px); }
-.geomap header, .geomap footer { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
-.geomap header { border-bottom: 1px solid var(--line); } .geomap footer { border-top: 1px solid var(--line); }
-.geomap header h3 { margin: 0; font: 600 15px/1.3 var(--font-display); flex: 1; }
+.geomap header, .geomap footer { display: flex; align-items: flex-end; gap: 12px; padding: 10px 14px; }
+.geomap header { align-items: center; border-bottom: 1px solid var(--line); } .geomap footer { border-top: 1px solid var(--line); }
+.geomap header h3 { margin: 0; font: 600 15px/1.3 var(--font-display); }
+.geomap header #gm-hint { flex: 1; text-align: right; }
 .geomap .gmap { position: relative; height: min(60vh, 460px); background: var(--tile); }
 .geomap .cross { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,.35); z-index: 500; pointer-events: none; }
 .geomap .cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--accent); }
-.geomap #gm-hint { padding: 6px 14px 0; min-height: 18px; }
+.geomap footer .col { display: grid; gap: 4px; min-width: 0; }
+.geomap footer .val { font-size: 12px; color: var(--fg-3); min-height: 15px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.geomap footer .val.unknown { color: #ff3b30; }
 .geomap .grow { flex: 1; }
 .geomap .btn .ico { width: 15px; height: 15px; vertical-align: -3px; margin-right: 4px; }
+.geomap .btn.hot { background: #ff3b30; color: #fff; border-color: transparent; }
+.geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
+.geomap .btn:disabled { opacity: .45; cursor: default; }
+.geomap .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, #ff3b30 10%, var(--bg)); font-size: 13.5px; }
+.geomap .confirm[hidden] { display: none; }
+.geomap .confirm span { flex: 1; }
 .leaflet-container { font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }

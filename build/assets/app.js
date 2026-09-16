@@ -279,39 +279,60 @@
   f.color.addEventListener('input', syncDot);
   const colorOf = () => f.color_cal.checked ? '' : f.color.value;
   const geoOf = () => { const a = f.lat.value.trim(), b = f.lon.value.trim(); return a !== '' && b !== '' && !isNaN(+a) && !isNaN(+b) ? [+a, +b] : null; };
-  // ---- location: suggestions after a typing pause (ring = countdown), map dialog with reverse lookup ----
-  const sugg = $('#ed-sugg'), ring = $('.locwrap .ring', form); let suggTimer = 0, suggRaf = 0, suggSeq = 0, suggItems = [], suggIdx = -1;
-  const ringStop = () => { cancelAnimationFrame(suggRaf); ring.hidden = true; ring.classList.remove('busy'); };
-  const ringCount = ms => { const c = $('circle', ring), t0 = performance.now(); ring.hidden = false; ring.classList.remove('busy'); const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); c.style.strokeDashoffset = (50.27 * k).toFixed(2); if (k < 1) suggRaf = requestAnimationFrame(step); }; step(); };
+  // ---- location: suggestions after a typing pause (ring = countdown), two map buttons, and a sync
+  // state — an address typed by hand leaves the coordinates stale and vice versa, until the map
+  // dialog applies the other value ----
+  const sugg = $('#ed-sugg'), ring = $('#ed-ring'); let suggTimer = 0, suggRaf = 0, suggSeq = 0, suggItems = [], suggIdx = -1;
+  const SUGG_DELAY = 2000;
+  let geoSync = 'ok'; // ok | addr (address changed → coordinates stale) | coords (coordinates changed → address stale)
+  // SVG elements have no `hidden` property: toggle the attribute
+  const ringStop = () => { cancelAnimationFrame(suggRaf); ring.setAttribute('hidden', ''); ring.classList.remove('busy'); };
+  const ringCount = ms => { const c = $('circle', ring), t0 = performance.now(); ring.removeAttribute('hidden'); ring.classList.remove('busy'); const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); c.style.strokeDashoffset = (50.27 * k).toFixed(2); if (k < 1) suggRaf = requestAnimationFrame(step); }; step(); };
   const suggClose = () => { sugg.hidden = true; sugg.innerHTML = ''; suggItems = []; suggIdx = -1; f.location.setAttribute('aria-expanded', 'false'); };
   const suggShow = items => { suggItems = items; suggIdx = -1; sugg.innerHTML = items.length ? items.map((p, i) => `<button type="button" role="option" data-i="${i}">${p.label.replace(/</g, '&lt;')}</button>`).join('') : `<div class="none">${T.suggNone}</div>`; sugg.hidden = false; f.location.setAttribute('aria-expanded', 'true'); };
-  const suggPick = i => { const p = suggItems[i]; if (!p) return; f.location.value = p.label; f.lat.value = p.lat.toFixed(6); f.lon.value = p.lon.toFixed(6); suggClose(); syncDot(); refresh(); };
+  const setSync = st => { geoSync = st; const loc = $('.field.loc', form), geo = $('.field.geo', form); loc.classList.toggle('stale', st === 'coords'); geo.classList.toggle('stale', st === 'addr'); $('#ed-sync-addr').hidden = st !== 'coords'; $('#ed-sync-coords').hidden = st !== 'addr'; $('[data-geo=address]', form).classList.toggle('stale', st === 'coords'); $('[data-geo=coords]', form).classList.toggle('stale', st === 'addr'); };
+  const suggPick = i => { const p = suggItems[i]; if (!p) return; f.location.value = p.label; f.lat.value = p.lat.toFixed(6); f.lon.value = p.lon.toFixed(6); suggClose(); setSync('ok'); syncDot(); refresh(); };
   async function geoSearch(q, near) { const u = new URL('/api/geo/search', location.origin); u.searchParams.set('q', q); if (near) { u.searchParams.set('lat', near[0]); u.searchParams.set('lon', near[1]); } const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.json(); }
-  f.location.addEventListener('input', () => { clearTimeout(suggTimer); const q = f.location.value.trim(); if (!form.classList.contains('mode-edit') || q.length < 3) { ringStop(); suggClose(); return; } ringCount(800); suggTimer = setTimeout(async () => { const seq = ++suggSeq; ring.classList.add('busy'); try { const items = await geoSearch(q, geoOf()); if (seq !== suggSeq) return; suggShow(items); } catch (_) { suggClose(); } finally { if (seq === suggSeq) ringStop(); } }, 800); });
+  f.location.addEventListener('input', () => { clearTimeout(suggTimer); const q = f.location.value.trim(); if (geoOf()) setSync(q ? 'addr' : 'ok'); if (!form.classList.contains('mode-edit') || q.length < 3) { ringStop(); suggClose(); return; } ringCount(SUGG_DELAY); suggTimer = setTimeout(async () => { const seq = ++suggSeq; ring.classList.add('busy'); try { const items = await geoSearch(q, geoOf()); if (seq !== suggSeq) return; suggShow(items); } catch (_) { suggClose(); } finally { if (seq === suggSeq) ringStop(); } }, SUGG_DELAY); });
+  [f.lat, f.lon].forEach(i => i.addEventListener('input', () => { if (f.location.value.trim()) setSync(geoOf() ? 'coords' : 'ok'); }));
   f.location.addEventListener('keydown', e => { if (sugg.hidden) return; if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); suggIdx = (suggIdx + (e.key === 'ArrowDown' ? 1 : -1) + suggItems.length) % Math.max(1, suggItems.length); $$('button', sugg).forEach((b, i) => b.setAttribute('aria-selected', i === suggIdx ? 'true' : 'false')); } else if (e.key === 'Enter' && suggIdx >= 0) { e.preventDefault(); suggPick(suggIdx); } else if (e.key === 'Escape') { e.stopPropagation(); suggClose(); } });
   sugg.addEventListener('mousedown', e => { const b = e.target.closest('button[data-i]'); if (b) { e.preventDefault(); suggPick(+b.dataset.i); } });
   f.location.addEventListener('blur', () => setTimeout(suggClose, 150));
-  // map dialog: Leaflet is fetched on first use; the position is the map centre under the crosshair
-  const gm = $('#geomap'); let map = null, gmSeq = 0;
+  // map dialog: Leaflet is fetched on first use; the position is the map centre under the crosshair.
+  // addrApplied / posApplied say whether the form's address / coordinates belong to that centre.
+  const gm = $('#geomap'); let map = null, gmSeq = 0, addrApplied = false, posApplied = false, gmMoving = false;
   const assetV = (($('script[src*="app.js"]') || {}).src || '').split('?')[1] || '';
   const loadLeaflet = () => new Promise((res, rej) => { if (window.L) return res(); const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assets/leaflet.css?' + assetV; document.head.appendChild(css); const js = document.createElement('script'); js.src = '/assets/leaflet.js?' + assetV; js.onload = res; js.onerror = () => rej(new Error('leaflet')); document.head.appendChild(js); });
-  const gmCoords = () => { const c = map.getCenter(); $('#gm-coords').textContent = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`; };
-  async function openMap() {
+  const centre = () => { const c = map.getCenter(); return [+c.lat.toFixed(6), +c.lng.toFixed(6)]; };
+  function gmState() {
+    const c = map ? centre() : null; $('#gm-coords').textContent = c ? `${c[0].toFixed(5)}, ${c[1].toFixed(5)}` : '';
+    const at = $('#gm-addr-txt'); at.textContent = addrApplied ? f.location.value : gm.dataset.tUnknown; at.classList.toggle('unknown', !addrApplied);
+    const ba = $('#gm-addr'), bp = $('#gm-ok'), bc = $('#gm-close'); ba.disabled = addrApplied; ba.classList.toggle('hot', !addrApplied); bp.disabled = posApplied; bp.classList.toggle('hot', !posApplied);
+    const sync = addrApplied && posApplied; bc.classList.toggle('good', sync); bc.classList.toggle('hot', !sync); $('#gm-confirm').hidden = true;
+  }
+  async function openMap(via) {
     gm.hidden = false; $('#gm-hint').textContent = ''; const seq = ++gmSeq;
     try { await loadLeaflet(); } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; return; }
-    if (!map) { map = L.map('gm-map', { zoomControl: true, attributionControl: true }).setView([20, 0], 2); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).addTo(map); map.on('move', gmCoords); }
+    if (!map) { map = L.map('gm-map', { zoomControl: true, attributionControl: true }).setView([20, 0], 2); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).addTo(map); map.on('move', () => { if (gmMoving) return; addrApplied = false; posApplied = false; gmState(); }); }
     map.invalidateSize();
-    const g = geoOf(), q = f.location.value.trim();
-    if (g) { map.setView(g, 16); $('#gm-hint').textContent = ''; }
-    else if (q.length >= 3) { $('#gm-hint').textContent = '…'; try { const items = await geoSearch(q, null); if (seq !== gmSeq) return; if (items.length) { map.setView([items[0].lat, items[0].lon], 16); $('#gm-hint').textContent = gm.dataset.tFound + ' (' + items[0].label + ')'; } else { map.setView([20, 0], 2); $('#gm-hint').textContent = gm.dataset.tNone + ' · ' + gm.dataset.tWorld; } } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; } }
-    else { map.setView([20, 0], 2); $('#gm-hint').textContent = gm.dataset.tWorld; }
-    gmCoords();
+    const g = geoOf(), q = f.location.value.trim(); gmMoving = true;
+    const jump = (ll, z) => map.setView(ll, z, { animate: false }); // an animated jump would fire move events that clear the applied flags
+    if (via === 'coords' && g) { jump(g, 16); posApplied = true; addrApplied = !!q && geoSync === 'ok'; }
+    else if (via === 'address' && q.length >= 3) {
+      $('#gm-hint').textContent = '…';
+      try { const items = await geoSearch(q, null); if (seq !== gmSeq) return; if (items.length) { jump([items[0].lat, items[0].lon], 16); addrApplied = true; posApplied = !!g && geoSync === 'ok' && Math.abs(g[0] - items[0].lat) < 1e-4 && Math.abs(g[1] - items[0].lon) < 1e-4; $('#gm-hint').textContent = gm.dataset.tFound; } else { jump(g || [20, 0], g ? 16 : 2); addrApplied = false; posApplied = !!g; $('#gm-hint').textContent = gm.dataset.tNone + ' · ' + gm.dataset.tWorld; } } catch (_) { jump(g || [20, 0], g ? 16 : 2); addrApplied = false; posApplied = !!g; $('#gm-hint').textContent = gm.dataset.tError; }
+    } else { jump(g || [20, 0], g ? 16 : 2); posApplied = !!g; addrApplied = false; $('#gm-hint').textContent = g ? '' : gm.dataset.tWorld; }
+    gmState(); setTimeout(() => { gmMoving = false; }, 120);
   }
   const closeMap = () => { gm.hidden = true; };
-  $('#gm-close').onclick = closeMap; gm.addEventListener('click', e => { if (e.target === gm) closeMap(); });
-  $('#gm-ok').onclick = () => { const c = map.getCenter(); f.lat.value = c.lat.toFixed(6); f.lon.value = c.lng.toFixed(6); closeMap(); syncDot(); refresh(); };
-  $('#gm-addr').onclick = async () => { const c = map.getCenter(); const b = $('#gm-addr'); b.disabled = true; $('#gm-hint').textContent = '…'; try { const r = await fetch(`/api/geo/reverse?lat=${c.lat.toFixed(6)}&lon=${c.lng.toFixed(6)}`); if (r.status === 404) { $('#gm-hint').textContent = gm.dataset.tNone; return; } if (!r.ok) throw new Error(r.status); const p = await r.json(); f.location.value = p.label; f.lat.value = c.lat.toFixed(6); f.lon.value = c.lng.toFixed(6); $('#gm-hint').textContent = p.label; syncDot(); refresh(); } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; } finally { b.disabled = false; } };
-  addEventListener('keydown', e => { if (e.key === 'Escape' && !gm.hidden) { e.stopImmediatePropagation(); closeMap(); } }, true);
+  const resolveSync = () => { if (addrApplied && posApplied) setSync('ok'); };
+  $('#gm-close').onclick = () => { if (addrApplied && posApplied) closeMap(); else $('#gm-confirm').hidden = false; };
+  $('#gm-back').onclick = () => { $('#gm-confirm').hidden = true; };
+  $('#gm-continue').onclick = closeMap;
+  gm.addEventListener('click', e => { if (e.target === gm) $('#gm-close').click(); });
+  $('#gm-ok').onclick = () => { const c = centre(); f.lat.value = c[0].toFixed(6); f.lon.value = c[1].toFixed(6); posApplied = true; resolveSync(); gmState(); syncDot(); refresh(); };
+  $('#gm-addr').onclick = async () => { const c = centre(); const b = $('#gm-addr'); b.disabled = true; $('#gm-hint').textContent = '…'; try { const r = await fetch(`/api/geo/reverse?lat=${c[0]}&lon=${c[1]}`); if (r.status === 404) { $('#gm-hint').textContent = gm.dataset.tNone; b.disabled = false; return; } if (!r.ok) throw new Error(r.status); const p = await r.json(); f.location.value = p.label; addrApplied = true; $('#gm-hint').textContent = ''; resolveSync(); gmState(); syncDot(); refresh(); } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; b.disabled = false; } };
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !gm.hidden) { e.stopImmediatePropagation(); $('#gm-close').click(); } }, true);
   // exceptions / extra dates: a date; timed events get the start time appended on save
   const addDate = (list, iso) => { const r = addRow(list); w(r, 'd').value = (iso || '').slice(0, 10); $('.txt', r).textContent = iso ? fmtD(iso) : ''; return r; };
   const datesOf = list => rows(list).map(r => w(r, 'd').value).filter(Boolean).map(d => f.all_day.checked ? d : `${d}T${f.from.value || '00:00'}:00`);
@@ -356,7 +377,7 @@
       f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); setRR('', ''); setColor(''); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
-    syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
+    setSync('ok'); ringStop(); suggClose(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
   }
   async function openEditor(key, date) {
     if (key) {
@@ -372,7 +393,7 @@
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
     if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.chip, .rows .row', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
-    if (b.dataset.geo === 'map') { openMap(); return; }
+    if (b.dataset.geo) { openMap(b.dataset.geo); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
