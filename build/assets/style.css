@@ -163,10 +163,14 @@ table.ct td[contenteditable]:hover { outline-color: var(--accent); }
 .ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 calc(100% - 14px), var(--dip) calc(100% - 4px), var(--dip) 100%); }
 .ev.span.end   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 100%); }
 .ev.span { -webkit-mask-image: var(--edge); mask-image: var(--edge); }
-/* last column: the bar stops at the row's end, rounded, no dip on the right */
-.day:nth-child(7n+7) .ev.span.start, .day:nth-child(7n+7) .ev.span.mid { margin-right: 0; padding-right: 6px; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
-.day:nth-child(7n+7) .ev.span.start { --edge: linear-gradient(90deg, #000, #000); }
-.day:nth-child(7n+7) .ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 100%); }
+/* row break: a start/mid segment in the last column continues in the next row → it ends at the
+   tile edge with the same dip as a tile transition (no rounded corner), and the first segment of
+   the next row repeats the title so the bar stays identifiable. nth-child counts the 7 .dow
+   header cells too, so 7n+7 = Sunday and 7n+1 = Monday. */
+.day:nth-child(7n+7) .ev.span.start, .day:nth-child(7n+7) .ev.span.mid { margin-right: -6px; padding-right: 6px; } /* runs to the tile edge, like the next row's first segment starts there */
+.day:nth-child(7n+7) .ev.span.start { --edge: linear-gradient(90deg, #000 0, #000 calc(100% - 10px), var(--dip) 100%); }
+.day:nth-child(7n+7) .ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 calc(100% - 10px), var(--dip) 100%); }
+.day:nth-child(7n+1) .ev.span.mid, .day:nth-child(7n+1) .ev.span.end { color: var(--fg); padding-left: 12px; } /* 6px margin compensation + the normal 6px inset */
 @media (max-width: 720px) { .ev.span { display: none; } }
 
 /* Fusion B (Runde 3) — Apple typography + Immich tiles; events as colour bar + text, all-day as tinted bar. */
