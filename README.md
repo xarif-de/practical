@@ -10,8 +10,11 @@ calendar, contacts and tasks views.
 person or group · app tokens · trash with restore · calendar views Day (ledger + document),
 Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor with reminder,
-recurrence, categories and presets · contacts as letter panels or an inline-editable sheet with a
-detail editor · minimal tasks (VTODO) · universal search incl. "jump to a date" · orbit date
+recurrence, categories and presets · contacts as letter panels (fields per entry selectable) or an
+inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
+WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
+the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
+preferred flags), address books with a colour · minimal tasks (VTODO) · universal search incl. "jump to a date" · orbit date
 picker · public/school holidays from the OpenHolidays API · vacation-day counting · browser
 push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German and
 English.
@@ -65,8 +68,16 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   `cargo test` asserts identical expansion (plan D11).
 - **Views** are rendered server-side (`src/render.rs`, a port of the design prototype); the
   browser swaps the fragment (`?fragment=1`) on navigation, re-fetches it on SSE change events,
-  and only the editor, picker and search are JavaScript. Per-view CSS/JS budget stays far below
-  60 KB gzip (one shared `style.css` + `app.js`).
+  and only the event editor, date picker, search, the endless timeline rail and the contact editor
+  are JavaScript. The page header stays put: the app frame is the viewport, `.main` scrolls, the
+  toolbar sticks under the topbar, scrollbars are hidden everywhere. Per-view CSS/JS budget stays
+  below 60 KB gzip (one shared `style.css` + `app.js`).
+- **vCard editing** keeps what it does not model: on update every property outside the managed set
+  (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
+  the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
+  `TYPE=HOME,PREF` and Apple's repeated `;type=…` would otherwise be invisible. Address-book colours
+  live in `xui_addressbook_colors` (RustiCal stores none), list-view field choices per user in
+  `xui_user_settings.contact_list_fields_json`.
 - **Holidays** come from `openholidaysapi.org` (`HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`, per-user
   region override), cached 30 days in `xui_holidays`; a failed fetch falls back to the stale cache.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
