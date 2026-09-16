@@ -149,19 +149,24 @@ table.ct td[contenteditable]:hover { outline-color: var(--accent); }
 
 /* Variant switcher (prototype only) */
 
-/* --- Multi-day events: one continuous bar across tiles (Runde 4). The bar bleeds into the
-   4px gap between tiles; a short gradient fades it out towards the neighbouring tile. --- */
+/* --- Multi-day events: one continuous bar across tiles. Geometry: tile padding 6px, gap 4px.
+   A segment owns its tile's content width plus the gap to its right (start/mid: -10px margin);
+   mid/end begin exactly at their tile's edge (-6px), so segments never overlap. At every tile
+   transition the mask dips symmetrically: 10px ramp → --dip across the gap → 10px ramp back. --- */
 .month { overflow: visible; }
 .day { overflow: visible; }
-.ev.span { position: relative; border-radius: 0; }
+.ev.span { position: relative; border-radius: 0; max-width: none; --dip: rgba(0,0,0,.5); } /* max-width: the .ev cap below would freeze the width and shift the fades off the edges */
 .ev.span.start { border-radius: 6px 0 0 6px; margin-right: -10px; padding-right: 10px; }
-.ev.span.mid   { margin-left: -10px; margin-right: -10px; padding-left: 10px; padding-right: 10px; color: transparent; }
-.ev.span.end   { border-radius: 0 6px 6px 0; margin-left: -10px; padding-left: 10px; color: transparent; }
-.ev.span.mid, .ev.span.end { --edge: linear-gradient(90deg, transparent 0, #000 12px, #000 100%); }
-.ev.span.start { --edge: linear-gradient(90deg, #000 0, #000 calc(100% - 12px), transparent 100%); }
-.ev.span.mid   { --edge: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%); }
+.ev.span.mid   { margin-left: -6px; margin-right: -10px; padding-left: 6px; padding-right: 10px; color: transparent; }
+.ev.span.end   { border-radius: 0 6px 6px 0; margin-left: -6px; padding-left: 6px; color: transparent; }
+.ev.span.start { --edge: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), var(--dip) calc(100% - 4px), var(--dip) 100%); }
+.ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 calc(100% - 14px), var(--dip) calc(100% - 4px), var(--dip) 100%); }
+.ev.span.end   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 100%); }
 .ev.span { -webkit-mask-image: var(--edge); mask-image: var(--edge); }
-.day:nth-child(7n+7) .ev.span.start, .day:nth-child(7n+7) .ev.span.mid { margin-right: 0; padding-right: 6px; border-radius: 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; --edge: linear-gradient(90deg, transparent 0, #000 12px, #000 100%); }
+/* last column: the bar stops at the row's end, rounded, no dip on the right */
+.day:nth-child(7n+7) .ev.span.start, .day:nth-child(7n+7) .ev.span.mid { margin-right: 0; padding-right: 6px; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.day:nth-child(7n+7) .ev.span.start { --edge: linear-gradient(90deg, #000, #000); }
+.day:nth-child(7n+7) .ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 100%); }
 @media (max-width: 720px) { .ev.span { display: none; } }
 
 /* Fusion B (Runde 3) — Apple typography + Immich tiles; events as colour bar + text, all-day as tinted bar. */
