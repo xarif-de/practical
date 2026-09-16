@@ -9,8 +9,10 @@ calendar, contacts and tasks views.
 **What it does (phase 1 + 2):** groups and memberships · calendars and address books per
 person or group · app tokens · trash with restore · calendar views Day (ledger + document),
 Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
-Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor with reminder,
-recurrence, categories and presets · contacts as letter panels (fields per entry selectable) or an
+Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
+(view mode behind a lock, cards only where data is): several reminders per event (before start,
+before end, at a time), recurrence with interval, weekdays, end and exceptions/extra dates,
+organizer and attendees, location with map actions, categories, notes, presets · contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
@@ -72,6 +74,13 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   are JavaScript. The page header stays put: the app frame is the viewport, `.main` scrolls, the
   toolbar sticks under the topbar, scrollbars are hidden everywhere. Per-view CSS/JS budget stays
   below 60 KB gzip (one shared `style.css` + `app.js`).
+- **Event editing** keeps what it does not model, too: the stored master VEVENT is split into the
+  lines the editor writes (`MANAGED`) and everything else (STATUS, CLASS, ATTACH, COLOR, X-…, RFC 9073
+  components), which is copied verbatim on every save; each VALARM keeps its position so its unmodelled
+  lines (UID, ACKNOWLEDGED, PROXIMITY, ATTACH, ATTENDEE) travel with the edited alarm, and RECURRENCE-ID
+  overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
+  VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
+  series instances get the master's alarms (caldata builds them without VALARMs).
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
