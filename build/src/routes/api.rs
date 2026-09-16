@@ -113,6 +113,12 @@ async fn get_contact(State(state): State<SharedState>, user: Principal, Path((p,
     Ok(Json(contacts::get_contact(&state, &user, &p, &a, &id).await?))
 }
 
+async fn contact_vcf(State(state): State<SharedState>, user: Principal, Path((p, a, id)): Path<(String, String, String)>) -> AppResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let vcf = contacts::get_vcf(&state, &user, &p, &a, &id).await?;
+    Ok(([(axum::http::header::CONTENT_TYPE, "text/vcard; charset=utf-8".to_string()), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{id}.vcf\""))], vcf).into_response())
+}
+
 async fn create_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     Ok(Json(Created { id: contacts::create_contact(&state, &user, input).await? }))
@@ -260,6 +266,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/events/{p}/{c}/{id}", get(get_event).put(update_event).delete(delete_event))
         .route("/api/contacts", post(create_contact))
         .route("/api/contacts/{p}/{a}/{id}", get(get_contact).put(update_contact).delete(delete_contact))
+        .route("/api/contacts/{p}/{a}/{id}/vcf", get(contact_vcf))
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{p}/{c}/{id}", axum::routing::put(update_task).delete(delete_task))
         .route("/api/search", get(api_search))

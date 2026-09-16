@@ -16,6 +16,41 @@ use rustical_store::{AddressbookReadStore, AddressbookWriteStore};
 pub struct Typed {
     pub kind: String,
     pub value: String,
+    /// TYPE=PREF (vCard 3) / PREF=1 (vCard 4): the number or address to use first
+    #[serde(default)]
+    pub pref: bool,
+}
+
+/// ADR components we edit (PO box and extended address are dropped on write).
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Address {
+    pub kind: String,
+    #[serde(default)]
+    pub street: String,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub region: String,
+    #[serde(default)]
+    pub country: String,
+    #[serde(default)]
+    pub pref: bool,
+}
+
+impl Address {
+    pub fn one_line(&self) -> String {
+        let place = format!("{} {}", self.code, self.city).trim().to_string();
+        [self.street.as_str(), place.as_str(), self.region.as_str(), self.country.as_str()].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(", ")
+    }
+}
+
+/// X-ABDATE with a label (name day, …): date as YYYY-MM-DD or --MM-DD.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Dated {
+    pub label: String,
+    pub date: String,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -31,17 +66,27 @@ pub struct Contact {
     pub full_name: String,
     pub given: String,
     pub family: String,
+    pub nickname: String,
+    pub prefix: String,
+    pub additional: String,
+    pub suffix: String,
     pub org: String,
+    pub department: String,
     pub title: String,
     pub emails: Vec<Typed>,
     pub phones: Vec<Typed>,
-    pub addresses: Vec<Typed>,
+    pub addresses: Vec<Address>,
+    pub urls: Vec<Typed>,
+    /// IMPP: kind = service (Signal, WhatsApp, Matrix, …), value = handle
+    pub impp: Vec<Typed>,
+    /// RELATED: kind = spouse/child/parent/…, value = the name
+    pub related: Vec<Typed>,
+    pub dates: Vec<Dated>,
     /// YYYY-MM-DD or --MM-DD
     pub birthday: String,
     pub anniversary: String,
     pub categories: Vec<String>,
     pub note: String,
-    pub url: String,
     pub etag: String,
 }
 
@@ -64,7 +109,7 @@ impl Contact {
         self.emails.first().map(|t| t.value.clone()).unwrap_or_default()
     }
     pub fn primary_address(&self) -> String {
-        self.addresses.first().map(|t| t.value.clone()).unwrap_or_default()
+        self.addresses.first().map(Address::one_line).unwrap_or_default()
     }
     pub fn category(&self) -> String {
         self.categories.first().cloned().unwrap_or_default()
@@ -104,42 +149,135 @@ pub fn norm_partial(v: &str) -> String {
     String::new()
 }
 
-fn kind_of(line: &caldata::parser::ContentLine) -> String {
-    line.params
-        .get_param("TYPE")
-        .map(|t| t.to_lowercase())
-        .unwrap_or_default()
-        .split(',')
-        .find(|t| !t.is_empty() && *t != "pref" && *t != "voice" && *t != "internet")
-        .unwrap_or("")
-        .to_string()
+/// One unfolded vCard content line with every parameter value — caldata's `get_param` returns only
+/// the first value, which hides `TYPE=HOME,PREF` and Apple's repeated `;type=…` parameters.
+#[derive(Debug, Clone, Default)]
+pub struct RawLine {
+    pub name: String,
+    /// (NAME, value) per value; `TYPE=HOME,PREF` becomes two entries, a bare `CELL` (vCard 2.1) a TYPE
+    pub params: Vec<(String, String)>,
+    pub value: String,
+}
+
+fn unfold(vcf: &str) -> Vec<String> {
+    let mut lines: Vec<String> = vec![];
+    for raw in vcf.split("\r\n").flat_map(|l| l.split('\n')) {
+        if let Some(cont) = raw.strip_prefix(' ').or_else(|| raw.strip_prefix('\t')) {
+            if let Some(last) = lines.last_mut() {
+                last.push_str(cont);
+            }
+        } else if !raw.trim().is_empty() {
+            lines.push(raw.to_string());
+        }
+    }
+    lines
+}
+
+/// Split at `sep` outside double quotes.
+fn split_unquoted(s: &str, sep: char) -> Vec<String> {
+    let (mut out, mut cur, mut q) = (vec![], String::new(), false);
+    for c in s.chars() {
+        match c {
+            '"' => q = !q,
+            c if c == sep && !q => out.push(std::mem::take(&mut cur)),
+            c => cur.push(c),
+        }
+    }
+    out.push(cur);
+    out
+}
+
+pub fn raw_lines(vcf: &str) -> Vec<RawLine> {
+    unfold(vcf)
+        .into_iter()
+        .filter_map(|l| {
+            let parts = split_unquoted(&l, ':');
+            let (head, value) = parts.split_first().map(|(h, rest)| (h.clone(), rest.join(":")))?;
+            let mut it = split_unquoted(&head, ';').into_iter();
+            let name = it.next()?;
+            let name = name.rsplit('.').next().unwrap_or(&name).to_ascii_uppercase();
+            let mut params = vec![];
+            for p in it {
+                let (k, v) = p.split_once('=').map(|(k, v)| (k.to_ascii_uppercase(), v.to_string())).unwrap_or(("TYPE".into(), p.clone()));
+                for v in split_unquoted(&v, ',') {
+                    params.push((k.clone(), v.trim_matches('"').to_string()));
+                }
+            }
+            Some(RawLine { name, params, value })
+        })
+        .collect()
+}
+
+impl RawLine {
+    fn param(&self, k: &str) -> Option<&str> {
+        self.params.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str())
+    }
+    fn types(&self) -> impl Iterator<Item = String> + '_ {
+        self.params.iter().filter(|(n, _)| n == "TYPE").map(|(_, v)| v.to_lowercase())
+    }
+    /// first TYPE that is a real kind (home/work/cell/…), not a flag
+    fn kind(&self) -> String {
+        self.types().find(|t| !t.is_empty() && !matches!(t.as_str(), "pref" | "voice" | "internet" | "text" | "x-mobile")).unwrap_or_default()
+    }
+    fn pref(&self) -> bool {
+        self.types().any(|t| t == "pref") || self.param("PREF").is_some_and(|p| p.trim() == "1")
+    }
+}
+
+/// Property names build_vcf writes itself; every other line of an existing vCard (PHOTO, X-…,
+/// client-specific items) is carried over untouched so an edit here never drops what another
+/// client stored.
+const MANAGED: &[&str] = &[
+    "BEGIN", "END", "VERSION", "PRODID", "UID", "REV", "FN", "N", "NICKNAME", "ORG", "TITLE", "EMAIL", "TEL", "ADR", "URL", "IMPP", "RELATED", "X-ABDATE", "BDAY", "ANNIVERSARY", "CATEGORIES", "NOTE",
+];
+
+/// Unfolded raw lines of `vcf` whose property is not managed by the editor.
+pub fn preserved_lines(vcf: &str) -> Vec<String> {
+    unfold(vcf)
+        .into_iter()
+        .filter(|l| {
+            let head = l.split([';', ':']).next().unwrap_or("");
+            let name = head.rsplit('.').next().unwrap_or(head).to_ascii_uppercase();
+            !MANAGED.contains(&name.as_str())
+        })
+        .collect()
 }
 
 pub fn parse_vcf(vcf: &str) -> AppResult<VcardContact> {
     Ok(VcardParser::from_slice(vcf.as_bytes()).expect_one()?)
 }
 
-pub fn contact_from(vc: &VcardContact, ab: &AbInfo, object_id: &str, etag: String) -> Contact {
+pub fn contact_from(vc: &VcardContact, raw: &[RawLine], ab: &AbInfo, object_id: &str, etag: String) -> Contact {
     let n: Vec<String> = vc.name.as_ref().map(|n| n.0.split(';').map(ical::unescape).collect()).unwrap_or_default();
     let full_name = vc.full_name.first().map(|f| ical::unescape(&f.0)).unwrap_or_default();
     let family = n.first().cloned().unwrap_or_default();
     let given = n.get(1).cloned().unwrap_or_default();
     let full_name = if full_name.is_empty() { format!("{given} {family}").trim().to_string() } else { full_name };
+    let part = |i: usize| n.get(i).cloned().unwrap_or_default();
+    fn lines<'a>(raw: &'a [RawLine], name: &'a str) -> impl Iterator<Item = &'a RawLine> + 'a {
+        raw.iter().filter(move |l| l.name == name)
+    }
     let typed = |name: &str| -> Vec<Typed> {
-        vc.get_named_properties(name).map(|l| Typed { kind: kind_of(l), value: ical::unescape(&l.value) }).filter(|t| !t.value.is_empty()).collect()
+        lines(raw, name).map(|l| Typed { kind: l.kind(), value: ical::unescape(&l.value), pref: l.pref() }).filter(|t| !t.value.is_empty()).collect()
     };
-    let addresses: Vec<Typed> = vc
-        .get_named_properties("ADR")
+    let addresses: Vec<Address> = lines(raw, "ADR")
         .map(|l| {
             let parts: Vec<String> = l.value.split(';').map(ical::unescape).collect();
-            // ADR: pobox;ext;street;locality;region;postal;country
-            let street = parts.get(2).cloned().unwrap_or_default();
-            let city = format!("{} {}", parts.get(5).cloned().unwrap_or_default(), parts.get(3).cloned().unwrap_or_default()).trim().to_string();
-            let country = parts.get(6).cloned().unwrap_or_default();
-            let v = [street, city, country].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", ");
-            Typed { kind: kind_of(l), value: v }
+            let g = |i: usize| parts.get(i).cloned().unwrap_or_default();
+            // ADR: pobox;ext;street;locality;region;postal;country — pobox/ext fold into the street
+            let street = [g(0), g(1), g(2)].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(", ");
+            Address { kind: l.kind(), street, city: g(3), region: g(4), code: g(5), country: g(6), pref: l.pref() }
         })
+        .filter(|a| !a.one_line().is_empty())
+        .collect();
+    let org_parts: Vec<String> = ical::text(vc, "ORG").map(|o| o.split(';').map(str::to_string).collect()).unwrap_or_default();
+    let impp: Vec<Typed> = lines(raw, "IMPP")
+        .map(|l| Typed { kind: l.param("X-SERVICE-TYPE").map(str::to_string).unwrap_or_else(|| l.kind()), value: ical::unescape(&l.value), pref: false })
         .filter(|t| !t.value.is_empty())
+        .collect();
+    let dates: Vec<Dated> = lines(raw, "X-ABDATE")
+        .map(|l| Dated { label: l.param("X-ABLABEL").map(str::to_string).unwrap_or_default(), date: norm_partial(&l.value) })
+        .filter(|d| !d.date.is_empty())
         .collect();
     Contact {
         principal: ab.principal.clone(),
@@ -152,16 +290,24 @@ pub fn contact_from(vc: &VcardContact, ab: &AbInfo, object_id: &str, etag: Strin
         full_name,
         given,
         family,
-        org: ical::text(vc, "ORG").map(|o| o.split(';').next().unwrap_or("").to_string()).unwrap_or_default(),
+        nickname: ical::text(vc, "NICKNAME").unwrap_or_default(),
+        prefix: part(3),
+        additional: part(2),
+        suffix: part(4),
+        org: org_parts.first().cloned().unwrap_or_default(),
+        department: org_parts.get(1).cloned().unwrap_or_default(),
         title: ical::text(vc, "TITLE").unwrap_or_default(),
         emails: typed("EMAIL"),
         phones: typed("TEL"),
         addresses,
+        urls: typed("URL"),
+        impp,
+        related: typed("RELATED"),
+        dates,
         birthday: vc.get_property("BDAY").map(|l| norm_partial(&l.value)).unwrap_or_default(),
         anniversary: vc.get_property("ANNIVERSARY").map(|l| norm_partial(&l.value)).unwrap_or_default(),
         categories: ical::list(vc, "CATEGORIES"),
         note: ical::text(vc, "NOTE").unwrap_or_default(),
-        url: ical::text(vc, "URL").unwrap_or_default(),
         etag,
     }
 }
@@ -171,7 +317,7 @@ pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Con
     for ab in abs {
         for (id, obj) in AddressbookReadStore::get_objects(&*state.addressbooks, &ab.principal, &ab.id).await? {
             match parse_vcf(obj.get_vcf()) {
-                Ok(vc) => out.push(contact_from(&vc, ab, &id, obj.get_etag())),
+                Ok(vc) => out.push(contact_from(&vc, &raw_lines(obj.get_vcf()), ab, &id, obj.get_etag())),
                 Err(e) => tracing::warn!("contact {}/{}/{}: {e}", ab.principal, ab.id, id),
             }
         }
@@ -185,7 +331,14 @@ pub async fn get_contact(state: &AppState, user: &Principal, principal: &str, ab
     let ab_row = state.addressbooks.get_addressbook(principal, ab_id, false).await?;
     let ab = AbInfo { color: String::new(), principal: principal.into(), owner_label: String::new(), is_group: principal.starts_with("group."), id: ab_id.into(), displayname: ab_row.displayname.unwrap_or_default(), description: String::new(), deleted_at: None, synctoken: 0 };
     let obj = AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await?;
-    Ok(contact_from(&parse_vcf(obj.get_vcf())?, &ab, object_id, obj.get_etag()))
+    Ok(contact_from(&parse_vcf(obj.get_vcf())?, &raw_lines(obj.get_vcf()), &ab, object_id, obj.get_etag()))
+}
+
+/// The stored vCard text of one contact (download button).
+pub async fn get_vcf(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<String> {
+    collections::ensure_owner(user, principal)?;
+    let obj = AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await?;
+    Ok(obj.get_vcf().to_string())
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -199,7 +352,17 @@ pub struct ContactInput {
     #[serde(default)]
     pub full_name: String,
     #[serde(default)]
+    pub nickname: String,
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub additional: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default)]
     pub org: String,
+    #[serde(default)]
+    pub department: String,
     #[serde(default)]
     pub title: String,
     #[serde(default)]
@@ -207,7 +370,15 @@ pub struct ContactInput {
     #[serde(default)]
     pub phones: Vec<Typed>,
     #[serde(default)]
-    pub addresses: Vec<Typed>,
+    pub addresses: Vec<Address>,
+    #[serde(default)]
+    pub urls: Vec<Typed>,
+    #[serde(default)]
+    pub impp: Vec<Typed>,
+    #[serde(default)]
+    pub related: Vec<Typed>,
+    #[serde(default)]
+    pub dates: Vec<Dated>,
     #[serde(default)]
     pub birthday: String,
     #[serde(default)]
@@ -216,8 +387,6 @@ pub struct ContactInput {
     pub categories: Vec<String>,
     #[serde(default)]
     pub note: String,
-    #[serde(default)]
-    pub url: String,
 }
 
 fn type_param(kind: &str) -> String {
@@ -225,12 +394,28 @@ fn type_param(kind: &str) -> String {
     if k.is_empty() || !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') { String::new() } else { format!(";TYPE={k}") }
 }
 
+/// `;TYPE=KIND[,PREF]` — vCard 3.0 spelling of the preferred flag (Apple and DAVx⁵ read it).
+fn type_pref(kind: &str, pref: bool) -> String {
+    let t = type_param(kind);
+    match (t.is_empty(), pref) {
+        (true, true) => ";TYPE=PREF".into(),
+        (false, true) => format!("{t},PREF"),
+        _ => t,
+    }
+}
+
+/// A single-word parameter value; anything else is dropped rather than written unquoted.
+fn word(v: &str) -> Option<&str> {
+    let v = v.trim();
+    (!v.is_empty() && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')).then_some(v)
+}
+
 fn partial_to_vcard(v: &str) -> Option<String> {
     let n = norm_partial(v);
     if n.is_empty() { None } else if let Some(md) = n.strip_prefix("--") { Some(format!("--{}", md.replace('-', ""))) } else { Some(n.replace('-', "")) }
 }
 
-pub fn build_vcf(uid: &str, i: &ContactInput) -> AppResult<String> {
+pub fn build_vcf(uid: &str, i: &ContactInput, preserved: &[String]) -> AppResult<String> {
     let given = i.given.trim();
     let family = i.family.trim();
     let mut full = i.full_name.trim().to_string();
@@ -246,29 +431,53 @@ pub fn build_vcf(uid: &str, i: &ContactInput) -> AppResult<String> {
         "PRODID:-//xarif.de//rustical-ui//DE".to_string(),
         format!("UID:{uid}"),
         format!("FN:{}", ical::escape(&full)),
-        format!("N:{};{};;;", ical::escape(family), ical::escape(given)),
+        format!("N:{};{};{};{};{}", ical::escape(family), ical::escape(given), ical::escape(i.additional.trim()), ical::escape(i.prefix.trim()), ical::escape(i.suffix.trim())),
         format!("REV:{}", ical::fmt_utc_now()),
     ];
-    if !i.org.trim().is_empty() {
-        l.push(format!("ORG:{}", ical::escape(i.org.trim())));
+    if !i.nickname.trim().is_empty() {
+        l.push(format!("NICKNAME:{}", ical::escape(i.nickname.trim())));
+    }
+    if !i.org.trim().is_empty() || !i.department.trim().is_empty() {
+        l.push(format!("ORG:{};{}", ical::escape(i.org.trim()), ical::escape(i.department.trim())));
     }
     if !i.title.trim().is_empty() {
         l.push(format!("TITLE:{}", ical::escape(i.title.trim())));
     }
     for e in &i.emails {
         if !e.value.trim().is_empty() {
-            l.push(format!("EMAIL{}:{}", type_param(&e.kind), ical::escape(e.value.trim())));
+            l.push(format!("EMAIL{}:{}", type_pref(&e.kind, e.pref), ical::escape(e.value.trim())));
         }
     }
     for p in &i.phones {
         if !p.value.trim().is_empty() {
-            l.push(format!("TEL{}:{}", type_param(&p.kind), ical::escape(p.value.trim())));
+            l.push(format!("TEL{}:{}", type_pref(&p.kind, p.pref), ical::escape(p.value.trim())));
         }
     }
     for a in &i.addresses {
-        // free-text address goes into the street component; clients show it verbatim
-        if !a.value.trim().is_empty() {
-            l.push(format!("ADR{}:;;{};;;;", type_param(&a.kind), ical::escape(a.value.trim())));
+        if !a.one_line().is_empty() {
+            l.push(format!("ADR{}:;;{};{};{};{};{}", type_pref(&a.kind, a.pref), ical::escape(a.street.trim()), ical::escape(a.city.trim()), ical::escape(a.region.trim()), ical::escape(a.code.trim()), ical::escape(a.country.trim())));
+        }
+    }
+    for u in &i.urls {
+        if !u.value.trim().is_empty() {
+            l.push(format!("URL{}:{}", type_param(&u.kind), u.value.trim()));
+        }
+    }
+    for m in &i.impp {
+        if !m.value.trim().is_empty() {
+            let svc = word(&m.kind).map(|w| format!(";X-SERVICE-TYPE={w}")).unwrap_or_default();
+            l.push(format!("IMPP{svc}:{}", ical::escape(m.value.trim())));
+        }
+    }
+    for r in &i.related {
+        if !r.value.trim().is_empty() {
+            l.push(format!("RELATED{};VALUE=text:{}", type_param(&r.kind), ical::escape(r.value.trim())));
+        }
+    }
+    for d in &i.dates {
+        if let Some(v) = partial_to_vcard(&d.date) {
+            let label = word(&d.label).map(|w| format!(";X-ABLABEL={w}")).unwrap_or_default();
+            l.push(format!("X-ABDATE{label}:{v}"));
         }
     }
     if let Some(b) = partial_to_vcard(&i.birthday) {
@@ -284,9 +493,7 @@ pub fn build_vcf(uid: &str, i: &ContactInput) -> AppResult<String> {
     if !i.note.trim().is_empty() {
         l.push(format!("NOTE:{}", ical::escape(i.note.trim())));
     }
-    if !i.url.trim().is_empty() {
-        l.push(format!("URL:{}", i.url.trim()));
-    }
+    l.extend(preserved.iter().cloned());
     l.push("END:VCARD".into());
     Ok(l.iter().map(|x| ical::fold(x)).collect::<Vec<_>>().join("\r\n") + "\r\n")
 }
@@ -294,7 +501,7 @@ pub fn build_vcf(uid: &str, i: &ContactInput) -> AppResult<String> {
 pub async fn create_contact(state: &AppState, user: &Principal, i: ContactInput) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
     let uid = uuid::Uuid::new_v4().to_string();
-    let obj = AddressObject::from_vcf(build_vcf(&uid, &i)?)?;
+    let obj = AddressObject::from_vcf(build_vcf(&uid, &i, &[])?)?;
     state.addressbooks.put_object(&i.principal, &i.ab_id, &uid, obj, false).await?;
     Ok(uid)
 }
@@ -309,7 +516,8 @@ pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str,
         return Err(AppError::Conflict("the contact was changed elsewhere; reload".into()));
     }
     let uid = parse_vcf(existing.get_vcf())?.get_uid().unwrap_or(object_id).to_string();
-    let obj = AddressObject::from_vcf(build_vcf(&uid, &i)?)?;
+    let keep = preserved_lines(existing.get_vcf());
+    let obj = AddressObject::from_vcf(build_vcf(&uid, &i, &keep)?)?;
     state.addressbooks.put_object(&i.principal, &i.ab_id, object_id, obj, true).await?;
     Ok(())
 }
@@ -331,23 +539,39 @@ mod tests {
             ab_id: "a".into(),
             given: "Christin".into(),
             family: "Lang".into(),
-            emails: vec![Typed { kind: "home".into(), value: "christin@example.org".into() }],
-            phones: vec![Typed { kind: "cell".into(), value: "+49 160 2223344".into() }],
-            addresses: vec![Typed { kind: "home".into(), value: "Parkstraße 12, 10115 Berlin".into() }],
+            nickname: "Chrissi".into(),
+            department: "Vertrieb".into(),
+            org: "ACME".into(),
+            emails: vec![Typed { kind: "home".into(), value: "christin@example.org".into(), pref: true }],
+            phones: vec![Typed { kind: "cell".into(), value: "+49 160 2223344".into(), pref: false }],
+            addresses: vec![Address { kind: "home".into(), street: "Parkstraße 12".into(), code: "10115".into(), city: "Berlin".into(), country: "Deutschland".into(), ..Default::default() }],
+            urls: vec![Typed { kind: "mastodon".into(), value: "https://example.social/@c".into(), pref: false }],
+            impp: vec![Typed { kind: "Signal".into(), value: "+49 160 2223344".into(), pref: false }],
+            related: vec![Typed { kind: "spouse".into(), value: "Max Lang".into(), pref: false }],
+            dates: vec![Dated { label: "Namenstag".into(), date: "--07-24".into() }],
             birthday: "1984-03-12".into(),
             categories: vec!["Familie".into()],
             note: "Allergie: Nüsse".into(),
             ..Default::default()
         };
-        let vcf = build_vcf("u1", &i).unwrap();
+        let vcf = build_vcf("u1", &i, &["PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ".to_string(), "X-FOO:bar".to_string()]).unwrap();
+        assert!(vcf.contains("X-FOO:bar"), "preserved lines are written back");
         let vc = parse_vcf(&vcf).unwrap();
         let ab = AbInfo { color: String::new(), principal: "p".into(), owner_label: String::new(), is_group: false, id: "a".into(), displayname: "Privat".into(), description: String::new(), deleted_at: None, synctoken: 0 };
-        let c = contact_from(&vc, &ab, "u1", String::new());
+        let c = contact_from(&vc, &raw_lines(&vcf), &ab, "u1", String::new());
         assert_eq!(c.full_name, "Christin Lang");
         assert_eq!(c.family, "Lang");
         assert_eq!(c.primary_email(), "christin@example.org");
         assert_eq!(c.phones[0].kind, "cell");
-        assert_eq!(c.primary_address(), "Parkstraße 12, 10115 Berlin");
+        assert_eq!(c.primary_address(), "Parkstraße 12, 10115 Berlin, Deutschland");
+        assert_eq!(c.addresses[0].code, "10115");
+        assert!(c.emails[0].pref && !c.phones[0].pref);
+        assert_eq!((c.nickname.as_str(), c.org.as_str(), c.department.as_str()), ("Chrissi", "ACME", "Vertrieb"));
+        assert_eq!(c.urls[0].kind, "mastodon");
+        assert_eq!(c.impp[0].kind, "Signal");
+        assert_eq!((c.related[0].kind.as_str(), c.related[0].value.as_str()), ("spouse", "Max Lang"));
+        assert_eq!((c.dates[0].label.as_str(), c.dates[0].date.as_str()), ("Namenstag", "--07-24"));
+        assert_eq!(preserved_lines(&vcf), vec!["PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ".to_string(), "X-FOO:bar".to_string()]);
         assert_eq!(c.birthday, "1984-03-12");
         assert_eq!(c.birthday_label(), "12.03.1984");
         assert_eq!(c.categories, vec!["Familie"]);
