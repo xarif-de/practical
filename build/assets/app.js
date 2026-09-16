@@ -343,11 +343,11 @@
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'] } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'] };
   // view switch
-  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
+  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $('#colpick').hidden = !table; $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
   // columns
-  function applyCols() { const on = $$('.cols input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
-  $$('.cols input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); fetch('/settings/columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
+  function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
+  $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); fetch('/settings/columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
   applyCols();
   // filter by addressbook / category
   const fb = $('#abfilter');
@@ -388,8 +388,10 @@
   $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
   $('#ct-new').onclick = () => show(null);
-  $('#ct-close').onclick = () => { det.classList.remove('on'); det.hidden = true; }; $('#ct-cancel').onclick = $('#ct-close').onclick;
-  if (location.hash.length > 1) open(location.hash.slice(1));
+  // wide list view: the editor is always visible, closing just returns to the empty (new contact) form
+  const wide = () => matchMedia('(min-width: 1100px)').matches;
+  $('#ct-close').onclick = () => { if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } }; $('#ct-cancel').onclick = $('#ct-close').onclick;
+  if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
     const lists = { phones: [], emails: [] };
