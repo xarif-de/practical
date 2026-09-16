@@ -765,3 +765,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
    the action bar stays visible at the pane's bottom edge */
 .contacts .detail { max-height: calc(100dvh - var(--sticky-top) - 30px); overflow-y: auto; overscroll-behavior: contain; }
 #ctform .actions { position: sticky; bottom: calc(-1 * var(--pad)); margin-bottom: calc(-1 * var(--pad)); padding-bottom: var(--pad); background: var(--bg); z-index: 2; }
+/* no visible scrollbars anywhere (the rails and the mouse wheel do the job); this covers .main, the
+   editor pane, the day view ledger, the table scroller and the timeline alike */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
