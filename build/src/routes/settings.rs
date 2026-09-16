@@ -459,6 +459,16 @@ async fn columns_save(State(state): State<SharedState>, user: Principal, session
     Ok(axum::Json(cols))
 }
 
+/// Contact list-view field choice (JSON array from app.js), stored per user.
+async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(fields): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let fields: Vec<String> = fields.into_iter().filter(|c| crate::routes::contacts::ALL_LIST_FIELDS.contains(&c.as_str())).collect();
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    p.contact_list_fields_json = Some(serde_json::to_string(&fields).unwrap());
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::Json(fields))
+}
+
 fn download(name: &str, ext: &str, mime: &'static str, body: String) -> Response {
     let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
     (
@@ -564,6 +574,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/columns", post(columns_save))
+        .route("/settings/list-fields", post(list_fields_save))
         .route("/settings/export/calendars/{owner}/{id}", get(export_calendar))
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))

@@ -69,6 +69,11 @@ CREATE TABLE xui_holidays (
 );
 "#,
     ),
+    (
+        2,
+        // fields shown per entry in the contacts LIST view (the table has contact_columns_json)
+        "ALTER TABLE xui_user_settings ADD COLUMN contact_list_fields_json TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

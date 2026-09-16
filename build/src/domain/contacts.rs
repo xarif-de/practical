@@ -23,6 +23,8 @@ pub struct Contact {
     pub principal: String,
     pub ab_id: String,
     pub ab_name: String,
+    /// stable colour per address book (collections::default_color), for the list chip
+    pub ab_color: String,
     pub is_group: bool,
     pub object_id: String,
     pub uid: String,
@@ -143,6 +145,7 @@ pub fn contact_from(vc: &VcardContact, ab: &AbInfo, object_id: &str, etag: Strin
         principal: ab.principal.clone(),
         ab_id: ab.id.clone(),
         ab_name: ab.displayname.clone(),
+        ab_color: collections::default_color(&ab.id),
         is_group: ab.is_group,
         object_id: object_id.to_string(),
         uid: vc.get_uid().unwrap_or(object_id).to_string(),

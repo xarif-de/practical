@@ -40,6 +40,8 @@ pub struct ContactsPage {
     pub table: bool,
     pub abs_param: String,
     pub columns: Vec<String>,
+    /// fields shown per entry in the list view
+    pub list_fields: Vec<String>,
     pub today: chrono::NaiveDate,
 }
 
@@ -47,9 +49,14 @@ impl ContactsPage {
     pub fn col(&self, name: &str) -> bool {
         self.columns.iter().any(|c| c == name)
     }
+    pub fn lf(&self, name: &str) -> bool {
+        self.list_fields.iter().any(|c| c == name)
+    }
 }
 
 pub const ALL_COLUMNS: &[&str] = &["phone", "email", "category", "addressbook", "birthday", "address", "org"];
+/// list view: everything but the note by default
+pub const ALL_LIST_FIELDS: &[&str] = &["phone", "email", "birthday", "address", "category", "note"];
 
 async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<CtQuery>) -> AppResult<ContactsPage> {
     let all = collections::addressbooks_for(&state, &user, false).await?;
@@ -68,6 +75,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     categories.dedup();
     let p = prefs::get(&state.db, &user.id).await?;
     let columns: Vec<String> = p.contact_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_COLUMNS.iter().take(5).map(|s| s.to_string()).collect());
+    let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(5).map(|s| s.to_string()).collect());
     let today = chrono::Utc::now().date_naive();
     Ok(ContactsPage {
         ctx,
@@ -79,6 +87,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         table: q.view.as_deref() == Some("table"),
         abs_param: q.abs.unwrap_or_default(),
         columns,
+        list_fields,
         today,
     })
 }

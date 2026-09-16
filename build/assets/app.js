@@ -343,12 +343,16 @@
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'] } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'] };
   // view switch
-  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $('#colpick').hidden = !table; $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
+  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
   $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); fetch('/settings/columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
   applyCols();
+  // list view: the same picker toggles the lines of every entry
+  function applyListFields() { const on = $$('#colpop input[data-lf]').filter(i => i.checked).map(i => i.dataset.lf); $$('.panels [data-lf]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.lf))); return on; }
+  $$('#colpop input[data-lf]').forEach(i => i.addEventListener('change', () => { const on = applyListFields(); fetch('/settings/list-fields', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
+  applyListFields(); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (wrap.classList.contains('view-table') ? 'table' : 'list'));
   // filter by addressbook / category
   const fb = $('#abfilter');
   function applyFilter() {

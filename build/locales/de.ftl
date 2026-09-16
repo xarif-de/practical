@@ -168,6 +168,7 @@ col-category = Kategorie
 col-addressbook = Adressbuch
 col-birthday = Geburtstag
 col-address = Adresse
+col-note = Notiz
 col-org = Firma
 ct-none = Noch keine Kontakte. Lege ein Adressbuch an oder importiere eine .vcf-Datei in den Einstellungen.
 ct-new-row = Neuer Kontakt …

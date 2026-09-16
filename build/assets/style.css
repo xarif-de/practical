@@ -640,3 +640,17 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
   .contacts:not(.view-table) { grid-template-columns: 1fr 2fr 32px; grid-template-areas: "list detail rail"; }
   .contacts:not(.view-table) .detail { display: block; } /* always shown; empty = new contact */
 }
+
+/* ---- contacts list entries: variable height, lines toggled from the ▥ picker (data-lf), the
+   address-book chip always shown; two lines minimum (the avatar height). ---- */
+.list li { grid-template-columns: 40px 1fr; align-items: start; }
+.list .ci { min-height: 36px; display: grid; gap: 2px; align-content: center; min-width: 0; }
+.list .name { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.list .name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .bday { flex: none; font-weight: 400; font-size: 12px; color: var(--fg-2); }
+.list .line { font-size: 13px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .sub { display: flex; flex-wrap: wrap; gap: 0 4px; } .list .sub span:not(.off) ~ span:not(.off)::before { content: "· "; }
+.list .abchip { display: inline-block; font-size: 12px; line-height: 1.4; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--fg); }
+.list .cats { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+.list .note { color: var(--fg-3); }
+.list .off { display: none; }

@@ -168,6 +168,7 @@ col-category = Category
 col-addressbook = Address book
 col-birthday = Birthday
 col-address = Address
+col-note = Note
 col-org = Company
 ct-none = No contacts yet. Create an address book or import a .vcf file in the settings.
 ct-new-row = New contact …
