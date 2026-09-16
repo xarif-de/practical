@@ -25,7 +25,7 @@
 <aside class="side">
 <div><label class="l">{{ ctx.t("ed-calendar") }}</label><select name="calendar" id="ed-cal">{% for c in calendars %}<option value="{{ c.principal }}/{{ c.id }}" data-color="{{ c.color }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select></div>
 <div><label class="l">{{ ctx.t("ed-date") }}</label><input type="date" name="date" required></div>
-<div class="row two" style="margin:0"><div><label class="l">{{ ctx.t("ed-from") }}</label><input type="time" name="from" step="300"></div><div><label class="l">{{ ctx.t("ed-to") }}</label><input type="time" name="to" step="300"></div></div>
+<div class="row two" id="ed-times" style="margin:0"><div><label class="l">{{ ctx.t("ed-from") }}</label><input type="time" name="from" step="300"></div><div><label class="l">{{ ctx.t("ed-to") }}</label><input type="time" name="to" step="300"></div></div>
 <div><label class="l">{{ ctx.t("ed-end-date") }}</label><input type="date" name="end_date"></div>
 <label class="toggle" id="ed-allday"><input type="checkbox" name="all_day" hidden><i></i> {{ ctx.t("ed-allday") }}</label>
 <div><label class="l">{{ ctx.t("ed-reminder") }}</label><select name="alarm"><option value="">{{ ctx.t("ed-reminder-none") }}</option><option value="0">{{ ctx.t("ed-reminder-0") }}</option><option value="15">{{ ctx.t("ed-reminder-15") }}</option><option value="60">{{ ctx.t("ed-reminder-60") }}</option><option value="180">{{ ctx.t("ed-reminder-180") }}</option><option value="1440">{{ ctx.t("ed-reminder-1440") }}</option><option value="2880">{{ ctx.t("ed-reminder-2880") }}</option></select></div>

@@ -175,7 +175,7 @@
   const presetBox = $('#ed-presets');
   if (presets.length) presetBox.innerHTML = '<div class="presetchips">' + presets.map((p, i) => `<button type="button" class="btn" data-preset="${i}">${p.title}</button>`).join('') + '</div>';
   $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) f.categories.value = p.category; if (p.all_day) setAllDay(true); syncDot(); });
-  function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; }
+  function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
   $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); });
   f.rrule.addEventListener('change', () => { f.rrule_custom.hidden = f.rrule.value !== 'custom'; });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = o ? o.dataset.color : ''; }
@@ -185,13 +185,17 @@
   function close() { ed.hidden = true; }
   $('#ed-close').onclick = close; $('#ed-cancel').onclick = close; ed.addEventListener('click', e => { if (e.target === ed) close(); });
   addEventListener('keydown', e => { if (e.key === 'Escape') { close(); pk.hidden = true; } });
+  // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
+  const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
+  const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
+  const nextDay = s => addDays(s, 1);
   function fill(d) {
     form.reset(); $('#ed-error').textContent = ''; f.rrule_custom.hidden = true;
     f.key.value = d ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = d ? d.etag : '';
     $('#edh').textContent = d ? T.editEv : T.newEv; $('#ed-delete').hidden = !d;
     if (d) {
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; f.categories.value = d.categories.join(', ');
-      f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.end.slice(0, 10);
+      f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       f.alarm.value = d.alarm_minutes == null ? '' : String(d.alarm_minutes);
       if (d.rrule) { const std = ['FREQ=DAILY','FREQ=WEEKLY','FREQ=MONTHLY','FREQ=YEARLY']; if (std.includes(d.rrule)) f.rrule.value = d.rrule; else { f.rrule.value = 'custom'; f.rrule_custom.value = d.rrule; f.rrule_custom.hidden = false; } }
@@ -225,7 +229,7 @@
     const allDay = f.all_day.checked;
     const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00';
     const endDate = f.end_date.value || f.date.value;
-    const end = allDay ? endDate + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
+    const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
     const rrule = f.rrule.value === 'custom' ? f.rrule_custom.value : f.rrule.value;
     const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarm_minutes: f.alarm.value === '' ? null : +f.alarm.value, categories: f.categories.value.split(',').map(s => s.trim()).filter(Boolean), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;

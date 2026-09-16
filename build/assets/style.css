@@ -384,6 +384,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .ed .title { font-size: 20px; font-weight: 600; padding: 10px 12px; }
 .ed .row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; } .ed .row.two { grid-template-columns: 1fr 1fr; } .ed .row.three { grid-template-columns: 1fr 1fr 1fr; } .ed .row.tl { grid-template-columns: 110px 1fr; align-items: center; }
 .ed label.l { font-size: 12px; color: var(--fg-3); display: block; margin-bottom: 4px; }
+.ed .row[hidden] { display: none; } /* all-day hides the time row; the grid display would beat the attribute */
 .ed .chips { display: flex; gap: 6px; flex-wrap: wrap; } .ed .chips button { border-radius: 999px; padding: 4px 10px; font-size: 13px; } .ed .chips button[aria-pressed=true] { background: var(--accent); color: #fff; border-color: transparent; }
 .ed .sw { width: 12px; height: 12px; }
 .ed .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
