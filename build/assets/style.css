@@ -235,8 +235,13 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .sres .jump { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .sres .none { padding: 10px; color: var(--fg-3); }
 .filter { position: relative; }
-.filter .pop { display: none; position: absolute; right: 0; top: 38px; width: 260px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 8px 10px; z-index: 30; }
-.filter:hover .pop, .filter:focus-within .pop, .filter.open .pop { display: block; } /* .open = the click toggle in app.js (keyboard/touch without hover or focus) */
+.filter .pop { display: block; position: absolute; right: 0; top: 38px; width: 260px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 8px 10px; z-index: 30; }
+/* hover popovers (.filter: topbar filter, user menu, contacts field picker; .more: calendar views) share one
+   behaviour: shown on hover, focus or the click toggle (.open, app.js), and they stay for half a second after
+   the pointer leaves so it can travel from the button into the dialog. visibility instead of display so the
+   delay can be a transition. */
+.filter .pop, .more .pop { visibility: hidden; opacity: 0; transition: opacity .15s .5s, visibility 0s .65s; }
+.filter:hover .pop, .filter:focus-within .pop, .filter.open .pop, .more:hover .pop, .more:focus-within .pop, .more.open .pop { visibility: visible; opacity: 1; transition: opacity .12s 0s, visibility 0s 0s; }
 .filter h4 { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
 .filter label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 14px; }
 .filter label:hover { background: var(--tile); } .filter label small { margin-left: auto; color: var(--fg-3); }
@@ -359,8 +364,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 
 /* "Mehr" dropdown in the view switcher */
 .more { position: relative; display: inline-flex; }
-.more .pop { display: none; position: absolute; right: 0; top: 36px; min-width: 200px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; z-index: 30; }
-.more:hover .pop, .more.open .pop, .more:focus-within .pop { display: grid; }
+.more .pop { display: grid; position: absolute; right: 0; top: 36px; min-width: 200px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; z-index: 30; }
 .more .pop a { padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--fg); }
 .more .pop a:hover { background: var(--tile); } .more .pop a[aria-pressed=true] { background: var(--tile); font-weight: 600; }
 .seg [data-more][aria-pressed=true] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.18); border-radius: 6px; }
@@ -652,5 +656,5 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .list .sub { display: flex; flex-wrap: wrap; gap: 0 4px; } .list .sub span:not(.off) ~ span:not(.off)::before { content: "· "; }
 .list .abchip { display: inline-block; font-size: 12px; line-height: 1.4; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); color: var(--fg); }
 .list .cats { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
-.list .note { color: var(--fg-3); }
+.list .note { color: var(--fg-3); font-style: italic; }
 .list .off { display: none; }

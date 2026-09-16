@@ -162,6 +162,7 @@ ct-list = List
 ct-table = Table
 ct-contact = Contact
 ct-columns = Columns:
+ct-show = Show:
 col-phone = Phone
 col-email = Email
 col-category = Category

@@ -162,6 +162,7 @@ ct-list = Liste
 ct-table = Tabelle
 ct-contact = Kontakt
 ct-columns = Spalten:
+ct-show = Darstellen von:
 col-phone = Telefon
 col-email = E-Mail
 col-category = Kategorie
