@@ -403,7 +403,7 @@
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
   const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].filter(e => !e.closest('template')).map(e => e.value).join('|') + '|' + chips().join(',') + '|' + $$('.pref[aria-pressed=true]', form).length;
-  function updateButtons() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed; $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  function updateButtons() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed && form.classList.contains('new'); $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
   const initials = n => n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   function show(c) {
     current = c; form.reset(); $('#ct-error').textContent = '';

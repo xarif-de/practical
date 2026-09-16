@@ -698,6 +698,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .field > span:first-child { grid-area: l; color: var(--fg-3); font-size: 11.5px; }
 #ctform .field > input, #ctform .field > select, #ctform .field > textarea, #ctform .field > .pdate { grid-area: v; }
 #ctform input:not([type=hidden]), #ctform select, #ctform textarea { font: inherit; font-size: 15px; color: var(--fg); background: transparent; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; width: 100%; box-sizing: border-box; }
+#ctform.mode-edit input:not([type=hidden]), #ctform.mode-edit textarea { border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 #ctform.mode-edit input:focus, #ctform.mode-edit textarea:focus { outline: none; border-bottom-color: var(--accent); }
 #ctform textarea { resize: none; min-height: 24px; }
 #ctform .note-wrap { padding-left: 26px; }
@@ -730,7 +731,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .rm:hover { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
 #ctform .add { all: unset; cursor: pointer; font-size: 13px; color: var(--accent); padding: 6px 0 0 26px; display: inline-flex; gap: 6px; align-items: center; }
 #ctform .add .ico { width: 14px; height: 14px; }
-#ctform .addmenu { position: relative; margin: 2px 0 4px; }
+#ctform .addmenu { position: relative; margin: 2px 0 4px; display: inline-block; width: max-content; }
 #ctform .addmenu .add { padding-left: 0; }
 #ctform .addmenu .pop { right: auto; left: 0; top: 30px; }
 #ctform .addmenu .pop button { all: unset; display: block; width: 100%; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; }
@@ -741,7 +742,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .pdate input { width: 34px; text-align: center; }
 #ctform .pdate input[data-p=y] { width: 52px; }
 #ctform .pdate small { color: var(--fg-3); font-size: 12px; }
-#ctform.mode-edit .pdate input { border-bottom-color: var(--line); }
+#ctform.mode-edit .tags input { border-bottom-color: transparent; }
 /* tags */
 #ctform .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-left: 26px; }
 #ctform .tags .chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
