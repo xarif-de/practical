@@ -210,6 +210,7 @@ push-devices = Angemeldete Geräte
 push-active = Aktiv auf diesem Gerät.
 push-denied = Benachrichtigungen wurden im Browser abgelehnt.
 ct-display-name = Anzeigename
+ct-new-title = Neuen Kontakt anlegen
 ct-name-hint = Anzeigename folgt Vor- und Nachname, bis du ihn selbst änderst
 ct-nickname = Spitzname
 ct-prefix = Titel / Präfix

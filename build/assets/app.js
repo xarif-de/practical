@@ -419,7 +419,7 @@
     $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added'));
     $('#ct-av').textContent = c ? initials(c.full_name || '?') : '?'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
     $('#ct-sub').textContent = c ? [c.org, c.categories.join(', ')].filter(Boolean).join(' · ') : '';
-    form.classList.toggle('new', !c);
+    form.classList.toggle('new', !c); f.full_name.placeholder = c ? D.tDisplay : D.tNewtitle;
     const b = $('#ct-save'); b.title = c ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     mode(c ? 'view' : 'edit'); baseline = serialize(); updateButtons();
     det.hidden = false; det.classList.add('on');
