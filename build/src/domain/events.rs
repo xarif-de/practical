@@ -36,6 +36,8 @@ pub struct Instance {
     /// every relative alarm as minutes before the start (RELATED=END ones shifted by the duration)
     pub alarms: Vec<i64>,
     pub is_group: bool,
+    /// STATUS:CANCELLED — the views strike it through
+    pub cancelled: bool,
 }
 
 impl Instance {
@@ -101,7 +103,8 @@ fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::
         principal: cal.principal.clone(),
         cal_id: cal.id.clone(),
         cal_name: cal.displayname.clone(),
-        color: cal.color.clone(),
+        // RFC 7986 COLOR on the event wins over the calendar colour
+        color: ical::text(ev, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_else(|| cal.color.clone()),
         object_id: object_id.to_string(),
         uid: ev.get_uid().to_string(),
         summary: ical::text(ev, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
@@ -115,6 +118,7 @@ fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::
         alarm_minutes: alarms.first().copied(),
         alarms,
         is_group: cal.is_group,
+        cancelled: ical::text(ev, "STATUS").is_some_and(|s| s.eq_ignore_ascii_case("CANCELLED")),
     }
 }
 
@@ -183,6 +187,19 @@ pub struct EventDetail {
     pub attendees: Vec<Person>,
     pub alarms: Vec<Alarm>,
     pub categories: Vec<String>,
+    /// CONFIRMED | TENTATIVE | CANCELLED | ""
+    pub status: String,
+    /// OPAQUE | TRANSPARENT | ""
+    pub transp: String,
+    /// PUBLIC | PRIVATE | CONFIDENTIAL | ""
+    pub class: String,
+    pub priority: Option<i64>,
+    /// RFC 7986 COLOR (CSS colour name or #rrggbb)
+    pub color: String,
+    /// GEO as (lat, lon)
+    pub geo: Option<(f64, f64)>,
+    /// URL, ATTACH (URIs) and CONFERENCE
+    pub links: Vec<Link>,
     pub etag: String,
     pub has_overrides: bool,
     pub timezone: String,
@@ -221,6 +238,13 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         attendees: persons_of(&raw.props, "ATTENDEE"),
         alarms: raw.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect(),
         categories: i.categories,
+        status: ical::text(main, "STATUS").unwrap_or_default().to_ascii_uppercase(),
+        transp: ical::text(main, "TRANSP").unwrap_or_default().to_ascii_uppercase(),
+        class: ical::text(main, "CLASS").unwrap_or_default().to_ascii_uppercase(),
+        priority: ical::text(main, "PRIORITY").and_then(|p| p.trim().parse().ok()),
+        color: ical::text(main, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_default(),
+        geo: ical::text(main, "GEO").and_then(|g| { let (a, b) = g.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) }),
+        links: links_of(&raw.props),
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
         timezone,
@@ -257,7 +281,105 @@ pub struct EventInput {
     #[serde(default)]
     pub categories: Vec<String>,
     #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub transp: String,
+    #[serde(default)]
+    pub class: String,
+    #[serde(default)]
+    pub priority: Option<i64>,
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub geo: Option<(f64, f64)>,
+    #[serde(default)]
+    pub links: Vec<Link>,
+    #[serde(default)]
     pub timezone: Option<String>,
+}
+
+/// URL / ATTACH (URI form) / CONFERENCE as one list; parameters the editor does not model
+/// (FMTTYPE, FEATURE, X-…) ride along in `extra`. Binary ATTACHs are not modelled: they stay
+/// in the preserved lines and are shown read-only as `embedded`.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Link {
+    /// url | attach | conference
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub uri: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub embedded: bool,
+    #[serde(default)]
+    pub extra: Vec<(String, String)>,
+}
+
+fn is_binary_attach(params: &[(String, String)]) -> bool {
+    params.iter().any(|(k, v)| (k == "VALUE" && v.eq_ignore_ascii_case("BINARY")) || k == "ENCODING")
+}
+
+fn links_of(props: &[String]) -> Vec<Link> {
+    props.iter().filter_map(|l| {
+        let (name, params, value) = ical::split_line(l);
+        let kind = match name.as_str() { "URL" => "url", "ATTACH" => "attach", "CONFERENCE" => "conference", _ => return None };
+        let mut link = Link { kind: kind.into(), uri: value.trim().to_string(), ..Default::default() };
+        if kind == "attach" && is_binary_attach(&params) {
+            link.embedded = true;
+            link.uri = String::new();
+            link.label = params.iter().find(|(k, _)| k == "FMTTYPE").map(|(_, v)| v.clone()).unwrap_or_default();
+            return Some(link);
+        }
+        for (k, v) in params {
+            match k.as_str() {
+                "LABEL" => link.label = v.trim_matches('"').to_string(),
+                "VALUE" => {}
+                _ => link.extra.push((k, v)),
+            }
+        }
+        Some(link)
+    }).collect()
+}
+
+fn link_lines(links: &[Link]) -> Vec<String> {
+    let mut out = vec![];
+    let mut url_written = false;
+    for l in links {
+        let uri = l.uri.trim();
+        if l.embedded || uri.is_empty() || uri.contains(['\n', '\r']) {
+            continue;
+        }
+        let name = match l.kind.as_str() { "url" => "URL", "attach" => "ATTACH", "conference" => "CONFERENCE", _ => continue };
+        if name == "URL" {
+            if url_written {
+                continue; // URL must not occur more than once
+            }
+            url_written = true;
+        }
+        let mut line = name.to_string();
+        if name == "CONFERENCE" {
+            line.push_str(";VALUE=URI");
+        }
+        for (k, v) in &l.extra {
+            line.push_str(&format!(";{k}={v}"));
+        }
+        let label = l.label.trim().replace('"', "");
+        if !label.is_empty() && name != "URL" {
+            line.push_str(&format!(";LABEL=\"{label}\""));
+        }
+        out.push(format!("{line}:{uri}"));
+    }
+    out
+}
+
+pub fn valid_color(c: &str) -> bool {
+    !c.is_empty() && c.len() <= 32 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '#')
+}
+
+fn one_of<'a>(v: &str, allowed: &[&'a str]) -> Option<&'a str> {
+    let u = v.trim().to_ascii_uppercase();
+    allowed.iter().copied().find(|a| *a == u)
 }
 
 /// ORGANIZER / ATTENDEE: the modelled parameters plus every other parameter verbatim (`extra`),
@@ -425,7 +547,17 @@ pub struct RawMaster {
 }
 
 /// Properties `build_vevent` writes itself; every other master line is carried over verbatim.
-const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE", "EXDATE", "RDATE", "ORGANIZER", "ATTENDEE"];
+const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE", "EXDATE", "RDATE", "ORGANIZER", "ATTENDEE", "STATUS", "TRANSP", "CLASS", "PRIORITY", "URL", "COLOR", "GEO", "ATTACH", "CONFERENCE"];
+
+/// A line `build_vevent` rewrites; binary ATTACHs are the exception and stay verbatim.
+fn is_managed(line: &str) -> bool {
+    let name = prop_name(line);
+    if name == "ATTACH" {
+        let (_, params, _) = ical::split_line(line);
+        return !is_binary_attach(&params);
+    }
+    MANAGED.contains(&name.as_str())
+}
 const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT"];
 
 fn prop_name(line: &str) -> String {
@@ -606,9 +738,29 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
         l.push(line);
     }
     l.extend(input.attendees.iter().filter_map(|a| person_line("ATTENDEE", a)));
+    if let Some(v) = one_of(&input.status, &["CONFIRMED", "TENTATIVE", "CANCELLED"]) {
+        l.push(format!("STATUS:{v}"));
+    }
+    if let Some(v) = one_of(&input.transp, &["OPAQUE", "TRANSPARENT"]) {
+        l.push(format!("TRANSP:{v}"));
+    }
+    if let Some(v) = one_of(&input.class, &["PUBLIC", "PRIVATE", "CONFIDENTIAL"]) {
+        l.push(format!("CLASS:{v}"));
+    }
+    if let Some(p) = input.priority.filter(|p| (0..=9).contains(p)) {
+        l.push(format!("PRIORITY:{p}"));
+    }
+    let color = input.color.trim();
+    if valid_color(color) {
+        l.push(format!("COLOR:{color}"));
+    }
+    if let Some((lat, lon)) = input.geo.filter(|(a, b)| (-90.0..=90.0).contains(a) && (-180.0..=180.0).contains(b)) {
+        l.push(format!("GEO:{lat:.6};{lon:.6}"));
+    }
+    l.extend(link_lines(&input.links));
     l.push(format!("LAST-MODIFIED:{}", ical::fmt_utc_now()));
     if let Some(r) = raw {
-        l.extend(r.props.iter().filter(|x| !MANAGED.contains(&prop_name(x).as_str())).cloned());
+        l.extend(r.props.iter().filter(|x| !is_managed(x)).cloned());
     }
     for a in &input.alarms {
         l.extend(build_valarm(a, input.summary.trim(), raw, tz));
@@ -805,6 +957,13 @@ mod tests {
             organizer: None,
             attendees: vec![],
             categories: vec!["Arzt".into()],
+            status: String::new(),
+            transp: String::new(),
+            class: String::new(),
+            priority: None,
+            color: String::new(),
+            geo: None,
+            links: vec![],
             timezone: None,
         };
         let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
@@ -873,8 +1032,17 @@ mod tests {
             organizer: persons_of(&raw.props, "ORGANIZER").into_iter().next(),
             attendees: persons_of(&raw.props, "ATTENDEE"),
             categories: vec!["Familie".into(), "Kultur".into(), "Demo".into()],
+            status: "CONFIRMED".into(),
+            transp: "OPAQUE".into(),
+            class: "PRIVATE".into(),
+            priority: Some(5),
+            color: "tomato".into(),
+            geo: Some((51.050407, 13.737262)),
+            links: links_of(&raw.props),
             timezone: Some("Europe/Berlin".into()),
         };
+        assert_eq!(input.links.iter().map(|l| (l.kind.as_str(), l.embedded)).collect::<Vec<_>>(), vec![("url", false), ("conference", false), ("attach", false), ("attach", true)]);
+        assert_eq!(input.links[1].label, "Videocall");
         assert_eq!(input.exdates, vec!["2026-10-06T19:00:00"]);
         assert_eq!(input.rdates, vec!["2026-10-10T19:00:00"]);
         assert_eq!(input.attendees.len(), 3);
@@ -895,6 +1063,9 @@ mod tests {
         assert!(flat.contains("ACKNOWLEDGED:20260915T170000Z") && flat.contains("PROXIMITY:DEPART"), "{flat}");
         assert!(flat.contains("ATTENDEE;CN=Erika Musterfrau;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CUTYPE=INDIVIDUAL;RSVP=TRUE:mailto:erika@example.org"), "{flat}");
         assert!(flat.contains("EXDATE;TZID=Europe/Berlin:20261006T190000") && flat.contains("RDATE;TZID=Europe/Berlin:20261010T190000"), "{flat}");
+        assert!(flat.contains("CONFERENCE;VALUE=URI;FEATURE=AUDIO,VIDEO;LABEL=\"Videocall\":https://meet.example.org/demo"), "{flat}");
+        assert!(flat.contains("ATTACH;FMTTYPE=text/plain;ENCODING=BASE64;VALUE=BINARY:SGFsbG8gRGVtbyE=") && flat.contains("GEO:51.050407;13.737262") && flat.contains("COLOR:tomato"), "{flat}");
+        assert_eq!(flat.matches("\nURL:").count(), 1);
         assert_eq!(main.expand_recurrence(None, None, overrides).len(), 6, "5 rule instances after the exclusion + the RDATE");
     }
 

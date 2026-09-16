@@ -827,3 +827,19 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform.mode-view .row.pe .pv { grid-template-columns: 1fr; }
 .ed .cardform.mode-view .row.pe .pv input[data-w=email] { font-size: 13px; color: var(--fg-2); }
 .ed .cardform.mode-view .row.pe .pv input:placeholder-shown { display: none; }
+/* status / links cards, colour and coordinates */
+.ev.cancelled { text-decoration: line-through; opacity: .55; }
+.ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }
+.ed .cardform input[type=color] { width: 34px; height: 24px; padding: 0; border: 0; background: transparent; }
+.ed .cardform .field.geo input[type=number] { width: 120px; }
+.ed .cardform .toggle.small { font-size: 13px; margin: 0; }
+.ed .cardform .toggle.small i { width: 28px; height: 16px; } .ed .cardform .toggle.small i::after { width: 12px; height: 12px; } .ed .cardform .toggle.small.on i::after { left: 14px; }
+.ed .cardform .geo-txt { padding: 0 0 4px 26px; font-size: 12px; color: var(--fg-3); }
+.ed .cardform .geo-txt:empty { display: none; }
+.ed .cardform .row.lk { grid-template-columns: 1fr auto; grid-template-areas: "v acts" "t acts"; }
+.ed .cardform.mode-edit .row.lk { grid-template-columns: 110px 1fr auto; grid-template-areas: "t v acts"; }
+.ed .cardform .row.lk .pv { grid-area: v; display: grid; grid-template-columns: 1fr; gap: 0; }
+.ed .cardform.mode-edit .row.lk .pv { grid-template-columns: 2fr 1fr; gap: 0 10px; }
+.ed .cardform.mode-view .row.lk .typ { grid-area: t; }
+.ed .cardform.mode-view .row.lk input[data-w=label] { font-size: 13px; color: var(--fg-2); }
+.ed .cardform.mode-view .row.lk input:placeholder-shown { display: none; }

@@ -113,6 +113,9 @@ fn ev_html(i: &Instance, role: Option<&str>) -> String {
         cls.push_str(" span ");
         cls.push_str(r);
     }
+    if i.cancelled {
+        cls.push_str(" cancelled");
+    }
     let label = if i.all_day { i.summary.clone() } else { format!("{} {}", i.summary, i.time_label()) };
     format!("<div class=\"{cls}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\" title=\"{}\">{}</div>", e(&i.color), e(&i.key()), i.start_date(), e(&i.summary), e(&label))
 }
@@ -262,7 +265,7 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
             let mut items = String::new();
             for i in &evs {
                 let tl = if i.all_day { l.t("ganztags", "all day").to_string() } else { i.time_label() };
-                let _ = write!(items, "<li><time>{}</time><span class=\"ev{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
+                let _ = write!(items, "<li><time>{}</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
             }
             if items.is_empty() {
                 items = "<li class=\"none\"><time></time><span>–</span></li>".into();
