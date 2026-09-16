@@ -604,3 +604,18 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .nowrap { white-space: nowrap; } label.link.file { cursor: pointer; color: var(--accent); font-size: 13px; padding: 2px 6px; }
 .tasks, .settings, .contacts, .placeholder { align-content: start; }
 .taskform { align-items: center; }
+
+/* ---- fixed page header: topbar and toolbar stay put, only the content below scrolls.
+   The app frame is the viewport and .main is the scroll container (it already had overflow-x
+   hidden, which made it the sticky scrollport without ever scrolling). Topbar and tabbar are
+   grid rows outside the scroller; the toolbar sticks at 0 inside it; sidebars stick below the
+   toolbar. app.js measures both bars into --topbar-h/--toolbar-h (they wrap on narrow screens
+   and the calendar toolbar is swapped with every fragment); these are desktop fallbacks. ---- */
+:root { --topbar-h: 61px; --toolbar-h: 53px; --sticky-top: calc(var(--topbar-h) + var(--toolbar-h)); }
+.app { height: 100dvh; }
+.main { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.toolbar { position: sticky; top: 0; z-index: 4; background: var(--bg); }
+.tl, .timeline, .cal.v-week .heat, .people, .contacts .detail { top: calc(var(--toolbar-h) + 4px); }
+.tl, .timeline { height: calc(100dvh - var(--sticky-top) - 30px); }
+.people, .ledger { max-height: calc(100dvh - var(--sticky-top) - 30px); }
+.sheetwrap { max-height: calc(100dvh - var(--sticky-top) - 40px); }

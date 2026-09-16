@@ -15,7 +15,15 @@
     connect();
   }
 
-  // light/dark toggle (choice persisted in the browser; server pref = initial default)
+  // fixed page header: the toolbar sticks under the topbar, sidebars under both — measured heights
+  // (both bars wrap on narrow screens; the calendar toolbar is replaced with every fragment swap)
+  const setBars = () => { const st = document.documentElement.style, tb = $('.topbar'), tl = $('.toolbar'); if (tb) st.setProperty('--topbar-h', tb.offsetHeight + 'px'); if (tl) st.setProperty('--toolbar-h', tl.offsetHeight + 'px'); };
+  if ('ResizeObserver' in window) {
+    const ro = new ResizeObserver(setBars);
+    const watch = () => { ro.disconnect(); ['.topbar', '.toolbar'].forEach(s => { const e = $(s); if (e) ro.observe(e); }); setBars(); };
+    watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(watch).observe(mainEl, { childList: true, subtree: true });
+  } else { setBars(); addEventListener('resize', setBars); }
+
   const h = document.documentElement;
   const sb = $('#scheme');
   if (sb) sb.addEventListener('click', () => { h.dataset.scheme = h.dataset.scheme === 'dark' ? 'light' : 'dark'; localStorage.scheme = h.dataset.scheme; });
@@ -38,7 +46,7 @@
       $$('.panel', settings).forEach(p => p.classList.toggle('on', p.id === id));
       tabs.forEach(a => { if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     };
-    const fromHash = () => { const id = location.hash.slice(1); show(($('#' + id, settings)) ? id : 'profile'); };
+    const fromHash = () => { const id = location.hash.slice(1); show(id && $('#' + CSS.escape(id), settings) ? id : 'profile'); }; // empty hash → '#' is not a selector
     tabs.forEach(a => a.addEventListener('click', e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); fromHash(); }));
     addEventListener('hashchange', fromHash); fromHash();
     // a flash after a failed confirmation should keep the details open
