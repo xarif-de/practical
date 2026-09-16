@@ -232,50 +232,79 @@
   $('.ybtn.reset', pk).onclick = () => { const d = parse(today); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; py(); pm(); density(); };
   $('#pk-close').onclick = () => pk.hidden = true; pk.addEventListener('click', e => { if (e.target === pk) pk.hidden = true; });
 
-  // ---- editor ----
-  const ed = $('#ed'), form = $('#edform'), f = form.elements;
+  // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
+  // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
+  const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;
+  let current = null, openDate = null, baseline = '';
   const presets = (() => { try { return JSON.parse($('#presets-data').textContent || '[]'); } catch (_) { return []; } })();
   const presetBox = $('#ed-presets');
-  if (presets.length) presetBox.innerHTML = '<div class="presetchips">' + presets.map((p, i) => `<button type="button" class="btn" data-preset="${i}">${p.title}</button>`).join('') + '</div>';
-  $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) f.categories.value = p.category; if (p.all_day) setAllDay(true); syncDot(); });
+  if (presets.length) presetBox.innerHTML = presets.map((p, i) => `<button type="button" class="btn" data-preset="${i}">${p.title}</button>`).join('');
+  $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) { addCard('cats'); addChip(p.category); } if (p.all_day) setAllDay(true); syncDot(); refresh(); });
   function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
-  $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); });
-  f.rrule.addEventListener('change', () => { f.rrule_custom.hidden = f.rrule.value !== 'custom'; });
-  function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = o ? o.dataset.color : ''; }
-  f.calendar.addEventListener('change', syncDot);
+  $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
+  function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = o ? o.dataset.color : ''; $('#ed-sub').textContent = o ? o.textContent : ''; }
   const tl = $('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   function close() { ed.hidden = true; }
-  $('#ed-close').onclick = close; $('#ed-cancel').onclick = close; ed.addEventListener('click', e => { if (e.target === ed) close(); });
+  $('#ed-close').onclick = close; ed.addEventListener('click', e => { if (e.target === ed) close(); });
   addEventListener('keydown', e => { if (e.key === 'Escape') { close(); pk.hidden = true; } });
+  // categories as chips (same widget as the contact editor)
+  const chips = () => $$('.tags .chip', form).map(c => c.firstChild.textContent.trim());
+  const addChip = v => { v = v.replace(/,/g, '').trim(); if (!v || chips().includes(v)) return; $('.tags input', form).insertAdjacentHTML('beforebegin', `<span class="chip">${v.replace(/</g, '&lt;')}<b class="edits">×</b></span>`); };
+  const tagIn = $('.tags input', form);
+  tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(tagIn.value); tagIn.value = ''; refresh(); } else if (e.key === 'Backspace' && !tagIn.value) { const c = tagIn.previousElementSibling; if (c && c.classList.contains('chip')) { c.remove(); refresh(); } } });
+  tagIn.addEventListener('blur', () => { if (tagIn.value.trim()) { addChip(tagIn.value); tagIn.value = ''; refresh(); } });
+  // cards: the "when" card always, the others when they hold data or were added in edit mode
+  const hasData = card => $$('input:not([type=hidden]), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.chip', card);
+  function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
+  function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
+  const serialize = () => $$('input:not([type=hidden]), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
+  function updateButtons() { const changed = serialize() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  const fmtD = s => { const d = parse(s); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
+  const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
+  function refresh() { whenLine(); grow(); updateButtons(); }
+  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
   const nextDay = s => addDays(s, 1);
-  function fill(d) {
-    form.reset(); $('#ed-error').textContent = ''; f.rrule_custom.hidden = true;
+  function fill(d, date) {
+    current = d; openDate = date; form.reset(); $('#ed-error').textContent = ''; f.rrule_custom.hidden = true;
+    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); $$('.tags .chip', form).forEach(x => x.remove());
     f.key.value = d ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = d ? d.etag : '';
-    $('#edh').textContent = d ? T.editEv : T.newEv; $('#ed-delete').hidden = !d;
+    form.classList.toggle('new', !d); f.summary.placeholder = d ? D.tTitle : D.tNewtitle;
+    const b = $('#ed-save'); b.title = d ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     if (d) {
-      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; f.categories.value = d.categories.join(', ');
+      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       f.alarm.value = d.alarm_minutes == null ? '' : String(d.alarm_minutes);
       if (d.rrule) { const std = ['FREQ=DAILY','FREQ=WEEKLY','FREQ=MONTHLY','FREQ=YEARLY']; if (std.includes(d.rrule)) f.rrule.value = d.rrule; else { f.rrule.value = 'custom'; f.rrule_custom.value = d.rrule; f.rrule_custom.hidden = false; } }
       $('#ed-hint').textContent = d.rrule ? T.series : '';
-    } else { $('#ed-hint').textContent = ''; }
-    syncDot();
+    } else {
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); $('#ed-hint').textContent = '';
+      if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
+    }
+    syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
   }
   async function openEditor(key, date) {
     if (key) {
       try { const r = await fetch('/api/events/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
-    } else {
-      fill(null); f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false);
-      if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; syncDot(); }
-    }
-    ed.hidden = false; f.summary.focus(); dayline();
+    } else fill(null, date);
+    ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
-  f.date.addEventListener('change', () => { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); });
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', e => { if (e.target === f.rrule) f.rrule_custom.hidden = f.rrule.value !== 'custom'; if (e.target === f.calendar) syncDot(); if (e.target === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } refresh(); });
+  form.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
+    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select', c).forEach(s => s.value = ''); $$('.chip', c).forEach(x => x.remove()); f.rrule_custom.hidden = true; delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.dataset.act) { const v = f.location.value, open_ = u => window.open(u, '_blank', 'noopener'); if (b.dataset.act === 'osm') open_('https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(v)); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
+  });
+  form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
+  $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
+  $('#ed-reset').onclick = () => fill(current, openDate);
   async function dayline() {
     const box = $('#ed-dayline'); const day = f.date.value; if (!day) return;
     let h = ''; for (let i = 0; i < 7; i++) h += `<span class="h" style="top:${(i * 14.3).toFixed(1)}%">${7 + i * 2}:00</span>`;
@@ -294,7 +323,7 @@
     const endDate = f.end_date.value || f.date.value;
     const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
     const rrule = f.rrule.value === 'custom' ? f.rrule_custom.value : f.rrule.value;
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarm_minutes: f.alarm.value === '' ? null : +f.alarm.value, categories: f.categories.value.split(',').map(s => s.trim()).filter(Boolean), timezone: root.dataset.tz, etag: f.etag.value };
+    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarm_minutes: f.alarm.value === '' ? null : +f.alarm.value, categories: chips(), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
