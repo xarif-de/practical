@@ -733,7 +733,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .add .ico { width: 14px; height: 14px; }
 #ctform .addmenu { position: relative; margin: 2px 0 4px; display: inline-block; width: max-content; }
 #ctform .addmenu .add { padding-left: 0; }
-#ctform .addmenu .pop { right: auto; left: 0; top: 30px; }
+#ctform .addmenu .pop { right: auto; left: 0; top: auto; bottom: 30px; } /* opens upward: the (invisible) popover would otherwise extend the pane's scroll area below the action bar */
 #ctform .addmenu .pop button { all: unset; display: block; width: 100%; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; }
 #ctform .addmenu .pop button:hover { background: var(--tile); }
 #ctform .addmenu .pop button:disabled { opacity: .35; cursor: default; }
@@ -761,3 +761,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .actions .grow { flex: 1; }
 #ctform .btn:disabled { opacity: .35; cursor: default; }
 #ctform.mode-view .adr-grid input:placeholder-shown, #ctform.mode-view .pdate small { display: none; } /* view mode: empty address parts and the TT/MM hints disappear */
+/* the editor pane scrolls on its own (it is sticky, so the page cannot bring its lower part into view);
+   the action bar stays visible at the pane's bottom edge */
+.contacts .detail { max-height: calc(100dvh - var(--sticky-top) - 30px); overflow-y: auto; overscroll-behavior: contain; }
+#ctform .actions { position: sticky; bottom: calc(-1 * var(--pad)); margin-bottom: calc(-1 * var(--pad)); padding-bottom: var(--pad); background: var(--bg); z-index: 2; }
