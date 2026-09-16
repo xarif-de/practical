@@ -37,6 +37,8 @@ pub struct AbInfo {
     pub is_group: bool,
     pub id: String,
     pub displayname: String,
+    /// xui_addressbook_colors, else default_color(id)
+    pub color: String,
     pub description: String,
     pub deleted_at: Option<NaiveDateTime>,
     pub synctoken: i64,
@@ -86,8 +88,9 @@ fn cal_info(c: Calendar, owner: &Owner) -> CalInfo {
     }
 }
 
-fn ab_info(a: Addressbook, owner: &Owner) -> AbInfo {
+fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
     AbInfo {
+        color: color.unwrap_or_else(|| default_color(&a.id)),
         principal: a.principal,
         owner_label: owner.label.clone(),
         is_group: owner.is_group,
@@ -109,12 +112,40 @@ pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) ->
 }
 
 pub async fn addressbooks_for(state: &AppState, user: &Principal, deleted: bool) -> AppResult<Vec<AbInfo>> {
+    use sqlx::Row;
+    let colors: std::collections::HashMap<(String, String), String> = sqlx::query("SELECT principal, id, color FROM xui_addressbook_colors")
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|r| ((r.get("principal"), r.get("id")), r.get("color")))
+        .collect();
     let mut out = vec![];
     for o in owners(state, user).await? {
         let abs = if deleted { state.addressbooks.get_deleted_addressbooks(&o.id).await? } else { state.addressbooks.get_addressbooks(&o.id).await? };
-        out.extend(abs.into_iter().map(|a| ab_info(a, &o)));
+        out.extend(abs.into_iter().map(|a| {
+            let c = colors.get(&(a.principal.clone(), a.id.clone())).cloned();
+            ab_info(a, &o, c)
+        }));
     }
     Ok(out)
+}
+
+/// `#rrggbb` only — the value lands in a style attribute.
+fn valid_color(c: &str) -> bool {
+    c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
+async fn set_addressbook_color(state: &AppState, owner: &str, id: &str, color: &str) -> AppResult<()> {
+    if !valid_color(color) {
+        return Err(AppError::BadRequest("color must be #rrggbb".into()));
+    }
+    sqlx::query("INSERT INTO xui_addressbook_colors (principal, id, color) VALUES (?, ?, ?) ON CONFLICT(principal, id) DO UPDATE SET color=excluded.color")
+        .bind(owner)
+        .bind(id)
+        .bind(color)
+        .execute(&state.db)
+        .await?;
+    Ok(())
 }
 
 pub struct NewCalendar {
@@ -194,12 +225,13 @@ pub async fn restore_calendar(state: &AppState, user: &Principal, owner: &str, i
     Ok(())
 }
 
-pub async fn create_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, description: &str) -> AppResult<String> {
+pub async fn create_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str) -> AppResult<String> {
     ensure_owner(user, owner)?;
     if name.trim().is_empty() {
         return Err(AppError::BadRequest("name required".into()));
     }
     let id = uuid::Uuid::new_v4().to_string();
+    set_addressbook_color(state, owner, &id, color).await?;
     state
         .addressbooks
         .insert_addressbook(Addressbook {
@@ -215,9 +247,10 @@ pub async fn create_addressbook(state: &AppState, user: &Principal, owner: &str,
     Ok(id)
 }
 
-pub async fn update_addressbook(state: &AppState, user: &Principal, owner: &str, id: &str, name: &str, description: &str) -> AppResult<()> {
+pub async fn update_addressbook(state: &AppState, user: &Principal, owner: &str, id: &str, name: &str, color: &str, description: &str) -> AppResult<()> {
     ensure_owner(user, owner)?;
     let mut a = state.addressbooks.get_addressbook(owner, id, false).await?;
+    set_addressbook_color(state, owner, id, color).await?;
     if !name.trim().is_empty() {
         a.displayname = Some(name.trim().to_string());
     }
@@ -229,6 +262,9 @@ pub async fn update_addressbook(state: &AppState, user: &Principal, owner: &str,
 pub async fn delete_addressbook(state: &AppState, user: &Principal, owner: &str, id: &str, hard: bool) -> AppResult<()> {
     ensure_owner(user, owner)?;
     state.addressbooks.delete_addressbook(owner, id, !hard).await?;
+    if hard {
+        sqlx::query("DELETE FROM xui_addressbook_colors WHERE principal = ? AND id = ?").bind(owner).bind(id).execute(&state.db).await?;
+    }
     Ok(())
 }
 

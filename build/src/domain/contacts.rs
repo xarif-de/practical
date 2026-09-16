@@ -23,7 +23,7 @@ pub struct Contact {
     pub principal: String,
     pub ab_id: String,
     pub ab_name: String,
-    /// stable colour per address book (collections::default_color), for the list chip
+    /// the address book's colour (AbInfo.color), for the chips
     pub ab_color: String,
     pub is_group: bool,
     pub object_id: String,
@@ -145,7 +145,7 @@ pub fn contact_from(vc: &VcardContact, ab: &AbInfo, object_id: &str, etag: Strin
         principal: ab.principal.clone(),
         ab_id: ab.id.clone(),
         ab_name: ab.displayname.clone(),
-        ab_color: collections::default_color(&ab.id),
+        ab_color: ab.color.clone(),
         is_group: ab.is_group,
         object_id: object_id.to_string(),
         uid: vc.get_uid().unwrap_or(object_id).to_string(),
@@ -183,7 +183,7 @@ pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Con
 pub async fn get_contact(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<Contact> {
     collections::ensure_owner(user, principal)?;
     let ab_row = state.addressbooks.get_addressbook(principal, ab_id, false).await?;
-    let ab = AbInfo { principal: principal.into(), owner_label: String::new(), is_group: principal.starts_with("group."), id: ab_id.into(), displayname: ab_row.displayname.unwrap_or_default(), description: String::new(), deleted_at: None, synctoken: 0 };
+    let ab = AbInfo { color: String::new(), principal: principal.into(), owner_label: String::new(), is_group: principal.starts_with("group."), id: ab_id.into(), displayname: ab_row.displayname.unwrap_or_default(), description: String::new(), deleted_at: None, synctoken: 0 };
     let obj = AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await?;
     Ok(contact_from(&parse_vcf(obj.get_vcf())?, &ab, object_id, obj.get_etag()))
 }
@@ -341,7 +341,7 @@ mod tests {
         };
         let vcf = build_vcf("u1", &i).unwrap();
         let vc = parse_vcf(&vcf).unwrap();
-        let ab = AbInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "a".into(), displayname: "Privat".into(), description: String::new(), deleted_at: None, synctoken: 0 };
+        let ab = AbInfo { color: String::new(), principal: "p".into(), owner_label: String::new(), is_group: false, id: "a".into(), displayname: "Privat".into(), description: String::new(), deleted_at: None, synctoken: 0 };
         let c = contact_from(&vc, &ab, "u1", String::new());
         assert_eq!(c.full_name, "Christin Lang");
         assert_eq!(c.family, "Lang");

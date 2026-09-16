@@ -56,7 +56,7 @@ impl ContactsPage {
 
 pub const ALL_COLUMNS: &[&str] = &["phone", "email", "category", "addressbook", "birthday", "address", "org"];
 /// list view: everything but the note by default
-pub const ALL_LIST_FIELDS: &[&str] = &["phone", "email", "birthday", "address", "category", "note"];
+pub const ALL_LIST_FIELDS: &[&str] = &["phone", "email", "birthday", "address", "addressbook", "category", "note"];
 
 async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<CtQuery>) -> AppResult<ContactsPage> {
     let all = collections::addressbooks_for(&state, &user, false).await?;
@@ -75,7 +75,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     categories.dedup();
     let p = prefs::get(&state.db, &user.id).await?;
     let columns: Vec<String> = p.contact_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_COLUMNS.iter().take(5).map(|s| s.to_string()).collect());
-    let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(5).map(|s| s.to_string()).collect());
+    let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(6).map(|s| s.to_string()).collect());
     let today = chrono::Utc::now().date_naive();
     Ok(ContactsPage {
         ctx,

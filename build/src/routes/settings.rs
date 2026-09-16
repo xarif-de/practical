@@ -320,6 +320,7 @@ struct AddressbookForm {
     csrf: String,
     owner: String,
     name: String,
+    color: String,
     #[serde(default)]
     description: String,
 }
@@ -327,7 +328,7 @@ struct AddressbookForm {
 async fn addressbook_create(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<AddressbookForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
-        collections::create_addressbook(&state, &user, &f.owner, &f.name, &f.description).await?;
+        collections::create_addressbook(&state, &user, &f.owner, &f.name, &f.color, &f.description).await?;
         Ok("flash-addressbook-created")
     }
     .await;
@@ -338,6 +339,7 @@ async fn addressbook_create(State(state): State<SharedState>, user: Principal, s
 struct AddressbookUpdateForm {
     csrf: String,
     name: String,
+    color: String,
     #[serde(default)]
     description: String,
 }
@@ -345,7 +347,7 @@ struct AddressbookUpdateForm {
 async fn addressbook_update(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<AddressbookUpdateForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
-        collections::update_addressbook(&state, &user, &owner, &id, &f.name, &f.description).await?;
+        collections::update_addressbook(&state, &user, &owner, &id, &f.name, &f.color, &f.description).await?;
         Ok("flash-saved")
     }
     .await;

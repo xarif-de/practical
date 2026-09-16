@@ -527,7 +527,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .sheet .av { width: 26px; height: 26px; border-radius: 8px; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
 .sheet [contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
 .sheet td[contenteditable]:empty::after { content: "–"; color: var(--fg-3); }
-.chip.bk { background: color-mix(in srgb, var(--c2) 18%, transparent); border-color: transparent; color: var(--fg); }
+.chip.bk { background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); border-color: transparent; color: var(--fg); }
 .sheet tr.new td { color: var(--fg-3); font-style: italic; font-weight: 400; }
 .sheet tr:hover td { background: var(--tile); }
 .sheet [data-c].off, .cols label.off { display: none; }
@@ -642,7 +642,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 }
 
 /* ---- contacts list entries: variable height, lines toggled from the ▥ picker (data-lf), the
-   address-book chip always shown; two lines minimum (the avatar height). ---- */
+   two lines minimum (the avatar height). ---- */
 .list li { grid-template-columns: 40px 1fr; align-items: start; }
 .list .ci { min-height: 36px; display: grid; gap: 2px; align-content: center; min-width: 0; }
 .list .name { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -650,7 +650,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .list .bday { flex: none; font-weight: 400; font-size: 12px; color: var(--fg-2); }
 .list .line { font-size: 13px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list .sub { display: flex; flex-wrap: wrap; gap: 0 4px; } .list .sub span:not(.off) ~ span:not(.off)::before { content: "· "; }
-.list .abchip { display: inline-block; font-size: 12px; line-height: 1.4; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--fg); }
+.list .abchip { display: inline-block; font-size: 12px; line-height: 1.4; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); color: var(--fg); }
 .list .cats { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
 .list .note { color: var(--fg-3); }
 .list .off { display: none; }

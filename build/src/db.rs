@@ -74,6 +74,11 @@ CREATE TABLE xui_holidays (
         // fields shown per entry in the contacts LIST view (the table has contact_columns_json)
         "ALTER TABLE xui_user_settings ADD COLUMN contact_list_fields_json TEXT;",
     ),
+    (
+        3,
+        // colour per address book — RustiCal's addressbooks table carries none (calendars do)
+        "CREATE TABLE xui_addressbook_colors (principal TEXT NOT NULL, id TEXT NOT NULL, color TEXT NOT NULL, PRIMARY KEY (principal, id));",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

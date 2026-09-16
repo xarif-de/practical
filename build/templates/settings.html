@@ -107,7 +107,7 @@
 
   <h3>{{ ctx.t("addressbooks") }}</h3>
   <table class="tbl">
-    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-owner") }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-color") }}</th><th>{{ ctx.t("col-owner") }}</th><th></th></tr></thead>
     <tbody>
     {% for a in addressbooks %}
     <tr>
@@ -115,10 +115,12 @@
         <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/update" class="stack">
           <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
           <label>{{ ctx.t("col-name") }}<input type="text" name="name" value="{{ a.displayname }}" required></label>
+          <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ a.color }}"></label>
           <label>{{ ctx.t("col-description") }}<input type="text" name="description" value="{{ a.description }}"></label>
           <div class="muted small">ID <code>{{ a.id }}</code></div>
           <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
         </form></details></td>
+      <td><span class="sw" style="background:{{ a.color }}"></span></td>
       <td>{{ a.owner_label }}{% if a.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
       <td class="nowrap"><a class="link" href="/settings/export/addressbooks/{{ a.principal }}/{{ a.id }}">{{ ctx.t("export") }}</a> <label class="link file"><span>{{ ctx.t("import") }}</span><input type="file" accept=".vcf,text/vcard" hidden data-import="/settings/import/addressbooks/{{ a.principal }}/{{ a.id }}"></label> <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
     </tr>
@@ -130,6 +132,7 @@
     <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
     <label>{{ ctx.t("col-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
     <label>{{ ctx.t("col-name") }}<input type="text" name="name" required></label>
+    <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ palette[1] }}"></label>
     <label>{{ ctx.t("col-description") }}<input type="text" name="description"></label>
     <div><button class="btn btn-primary" type="submit">{{ ctx.t("create") }}</button></div>
   </form></details>
