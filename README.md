@@ -12,7 +12,9 @@ Week (stream), Month (tiles with continuous multi-day bars) and the "More" views
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): several reminders per event (before start,
 before end, at a time), recurrence with interval, weekdays, end and exceptions/extra dates,
-organizer and attendees, location with map actions, categories, notes, presets · contacts as letter panels (fields per entry selectable) or an
+organizer and attendees, location with coordinates and map actions, status/busy/visibility/
+priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
+contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
