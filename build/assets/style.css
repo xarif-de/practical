@@ -533,6 +533,11 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .sheet td[contenteditable]:empty::after { content: "–"; color: var(--fg-3); }
 .chip.bk { background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); border-color: transparent; color: var(--fg); }
 .sheet tr.new td { color: var(--fg-3); font-style: italic; font-weight: 400; }
+/* the "new contact" row sits in a sticky <tfoot> at the bottom of the table scroller (a sticky td in the
+   last tbody row cannot move — its containing block ends with it); its name cell stays pinned left too */
+.sheet tfoot { position: sticky; bottom: 0; z-index: 2; }
+.sheet tfoot td { border-top: 1px solid var(--line); box-shadow: 0 -6px 12px -8px rgba(0,0,0,.25); }
+.sheet tfoot td.pin { z-index: 4; }
 .sheet tr:hover td { background: var(--tile); }
 .sheet [data-c].off, .cols label.off { display: none; }
 .contacts .detail { display: none; grid-area: detail; position: sticky; top: 64px; align-self: start; }
