@@ -7,7 +7,7 @@
   <input type="text" name="summary" placeholder="{{ ctx.t("task-new-placeholder") }}" required autocomplete="off">
   <input type="date" name="due" title="{{ ctx.t("task-due") }}">
   <select name="calendar">{% for c in calendars %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select>
-  <button class="btn btn-primary" type="submit">{{ ctx.t("task-add") }}</button>
+  <button class="btn btn-primary icon-btn" type="submit" title="{{ ctx.t("task-add") }}" aria-label="{{ ctx.t("task-add") }}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
 </form>
 {% if calendars.is_empty() %}<p class="muted">{{ ctx.t("tasks-no-calendar") }}</p>{% endif %}
 <ul class="tasklist">
