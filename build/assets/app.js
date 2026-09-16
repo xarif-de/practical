@@ -401,17 +401,18 @@
     form.classList.toggle('new', !c);
     const lbl = (id, t) => { const b = $(id); b.title = t; b.setAttribute('aria-label', t); };
     lbl('#ct-save', c ? T.save : T.create); lbl('#ct-cancel', c ? T.cancel : T.reset); lbl('#ct-delete', T.delete);
-    updateCancel();
+    baseline = serialize(); updateCancel();
     det.hidden = false; det.classList.add('on');
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
   async function open(key) { try { const r = await fetch('/api/contacts/' + key); if (!r.ok) throw new Error(r.status); show(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); } }
   $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
-  // new-contact mode: the reset button only becomes active once something was typed
-  const dirty = () => [...form.querySelectorAll('input:not([type=hidden]), textarea')].some(el => el.value.trim() !== '');
-  function updateCancel() { $('#ct-cancel').disabled = form.classList.contains('new') && !dirty(); }
-  form.addEventListener('input', updateCancel); multi.addEventListener('click', () => setTimeout(updateCancel, 0));
+  // save/create and reset/cancel only become active once the form differs from what show() loaded
+  const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].map(e => e.type === 'checkbox' ? e.checked : e.value).join('\u0001');
+  let baseline = '';
+  function updateCancel() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-cancel').disabled = !changed; }
+  form.addEventListener('input', updateCancel); form.addEventListener('change', updateCancel); multi.addEventListener('click', () => setTimeout(updateCancel, 0)); $('#ct-addf').addEventListener('click', () => setTimeout(updateCancel, 0));
   // wide list view: the editor is always visible, closing just returns to the empty (new contact) form
   const wide = () => matchMedia('(min-width: 1100px)').matches;
   // reset (new) / cancel (edit): back to the empty form; narrow screens close the overlay instead
