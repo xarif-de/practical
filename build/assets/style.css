@@ -255,11 +255,13 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
   .tl { display: block; position: sticky; top: 64px; align-self: start; height: calc(100dvh - 90px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
   .tl::-webkit-scrollbar { display: none; }
   .tl svg { display: block; }
-  .tl .wdot circle { fill: var(--fg-3); transition: r .12s; cursor: pointer; }
+  .tl .wdot circle { fill: var(--fg-3); cursor: pointer; }
   .tl .mline { cursor: pointer; }
-  .tl .mline:hover line { stroke: var(--accent); }
-  .tl .wdot:hover circle { fill: var(--accent); r: 6; }
-  .tl .wdot.cur circle { fill: var(--accent); }
+  .tl .wdot.now circle { fill: var(--accent); } /* today's period: the blue dot; dots never change on select/hover */
+  .tl .sel, .tl .pre { fill: none; stroke: var(--accent); stroke-width: 1.5; pointer-events: none; } /* selected period: ring */
+  .tl .pre { stroke: color-mix(in srgb, var(--accent) 45%, transparent); } /* hover preview ring, follows the nearest item */
+  .tl .sel[hidden], .tl .pre[hidden] { display: none; }
+  .tl svg { cursor: pointer; }
   .tl .mline line { stroke: var(--fg-3); stroke-width: 1.5; } .tl .mline text { font: 11px var(--font); fill: var(--fg-2); }
   .tl[data-kind=months] .mline line { stroke-width: 2; stroke: var(--fg-2); } .tl[data-kind=months] .mline text { font-weight: 600; }
   .cal.v-day .ledger { grid-column: 1; } .cal.v-day .doc { grid-column: 2; } .cal.v-day .tl { grid-column: 3; }

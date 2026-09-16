@@ -209,52 +209,14 @@ pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str) -> St
     out.push_str("</ul></section>");
     out
 }
-
-/// Tag/Woche timeline: ISO weeks as dots, month starts as lines, ±3 months.
-pub fn tl_weeks(center: NaiveDate, today: NaiveDate, l: &L) -> String {
-    let start = center.with_day(1).unwrap() - Duration::days(92);
-    let end = center.with_day(1).unwrap() + Duration::days(122);
-    let mut d = start - Duration::days(i64::from(start.weekday().num_days_from_monday()));
-    let step = 30;
-    let mut y = 16;
-    let mut rows = String::new();
-    while d <= end {
-        if let Some(m) = (0..7).map(|x| d + Duration::days(x)).find(|x| x.day() == 1) {
-            let _ = write!(rows, "<g class=\"mline\" data-label=\"1. {} {}\" data-date=\"{}\"><line x1=\"18\" x2=\"46\" y1=\"{y}\" y2=\"{y}\"/><text x=\"50\" y=\"{}\">{}</text></g>", l.mon(m.month()), m.year(), m, y + 4, if m.month() == 1 { m.year().to_string() } else { l.mon3(m.month()) });
-            y += step;
-        }
-        let cur = d <= center && center < d + Duration::days(7);
-        let is_today = d <= today && today < d + Duration::days(7);
-        let ed = d + Duration::days(6);
-        let _ = write!(rows, "<g class=\"wdot{}{}\" data-y=\"{y}\" data-date=\"{d}\" data-label=\"KW {} · {} – {}\"><circle cx=\"32\" cy=\"{y}\" r=\"{}\"/></g>", if cur { " cur" } else { "" }, if is_today { " now" } else { "" }, d.iso_week().week(), l.dm(d), l.dm(ed), if cur { 5.0 } else { 3.5 });
-        d += Duration::days(7);
-        y += step;
-    }
-    format!("<div class=\"tl\" data-kind=\"weeks\"><svg width=\"88\" height=\"{y}\" viewBox=\"0 0 88 {y}\">{rows}</svg></div>")
+/// Right rail timeline. Rendered by app.js (endless scrolling, scroll position survives
+/// navigation), the server only says which kind and where to centre on first paint.
+pub fn tl_weeks(center: NaiveDate, today: NaiveDate) -> String {
+    format!("<div class=\"tl\" data-kind=\"weeks\" data-center=\"{center}\" data-today=\"{today}\"></div>")
 }
 
-/// Monat and the "Mehr" views: months as dots, January as a year line, ±24 months.
-pub fn tl_months(center: NaiveDate, today: NaiveDate, l: &L) -> String {
-    let mut rows = String::new();
-    let mut y = 14;
-    let step = 24;
-    let (mut yy, mut mm) = (center.year() - 2, center.month());
-    for _ in 0..49 {
-        if mm == 1 {
-            let _ = write!(rows, "<g class=\"mline\" data-label=\"{yy}\" data-date=\"{yy}-01-01\"><line x1=\"18\" x2=\"46\" y1=\"{y}\" y2=\"{y}\"/><text x=\"50\" y=\"{}\">{yy}</text></g>", y + 4);
-            y += step;
-        }
-        let cur = (yy, mm) == (center.year(), center.month());
-        let now = (yy, mm) == (today.year(), today.month());
-        let _ = write!(rows, "<g class=\"wdot{}{}\" data-y=\"{y}\" data-date=\"{yy}-{mm:02}-01\" data-label=\"{} {yy}\"><circle cx=\"32\" cy=\"{y}\" r=\"{}\"/></g>", if cur { " cur" } else { "" }, if now { " now" } else { "" }, l.mon(mm), if cur { 5.0 } else { 3.5 });
-        y += step;
-        mm += 1;
-        if mm > 12 {
-            mm = 1;
-            yy += 1;
-        }
-    }
-    format!("<div class=\"tl\" data-kind=\"months\"><svg width=\"88\" height=\"{y}\" viewBox=\"0 0 88 {y}\">{rows}</svg></div>")
+pub fn tl_months(center: NaiveDate, today: NaiveDate) -> String {
+    format!("<div class=\"tl\" data-kind=\"months\" data-center=\"{center}\" data-today=\"{today}\"></div>")
 }
 
 /// Orbit picker: 17-year outer ring (current year at 6 o'clock), month ring, centre grid slot (JS fills).
@@ -316,7 +278,7 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
             let _ = write!(heat, "<i class=\"{}{}\" style=\"--n:{}\" data-date=\"{d}\" title=\"{}\"></i>", if d.month() != month { "o" } else { "" }, if *d == today { " t" } else { "" }, n.min(4), l.dm(*d));
         }
     }
-    format!("<div class=\"cal v-week on\"><div class=\"heat\"><h4>{}</h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), tl_weeks(view_date, today, l))
+    format!("<div class=\"cal v-week on\"><div class=\"heat\"><h4>{}</h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), tl_weeks(view_date, today))
 }
 
 /// Day view ("Ledger"): dense day column of the month + the selected day as a document.
@@ -353,7 +315,7 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
         let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}<div class=\"meta\">{meta}</div></div></article>", e(&i.key()), i.start_date(), e(&i.summary), if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description).replace('\n', "<br>")) });
     }
     doc.push_str("</section>");
-    format!("<div class=\"cal v-day on\"><div class=\"ledger\">{led}</div>{doc}{}</div>", tl_weeks(view_date, today, l))
+    format!("<div class=\"cal v-day on\"><div class=\"ledger\">{led}</div>{doc}{}</div>", tl_weeks(view_date, today))
 }
 
 pub fn alarm_label(m: i64, l: &L) -> String {
@@ -375,7 +337,7 @@ pub fn alarm_label(m: i64, l: &L) -> String {
 pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate) -> String {
     let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, view_date);
     let title = if agenda_date == today { format!("{}, {}", l.t("Heute", "Today"), l.long_date(agenda_date)) } else { l.long_date(agenda_date) };
-    format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today, l), agenda(agenda_date, instances, l, &title))
+    format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today), agenda(agenda_date, instances, l, &title))
 }
 
 #[cfg(test)]

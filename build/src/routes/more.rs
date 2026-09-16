@@ -370,5 +370,5 @@ pub async fn render(state: &SharedState, user: &Principal, ctx: &PageCtx, view: 
         _ => numbers(&y, l),
     };
     let title = if view == "countdown" { label.clone() } else { date.year().to_string() };
-    Ok((title, format!("<div class=\"cal v-{view} on\"><div class=\"mv\"><h2 class=\"mvh\">{} <span class=\"sub\">{}</span></h2>{body}</div>{}</div>", e(&label), y.year, render::tl_months(date, vc.today, l))))
+    Ok((title, format!("<div class=\"cal v-{view} on\"><div class=\"mv\"><h2 class=\"mvh\">{} <span class=\"sub\">{}</span></h2>{body}</div>{}</div>", e(&label), y.year, render::tl_months(date, vc.today))))
 }

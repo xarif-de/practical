@@ -112,7 +112,8 @@
       const r = await fetch(u, { headers: { Accept: 'text/html' } });
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
-      root.innerHTML = await r.text();
+      const html = await r.text(); tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      root.innerHTML = html;
       root.dataset.view = state.view; root.dataset.date = state.date;
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
@@ -131,19 +132,73 @@
   }
   function go(view, date) { if (view) state.view = view; if (date) state.date = date; load(); }
 
-  // ---- timeline tooltip (instant, custom) ----
+  // ---- timeline (right rail): client-rendered, endless in both directions; the SVG node and the
+  // scroll position survive fragment swaps of the same kind, so selecting never re-centres ----
   const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; document.body.appendChild(tip);
+  const TLK = { weeks: { step: 30, y0: 16, r: 3.5, chunk: 26 }, months: { step: 24, y0: 14, r: 3.5, chunk: 24 } };
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const dm = d => lang === 'en' ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getDate()}.${d.getMonth() + 1}.`;
+  const isoWeek = d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); };
+  const weekStart = d => { const w = new Date(d); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); return w; };
+  const stepDate = (kind, d, n) => { const x = new Date(d); if (kind === 'weeks') x.setDate(x.getDate() + 7 * n); else x.setMonth(x.getMonth() + n); return x; };
+  const periodOf = (kind, d) => kind === 'weeks' ? weekStart(d) : new Date(d.getFullYear(), d.getMonth(), 1);
+  let tlSvg = null, tlKind = null, tlFirst = null, tlLast = null, tlItems = [], tlScroll = null;
+  // items: one per period, optional line before it (month start in weeks, January in months)
+  function tlBuild(kind) {
+    const k = TLK[kind], todayD = parse(today), nowP = fmt(periodOf(kind, todayD));
+    let y = k.y0, out = '', items = [];
+    for (let d = new Date(tlFirst); d <= tlLast; d = stepDate(kind, d, 1)) {
+      if (kind === 'weeks') {
+        const first = [0, 1, 2, 3, 4, 5, 6].map(i => { const x = new Date(d); x.setDate(x.getDate() + i); return x; }).find(x => x.getDate() === 1);
+        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`; out += `<g class="mline" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${first.getMonth() === 0 ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl }); y += k.step; }
+        const e = new Date(d); e.setDate(e.getDate() + 6);
+        const lbl = `KW ${isoWeek(d)} · ${dm(d)} – ${dm(e)}`, ds = fmt(d);
+        out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
+        items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
+      } else {
+        if (d.getMonth() === 0) { out += `<g class="mline" data-y="${y}" data-date="${fmt(d)}" data-label="${d.getFullYear()}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${d.getFullYear()}</text></g>`; items.push({ y, date: fmt(d), label: String(d.getFullYear()) }); y += k.step; }
+        const lbl = `${MON[d.getMonth()]} ${d.getFullYear()}`, ds = fmt(d);
+        out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
+        items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
+      }
+    }
+    tlSvg.setAttribute('height', y); tlSvg.setAttribute('viewBox', `0 0 88 ${y}`);
+    tlSvg.innerHTML = out + '<circle class="sel" cx="32" r="7.5" hidden/><circle class="pre" cx="32" r="7.5" hidden/>';
+    tlItems = items; tlMark();
+    return y;
+  }
+  const svgShow = (el, on) => on ? el.removeAttribute('hidden') : el.setAttribute('hidden', ''); // SVG elements have no .hidden property
+  function tlMark() { // selection ring on the viewed period
+    if (!tlSvg) return; const sel = tlSvg.querySelector('.sel'); const p = fmt(periodOf(tlKind, parse(state.date)));
+    const it = tlItems.find(i => i.period === p); if (it) sel.setAttribute('cy', it.y); svgShow(sel, !!it);
+  }
+  function tlExtend(box) { // keep two chunks of slack above and below the viewport
+    const k = TLK[tlKind]; let changed = false;
+    if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -k.chunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
+    if (box.scrollTop + box.clientHeight > box.scrollHeight - 300) { tlLast = stepDate(tlKind, tlLast, k.chunk); tlBuild(tlKind); changed = true; }
+    return changed;
+  }
+  function mountTimeline(box) {
+    if (!box) return;
+    const kind = box.dataset.kind, center = periodOf(kind, parse(box.dataset.center));
+    if (tlSvg && tlKind === kind) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; tlMark(); }
+    else {
+      tlKind = kind; tlFirst = stepDate(kind, center, -TLK[kind].chunk); tlLast = stepDate(kind, center, TLK[kind].chunk);
+      tlSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); tlSvg.setAttribute('width', 88); box.appendChild(tlSvg); tlBuild(kind);
+      const it = tlItems.find(i => i.period === fmt(center)); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0;
+    }
+    const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
+    box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
+    box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
+    box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; go(null, it.date); } };
+    box.onscroll = () => { if (!box._busy) { box._busy = true; requestAnimationFrame(() => { tlExtend(box); box._busy = false; }); } };
+    tlExtend(box);
+  }
   function wire() {
     $$('[data-nav]', root).forEach(b => b.onclick = () => b.dataset.nav === 'today' ? go(null, today) : shift(b.dataset.nav === 'next' ? 1 : -1));
     $$('.toolbar [data-view]', root).forEach(b => b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); });
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
-    $$('.tl [data-label]', root).forEach(el => {
-      el.addEventListener('mouseenter', () => { tip.textContent = el.dataset.label; tip.hidden = false; });
-      el.addEventListener('mousemove', e => { tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; });
-      el.addEventListener('mouseleave', () => tip.hidden = true);
-      el.addEventListener('click', () => { tip.hidden = true; go(null, el.dataset.date); });
-    });
-    $$('.tl', root).forEach(t => { const c = $('.wdot.cur', t); if (c) t.scrollTop = Math.max(0, (+c.dataset.y) - t.clientHeight / 2); });
+    mountTimeline($('.tl', root));
     $$('.heat i[data-date], .c[data-date], .we[data-date]', root).forEach(el => el.onclick = () => go(state.view === 'week' ? 'week' : 'day', el.dataset.date));
     $$('.lrow[data-date]', root).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); go('day', el.dataset.date); });
     $$('.day[data-date] .n, .more[data-date]', root).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
