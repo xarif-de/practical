@@ -400,8 +400,8 @@
     $('#ct-delete').hidden = !c;
     form.classList.toggle('new', !c);
     const lbl = (id, t) => { const b = $(id); b.title = t; b.setAttribute('aria-label', t); };
-    lbl('#ct-save', c ? T.save : T.create); lbl('#ct-cancel', c ? T.cancel : T.reset); lbl('#ct-delete', T.delete);
-    baseline = serialize(); updateCancel();
+    lbl('#ct-save', c ? T.save : T.create); lbl('#ct-reset', T.reset); lbl('#ct-cancel', T.cancel); lbl('#ct-delete', T.delete);
+    current = c; baseline = serialize(); updateCancel();
     det.hidden = false; det.classList.add('on');
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
@@ -410,13 +410,15 @@
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
   // save/create and reset/cancel only become active once the form differs from what show() loaded
   const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].map(e => e.type === 'checkbox' ? e.checked : e.value).join('\u0001');
-  let baseline = '';
-  function updateCancel() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-cancel').disabled = !changed; }
+  let baseline = '', current = null; // what show() loaded — reset re-renders it
+  // save/create and reset follow changes; cancel (edit mode only) is always available
+  function updateCancel() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed; }
   form.addEventListener('input', updateCancel); form.addEventListener('change', updateCancel); multi.addEventListener('click', () => setTimeout(updateCancel, 0)); $('#ct-addf').addEventListener('click', () => setTimeout(updateCancel, 0));
   // wide list view: the editor is always visible, closing just returns to the empty (new contact) form
   const wide = () => matchMedia('(min-width: 1100px)').matches;
-  // reset (new) / cancel (edit): back to the empty form; narrow screens close the overlay instead
-  $('#ct-cancel').onclick = () => { if (wide() || !f.key.value) show(null); else { det.classList.remove('on'); det.hidden = true; } };
+  // reset: drop the edits (re-render the loaded contact, or the empty form); cancel: back to the empty form (narrow screens close the overlay)
+  $('#ct-reset').onclick = () => show(current);
+  $('#ct-cancel').onclick = () => { if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
