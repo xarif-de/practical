@@ -5,6 +5,7 @@
 use crate::csrf;
 use crate::domain::contacts::{self, Contact, ContactInput};
 use crate::domain::events::{self, EventDetail, EventInput};
+use crate::domain::geo;
 use crate::domain::search;
 use crate::domain::tasks::{self, TaskInput};
 use crate::error::{AppError, AppResult};
@@ -260,8 +261,34 @@ async fn push_list(State(state): State<SharedState>, user: Principal) -> AppResu
     Ok(Json(rows.iter().map(|r| PushSub { endpoint: r.get("endpoint"), user_agent: r.get("user_agent"), created_at: r.get("created_at") }).collect()))
 }
 
+#[derive(Deserialize)]
+struct GeoSearch {
+    q: String,
+    lat: Option<f64>,
+    lon: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct GeoReverse {
+    lat: f64,
+    lon: f64,
+}
+
+/// Address suggestions (Photon) — the browser asks only after a typing pause.
+async fn geo_search(State(state): State<SharedState>, _user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<GeoSearch>) -> AppResult<Json<Vec<geo::Place>>> {
+    let near = match (q.lat, q.lon) { (Some(a), Some(b)) => Some((a, b)), _ => None };
+    Ok(Json(geo::search(&state, &q.q, &ctx.lang, near).await?))
+}
+
+/// Address at a position (Nominatim) — one click on the map dialog's button.
+async fn geo_reverse(State(state): State<SharedState>, _user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<GeoReverse>) -> AppResult<Json<geo::Place>> {
+    geo::reverse(&state, q.lat, q.lon, &ctx.lang).await?.map(Json).ok_or(AppError::NotFound)
+}
+
 pub fn router() -> Router<SharedState> {
     Router::new()
+        .route("/api/geo/search", get(geo_search))
+        .route("/api/geo/reverse", get(geo_reverse))
         .route("/api/changes", get(changes))
         .route("/api/events/{p}/{c}/{id}", get(get_event).put(update_event).delete(delete_event))
         .route("/api/contacts", post(create_contact))

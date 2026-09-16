@@ -1,4 +1,4 @@
-//! Static assets compiled into the binary (four files; no rust-embed needed).
+//! Static assets compiled into the binary (six files; no rust-embed needed).
 //! Development (`RUSTICAL_UI__DEV_ASSETS_DIR`): read from that directory on every request, uncached.
 
 use crate::state::SharedState;
@@ -20,6 +20,9 @@ const ASSETS: &[Asset] = &[
     Asset { name: "app.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/app.js") },
     Asset { name: "sw.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/sw.js") },
     Asset { name: "icon.svg", mime: "image/svg+xml", body: include_bytes!("../../assets/icon.svg") },
+    // Leaflet 1.9.4 (BSD-2), vendored; fetched by the browser only when the map dialog opens
+    Asset { name: "leaflet.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/leaflet.js") },
+    Asset { name: "leaflet.css", mime: "text/css; charset=utf-8", body: include_bytes!("../../assets/leaflet.css") },
 ];
 
 fn etags() -> &'static Vec<String> {

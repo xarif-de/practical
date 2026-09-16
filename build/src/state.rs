@@ -26,6 +26,8 @@ pub struct AppState {
     /// Development only (`config.dev_assets_dir`): fired when an asset file changes → `/dev/reload`.
     pub dev_reload: broadcast::Sender<()>,
     pub http: reqwest::Client,
+    /// geocoder proxy: throttle + cache (`domain::geo`)
+    pub geo: crate::domain::geo::Geo,
     pub vapid: Option<VapidKeypair>,
     pub started_at: chrono::DateTime<chrono::Utc>,
 }

@@ -143,6 +143,7 @@ async fn serve() -> Result<(), String> {
         changes,
         dev_reload,
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
+        geo: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),
         db,

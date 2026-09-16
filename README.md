@@ -89,6 +89,15 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   `TYPE=HOME,PREF` and Apple's repeated `;type=…` would otherwise be invisible. Address-book colours
   live in `xui_addressbook_colors` (RustiCal stores none), list-view field choices per user in
   `xui_user_settings.contact_list_fields_json`.
+- **Addresses** (event location card): suggestions while typing come from [Photon](https://photon.komoot.io)
+  (komoot, OSM data, built for search-as-you-type), the address of a map position from
+  [Nominatim](https://nominatim.openstreetmap.org) (OSMF; its policy forbids autocomplete and demands
+  an identifying User-Agent, so it only answers the map dialog's button). Both go through the sidecar
+  (`/api/geo/search`, `/api/geo/reverse`): it sends the User-Agent, throttles each provider to one
+  request per second, caches answers for a week and keeps the users' IPs at home. The browser asks
+  only after an 800 ms typing pause (the ring in the field counts it down) or on a button. The map
+  dialog is Leaflet 1.9.4 (vendored, BSD-2, loaded on first use) with tiles from
+  tile.openstreetmap.org, attribution shown as the tile policy requires.
 - **Holidays** come from `openholidaysapi.org` (`HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`, per-user
   region override), cached 30 days in `xui_holidays`; a failed fetch falls back to the stale cache.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;

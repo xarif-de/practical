@@ -1,6 +1,7 @@
 pub mod collections;
 pub mod contacts;
 pub mod events;
+pub mod geo;
 pub mod groups;
 pub mod holidays;
 pub mod ical;
