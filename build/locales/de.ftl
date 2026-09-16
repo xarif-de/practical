@@ -157,6 +157,7 @@ ed-repeat-weekly = Wöchentlich
 ed-repeat-monthly = Monatlich
 ed-repeat-yearly = Jährlich
 ed-repeat-custom = Eigene Regel …
+ct-rail = Schnellwahl
 ct-list = Liste
 ct-table = Tabelle
 ct-contact = Kontakt

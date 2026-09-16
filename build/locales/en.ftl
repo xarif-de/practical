@@ -157,6 +157,7 @@ ed-repeat-weekly = Weekly
 ed-repeat-monthly = Monthly
 ed-repeat-yearly = Yearly
 ed-repeat-custom = Custom rule …
+ct-rail = Quick jump
 ct-list = List
 ct-table = Table
 ct-contact = Contact

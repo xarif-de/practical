@@ -621,3 +621,17 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .tl, .timeline { height: calc(100dvh - var(--sticky-top) - 30px); }
 .people, .ledger { max-height: calc(100dvh - var(--sticky-top) - 30px); }
 .sheetwrap { max-height: calc(100dvh - var(--sticky-top) - 40px); }
+
+/* ---- contacts: quick-jump rail at the right edge (like the calendar timeline, but static).
+   Only letters that exist are rendered (server groups); a click just scrolls, nothing stays
+   highlighted. Hidden below 900px like the calendar rail. ---- */
+.ct-rail { display: none; }
+@media (min-width: 900px) {
+  .contacts { grid-template-columns: minmax(320px, 1fr) minmax(360px, 480px) 32px; grid-template-areas: "cols detail rail" "list detail rail"; }
+  .view-table.contacts { grid-template-columns: 1fr 32px; grid-template-areas: "cols rail" "list rail"; }
+  .ct-rail { grid-area: rail; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0; position: sticky; top: calc(var(--toolbar-h) + 4px); align-self: start; height: calc(100dvh - var(--sticky-top) - 30px); overflow: hidden; }
+  .ct-rail button { all: unset; cursor: pointer; font: 600 11px/1 var(--font); color: var(--fg-3); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; }
+  .ct-rail button:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .ct-rail button.hide { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1099px) { .contacts { grid-template-columns: 1fr 32px; grid-template-areas: "cols rail" "list rail"; } }

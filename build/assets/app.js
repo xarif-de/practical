@@ -355,8 +355,17 @@
     const abs = $$('input[data-ab]', fb).filter(i => !i.checked).map(i => i.dataset.ab); const cats = $$('input[data-cat]', fb).filter(i => !i.checked).map(i => i.dataset.cat);
     $$('[data-key][data-ab]', wrap).forEach(el => el.classList.toggle('hide', abs.includes(el.dataset.ab) || cats.includes(el.dataset.cat)));
     $$('.lpanel', wrap).forEach(p => p.classList.toggle('hide', !$$('li:not(.hide)', p).length));
+    $$('.ct-rail [data-jump]', wrap).forEach(b => { const p = $(`.lpanel[data-letter="${CSS.escape(b.dataset.jump)}"]`, wrap); b.classList.toggle('hide', !p || p.classList.contains('hide')); });
   }
   if (fb) $$('input', fb).forEach(i => i.addEventListener('change', applyFilter));
+  // quick-jump rail: scroll the letter's panel (list) or first row (table) to the top of its scroller
+  const scrollerOf = el => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if (o === 'auto' || o === 'scroll') return p; } return document.querySelector('.main'); };
+  $$('.ct-rail [data-jump]', wrap).forEach(b => b.onclick = () => {
+    const L = CSS.escape(b.dataset.jump);
+    const target = wrap.classList.contains('view-table') ? $(`tr[data-letter="${L}"]:not(.hide)`, wrap) : $(`.lpanel[data-letter="${L}"]`, wrap);
+    if (!target) return; const sc = scrollerOf(target); const head = sc.classList.contains('main') ? ($('.toolbar') || {}).offsetHeight || 0 : ($('thead', sc) || {}).offsetHeight || 0;
+    sc.scrollTop += target.getBoundingClientRect().top - sc.getBoundingClientRect().top - head - 6;
+  });
   // detail editor
   const det = $('#detail'), form = $('#ctform'), f = form.elements, multi = $('#ct-multi');
   function row(kind, type, value) { const k = kind === 'phone' ? 'phones' : 'emails'; return `<div class="multi" data-k="${k}"><select>${T.kinds.map(x => `<option${x === type ? ' selected' : ''}>${x}</option>`).join('')}</select><input value="${String(value).replace(/"/g, '&quot;')}" placeholder="${kind === 'phone' ? T.phone : T.email}"><button class="link danger" type="button" data-rm>✕</button></div>`; }
