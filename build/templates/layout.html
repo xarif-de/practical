@@ -12,8 +12,7 @@
 {% block head %}{% endblock %}
 </head>
 <body data-lang="{{ ctx.lang }}" data-user="{{ ctx.user_id() }}"{% if ctx.dev %} data-dev="1"{% endif %}>
-<div class="app">
-<svg hidden xmlns="http://www.w3.org/2000/svg"><!-- icon sprite: monochrome strokes in currentColor, used via <use href="#i-…"> -->
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><!-- icon sprite: monochrome strokes in currentColor, used via <use href="#i-…"> -->
 <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
 <symbol id="i-contacts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></symbol>
 <symbol id="i-tasks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15l2 2 4-4"/></symbol>
@@ -26,6 +25,7 @@
 <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></symbol>
 </svg>
+<div class="app">
 <header class="topbar">
   <a class="brand" href="/calendar">{{ ctx.t("app-name") }}</a>
   {% if ctx.user.is_some() %}
