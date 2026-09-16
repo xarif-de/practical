@@ -891,3 +891,19 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .confirm { position: sticky; bottom: 58px; z-index: 1; border-top: 1px solid var(--line); }
 .leaflet-container { font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }
+/* location (design G): one primary field, the other part derived and shown as a chip below; errors in red */
+.ed .cardform .field.loc > .mapbtn { display: inline-flex; gap: 4px; }
+.ed .cardform .field.loc.err input { color: #ff3b30; border-bottom-color: color-mix(in srgb, #ff3b30 55%, transparent); }
+.ed .cardform .locsub { padding: 4px 0 2px 26px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ed .cardform .locsub:empty { display: none; }
+.ed .cardform .locsub .chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; background: var(--bg); max-width: 100%; }
+.ed .cardform .locsub .chip .ico { width: 12px; height: 12px; color: var(--fg-3); flex: none; }
+.ed .cardform .locsub .chip .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed .cardform .locsub .chip b { all: unset; cursor: pointer; color: var(--fg-3); padding-left: 2px; }
+.ed .cardform .locsub .chip b:hover { color: #ff3b30; }
+.ed .cardform .locsub .chip.ghost { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); border-radius: 999px; padding: 2px 8px; font-size: 12px; color: var(--accent); }
+.ed .cardform .locsub .chip.ghost .ico { color: var(--accent); }
+.ed .cardform .locsub .chip.err { color: #ff3b30; border-color: #ff3b30; }
+.ed .cardform .locsub .errtxt { font-size: 11.5px; color: #ff3b30; }
+.ed .cardform .act.map.hot { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
+.geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
