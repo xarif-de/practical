@@ -181,3 +181,35 @@ mod tests {
         assert_eq!(folded.replace("\r\n ", ""), long);
     }
 }
+
+/// Splits one unfolded content line into (NAME, [(PARAM, value)…], value); quoted parameter
+/// values may contain `;`/`:`/`,`. Parameter names are upper-cased, values kept.
+pub fn split_line(line: &str) -> (String, Vec<(String, String)>, String) {
+    let mut head_end = line.len();
+    let mut quoted = false;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ':' if !quoted => {
+                head_end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let (head, value) = (&line[..head_end], line.get(head_end + 1..).unwrap_or(""));
+    let mut parts = vec![];
+    let mut cur = String::new();
+    quoted = false;
+    for c in head.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            ';' if !quoted => parts.push(std::mem::take(&mut cur)),
+            _ => cur.push(c),
+        }
+    }
+    parts.push(cur);
+    let name = parts[0].rsplit('.').next().unwrap_or("").to_ascii_uppercase();
+    let params = parts[1..].iter().filter_map(|p| p.split_once('=').map(|(k, v)| (k.to_ascii_uppercase(), v.to_string()))).collect();
+    (name, params, value.to_string())
+}

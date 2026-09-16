@@ -8,7 +8,7 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use caldata::component::{CalendarInnerData, Component, IcalEvent};
 use caldata::types::parse_duration;
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, TimeZone};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
 use rustical_store::{CalendarQuery, CalendarReadStore, CalendarWriteStore};
@@ -31,8 +31,10 @@ pub struct Instance {
     pub all_day: bool,
     pub recurring: bool,
     pub categories: Vec<String>,
-    /// minutes before start of the first DISPLAY alarm, if any
+    /// minutes before start of the first relative alarm, if any (views, push)
     pub alarm_minutes: Option<i64>,
+    /// every relative alarm as minutes before the start (RELATED=END ones shifted by the duration)
+    pub alarms: Vec<i64>,
     pub is_group: bool,
 }
 
@@ -59,20 +61,26 @@ impl Instance {
     }
 }
 
-pub fn alarm_minutes(ev: &IcalEvent) -> Option<i64> {
+/// Relative alarms of an event as minutes before its start (a trigger after the start or
+/// relative to the end comes out negative/shifted). Absolute (VALUE=DATE-TIME) triggers are
+/// left out: they do not follow the instance.
+pub fn alarm_offsets(ev: &IcalEvent) -> Vec<i64> {
+    let dur = ev.get_duration().map(|d| d.num_minutes()).unwrap_or(0);
+    let mut out = vec![];
     for a in ev.get_alarms() {
         let Some(t) = a.get_property("TRIGGER") else { continue };
         if t.params.get_param("VALUE").is_some_and(|v| v.eq_ignore_ascii_case("DATE-TIME")) {
             continue;
         }
         if let Ok(d) = parse_duration(&t.value) {
-            return Some(-d.num_minutes());
+            let related_end = t.params.get_param("RELATED").is_some_and(|v| v.eq_ignore_ascii_case("END"));
+            out.push(-d.num_minutes() - if related_end { dur } else { 0 });
         }
     }
-    None
+    out
 }
 
-fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, recurring: bool) -> Instance {
+fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, recurring: bool, alarms: Vec<i64>) -> Instance {
     let (start, all_day) = ical::local(&ev.dtstart.0, tz);
     let end = if all_day {
         // Whole days: DTEND is an exclusive DATE. Go through the duration, not the converted
@@ -104,7 +112,8 @@ fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::
         all_day,
         recurring,
         categories: ical::list(ev, "CATEGORIES"),
-        alarm_minutes: alarm_minutes(ev),
+        alarm_minutes: alarms.first().copied(),
+        alarms,
         is_group: cal.is_group,
     }
 }
@@ -138,7 +147,8 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
             let recurring = main.has_rruleset();
             let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
             for ev in &expanded {
-                let inst = instance_from(ev, cal, &id, tz, recurring);
+                let alarms = alarm_offsets(ev);
+                let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
                 if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
                     out.push(inst);
                 }
@@ -162,7 +172,7 @@ pub struct EventDetail {
     pub end: NaiveDateTime,
     pub all_day: bool,
     pub rrule: Option<String>,
-    pub alarm_minutes: Option<i64>,
+    pub alarms: Vec<Alarm>,
     pub categories: Vec<String>,
     pub etag: String,
     pub has_overrides: bool,
@@ -176,7 +186,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         return Err(AppError::NotFound);
     };
     let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
-    let i = instance_from(main, &cal, object_id, tz, main.has_rruleset());
+    let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
     let rrule = main.get_property("RRULE").map(|p| p.value.clone());
     let timezone = match &main.dtstart.0 {
         caldata::types::CalDateOrDateTime::DateTime(d) => ical::tz_of(&d.timezone()).map(|t| t.name().to_string()).unwrap_or_else(|| tz.name().to_string()),
@@ -194,7 +204,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         end: i.end,
         all_day: i.all_day,
         rrule,
-        alarm_minutes: i.alarm_minutes,
+        alarms: split_ics(&obj.get_ics()).0.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect(),
         categories: i.categories,
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
@@ -219,11 +229,166 @@ pub struct EventInput {
     #[serde(default)]
     pub rrule: Option<String>,
     #[serde(default)]
-    pub alarm_minutes: Option<i64>,
+    pub alarms: Vec<Alarm>,
     #[serde(default)]
     pub categories: Vec<String>,
     #[serde(default)]
     pub timezone: Option<String>,
+}
+
+/// One VALARM as the editor sees it. `idx` is the alarm's position in the stored object: on
+/// save the lines the editor does not model (UID, ACKNOWLEDGED, PROXIMITY, ATTACH, ATTENDEE,
+/// X-…) are copied from that alarm; a new alarm has none.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Alarm {
+    #[serde(default)]
+    pub idx: Option<usize>,
+    /// DISPLAY (default) | AUDIO | EMAIL
+    #[serde(default)]
+    pub action: String,
+    /// minutes before the anchor (negative = after)
+    #[serde(default)]
+    pub minutes: i64,
+    /// anchor is the end (TRIGGER;RELATED=END) instead of the start
+    #[serde(default)]
+    pub related_end: bool,
+    /// absolute trigger in the user's zone (TRIGGER;VALUE=DATE-TIME); wins over `minutes`
+    #[serde(default)]
+    pub at: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub description: String,
+    /// DURATION/REPEAT pair: repeat the alarm `repeat` more times every `duration_minutes`
+    #[serde(default)]
+    pub repeat: i64,
+    #[serde(default)]
+    pub duration_minutes: i64,
+}
+
+// ---- raw access to the stored object: whatever the editor does not model survives a save ----
+
+/// The master VEVENT's lines outside its VALARMs (unfolded, in order) and its VALARM blocks.
+#[derive(Debug, Default)]
+pub struct RawMaster {
+    pub props: Vec<String>,
+    pub alarms: Vec<Vec<String>>,
+}
+
+/// Properties `build_vevent` writes itself; every other master line is carried over verbatim.
+const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE"];
+const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT"];
+
+fn prop_name(line: &str) -> String {
+    line.split([';', ':']).next().unwrap_or("").to_ascii_uppercase()
+}
+
+/// Splits a stored object into its master VEVENT and the RECURRENCE-ID override blocks
+/// (verbatim, folded again) — those come from other clients and are never rewritten here.
+pub fn split_ics(ics: &str) -> (RawMaster, Vec<String>) {
+    let unfolded = unfold(&ics.replace("\r\n", "\n"));
+    let mut master = RawMaster::default();
+    let mut overrides = vec![];
+    let mut block: Vec<String> = vec![];
+    let mut depth = 0;
+    for line in &unfolded {
+        if line.starts_with("BEGIN:VEVENT") && depth == 0 {
+            depth = 1;
+            block.clear();
+            continue;
+        }
+        if depth == 0 {
+            continue;
+        }
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+        } else if line.starts_with("END:") {
+            depth -= 1;
+            if depth == 0 {
+                if block.iter().any(|l| l.starts_with("RECURRENCE-ID")) {
+                    let folded: Vec<String> = std::iter::once("BEGIN:VEVENT".to_string()).chain(block.iter().cloned()).chain(std::iter::once("END:VEVENT".to_string())).map(|l| ical::fold(&l)).collect();
+                    overrides.push(folded.join("\r\n"));
+                } else if master.props.is_empty() && master.alarms.is_empty() {
+                    let mut alarm: Option<Vec<String>> = None;
+                    for l in &block {
+                        if l.starts_with("BEGIN:VALARM") {
+                            alarm = Some(vec![]);
+                        } else if l.starts_with("END:VALARM") {
+                            master.alarms.push(alarm.take().unwrap_or_default());
+                        } else if let Some(a) = alarm.as_mut() {
+                            a.push(l.clone());
+                        } else {
+                            master.props.push(l.clone());
+                        }
+                    }
+                }
+                continue;
+            }
+        }
+        block.push(line.clone());
+    }
+    (master, overrides)
+}
+
+fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Alarm {
+    let mut a = Alarm { idx: Some(idx), action: "DISPLAY".into(), ..Default::default() };
+    for l in lines {
+        let (name, params, value) = ical::split_line(l);
+        let param = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.to_ascii_uppercase());
+        match name.as_str() {
+            "ACTION" => a.action = value.to_ascii_uppercase(),
+            "TRIGGER" => {
+                if param("VALUE").as_deref() == Some("DATE-TIME") || (value.ends_with('Z') && !value.starts_with(['P', '-', '+'])) {
+                    if let Ok(utc) = NaiveDateTime::parse_from_str(value.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
+                        a.at = Some(chrono::Utc.from_utc_datetime(&utc).with_timezone(&tz).naive_local());
+                    }
+                } else if let Ok(d) = parse_duration(&value) {
+                    a.minutes = -d.num_minutes();
+                    a.related_end = param("RELATED").as_deref() == Some("END");
+                }
+            }
+            "DESCRIPTION" => a.description = ical::unescape(&value),
+            "SUMMARY" if a.description.is_empty() => a.description = ical::unescape(&value),
+            "DURATION" => a.duration_minutes = parse_duration(&value).map(|d| d.num_minutes()).unwrap_or(0),
+            "REPEAT" => a.repeat = value.trim().parse().unwrap_or(0),
+            _ => {}
+        }
+    }
+    a
+}
+
+fn fmt_trigger_offset(minutes: i64) -> String {
+    if minutes == 0 {
+        return "PT0S".into();
+    }
+    let sign = if minutes > 0 { "-" } else { "" };
+    let m = minutes.abs();
+    if m % 1440 == 0 { format!("{sign}P{}D", m / 1440) } else if m % 60 == 0 { format!("{sign}PT{}H", m / 60) } else { format!("{sign}PT{m}M") }
+}
+
+/// VALARM lines for one alarm: the modelled properties from `a`, the rest from the stored alarm.
+fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz: chrono_tz::Tz) -> Vec<String> {
+    let action = match a.action.to_ascii_uppercase().as_str() { "AUDIO" => "AUDIO", "EMAIL" => "EMAIL", _ => "DISPLAY" };
+    let mut l = vec!["BEGIN:VALARM".to_string(), format!("ACTION:{action}")];
+    l.push(match a.at {
+        Some(at) => format!("TRIGGER;VALUE=DATE-TIME:{}", ical::to_utc(at, tz).format("%Y%m%dT%H%M%SZ")),
+        None if a.related_end => format!("TRIGGER;RELATED=END:{}", fmt_trigger_offset(a.minutes)),
+        None => format!("TRIGGER:{}", fmt_trigger_offset(a.minutes)),
+    });
+    let text = if a.description.trim().is_empty() { summary } else { a.description.trim() };
+    if action != "AUDIO" {
+        l.push(format!("DESCRIPTION:{}", ical::escape(text)));
+    }
+    if action == "EMAIL" {
+        l.push(format!("SUMMARY:{}", ical::escape(text)));
+    }
+    if a.repeat > 0 && a.duration_minutes > 0 {
+        l.push(format!("DURATION:{}", fmt_trigger_offset(-a.duration_minutes)));
+        l.push(format!("REPEAT:{}", a.repeat));
+    }
+    if let Some(src) = a.idx.and_then(|i| raw.and_then(|r| r.alarms.get(i))) {
+        l.extend(src.iter().filter(|x| !ALARM_MANAGED.contains(&prop_name(x).as_str())).cloned());
+    }
+    l.push("END:VALARM".into());
+    l
 }
 
 fn validate_rrule(r: &str) -> AppResult<String> {
@@ -238,8 +403,10 @@ fn validate_rrule(r: &str) -> AppResult<String> {
     Ok(r.to_uppercase())
 }
 
-/// Builds the VEVENT lines (without BEGIN/END) for the master event.
-fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz) -> AppResult<Vec<String>> {
+/// Builds the VEVENT lines (without BEGIN/END) for the master event. With `raw` (an update)
+/// every stored line the editor does not model is carried over verbatim — properties like
+/// ATTENDEE, STATUS, ATTACH, COLOR, EXDATE, X-… and the unmodelled parts of each VALARM.
+fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz, raw: Option<&RawMaster>) -> AppResult<Vec<String>> {
     if input.summary.trim().is_empty() {
         return Err(AppError::BadRequest("summary required".into()));
     }
@@ -280,14 +447,12 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz)
     {
         l.push(format!("RRULE:{}", validate_rrule(r)?));
     }
-    if let Some(m) = input.alarm_minutes
-        && m >= 0
-    {
-        l.push("BEGIN:VALARM".into());
-        l.push("ACTION:DISPLAY".into());
-        l.push(format!("DESCRIPTION:{}", ical::escape(input.summary.trim())));
-        l.push(if m == 0 { "TRIGGER:PT0S".into() } else if m % 1440 == 0 { format!("TRIGGER:-P{}D", m / 1440) } else if m % 60 == 0 { format!("TRIGGER:-PT{}H", m / 60) } else { format!("TRIGGER:-PT{m}M") });
-        l.push("END:VALARM".into());
+    l.push(format!("LAST-MODIFIED:{}", ical::fmt_utc_now()));
+    if let Some(r) = raw {
+        l.extend(r.props.iter().filter(|x| !MANAGED.contains(&prop_name(x).as_str())).cloned());
+    }
+    for a in &input.alarms {
+        l.extend(build_valarm(a, input.summary.trim(), raw, tz));
     }
     Ok(l)
 }
@@ -323,7 +488,7 @@ pub async fn create_event(state: &AppState, user: &Principal, input: EventInput,
     collections::ensure_owner(user, &input.principal)?;
     let tz = user_tz(&input, default_tz);
     let uid = uuid::Uuid::new_v4().to_string();
-    let lines = build_vevent(&uid, 0, &input, tz)?;
+    let lines = build_vevent(&uid, 0, &input, tz, None)?;
     let ics = assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, vec![lines], &[]);
     let obj = CalendarObject::import(&ics, None)?;
     let object_id = uid.clone();
@@ -331,9 +496,9 @@ pub async fn create_event(state: &AppState, user: &Principal, input: EventInput,
     Ok(object_id)
 }
 
-/// Rewrites the master VEVENT; RECURRENCE-ID overrides written by other
-/// clients are carried over untouched (raw blocks), so "edit the series"
-/// never silently drops a moved single occurrence.
+/// Rewrites the master VEVENT from the input plus every stored line the editor does not
+/// model; RECURRENCE-ID overrides written by other clients are carried over untouched
+/// (raw blocks), so "edit the series" never silently drops a moved single occurrence.
 pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, input: EventInput, expected_etag: Option<&str>, default_tz: chrono_tz::Tz) -> AppResult<()> {
     collections::ensure_owner(user, &input.principal)?;
     let tz = user_tz(&input, default_tz);
@@ -349,37 +514,8 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     };
     let uid = main.get_uid().to_string();
     let sequence: i64 = main.get_property("SEQUENCE").and_then(|p| p.value.parse().ok()).unwrap_or(0) + 1;
-    let lines = build_vevent(&uid, sequence, &input, tz)?;
-    // carry over override blocks + foreign VTIMEZONEs verbatim
-    let raw = existing.get_ics().replace("\r\n", "\n");
-    let unfolded = unfold(&raw);
-    let mut extra = vec![];
-    let mut cur: Vec<String> = vec![];
-    let mut depth = 0;
-    let mut is_override = false;
-    for line in &unfolded {
-        if line.starts_with("BEGIN:VEVENT") && depth == 0 {
-            depth = 1;
-            cur.clear();
-            is_override = false;
-        }
-        if depth > 0 {
-            cur.push(line.clone());
-            if line.starts_with("RECURRENCE-ID") {
-                is_override = true;
-            }
-            if line.starts_with("BEGIN:") && !line.starts_with("BEGIN:VEVENT") {
-                depth += 1;
-            } else if line.starts_with("END:VEVENT") {
-                depth -= 1;
-                if depth == 0 && is_override {
-                    extra.push(cur.iter().map(|l| ical::fold(l)).collect::<Vec<_>>().join("\r\n"));
-                }
-            } else if line.starts_with("END:") {
-                depth -= 1;
-            }
-        }
-    }
+    let (raw, extra) = split_ics(&existing.get_ics());
+    let lines = build_vevent(&uid, sequence, &input, tz, Some(&raw))?;
     let ics = assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, vec![lines], &extra);
     let obj = CalendarObject::import(&ics, None)?;
     state.calendars.put_object(&input.principal, &input.cal_id, object_id, obj, true).await?;
@@ -481,7 +617,7 @@ mod tests {
         let ws = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
         let we = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
         let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
-        let inst: Vec<Instance> = expanded.iter().map(|ev| instance_from(ev, &cal, "bday", tz, true)).collect();
+        let inst: Vec<Instance> = expanded.iter().map(|ev| instance_from(ev, &cal, "bday", tz, true, vec![])).collect();
         assert_eq!(inst.len(), 1);
         let i = &inst[0];
         assert!(i.all_day);
@@ -504,24 +640,85 @@ mod tests {
             end: NaiveDate::from_ymd_opt(2026, 9, 3).unwrap().and_hms_opt(9, 15, 0).unwrap(),
             all_day: false,
             rrule: Some("FREQ=WEEKLY;COUNT=3".into()),
-            alarm_minutes: Some(15),
+            alarms: vec![Alarm { minutes: 15, ..Default::default() }],
             categories: vec!["Arzt".into()],
             timezone: None,
         };
-        let lines = build_vevent("uid-1", 0, &input, tz).unwrap();
+        let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
         let ics = assemble(ical::vtimezone("Europe/Berlin"), vec![lines], &[]);
         let obj = CalendarObject::import(&ics, None).unwrap();
         let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { panic!() };
         assert!(main.has_rruleset());
-        assert_eq!(alarm_minutes(main), Some(15));
+        assert_eq!(alarm_offsets(main), vec![15]);
         let ex = main.expand_recurrence(None, None, overrides);
         assert_eq!(ex.len(), 3);
         let cal = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: "Test".into(), color: "#000".into(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
-        let i = instance_from(&ex[1], &cal, "uid-1", tz, true);
+        let i = instance_from(&ex[1], &cal, "uid-1", tz, true, alarm_offsets(main));
         assert_eq!(i.start.date().day(), 10);
         assert_eq!(i.summary, "Zahnarzt, Kontrolle");
         assert_eq!(i.description, "Karte\nmitnehmen");
         assert_eq!((i.end - i.start).num_minutes(), 45);
         assert!(validate_rrule("DAILY").is_err());
+    }
+
+    /// Property histogram of a VEVENT block (nested VALARMs prefixed), CATEGORIES merged.
+    fn histogram(ics: &str) -> std::collections::BTreeMap<String, usize> {
+        let (m, _) = split_ics(ics);
+        let mut h = std::collections::BTreeMap::new();
+        for l in &m.props {
+            let n = prop_name(l);
+            if n != "LAST-MODIFIED" && n != "DTSTAMP" {
+                *h.entry(n).or_insert(0) += 1;
+            }
+        }
+        for a in &m.alarms {
+            for l in a {
+                *h.entry(format!("VALARM:{}", prop_name(l))).or_insert(0) += 1;
+            }
+        }
+        h.entry("CATEGORIES".into()).and_modify(|v| *v = 1);
+        h
+    }
+
+    /// The demo fixture carries every VEVENT property there is (RFC 5545/7986/9073/9074 + X-);
+    /// an unchanged round trip through the editor's model must keep all of them, alarm by alarm.
+    #[test]
+    fn unchanged_save_keeps_every_property() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let ics = include_str!("../../tests/fixtures/demo-event-full.ics");
+        let (raw, overrides) = split_ics(ics);
+        assert_eq!(raw.alarms.len(), 5);
+        assert_eq!(overrides.len(), 1);
+        let alarms: Vec<Alarm> = raw.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect();
+        assert_eq!(alarms[0].minutes, 15);
+        assert_eq!((alarms[1].minutes, alarms[1].repeat, alarms[1].duration_minutes), (1440, 2, 10));
+        assert!(alarms[2].related_end && alarms[2].action == "AUDIO");
+        assert!(alarms[3].at.is_some() && alarms[3].action == "EMAIL");
+        let input = EventInput {
+            principal: "p".into(),
+            cal_id: "c".into(),
+            summary: "Demo-Termin: alle Eigenschaften".into(),
+            location: "Kulturpalast, Schloßstraße 2, 01067 Dresden".into(),
+            description: "Zeilen mit Umbruch\nund Sonderzeichen, Komma; Semikolon.\nZweiter Absatz.".into(),
+            start: NaiveDate::from_ymd_opt(2026, 9, 22).unwrap().and_hms_opt(19, 0, 0).unwrap(),
+            end: NaiveDate::from_ymd_opt(2026, 9, 22).unwrap().and_hms_opt(21, 30, 0).unwrap(),
+            all_day: false,
+            rrule: Some("FREQ=WEEKLY;BYDAY=TU;COUNT=6".into()),
+            alarms,
+            categories: vec!["Familie".into(), "Kultur".into(), "Demo".into()],
+            timezone: Some("Europe/Berlin".into()),
+        };
+        let lines = build_vevent("demo-event-full@xarif.de", 4, &input, tz, Some(&raw)).unwrap();
+        let out = assemble(ical::vtimezone("Europe/Berlin"), vec![lines], &overrides);
+        let (before, after) = (histogram(ics), histogram(&out));
+        let lost: Vec<String> = before.iter().filter(|(k, v)| after.get(*k).copied().unwrap_or(0) < **v).map(|(k, v)| format!("{k} {v}->{}", after.get(k).copied().unwrap_or(0))).collect();
+        assert!(lost.is_empty(), "lost on save: {lost:?}");
+        // and the result is still a valid object with the same series, override and alarms
+        let obj = CalendarObject::import(&out, None).unwrap();
+        let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { panic!() };
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(main.get_alarms().len(), 5);
+        assert_eq!(alarm_offsets(main), vec![15, 1440, 5 - 150, 60]);
+        assert!(out.contains("ACKNOWLEDGED:20260915T170000Z") && out.contains("PROXIMITY:DEPART") && out.contains("ATTENDEE;CN=Erika Musterfrau"));
     }
 }

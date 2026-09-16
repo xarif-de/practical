@@ -55,7 +55,7 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
         // alarms up to 2 days ahead can only fire within the next hour if the event is within ~3 days
         let inst = events::instances(state, &cals, today - Duration::days(1), today + Duration::days(4), tz).await.map_err(|e| e.to_string())?;
         for i in inst {
-            let Some(m) = i.alarm_minutes else { continue };
+            for m in i.alarms.iter().copied() {
             let start_utc = crate::domain::ical::to_utc(i.start, tz);
             let trigger = start_utc - Duration::minutes(m);
             // fire window: trigger within [now-2min, now+1min] (the poll runs every minute)
@@ -85,6 +85,7 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
             sqlx::query("INSERT OR IGNORE INTO xui_alarms_sent (principal, cal_id, object_id, trigger_at) VALUES (?, ?, ?, ?)")
                 .bind(&principal).bind(&i.cal_id).bind(&i.object_id).bind(&key_trigger)
                 .execute(&state.db).await.map_err(|e| e.to_string())?;
+            }
         }
     }
     // housekeeping: sent-log older than 30 days

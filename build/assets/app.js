@@ -279,7 +279,7 @@
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
-      f.alarm.value = d.alarm_minutes == null ? '' : String(d.alarm_minutes);
+      const primary = (d.alarms || []).find(a => !a.at && !a.related_end); if (primary && ![...f.alarm.options].some(o => o.value === String(primary.minutes))) f.alarm.add(new Option(primary.minutes + ' min', String(primary.minutes))); f.alarm.value = primary ? String(primary.minutes) : '';
       if (d.rrule) { const std = ['FREQ=DAILY','FREQ=WEEKLY','FREQ=MONTHLY','FREQ=YEARLY']; if (std.includes(d.rrule)) f.rrule.value = d.rrule; else { f.rrule.value = 'custom'; f.rrule_custom.value = d.rrule; f.rrule_custom.hidden = false; } }
       $('#ed-hint').textContent = d.rrule ? T.series : '';
     } else {
@@ -315,6 +315,8 @@
     } catch (_) {}
     box.innerHTML = h;
   }
+  // the reminder select stands for the first plain "before start" alarm; the others (absolute, relative to the end, audio/mail) are carried along untouched
+  const alarmList = () => { const all = current ? current.alarms : []; const primary = all.find(a => !a.at && !a.related_end); const others = all.filter(a => a !== primary); return f.alarm.value === '' ? others : [{ ...(primary || { action: 'DISPLAY' }), minutes: +f.alarm.value }, ...others]; };
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const [principal, cal_id] = f.calendar.value.split('/');
@@ -323,7 +325,7 @@
     const endDate = f.end_date.value || f.date.value;
     const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
     const rrule = f.rrule.value === 'custom' ? f.rrule_custom.value : f.rrule.value;
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarm_minutes: f.alarm.value === '' ? null : +f.alarm.value, categories: chips(), timezone: root.dataset.tz, etag: f.etag.value };
+    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarms: alarmList(), categories: chips(), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
