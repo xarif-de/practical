@@ -830,8 +830,11 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 /* status / links cards, colour and coordinates */
 .ev.cancelled { text-decoration: line-through; opacity: .55; }
 .ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }
+.ed .cardform .field.geo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "v map" "l map"; } /* same column as the address row: the two map buttons line up */
+.ed .cardform .field.geo > .mapbtn { grid-area: map; }
+.ed .cardform .field.geo .inl { min-width: 0; } /* number inputs have a wide intrinsic width that would push the track past the card */
+.ed .cardform .field.geo .inl input[type=number] { flex: 1 1 0; width: 0; min-width: 0; }
 .ed .cardform input[type=color] { width: 34px; height: 24px; padding: 0; border: 0; background: transparent; }
-.ed .cardform .field.geo input[type=number] { width: 120px; }
 .ed .cardform .toggle.small { font-size: 13px; margin: 0; }
 .ed .cardform .toggle.small i { width: 28px; height: 16px; } .ed .cardform .toggle.small i::after { width: 12px; height: 12px; } .ed .cardform .toggle.small.on i::after { left: 14px; }
 .ed .cardform .geo-txt { padding: 0 0 4px 26px; font-size: 12px; color: var(--fg-3); }
@@ -846,6 +849,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 /* location: suggestions after a typing pause (the ring counts it down), two map buttons, sync state, map dialog */
 .ed .cardform input:not([type=hidden]) { border-radius: 0; } /* the dialog's rounded inputs would bend the underline at its ends */
 .ed .cardform .field.loc { grid-template-columns: 1fr auto auto; grid-template-areas: "v map acts" "l map acts"; }
+.ed .cardform.mode-edit .field.loc { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "v map" "l map"; } /* no empty action column (its gap would shift the map button 8 px off the one below) */
 .ed .cardform .field.loc > .lbl { grid-area: l; } .ed .cardform .field.loc > .locwrap { grid-area: v; } .ed .cardform .field.loc > .mapbtn { grid-area: map; } .ed .cardform .field.loc > .acts { grid-area: acts; }
 .ed .cardform .field .sync { font-style: normal; color: #ff3b30; margin-left: 6px; }
 .ed .cardform .field .sync[hidden] { display: none; }
@@ -862,7 +866,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .sugg button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13.5px; line-height: 1.3; }
 .ed .cardform .sugg button:hover, .ed .cardform .sugg button[aria-selected=true] { background: var(--tile); }
 .ed .cardform .sugg .none { padding: 6px 8px; font-size: 13px; color: var(--fg-3); }
-.ed .cardform .field.geo .inl .act.map { margin-left: 4px; }
+.ed .cardform .field.loc > .mapbtn, .ed .cardform .field.geo > .mapbtn { align-self: center; justify-self: end; }
 .geomap { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
 .geomap[hidden] { display: none; }
 .geomap .gbox { width: min(760px, 100%); background: var(--bg); border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.35); display: grid; grid-template-rows: auto 1fr auto auto; max-height: calc(100dvh - 32px); }
