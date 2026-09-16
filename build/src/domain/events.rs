@@ -74,14 +74,21 @@ pub fn alarm_minutes(ev: &IcalEvent) -> Option<i64> {
 
 fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, recurring: bool) -> Instance {
     let (start, all_day) = ical::local(&ev.dtstart.0, tz);
-    let end = match (&ev.dtend, ev.get_duration()) {
-        (Some(e), _) => ical::local(&e.0, tz).0,
-        (None, Some(d)) => start + d,
-        (None, None) => {
-            if all_day { start + Duration::days(1) } else { start }
+    let end = if all_day {
+        // Whole days: DTEND is an exclusive DATE. Go through the duration, not the converted
+        // DTEND — caldata expands an all-day series to `recurrence-id + duration`, which is a
+        // UTC DateTime (caldata event/mod.rs:259) that ical::local would shift into the zone
+        // (+2 h in summer → the instance spilled into the next day).
+        let days = ev.get_duration().map(|d| d.num_days()).filter(|d| *d > 0).unwrap_or(1);
+        start + Duration::days(days)
+    } else {
+        match (&ev.dtend, ev.get_duration()) {
+            (Some(e), _) => ical::local(&e.0, tz).0,
+            (None, Some(d)) => start + d,
+            (None, None) => start,
         }
+        .max(start)
     };
-    let end = if end <= start && all_day { start + Duration::days(1) } else { end.max(start) };
     Instance {
         principal: cal.principal.clone(),
         cal_id: cal.id.clone(),
@@ -447,6 +454,41 @@ mod tests {
             checked += got.len();
         }
         assert!(checked > 2000, "only {checked} instances compared");
+    }
+
+    /// An all-day yearly series: caldata expands DATE + duration into a UTC DateTime end; the
+    /// instance must still be exactly one day (summer instance → zone offset must not leak).
+    #[test]
+    fn allday_series_instance_is_one_day() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//t//EN\r\nBEGIN:VEVENT\r\nUID:bday\r\nDTSTAMP:20240901T000000Z\r\nSUMMARY:Geburtstag\r\nDTSTART;VALUE=DATE:20240911\r\nDTEND;VALUE=DATE:20240912\r\nRRULE:FREQ=YEARLY;WKST=MO\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let obj = CalendarObject::from_ics(ics.to_string()).unwrap();
+        let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { panic!("not an event") };
+        let cal = CalInfo {
+            principal: "p".into(),
+            owner_label: "p".into(),
+            is_group: false,
+            id: "c".into(),
+            displayname: "c".into(),
+            color: "#000".into(),
+            description: String::new(),
+            components: vec!["VEVENT".into()],
+            timezone_id: "Europe/Berlin".into(),
+            subscription_url: None,
+            deleted_at: None,
+            synctoken: 0,
+        };
+        let ws = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
+        let we = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
+        let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
+        let inst: Vec<Instance> = expanded.iter().map(|ev| instance_from(ev, &cal, "bday", tz, true)).collect();
+        assert_eq!(inst.len(), 1);
+        let i = &inst[0];
+        assert!(i.all_day);
+        assert_eq!(i.start, NaiveDate::from_ymd_opt(2026, 9, 11).unwrap().and_hms_opt(0, 0, 0).unwrap());
+        assert_eq!(i.end, NaiveDate::from_ymd_opt(2026, 9, 12).unwrap().and_hms_opt(0, 0, 0).unwrap());
+        assert_eq!(i.last_date(), NaiveDate::from_ymd_opt(2026, 9, 11).unwrap());
+        assert!(!i.multi_day());
     }
 
     #[test]
