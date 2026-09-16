@@ -383,56 +383,106 @@
   $('.main').addEventListener('scroll', railTick); $('.sheetwrap', wrap).addEventListener('scroll', railTick);
   $$('[data-ctview]').forEach(b => b.addEventListener('click', () => setTimeout(railMark, 0)));
   railMark();
-  // detail editor
-  const det = $('#detail'), form = $('#ctform'), f = form.elements, multi = $('#ct-multi');
-  function row(kind, type, value) { const k = kind === 'phone' ? 'phones' : 'emails'; return `<div class="multi" data-k="${k}"><select>${T.kinds.map(x => `<option${x === type ? ' selected' : ''}>${x}</option>`).join('')}</select><input value="${String(value).replace(/"/g, '&quot;')}" placeholder="${kind === 'phone' ? T.phone : T.email}"><button class="link danger" type="button" data-rm>✕</button></div>`; }
-  multi.addEventListener('click', e => { if (e.target.dataset.rm !== undefined) e.target.closest('.multi').remove(); });
-  $('#ct-addf').onclick = () => { multi.insertAdjacentHTML('beforeend', row('phone', 'cell', '') + row('email', 'home', '')); };
+  // ---- contact editor: cards, view/edit mode (lock), per-row actions ----
+  const det = $('#detail'), form = $('#ctform'), f = form.elements, D = form.dataset;
+  const KEY = c => `${c.principal}/${c.ab_id}/${c.object_id}`;
+  let current = null, baseline = '', fnAuto = true;
+  const wide = () => matchMedia('(min-width: 1100px)').matches;
+  // partial dates: "YYYY-MM-DD" | "--MM-DD" <-> three inputs
+  const setDate = (p, iso) => { const m = (iso || '').match(/^(?:(\d{4})|-)-(\d{2})-(\d{2})$/); $('[data-p=d]', p).value = m ? m[3] : ''; $('[data-p=m]', p).value = m ? m[2] : ''; $('[data-p=y]', p).value = m && m[1] ? m[1] : ''; };
+  const getDate = p => { const d = $('[data-p=d]', p).value.trim(), m = $('[data-p=m]', p).value.trim(), y = $('[data-p=y]', p).value.trim(); if (!d || !m) return ''; const dd = d.padStart(2, '0'), mm = m.padStart(2, '0'); return (y ? y.padStart(4, '0') : '-') + `-${mm}-${dd}`; };
+  const dateInfo = p => { const d = +$('[data-p=d]', p).value, m = +$('[data-p=m]', p).value, y = +$('[data-p=y]', p).value; const info = $('.dateinfo', p); if (!info) return; if (!d || !m) { info.textContent = ''; return; } const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()); let next = new Date(now.getFullYear(), m - 1, d); if (next < t0) next = new Date(now.getFullYear() + 1, m - 1, d); const days = Math.round((next - t0) / 864e5); info.textContent = (days === 0 ? D.tToday : D.tIn.replace('{$n}', days)) + (y ? ' · ' + D.tTurns.replace('{$n}', next.getFullYear() - y) : ''); };
+  // list rows from <template>
+  const addRow = (list, item) => { const box = $(`[data-list="${list}"]`, form); const tpl = $('template', box); box.appendChild(tpl.content.cloneNode(true)); const row = box.lastElementChild; if (item) { const sel = $('select.typ', row); if (sel && item.kind) { if (![...sel.options].some(o => o.value === item.kind)) sel.add(new Option(item.kind, item.kind)); sel.value = item.kind; } if (row.classList.contains('adr')) { ['street', 'code', 'city', 'country', 'region'].forEach(k => $(`[data-w=${k}]`, row).value = item[k] || ''); } else if (row.classList.contains('xd')) { $('.lbl', row).value = item.label || ''; setDate($('.pdate', row), item.date); dateInfo($('.pdate', row)); } else { $('input', row).value = item.value || ''; } const pref = $('.pref', row); if (pref) pref.setAttribute('aria-pressed', item.pref ? 'true' : 'false'); } return row; };
+  const rows = list => [...$$(`[data-list="${list}"] .row`, form)];
+  const rowVals = list => rows(list).map(r => { const p = $('.pref', r); return { kind: $('select.typ', r).value, value: $('input:not([type=hidden])', r).value.trim(), pref: !!p && p.getAttribute('aria-pressed') === 'true' }; }).filter(v => v.value);
+  const chips = () => $$('.tags .chip', form).map(c => c.firstChild.textContent.trim());
+  const addChip = v => { v = v.replace(/,/g, '').trim(); if (!v || chips().includes(v)) return; $('.tags input', form).insertAdjacentHTML('beforebegin', `<span class="chip">${v.replace(/</g, '&lt;')}<b class="edits">×</b></span>`); };
+  const hasData = card => $$('input:not([type=hidden]), textarea', card).some(i => !i.closest('template') && i.value.trim() !== '') || !!$('.chip', card);
+  function markEmpty() { $$('.field', form).forEach(fl => { const p = $('.pdate', fl); const v = p ? getDate(p) : ($('input, select, textarea', fl) || {}).value; fl.classList.toggle('empty', !(v || '').trim()); }); const mn = $('.morenames', form); mn.classList.toggle('filled', $$('input', mn).some(i => i.value.trim())); }
+  function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
+  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
+  const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].filter(e => !e.closest('template')).map(e => e.value).join('|') + '|' + chips().join(',') + '|' + $$('.pref[aria-pressed=true]', form).length;
+  function updateButtons() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed; $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  const initials = n => n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   function show(c) {
-    form.reset(); $('#ct-error').textContent = '';
-    f.key.value = c ? `${c.principal}/${c.ab_id}/${c.object_id}` : ''; f.etag.value = c ? c.etag : '';
-    $('#ct-h').textContent = c ? c.full_name : (lang === 'en' ? 'New contact' : 'Neuer Kontakt'); $('#ct-sub').textContent = c ? c.ab_name : '';
-    $('#ct-av').textContent = c ? c.full_name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
-    multi.innerHTML = '';
-    if (c) { f.given.value = c.given; f.family.value = c.family; f.org.value = c.org; f.birthday.value = c.birthday; f.address.value = (c.addresses[0] || {}).value || ''; f.note.value = c.note; f.ab.value = `${c.principal}/${c.ab_id}`; f.category.value = c.categories[0] || '';
-      c.phones.forEach(p => multi.insertAdjacentHTML('beforeend', row('phone', p.kind, p.value))); c.emails.forEach(p => multi.insertAdjacentHTML('beforeend', row('email', p.kind, p.value))); }
-    else { multi.insertAdjacentHTML('beforeend', row('phone', 'cell', '') + row('email', 'home', '')); }
-    $('#ct-delete').hidden = !c;
+    current = c; form.reset(); $('#ct-error').textContent = '';
+    f.key.value = c ? KEY(c) : ''; f.etag.value = c ? c.etag : '';
+    ['given', 'family', 'nickname', 'prefix', 'additional', 'suffix', 'org', 'department', 'title', 'note', 'full_name'].forEach(k => f[k].value = c ? (c[k] || '') : '');
+    fnAuto = !c || !c.full_name || c.full_name === [c.given, c.family].filter(Boolean).join(' ');
+    f.ab.value = c ? `${c.principal}/${c.ab_id}` : f.ab.options[0].value;
+    setDate($('[data-date=birthday]', form), c ? c.birthday : ''); setDate($('[data-date=anniversary]', form), c ? c.anniversary : '');
+    ['phones', 'emails', 'addresses', 'urls', 'impp', 'related', 'dates'].forEach(l => { rows(l).forEach(r => r.remove()); (c ? c[l] : []).forEach(it => addRow(l, it)); });
+    if (!c) addRow('phones', { kind: 'cell', value: '' });
+    $$('.tags .chip', form).forEach(x => x.remove()); (c ? c.categories : []).forEach(addChip);
+    $('.morenames', form).hidden = true; $('[data-more]', form).hidden = false;
+    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added'));
+    $('#ct-av').textContent = c ? initials(c.full_name || '?') : '?'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
+    $('#ct-sub').textContent = c ? [c.org, c.categories.join(', ')].filter(Boolean).join(' · ') : '';
     form.classList.toggle('new', !c);
-    const lbl = (id, t) => { const b = $(id); b.title = t; b.setAttribute('aria-label', t); };
-    lbl('#ct-save', c ? T.save : T.create); lbl('#ct-reset', T.reset); lbl('#ct-cancel', T.cancel); lbl('#ct-delete', T.delete);
-    current = c; baseline = serialize(); updateCancel();
+    const b = $('#ct-save'); b.title = c ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
+    mode(c ? 'view' : 'edit'); baseline = serialize(); updateButtons();
     det.hidden = false; det.classList.add('on');
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
   async function open(key) { try { const r = await fetch('/api/contacts/' + key); if (!r.ok) throw new Error(r.status); show(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); } }
   $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
-  // save/create and reset/cancel only become active once the form differs from what show() loaded
-  const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].map(e => e.type === 'checkbox' ? e.checked : e.value).join('\u0001');
-  let baseline = '', current = null; // what show() loaded — reset re-renders it
-  // save/create and reset follow changes; cancel (edit mode only) is always available
-  function updateCancel() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed; }
-  form.addEventListener('input', updateCancel); form.addEventListener('change', updateCancel); multi.addEventListener('click', () => setTimeout(updateCancel, 0)); $('#ct-addf').addEventListener('click', () => setTimeout(updateCancel, 0));
-  // wide list view: the editor is always visible, closing just returns to the empty (new contact) form
-  const wide = () => matchMedia('(min-width: 1100px)').matches;
-  // reset: drop the edits (re-render the loaded contact, or the empty form); cancel: back to the empty form (narrow screens close the overlay)
+  // editing: dirty tracking, display name follows given + family, dates re-evaluate
+  form.addEventListener('input', e => { if (e.target === f.given || e.target === f.family) { if (fnAuto) f.full_name.value = [f.given.value, f.family.value].filter(Boolean).join(' '); } else if (e.target === f.full_name) fnAuto = !f.full_name.value; const p = e.target.closest('.pdate'); if (p) dateInfo(p); updateButtons(); });
+  form.addEventListener('change', updateButtons);
+  form.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
+    if (b.dataset.add) { const row = addRow(b.dataset.add, b.dataset.add === 'phones' ? { kind: 'cell' } : b.dataset.add === 'emails' || b.dataset.add === 'addresses' ? { kind: 'home' } : null); const i = $('input:not([type=hidden])', row); if (i) i.focus(); updateButtons(); return; }
+    if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); updateButtons(); return; }
+    if (b.classList.contains('pref')) { const list = b.closest('[data-list]'); const on = b.getAttribute('aria-pressed') === 'true'; $$('.pref', list).forEach(p => p.setAttribute('aria-pressed', p === b && !on ? 'true' : 'false')); updateButtons(); return; }
+    if (b.hasAttribute('data-more')) { $('.morenames', form).hidden = false; b.hidden = true; return; }
+    if (b.dataset.cardAdd) { const c = $(`.card[data-card="${b.dataset.cardAdd}"]`, form); c.dataset.added = '1'; c.hidden = false; b.disabled = true; b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'email') addRow('emails', { kind: 'home' }); if (b.dataset.cardAdd === 'adr') addRow('addresses', { kind: 'home' }); const i = $('input:not([type=hidden]), textarea', c); if (i && !i.closest('template')) i.focus(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => { if (!i.closest('template')) i.value = ''; }); $$('.rows .row', c).forEach(x => x.remove()); $$('.chip', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); updateButtons(); return; }
+    if (b.dataset.act) { action(b); return; }
+  });
+  form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); updateButtons(); } });
+  const tagIn = $('.tags input', form);
+  tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(tagIn.value); tagIn.value = ''; updateButtons(); } else if (e.key === 'Backspace' && !tagIn.value) { const c = tagIn.previousElementSibling; if (c && c.classList.contains('chip')) { c.remove(); updateButtons(); } } });
+  tagIn.addEventListener('blur', () => { if (tagIn.value.trim()) { addChip(tagIn.value); tagIn.value = ''; updateButtons(); } });
+  // view-mode actions
+  function action(b) {
+    const row = b.closest('.row'); const val = row ? ($('input:not([type=hidden])', row) || {}).value || '' : ''; const digits = val.replace(/[^0-9+]/g, ''); const open_ = u => window.open(u, '_blank', 'noopener');
+    const adrText = () => ['street', 'code', 'city', 'country'].map(k => ($(`[data-w=${k}]`, row) || {}).value || '').filter(Boolean).join(', ');
+    switch (b.dataset.act) {
+      case 'tel': location.href = 'tel:' + digits; break;
+      case 'sms': location.href = 'sms:' + digits; break;
+      case 'wa': open_('https://wa.me/' + digits.replace(/^\+/, '').replace(/^00/, '').replace(/^0/, '49')); break;
+      case 'mailto': location.href = 'mailto:' + val; break;
+      case 'open': open_(/^https?:/.test(val) ? val : 'https://' + val); break;
+      case 'osm': open_('https://www.openstreetmap.org/search?query=' + encodeURIComponent(adrText())); break;
+      case 'gmaps': open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(adrText())); break;
+      case 'copy': navigator.clipboard.writeText(row.classList.contains('adr') ? adrText() : val).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); break;
+      case 'im': { const svc = $('select.typ', row).value; const u = { Signal: 'https://signal.me/#p/' + digits, WhatsApp: 'https://wa.me/' + digits.replace(/^\+/, ''), Telegram: 'https://t.me/' + val.replace(/^@/, ''), Matrix: 'https://matrix.to/#/' + val, XMPP: 'xmpp:' + val, Threema: 'https://threema.id/' + val }[svc]; if (u) open_(u); break; }
+      case 'goto': { const li = $$('.list li[data-key]').find(l => (l.dataset.name || '').toLowerCase() === val.toLowerCase()); if (li) { open(li.dataset.key); const sc = $('.main'); sc.scrollTop += li.getBoundingClientRect().top - sc.getBoundingClientRect().top - 120; } else alert(D.tMissing); break; }
+    }
+  }
+  $('#ct-lock').onclick = () => mode('edit');
   $('#ct-reset').onclick = () => show(current);
   $('#ct-cancel').onclick = () => { if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
+  $('#ct-vcf').onclick = () => { if (f.key.value) location.href = '/api/contacts/' + f.key.value + '/vcf'; };
   if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
-    const lists = { phones: [], emails: [] };
-    $$('.multi', multi).forEach(m => { const v = m.querySelector('input').value.trim(); if (v) lists[m.dataset.k].push({ kind: m.querySelector('select').value, value: v }); });
-    return { principal, ab_id, given: f.given.value, family: f.family.value, org: f.org.value, birthday: f.birthday.value, addresses: f.address.value.trim() ? [{ kind: 'home', value: f.address.value.trim() }] : [], note: f.note.value, categories: f.category.value.trim() ? [f.category.value.trim()] : [], phones: lists.phones, emails: lists.emails, etag: f.etag.value };
+    const g = k => f[k].value.trim();
+    return { principal, ab_id, full_name: g('full_name'), given: g('given'), family: g('family'), nickname: g('nickname'), prefix: g('prefix'), additional: g('additional'), suffix: g('suffix'), org: g('org'), department: g('department'), title: g('title'), note: g('note'),
+      phones: rowVals('phones'), emails: rowVals('emails'), urls: rowVals('urls'), impp: rowVals('impp'), related: rowVals('related'),
+      addresses: rows('addresses').map(r => { const o = { kind: $('select.typ', r).value, pref: $('.pref', r).getAttribute('aria-pressed') === 'true' }; ['street', 'code', 'city', 'country', 'region'].forEach(k => o[k] = $(`[data-w=${k}]`, r).value.trim()); return o; }).filter(a => a.street || a.city || a.code || a.country),
+      dates: rows('dates').map(r => ({ label: $('.lbl', r).value.trim(), date: getDate($('.pdate', r)) })).filter(d => d.date),
+      birthday: getDate($('[data-date=birthday]', form)), anniversary: getDate($('[data-date=anniversary]', form)), categories: chips() };
   }
   form.addEventListener('submit', async e => {
     e.preventDefault(); const key = f.key.value; const body = collect();
-    const r = await fetch(key ? '/api/contacts/' + key : '/api/contacts', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    const r = await fetch(key ? '/api/contacts/' + key : '/api/contacts', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(key ? { ...body, etag: f.etag.value } : body) });
     if (!r.ok) { $('#ct-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; }
-    location.reload();
+    const { id } = await r.json(); location.hash = `${body.principal}/${body.ab_id}/${id}`; location.reload();
   });
-  $('#ct-delete').onclick = async () => { if (!confirm(T.del)) return; const r = await fetch('/api/contacts/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) location.reload(); };
+  $('#ct-delete').onclick = async () => { if (!confirm(T.del)) return; const r = await fetch('/api/contacts/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { location.hash = ''; location.reload(); } };
   // table inline edit: fetch → patch one field → PUT
   $$('.sheet td[contenteditable][data-f], .sheet .pin [contenteditable][data-f]').forEach(cell => {
     let before = '';
@@ -443,14 +493,14 @@
       const tr = cell.closest('tr'); const key = tr.dataset.key;
       try {
         const c = await (await fetch('/api/contacts/' + key)).json();
-        const body = { principal: c.principal, ab_id: c.ab_id, given: c.given, family: c.family, full_name: c.full_name, org: c.org, title: c.title, emails: c.emails, phones: c.phones, addresses: c.addresses, birthday: c.birthday, anniversary: c.anniversary, categories: c.categories, note: c.note, url: c.url, etag: c.etag };
+        const body = { ...c }; // the contact JSON is a superset of the input: nothing gets dropped
         switch (cell.dataset.f) {
           case 'full_name': { body.full_name = v; const parts = v.split(/\s+/); body.given = parts.slice(0, -1).join(' '); body.family = parts.slice(-1)[0] || ''; break; }
           case 'phone': body.phones = v ? [{ kind: (c.phones[0] || {}).kind || 'cell', value: v }, ...c.phones.slice(1)] : c.phones.slice(1); break;
           case 'email': body.emails = v ? [{ kind: (c.emails[0] || {}).kind || 'home', value: v }, ...c.emails.slice(1)] : c.emails.slice(1); break;
           case 'category': body.categories = v ? [v] : []; break;
           case 'birthday': { const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/); body.birthday = m ? (m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`) : v; break; }
-          case 'address': body.addresses = v ? [{ kind: (c.addresses[0] || {}).kind || 'home', value: v }] : []; break;
+          case 'address': body.addresses = v ? [{ ...(c.addresses[0] || { kind: 'home' }), street: v, code: '', city: '', region: '', country: '' }, ...c.addresses.slice(1)] : c.addresses.slice(1); break;
           case 'org': body.org = v; break;
         }
         const r = await fetch('/api/contacts/' + key, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });

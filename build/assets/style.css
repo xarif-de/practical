@@ -678,3 +678,85 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #ctform .actions { display: flex; gap: 8px; align-items: center; }
 #ctform .btn:disabled { opacity: .4; cursor: default; }
 [hidden] { display: none !important; } /* the icon-button display rules must not resurrect hidden elements (the delete button in new-contact mode did) */
+
+/* ---- contact editor: cards ("Symbolgeführt"), view/edit mode, pill action groups ----
+   view mode: fields read-only, empty ones hidden, per-row actions in a pill; edit mode: type left,
+   value, edit controls; cards without data are hidden unless added via the menu. ---- */
+.contacts .detail { container-type: inline-size; }
+#ctform .photo { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+#ctform .photo .av { width: 56px; height: 56px; border-radius: 16px; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 18px; flex: none; }
+#ctform .names { flex: 1; display: grid; gap: 2px; min-width: 0; }
+#ctform .names input { font: 600 20px/1.2 var(--font-display); border: 0; background: transparent; color: var(--fg); padding: 0; width: 100%; }
+#ctform .names small { color: var(--fg-3); font-size: 12px; }
+#ctform .cards { columns: 1; column-gap: 12px; }
+@container (min-width: 640px) { #ctform .cards { columns: 2; } }
+#ctform .card { background: var(--tile); border-radius: 14px; padding: 10px 14px 12px; break-inside: avoid; margin-bottom: 12px; }
+#ctform .card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font: 600 15px/1.3 var(--font-display); }
+#ctform .card h3 .ico { width: 18px; height: 18px; color: var(--accent); flex: none; }
+#ctform .card h3 .grow { flex: 1; }
+#ctform .field { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "v acts" "l acts"; gap: 0 8px; padding: 5px 0 5px 26px; border: 0; font-size: 14px; align-items: center; }
+#ctform .field > span:first-child { grid-area: l; color: var(--fg-3); font-size: 11.5px; }
+#ctform .field > input, #ctform .field > select, #ctform .field > textarea, #ctform .field > .pdate { grid-area: v; }
+#ctform input:not([type=hidden]), #ctform select, #ctform textarea { font: inherit; font-size: 15px; color: var(--fg); background: transparent; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; width: 100%; box-sizing: border-box; }
+#ctform.mode-edit input:focus, #ctform.mode-edit textarea:focus { outline: none; border-bottom-color: var(--accent); }
+#ctform textarea { resize: none; min-height: 24px; }
+#ctform .note-wrap { padding-left: 26px; }
+/* rows */
+#ctform .rows { display: grid; gap: 2px; }
+#ctform .row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "v acts" "t acts"; gap: 0 8px; align-items: center; padding: 4px 0 4px 26px; }
+#ctform .row .typ { grid-area: t; font-size: 11.5px; color: var(--fg-3); width: auto; max-width: 100%; padding: 0; }
+#ctform .row > input, #ctform .row > .adr-grid, #ctform .row > .pdate { grid-area: v; }
+#ctform .row .acts, #ctform .row .edits { grid-area: acts; justify-self: end; }
+#ctform .row .edits { display: inline-flex; gap: 2px; align-items: center; }
+#ctform .row.xd .lbl { grid-area: t; }
+#ctform .adr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+#ctform .adr-grid input[data-w=street], #ctform .adr-grid input[data-w=country] { grid-column: 1 / -1; }
+#ctform .adr-grid .plz { display: grid; grid-template-columns: 90px 1fr; gap: 8px; grid-column: 1 / -1; }
+#ctform.mode-edit .row { grid-template-columns: 100px 1fr auto; grid-template-areas: "t v acts"; }
+#ctform.mode-edit .row .typ { background: var(--bg); border-radius: 8px; padding: 4px 6px; font-size: 12px; color: var(--fg-2); }
+#ctform.mode-edit .row.xd .lbl { background: transparent; }
+#ctform.mode-edit .row.adr { align-items: start; }
+#ctform.mode-edit .row.adr .edits { align-self: start; }
+/* pill action group */
+#ctform .acts { display: inline-flex; gap: 2px; background: var(--bg); border-radius: 999px; padding: 2px 3px; }
+#ctform .acts:empty { display: none; }
+#ctform .act { all: unset; cursor: pointer; width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 999px; color: var(--fg-2); }
+#ctform .act:hover { background: var(--tile); color: var(--accent); }
+#ctform .act .ico { width: 14px; height: 14px; }
+#ctform .dateinfo { font-size: 12px; color: var(--fg-3); margin-left: 8px; }
+#ctform .pref { all: unset; cursor: pointer; color: var(--fg-3); font-size: 15px; width: 22px; text-align: center; }
+#ctform .pref[aria-pressed=true] { color: #ff9f0a; }
+#ctform .rm { all: unset; cursor: pointer; color: var(--fg-3); width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%; font-size: 15px; }
+#ctform .rm:hover { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
+#ctform .add { all: unset; cursor: pointer; font-size: 13px; color: var(--accent); padding: 6px 0 0 26px; display: inline-flex; gap: 6px; align-items: center; }
+#ctform .add .ico { width: 14px; height: 14px; }
+#ctform .addmenu { position: relative; margin: 2px 0 4px; }
+#ctform .addmenu .add { padding-left: 0; }
+#ctform .addmenu .pop { right: auto; left: 0; top: 30px; }
+#ctform .addmenu .pop button { all: unset; display: block; width: 100%; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; }
+#ctform .addmenu .pop button:hover { background: var(--tile); }
+#ctform .addmenu .pop button:disabled { opacity: .35; cursor: default; }
+/* partial date */
+#ctform .pdate { display: inline-flex; gap: 4px; align-items: center; }
+#ctform .pdate input { width: 34px; text-align: center; }
+#ctform .pdate input[data-p=y] { width: 52px; }
+#ctform .pdate small { color: var(--fg-3); font-size: 12px; }
+#ctform.mode-edit .pdate input { border-bottom-color: var(--line); }
+/* tags */
+#ctform .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-left: 26px; }
+#ctform .tags .chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+#ctform .tags .chip b { all: unset; cursor: pointer; color: var(--fg-3); }
+#ctform .tags input { flex: 1; min-width: 120px; width: auto; }
+/* modes */
+#ctform.mode-view .edits { display: none !important; }
+#ctform.mode-edit .views, #ctform.mode-edit .acts { display: none !important; }
+#ctform.mode-view input, #ctform.mode-view textarea, #ctform.mode-view select { pointer-events: none; }
+#ctform.mode-view select { appearance: none; }
+#ctform.mode-view .field.empty, #ctform.mode-view .morenames { display: none; }
+#ctform.mode-view .morenames.filled { display: block !important; }
+#ctform.new #ct-delete { display: none; }
+#ctform.new .only-edit, #ctform:not(.new) .only-new { display: none; }
+#ctform .actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+#ctform .actions .grow { flex: 1; }
+#ctform .btn:disabled { opacity: .35; cursor: default; }
+#ctform.mode-view .adr-grid input:placeholder-shown, #ctform.mode-view .pdate small { display: none; } /* view mode: empty address parts and the TT/MM hints disappear */
