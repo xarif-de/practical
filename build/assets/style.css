@@ -592,3 +592,5 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .day { min-width: 0; } .ev { max-width: 100%; }
 .cal { min-width: 0; } .main { min-width: 0; overflow-x: hidden; }
 .nowrap { white-space: nowrap; } label.link.file { cursor: pointer; color: var(--accent); font-size: 13px; padding: 2px 6px; }
+.tasks, .settings, .contacts, .placeholder { align-content: start; }
+.taskform { align-items: center; }
