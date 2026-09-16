@@ -248,30 +248,56 @@
   function close() { ed.hidden = true; }
   $('#ed-close').onclick = close; ed.addEventListener('click', e => { if (e.target === ed) close(); });
   addEventListener('keydown', e => { if (e.key === 'Escape') { close(); pk.hidden = true; } });
+  const fmtD = s => { const d = parse(s.slice(0, 10)); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
   // categories as chips (same widget as the contact editor)
   const chips = () => $$('.tags .chip', form).map(c => c.firstChild.textContent.trim());
   const addChip = v => { v = v.replace(/,/g, '').trim(); if (!v || chips().includes(v)) return; $('.tags input', form).insertAdjacentHTML('beforebegin', `<span class="chip">${v.replace(/</g, '&lt;')}<b class="edits">×</b></span>`); };
   const tagIn = $('.tags input', form);
   tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(tagIn.value); tagIn.value = ''; refresh(); } else if (e.key === 'Backspace' && !tagIn.value) { const c = tagIn.previousElementSibling; if (c && c.classList.contains('chip')) { c.remove(); refresh(); } } });
   tagIn.addEventListener('blur', () => { if (tagIn.value.trim()) { addChip(tagIn.value); tagIn.value = ''; refresh(); } });
+  // ---- list rows from <template>: reminders, people, exceptions, extra dates ----
+  const rows = list => $$(`[data-list="${list}"] .row`, form);
+  const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
+  const w = (row, k) => $(`[data-w=${k}]`, row);
+  const setSel = (sel, v) => { v = String(v); if (![...sel.options].some(o => o.value === v)) sel.add(new Option(v + ' min', v)); sel.value = v; };
+  // reminders: minutes before start | before end | at a time; audio/mail and repeats are shown, extra lines ride along in the row's original
+  const alarmText = a => { let t; if (a.at) t = fmtDT(a.at); else if (a.minutes === 0) t = D.tAt0; else { const m = Math.abs(a.minutes); t = m === 1440 ? D.tDay : m === 60 ? D.tHour : m % 1440 === 0 ? D.tDays.replace('{n}', m / 1440) : m % 60 === 0 ? D.tHours.replace('{n}', m / 60) : D.tMin.replace('{n}', m); t += ' ' + (a.related_end ? D.tBeforeEnd : D.tBefore); } const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
+  const addAlarm = a => { const r = addRow('alarms'); r._orig = a; setSel(w(r, 'min'), a.minutes); w(r, 'rel').value = a.at ? 'at' : a.related_end ? 'end' : 'start'; w(r, 'at').value = a.at ? a.at.slice(0, 16) : ''; w(r, 'at').hidden = !a.at; w(r, 'act').value = a.action || 'DISPLAY'; w(r, 'text').value = a.description && a.description !== f.summary.value ? a.description : ''; $('.txt', r).textContent = alarmText(a); return r; };
+  const alarmsOf = () => rows('alarms').map(r => { const rel = w(r, 'rel').value; return { ...(r._orig || { idx: null, repeat: 0, duration_minutes: 0 }), action: w(r, 'act').value, minutes: +w(r, 'min').value, related_end: rel === 'end', at: rel === 'at' && w(r, 'at').value ? w(r, 'at').value + ':00' : null, description: w(r, 'text').value.trim() }; });
+  // people: the organizer is the row with the ORGANIZER role
+  const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
+  const addPerson = (p, role) => { const r = addRow('people'); r._orig = p; w(r, 'role').value = role; w(r, 'name').value = p.name || ''; w(r, 'email').value = p.email || ''; $('.st', r).textContent = [statusText(p), p.cutype === 'RESOURCE' || p.cutype === 'ROOM' ? p.cutype.toLowerCase() : ''].filter(Boolean).join(' · '); return r; };
+  const peopleOf = () => { const all = rows('people').map(r => ({ ...(r._orig || { status: '', cutype: '', extra: [] }), role: w(r, 'role').value, name: w(r, 'name').value.trim(), email: w(r, 'email').value.trim() })).filter(p => p.email); const org = all.find(p => p.role === 'ORGANIZER'); return { organizer: org ? { ...org, role: '' } : null, attendees: all.filter(p => p.role !== 'ORGANIZER') }; };
+  // exceptions / extra dates: a date; timed events get the start time appended on save
+  const addDate = (list, iso) => { const r = addRow(list); w(r, 'd').value = (iso || '').slice(0, 10); $('.txt', r).textContent = iso ? fmtD(iso) : ''; return r; };
+  const datesOf = list => rows(list).map(r => w(r, 'd').value).filter(Boolean).map(d => f.all_day.checked ? d : `${d}T${f.from.value || '00:00'}:00`);
+  // recurrence: widgets for the common rules, raw text for everything else
+  const FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'], DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+  $('#ed-days').innerHTML = DAYS.map((d, i) => `<button type="button" data-day="${d}" aria-pressed="false">${DOW[i]}</button>`).join('');
+  $$('#ed-days button').forEach(b => b.onclick = () => { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); refresh(); });
+  const parseRR = r => { const o = { freq: '', interval: 1, byday: [], count: 0, until: '', extra: false }; (r || '').split(';').forEach(p => { const [k, v] = p.split('='); if (k === 'FREQ') o.freq = v; else if (k === 'INTERVAL') o.interval = +v || 1; else if (k === 'BYDAY' && o.freq === 'WEEKLY') o.byday = v.split(','); else if (k === 'COUNT') o.count = +v; else if (k === 'UNTIL') o.until = v; else if (k && k !== 'WKST') o.extra = true; }); return o; };
+  function setRR(r, untilLocal) { const o = parseRR(r); const simple = FREQS.includes(o.freq) && !o.extra && !(o.byday.length && o.freq !== 'WEEKLY'); f.rrule.value = !r ? '' : simple ? o.freq : 'custom'; f.rrule_custom.value = simple ? '' : (r || ''); f.interval.value = o.interval; $$('#ed-days button').forEach(b => b.setAttribute('aria-pressed', o.byday.includes(b.dataset.day) ? 'true' : 'false')); f.rend.value = o.count ? 'count' : o.until ? 'until' : ''; f.count.value = o.count || 10; f.until.value = untilLocal || (o.until ? `${o.until.slice(0, 4)}-${o.until.slice(4, 6)}-${o.until.slice(6, 8)}` : ''); }
+  const buildRR = () => { const v = f.rrule.value; if (!v) return null; if (v === 'custom') return f.rrule_custom.value.trim() || null; let r = 'FREQ=' + v; if (+f.interval.value > 1) r += ';INTERVAL=' + f.interval.value; if (v === 'WEEKLY') { const d = $$('#ed-days [aria-pressed=true]').map(b => b.dataset.day); if (d.length) r += ';BYDAY=' + d.join(','); } if (f.rend.value === 'count') r += ';COUNT=' + (+f.count.value || 1); else if (f.rend.value === 'until' && f.until.value) r += ';UNTIL=' + f.until.value.replace(/-/g, ''); return r; };
+  const rrText = () => { const v = f.rrule.value; if (!v) return ''; if (v === 'custom') return f.rrule_custom.value; let t = f.rrule.selectedOptions[0].textContent; const units = D.tUnits.split('|'); if (+f.interval.value > 1) t += ', ' + D.tEvery.replace('{n}', f.interval.value) + ' ' + units[FREQS.indexOf(v)]; if (v === 'WEEKLY') { const d = $$('#ed-days [aria-pressed=true]').map(b => DOW[DAYS.indexOf(b.dataset.day)]); if (d.length) t += ' ' + D.tOn + ' ' + d.join(', '); } if (f.rend.value === 'count') t += ', ' + D.tCount.replace('{n}', f.count.value); else if (f.rend.value === 'until' && f.until.value) t += ', ' + D.tUntil + ' ' + fmtD(f.until.value); return t; };
+  function syncRR() { const v = f.rrule.value, on = v && v !== 'custom'; $('#ed-rr').hidden = !on; f.rrule_custom.hidden = v !== 'custom'; f.rrule_custom.closest('.field').hidden = v !== 'custom'; $('#ed-unit').textContent = on ? D.tUnits.split('|')[FREQS.indexOf(v)] : ''; $('#ed-days').hidden = v !== 'WEEKLY'; f.count.hidden = f.rend.value !== 'count'; $('.cnt', form).hidden = f.rend.value !== 'count'; f.until.hidden = f.rend.value !== 'until'; $('#ed-rrule-text').textContent = rrText(); ['exdates', 'rdates'].forEach(l => { const box = $('#ed-' + l); box.hidden = !v; box.classList.toggle('empty', !rows(l).length); }); }
   // cards: the "when" card always, the others when they hold data or were added in edit mode
-  const hasData = card => $$('input:not([type=hidden]), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.chip', card);
+  const hasData = card => $$('input:not([type=hidden]), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.chip', card) || $$('.rows .row', card).length > 0;
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
-  const serialize = () => $$('input:not([type=hidden]), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
+  const serialize = () => $$('input:not([type=hidden]), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',') + '|' + $$('#ed-days [aria-pressed=true]', form).length;
   function updateButtons() { const changed = serialize() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
-  const fmtD = s => { const d = parse(s); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); grow(); updateButtons(); }
+  function refresh() { whenLine(); syncRR(); grow(); updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
   const nextDay = s => addDays(s, 1);
   function fill(d, date) {
-    current = d; openDate = date; form.reset(); $('#ed-error').textContent = ''; f.rrule_custom.hidden = true;
-    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); $$('.tags .chip', form).forEach(x => x.remove());
+    current = d; openDate = date; form.reset(); $('#ed-error').textContent = '';
+    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); $$('.tags .chip', form).forEach(x => x.remove()); $$('.rows .row', form).forEach(x => x.remove());
     f.key.value = d ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = d ? d.etag : '';
     form.classList.toggle('new', !d); f.summary.placeholder = d ? D.tTitle : D.tNewtitle;
     const b = $('#ed-save'); b.title = d ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
@@ -279,11 +305,11 @@
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
-      const primary = (d.alarms || []).find(a => !a.at && !a.related_end); if (primary && ![...f.alarm.options].some(o => o.value === String(primary.minutes))) f.alarm.add(new Option(primary.minutes + ' min', String(primary.minutes))); f.alarm.value = primary ? String(primary.minutes) : '';
-      if (d.rrule) { const std = ['FREQ=DAILY','FREQ=WEEKLY','FREQ=MONTHLY','FREQ=YEARLY']; if (std.includes(d.rrule)) f.rrule.value = d.rrule; else { f.rrule.value = 'custom'; f.rrule_custom.value = d.rrule; f.rrule_custom.hidden = false; } }
-      $('#ed-hint').textContent = d.rrule ? T.series : '';
+      d.alarms.forEach(addAlarm); if (d.organizer) addPerson(d.organizer, 'ORGANIZER'); d.attendees.forEach(p => addPerson(p, p.role || 'REQ-PARTICIPANT'));
+      setRR(d.rrule, d.rrule_until); d.exdates.forEach(x => addDate('exdates', x)); d.rdates.forEach(x => addDate('rdates', x));
+      $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); $('#ed-hint').textContent = '';
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); setRR('', ''); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
@@ -295,12 +321,14 @@
     ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
   form.addEventListener('input', refresh);
-  form.addEventListener('change', e => { if (e.target === f.rrule) f.rrule_custom.hidden = f.rrule.value !== 'custom'; if (e.target === f.calendar) syncDot(); if (e.target === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } refresh(); });
+  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t.dataset.w === 'rel') w(t.closest('.row'), 'at').hidden = t.value !== 'at'; refresh(); });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
-    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select', c).forEach(s => s.value = ''); $$('.chip', c).forEach(x => x.remove()); f.rrule_custom.hidden = true; delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
-    if (b.dataset.act) { const v = f.location.value, open_ = u => window.open(u, '_blank', 'noopener'); if (b.dataset.act === 'osm') open_('https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(v)); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
+    if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? addAlarm({ idx: null, action: 'DISPLAY', minutes: 15, related_end: false, at: null, description: '', repeat: 0, duration_minutes: 0 }) : l === 'people' ? addPerson({ name: '', email: '', status: '', cutype: '', extra: [] }, rows('people').length ? 'REQ-PARTICIPANT' : 'ORGANIZER') : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
+    if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
+    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.chip, .rows .row', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.dataset.act) { const row = b.closest('.row'); const v = row ? w(row, 'email').value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'); if (b.dataset.act === 'osm') open_('https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
@@ -315,8 +343,6 @@
     } catch (_) {}
     box.innerHTML = h;
   }
-  // the reminder select stands for the first plain "before start" alarm; the others (absolute, relative to the end, audio/mail) are carried along untouched
-  const alarmList = () => { const all = current ? current.alarms : []; const primary = all.find(a => !a.at && !a.related_end); const others = all.filter(a => a !== primary); return f.alarm.value === '' ? others : [{ ...(primary || { action: 'DISPLAY' }), minutes: +f.alarm.value }, ...others]; };
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const [principal, cal_id] = f.calendar.value.split('/');
@@ -324,8 +350,8 @@
     const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00';
     const endDate = f.end_date.value || f.date.value;
     const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
-    const rrule = f.rrule.value === 'custom' ? f.rrule_custom.value : f.rrule.value;
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrule || null, alarms: alarmList(), categories: chips(), timezone: root.dataset.tz, etag: f.etag.value };
+    const people = peopleOf();
+    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: buildRR(), exdates: datesOf('exdates'), rdates: datesOf('rdates'), alarms: alarmsOf(), organizer: people.organizer, attendees: people.attendees, categories: chips(), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });

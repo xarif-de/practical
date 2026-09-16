@@ -175,6 +175,12 @@ pub struct EventDetail {
     pub end: NaiveDateTime,
     pub all_day: bool,
     pub rrule: Option<String>,
+    /// UNTIL of the RRULE as a local date (the rule itself carries it in UTC)
+    pub rrule_until: Option<NaiveDate>,
+    pub exdates: Vec<String>,
+    pub rdates: Vec<String>,
+    pub organizer: Option<Person>,
+    pub attendees: Vec<Person>,
     pub alarms: Vec<Alarm>,
     pub categories: Vec<String>,
     pub etag: String,
@@ -190,6 +196,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
     };
     let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
+    let (raw, _) = split_ics(&obj.get_ics());
     let rrule = main.get_property("RRULE").map(|p| p.value.clone());
     let timezone = match &main.dtstart.0 {
         caldata::types::CalDateOrDateTime::DateTime(d) => ical::tz_of(&d.timezone()).map(|t| t.name().to_string()).unwrap_or_else(|| tz.name().to_string()),
@@ -206,8 +213,13 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         start: i.start,
         end: i.end,
         all_day: i.all_day,
+        rrule_until: rrule.as_deref().and_then(|r| rrule_until_local(r, tz)),
         rrule,
-        alarms: split_ics(&obj.get_ics()).0.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect(),
+        exdates: dates_of(&raw.props, "EXDATE", tz),
+        rdates: dates_of(&raw.props, "RDATE", tz),
+        organizer: persons_of(&raw.props, "ORGANIZER").into_iter().next(),
+        attendees: persons_of(&raw.props, "ATTENDEE"),
+        alarms: raw.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect(),
         categories: i.categories,
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
@@ -233,10 +245,146 @@ pub struct EventInput {
     pub rrule: Option<String>,
     #[serde(default)]
     pub alarms: Vec<Alarm>,
+    /// local "YYYY-MM-DD" (all-day) or "YYYY-MM-DDTHH:MM:SS" in the event's zone
+    #[serde(default)]
+    pub exdates: Vec<String>,
+    #[serde(default)]
+    pub rdates: Vec<String>,
+    #[serde(default)]
+    pub organizer: Option<Person>,
+    #[serde(default)]
+    pub attendees: Vec<Person>,
     #[serde(default)]
     pub categories: Vec<String>,
     #[serde(default)]
     pub timezone: Option<String>,
+}
+
+/// ORGANIZER / ATTENDEE: the modelled parameters plus every other parameter verbatim (`extra`),
+/// so RSVP, DELEGATED-FROM, X-… survive a save.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Person {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub email: String,
+    /// REQ-PARTICIPANT | OPT-PARTICIPANT | CHAIR | NON-PARTICIPANT
+    #[serde(default)]
+    pub role: String,
+    /// NEEDS-ACTION | ACCEPTED | DECLINED | TENTATIVE | DELEGATED
+    #[serde(default)]
+    pub status: String,
+    /// INDIVIDUAL | GROUP | RESOURCE | ROOM
+    #[serde(default)]
+    pub cutype: String,
+    #[serde(default)]
+    pub extra: Vec<(String, String)>,
+}
+
+fn persons_of(props: &[String], name: &str) -> Vec<Person> {
+    props.iter().filter(|l| prop_name(l) == name).map(|l| {
+        let (_, params, value) = ical::split_line(l);
+        let mut p = Person { email: value.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:").to_string(), ..Default::default() };
+        for (k, v) in params {
+            match k.as_str() {
+                "CN" => p.name = v.trim_matches('"').to_string(),
+                "ROLE" => p.role = v.to_ascii_uppercase(),
+                "PARTSTAT" => p.status = v.to_ascii_uppercase(),
+                "CUTYPE" => p.cutype = v.to_ascii_uppercase(),
+                _ => p.extra.push((k, v)),
+            }
+        }
+        p
+    }).collect()
+}
+
+fn person_line(name: &str, p: &Person) -> Option<String> {
+    let email = p.email.trim();
+    if email.is_empty() {
+        return None;
+    }
+    let mut l = name.to_string();
+    if !p.name.trim().is_empty() {
+        let n = p.name.trim().replace('"', "");
+        if n.contains([';', ':', ',']) { l.push_str(&format!(";CN=\"{n}\"")) } else { l.push_str(&format!(";CN={n}")) }
+    }
+    for (k, v) in [("ROLE", &p.role), ("PARTSTAT", &p.status), ("CUTYPE", &p.cutype)] {
+        if !v.trim().is_empty() {
+            l.push_str(&format!(";{k}={}", v.trim().to_ascii_uppercase()));
+        }
+    }
+    for (k, v) in &p.extra {
+        l.push_str(&format!(";{k}={v}"));
+    }
+    Some(format!("{l}:mailto:{email}"))
+}
+
+/// EXDATE/RDATE values as local strings in the user's zone ("YYYY-MM-DD" for DATE values).
+/// PERIOD-valued RDATEs are not modelled and get dropped on save.
+fn dates_of(props: &[String], name: &str, tz: chrono_tz::Tz) -> Vec<String> {
+    let mut out = vec![];
+    for l in props.iter().filter(|l| prop_name(l) == name) {
+        let (_, params, value) = ical::split_line(l);
+        let param = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        let is_date = param("VALUE").is_some_and(|v| v.eq_ignore_ascii_case("DATE"));
+        let src_tz = param("TZID").and_then(|t| ical::parse_tz(&t));
+        for v in value.split(',') {
+            let v = v.trim();
+            if is_date || v.len() == 8 {
+                if let Ok(d) = NaiveDate::parse_from_str(v, "%Y%m%d") {
+                    out.push(d.format("%Y-%m-%d").to_string());
+                }
+            } else if let Ok(dt) = NaiveDateTime::parse_from_str(v.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
+                let local = if v.ends_with('Z') {
+                    chrono::Utc.from_utc_datetime(&dt).with_timezone(&tz).naive_local()
+                } else if let Some(stz) = src_tz {
+                    stz.from_local_datetime(&dt).single().map(|d| d.with_timezone(&tz).naive_local()).unwrap_or(dt)
+                } else {
+                    dt
+                };
+                out.push(local.format("%Y-%m-%dT%H:%M:%S").to_string());
+            }
+        }
+    }
+    out
+}
+
+fn date_lines(name: &str, values: &[String], all_day: bool, tz: chrono_tz::Tz) -> Vec<String> {
+    let mut out = vec![];
+    for v in values {
+        let v = v.trim();
+        if all_day || v.len() == 10 {
+            if let Ok(d) = NaiveDate::parse_from_str(&v[..v.len().min(10)], "%Y-%m-%d") {
+                out.push(format!("{name};VALUE=DATE:{}", ical::fmt_date(d)));
+            }
+        } else if let Ok(dt) = NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S").or_else(|_| NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M")) {
+            out.push(format!("{name};TZID={}:{}", tz.name(), ical::fmt_dt(dt)));
+        }
+    }
+    out
+}
+
+/// The RRULE's UNTIL as a local date, whatever form it was written in.
+fn rrule_until_local(rrule: &str, tz: chrono_tz::Tz) -> Option<NaiveDate> {
+    let v = rrule.split(';').find_map(|p| p.strip_prefix("UNTIL="))?;
+    if let Ok(dt) = NaiveDateTime::parse_from_str(v.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
+        return Some(if v.ends_with('Z') { chrono::Utc.from_utc_datetime(&dt).with_timezone(&tz).date_naive() } else { dt.date() });
+    }
+    NaiveDate::parse_from_str(&v[..v.len().min(8)], "%Y%m%d").ok()
+}
+
+/// A bare `UNTIL=YYYYMMDD` on a timed event becomes the end of that local day in UTC (RFC 5545
+/// wants UNTIL in the DTSTART value type); on an all-day event a date-time UNTIL becomes a date.
+fn normalize_until(rrule: &str, all_day: bool, tz: chrono_tz::Tz) -> String {
+    rrule.split(';').map(|p| {
+        let Some(v) = p.strip_prefix("UNTIL=") else { return p.to_string() };
+        let date = rrule_until_local(&format!("UNTIL={v}"), tz);
+        match date {
+            Some(d) if all_day => format!("UNTIL={}", ical::fmt_date(d)),
+            Some(d) if v.len() <= 8 => format!("UNTIL={}", ical::to_utc(d.and_hms_opt(23, 59, 59).unwrap(), tz).format("%Y%m%dT%H%M%SZ")),
+            _ => p.to_string(),
+        }
+    }).collect::<Vec<_>>().join(";")
 }
 
 /// One VALARM as the editor sees it. `idx` is the alarm's position in the stored object: on
@@ -277,7 +425,7 @@ pub struct RawMaster {
 }
 
 /// Properties `build_vevent` writes itself; every other master line is carried over verbatim.
-const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE"];
+const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE", "EXDATE", "RDATE", "ORGANIZER", "ATTENDEE"];
 const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT"];
 
 fn prop_name(line: &str) -> String {
@@ -448,8 +596,16 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
     if let Some(r) = &input.rrule
         && !r.trim().is_empty()
     {
-        l.push(format!("RRULE:{}", validate_rrule(r)?));
+        l.push(format!("RRULE:{}", validate_rrule(&normalize_until(r, input.all_day, tz))?));
+        l.extend(date_lines("EXDATE", &input.exdates, input.all_day, tz));
+        l.extend(date_lines("RDATE", &input.rdates, input.all_day, tz));
     }
+    if let Some(o) = &input.organizer
+        && let Some(line) = person_line("ORGANIZER", o)
+    {
+        l.push(line);
+    }
+    l.extend(input.attendees.iter().filter_map(|a| person_line("ATTENDEE", a)));
     l.push(format!("LAST-MODIFIED:{}", ical::fmt_utc_now()));
     if let Some(r) = raw {
         l.extend(r.props.iter().filter(|x| !MANAGED.contains(&prop_name(x).as_str())).cloned());
@@ -644,6 +800,10 @@ mod tests {
             all_day: false,
             rrule: Some("FREQ=WEEKLY;COUNT=3".into()),
             alarms: vec![Alarm { minutes: 15, ..Default::default() }],
+            exdates: vec![],
+            rdates: vec![],
+            organizer: None,
+            attendees: vec![],
             categories: vec!["Arzt".into()],
             timezone: None,
         };
@@ -708,9 +868,18 @@ mod tests {
             all_day: false,
             rrule: Some("FREQ=WEEKLY;BYDAY=TU;COUNT=6".into()),
             alarms,
+            exdates: dates_of(&raw.props, "EXDATE", tz),
+            rdates: dates_of(&raw.props, "RDATE", tz),
+            organizer: persons_of(&raw.props, "ORGANIZER").into_iter().next(),
+            attendees: persons_of(&raw.props, "ATTENDEE"),
             categories: vec!["Familie".into(), "Kultur".into(), "Demo".into()],
             timezone: Some("Europe/Berlin".into()),
         };
+        assert_eq!(input.exdates, vec!["2026-10-06T19:00:00"]);
+        assert_eq!(input.rdates, vec!["2026-10-10T19:00:00"]);
+        assert_eq!(input.attendees.len(), 3);
+        assert_eq!(input.attendees[0].extra, vec![("RSVP".to_string(), "TRUE".to_string())]);
+        assert_eq!(input.organizer.as_ref().map(|o| o.name.as_str()), Some("Thomas Steinbach"));
         let lines = build_vevent("demo-event-full@xarif.de", 4, &input, tz, Some(&raw)).unwrap();
         let out = assemble(ical::vtimezone("Europe/Berlin"), vec![lines], &overrides);
         let (before, after) = (histogram(ics), histogram(&out));
@@ -722,6 +891,18 @@ mod tests {
         assert_eq!(overrides.len(), 1);
         assert_eq!(main.get_alarms().len(), 5);
         assert_eq!(alarm_offsets(main), vec![15, 1440, 5 - 150, 60]);
-        assert!(out.contains("ACKNOWLEDGED:20260915T170000Z") && out.contains("PROXIMITY:DEPART") && out.contains("ATTENDEE;CN=Erika Musterfrau"));
+        let flat = unfold(&out.replace("\r\n", "\n")).join("\n"); // long lines are folded in `out`
+        assert!(flat.contains("ACKNOWLEDGED:20260915T170000Z") && flat.contains("PROXIMITY:DEPART"), "{flat}");
+        assert!(flat.contains("ATTENDEE;CN=Erika Musterfrau;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CUTYPE=INDIVIDUAL;RSVP=TRUE:mailto:erika@example.org"), "{flat}");
+        assert!(flat.contains("EXDATE;TZID=Europe/Berlin:20261006T190000") && flat.contains("RDATE;TZID=Europe/Berlin:20261010T190000"), "{flat}");
+        assert_eq!(main.expand_recurrence(None, None, overrides).len(), 6, "5 rule instances after the exclusion + the RDATE");
+    }
+
+    #[test]
+    fn until_forms() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        assert_eq!(normalize_until("FREQ=DAILY;UNTIL=20260930", false, tz), "FREQ=DAILY;UNTIL=20260930T215959Z");
+        assert_eq!(normalize_until("FREQ=DAILY;UNTIL=20260930T215959Z", true, tz), "FREQ=DAILY;UNTIL=20260930");
+        assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=20260930T215959Z", tz), NaiveDate::from_ymd_opt(2026, 9, 30));
     }
 }
