@@ -667,3 +667,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .icon-btn, .seg button { display: inline-grid; place-items: center; }
 .seg button .ico { width: 16px; height: 16px; }
 .btn.icon-btn { padding: 6px 9px; }
+
+/* contacts editor: one button set, icons switch between "new contact" (form.new) and "edit" */
+#ctform.new .only-edit, #ctform:not(.new) .only-new { display: none; }
+#ctform .actions { display: flex; gap: 8px; align-items: center; }
+#ctform .btn:disabled { opacity: .4; cursor: default; }

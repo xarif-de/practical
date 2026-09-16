@@ -341,7 +341,7 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'] } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'] };
+  const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'], create: 'Create contact', save: 'Save', reset: 'Reset', cancel: 'Cancel', delete: 'Delete' } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'], create: 'Kontakt anlegen', save: 'Speichern', reset: 'Zurücksetzen', cancel: 'Abbrechen', delete: 'Löschen' };
   // view switch
   $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
@@ -392,22 +392,30 @@
     form.reset(); $('#ct-error').textContent = '';
     f.key.value = c ? `${c.principal}/${c.ab_id}/${c.object_id}` : ''; f.etag.value = c ? c.etag : '';
     $('#ct-h').textContent = c ? c.full_name : (lang === 'en' ? 'New contact' : 'Neuer Kontakt'); $('#ct-sub').textContent = c ? c.ab_name : '';
-    $('#ct-av').textContent = c ? c.full_name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() : '+'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
+    $('#ct-av').textContent = c ? c.full_name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
     multi.innerHTML = '';
     if (c) { f.given.value = c.given; f.family.value = c.family; f.org.value = c.org; f.birthday.value = c.birthday; f.address.value = (c.addresses[0] || {}).value || ''; f.note.value = c.note; f.ab.value = `${c.principal}/${c.ab_id}`; f.category.value = c.categories[0] || '';
       c.phones.forEach(p => multi.insertAdjacentHTML('beforeend', row('phone', p.kind, p.value))); c.emails.forEach(p => multi.insertAdjacentHTML('beforeend', row('email', p.kind, p.value))); }
     else { multi.insertAdjacentHTML('beforeend', row('phone', 'cell', '') + row('email', 'home', '')); }
     $('#ct-delete').hidden = !c;
+    form.classList.toggle('new', !c);
+    const lbl = (id, t) => { const b = $(id); b.title = t; b.setAttribute('aria-label', t); };
+    lbl('#ct-save', c ? T.save : T.create); lbl('#ct-cancel', c ? T.cancel : T.reset); lbl('#ct-delete', T.delete);
+    updateCancel();
     det.hidden = false; det.classList.add('on');
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
   async function open(key) { try { const r = await fetch('/api/contacts/' + key); if (!r.ok) throw new Error(r.status); show(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); } }
   $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
-  $('#ct-new').onclick = () => show(null);
+  // new-contact mode: the reset button only becomes active once something was typed
+  const dirty = () => [...form.querySelectorAll('input:not([type=hidden]), textarea')].some(el => el.value.trim() !== '');
+  function updateCancel() { $('#ct-cancel').disabled = form.classList.contains('new') && !dirty(); }
+  form.addEventListener('input', updateCancel); multi.addEventListener('click', () => setTimeout(updateCancel, 0));
   // wide list view: the editor is always visible, closing just returns to the empty (new contact) form
   const wide = () => matchMedia('(min-width: 1100px)').matches;
-  $('#ct-close').onclick = () => { if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } }; $('#ct-cancel').onclick = $('#ct-close').onclick;
+  // reset (new) / cancel (edit): back to the empty form; narrow screens close the overlay instead
+  $('#ct-cancel').onclick = () => { if (wide() || !f.key.value) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
