@@ -2,6 +2,7 @@ pub mod api;
 pub mod assets;
 pub mod calendar;
 pub mod contacts;
+pub mod dev;
 pub mod more;
 pub mod pages;
 pub mod settings;

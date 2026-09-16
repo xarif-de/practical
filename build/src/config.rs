@@ -36,6 +36,12 @@ pub struct Config {
     pub default_lang: String,
     /// Session lifetime (inactivity) in hours.
     pub session_hours: i64,
+    /// Development only: serve `/assets/*` from this directory on every request (no caching) and mount
+    /// `/dev/reload` (SSE) so the browser reloads after a rebuild or an asset edit. Unset in production.
+    pub dev_assets_dir: Option<String>,
+    /// Development only, requires `dev_assets_dir`: GET /login signs this principal in without a
+    /// password, so the in-memory sessions lost on every watchexec restart cost nothing.
+    pub dev_login: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +94,9 @@ impl Config {
         let trash_retention_days: u32 = var_or("TRASH_RETENTION_DAYS", "90")
             .parse()
             .map_err(|e| format!("RUSTICAL_UI__TRASH_RETENTION_DAYS: {e}"))?;
+        if var("DEV_LOGIN").is_some() && var("DEV_ASSETS_DIR").is_none() {
+            return Err("RUSTICAL_UI__DEV_LOGIN is only honoured together with RUSTICAL_UI__DEV_ASSETS_DIR (development)".into());
+        }
         let session_hours: i64 = var_or("SESSION_HOURS", "12")
             .parse()
             .map_err(|e| format!("RUSTICAL_UI__SESSION_HOURS: {e}"))?;
@@ -109,6 +118,8 @@ impl Config {
             default_timezone: var_or("DEFAULT_TIMEZONE", "Europe/Berlin"),
             default_lang: var_or("DEFAULT_LANG", "de"),
             session_hours,
+            dev_assets_dir: var("DEV_ASSETS_DIR"),
+            dev_login: var("DEV_LOGIN"),
         })
     }
 

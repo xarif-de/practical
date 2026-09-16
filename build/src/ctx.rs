@@ -33,6 +33,8 @@ pub struct PageCtx {
     pub public_dav_url: String,
     pub push_enabled: bool,
     pub asset_v: &'static str,
+    /// Development mode (assets from disk + `/dev/reload`); adds `data-dev` to <body>.
+    pub dev: bool,
 }
 
 impl PageCtx {
@@ -119,6 +121,7 @@ impl FromRequestParts<SharedState> for PageCtx {
             public_dav_url: state.config.public_dav_url.clone(),
             push_enabled: state.vapid.is_some(),
             asset_v: crate::routes::assets::asset_version(),
+            dev: state.config.dev_assets_dir.is_some(),
         })
     }
 }

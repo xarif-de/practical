@@ -44,12 +44,41 @@ exec cargo deny --manifest-path build/Cargo.toml check advisories bans sources
 
 [tasks.test]
 description = "Rust unit tests (rust-toolchain.toml pins 1.98, the RustiCal crates' MSRV)"
-run = "cd build && cargo test"
+# An exported RUSTUP_TOOLCHAIN in the shell silently overrides rust-toolchain.toml → re-derive it.
+run = '''
+cd build && export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" && cargo test
+'''
 
 [tasks.dev]
-description = "Run against a COPY of a RustiCal DB with password login (never the live file)"
-run = """
-: "${DB:?set DB=/path/to/copy-of-db.sqlite3}"
-cd build && RUSTICAL_UI__RUSTICAL_URL= RUSTICAL_UI__DB_PATH="$DB" RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true \
-  RUSTICAL_UI__PUBLIC_URL=http://localhost:4001 RUSTICAL_UI__BIND=127.0.0.1:4001 cargo run -- serve
-"""
+description = "Feedback loop: watchexec rebuilds+restarts on src/templates/locales edits (~3-10 s), CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db`"
+run = '''
+DB="${DB:-$HOME/.cache/rustical-ui-dev/db.sqlite3}"
+[ -f "$DB" ] || { echo "no DB copy at $DB — run: mise run dev-db" >&2; exit 1; }
+cd build
+export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+export RUSTICAL_UI__RUSTICAL_URL= RUSTICAL_UI__DB_PATH="$DB" RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true \
+  RUSTICAL_UI__PUBLIC_URL=http://localhost:4001 RUSTICAL_UI__BIND=127.0.0.1:4001 \
+  RUSTICAL_UI__DEV_ASSETS_DIR="$PWD/assets" RUSTICAL_UI__HOLIDAYS_SUBDIVISION=DE-SN \
+  RUSTICAL_UI__PUBLIC_DAV_URL=https://dav.example.org RUSTICAL_UI__DEV_LOGIN="${DEV_USER:-thomass}"
+if command -v watchexec >/dev/null 2>&1; then
+  exec watchexec --restart --watch src --watch templates --watch locales --watch Cargo.toml --watch build.rs -- cargo run -- serve
+fi
+echo "watchexec not found (brew install watchexec) — running once without auto-rebuild" >&2
+exec cargo run -- serve
+'''
+
+[tasks.dev-db]
+description = "Fresh COPY of the production DB for `mise run dev` (cluster stays read-only: VACUUM INTO in the backup sidecar); sets password 'devpass' for DEV_USER (default thomass)"
+run = '''
+set -e
+DEST="$HOME/.cache/rustical-ui-dev/db.sqlite3"; mkdir -p "$(dirname "$DEST")"
+POD="$(kubectl get pod -n rustical -l app=rustical -o jsonpath='{.items[0].metadata.name}')"
+kubectl exec -n rustical "$POD" -c sqlite-backup -- sqlite3 /var/lib/rustical/db.sqlite3 "VACUUM INTO '/tmp/dev-copy.db'"
+kubectl cp -n rustical -c sqlite-backup "$POD:/tmp/dev-copy.db" "$DEST" >/dev/null
+kubectl exec -n rustical "$POD" -c sqlite-backup -- rm -f /tmp/dev-copy.db
+# the rustical CLI of the SAME release as the pinned crates sets the test password on the copy
+TAG="$(sed -n 's/.*tag = "v\([^"]*\)".*/\1/p' build/Cargo.toml | head -1)"
+docker run --rm -v "$(dirname "$DEST"):/var/lib/rustical" "ghcr.io/lennart-k/rustical:$TAG" \
+  rustical principals edit "${DEV_USER:-thomass}" --for-testing-password-from-arg devpass
+echo "copy at $DEST — login ${DEV_USER:-thomass} / devpass on http://localhost:4001"
+'''

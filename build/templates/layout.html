@@ -11,7 +11,7 @@
 <script>(function(){const h=document.documentElement;h.dataset.scheme=localStorage.scheme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");})();</script>
 {% block head %}{% endblock %}
 </head>
-<body data-lang="{{ ctx.lang }}" data-user="{{ ctx.user_id() }}">
+<body data-lang="{{ ctx.lang }}" data-user="{{ ctx.user_id() }}"{% if ctx.dev %} data-dev="1"{% endif %}>
 <div class="app">
 <header class="topbar">
   <a class="brand" href="/calendar">{{ ctx.t("app-name") }}</a>

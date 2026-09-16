@@ -120,15 +120,20 @@ image published → bump the rustical image there → Renovate re-pins this imag
 ## Local development
 
 ```bash
+mise run dev-db                # COPY of the production DB → ~/.cache/rustical-ui-dev (cluster read-only), test password
+mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
 mise run test                  # cargo test (rust-toolchain.toml → 1.98)
-DB=/path/to/copy.sqlite3 mise run dev   # serve on :4001 against a COPY, password login on
 mise run deny                  # cargo-deny: advisories, bans, sources
 mise run pipeline              # the CI image build + tests/tests.yaml, loaded into docker
 ```
 
-Never point `DB` at a live RustiCal file; take a copy (`sqlite3 db 'VACUUM INTO …'`). Set a
-test password on the copy with RustiCal's CLI:
-`rustical principals edit <user> --for-testing-password-from-arg <pw>`.
+`mise run dev` is the edit-and-see loop: `watchexec` rebuilds and restarts on every change under
+`src/`, `templates/` and `locales/` (an incremental debug build takes ~3 s); `RUSTICAL_UI__DEV_ASSETS_DIR`
+makes the server read `assets/*` from disk on every request (uncached) and mounts `/dev/reload`, an
+SSE stream the page listens to (`body[data-dev]`): a new process boot id or an asset change reloads
+the open tab, and `RUSTICAL_UI__DEV_LOGIN` signs `DEV_USER` back in after the restart (sessions are in
+memory), so nothing needs a manual refresh or login. Never point `DB` at a live RustiCal file — `dev-db`
+takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset in production.
 
 ## Repository layout
 

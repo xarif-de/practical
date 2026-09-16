@@ -103,6 +103,7 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .route("/healthz", get(healthz))
         .merge(auth::router(state)?)
         .merge(routes::assets::router())
+        .merge(routes::dev::router(state.config.dev_assets_dir.is_some()))
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))
         .layer(AuthenticationLayer::new(state.principals.clone()))
@@ -133,12 +134,14 @@ async fn serve() -> Result<(), String> {
         None => None,
     };
     let (changes, _) = tokio::sync::broadcast::channel(256);
+    let (dev_reload, _) = tokio::sync::broadcast::channel(16);
     let state: SharedState = Arc::new(AppState {
         principals: Arc::new(SqlitePrincipalStore::new(db.clone())),
         calendars: Arc::new(SqliteCalendarStore::new(db.clone(), cal_tx, true)),
         addressbooks: Arc::new(SqliteAddressbookStore::new(db.clone(), ab_tx, true)),
         i18n: i18n::I18n::load(),
         changes,
+        dev_reload,
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
         vapid,
         started_at: chrono::Utc::now(),
@@ -148,6 +151,7 @@ async fn serve() -> Result<(), String> {
     let app = build_router(&state)?;
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());
+    tasks::spawn_dev_asset_watcher(state.clone());
     domain::push::spawn_reminder_loop(state.clone());
 
     let listener = tokio::net::TcpListener::bind(&state.config.bind).await.map_err(|e| format!("bind {}: {e}", state.config.bind))?;

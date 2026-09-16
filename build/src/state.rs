@@ -23,6 +23,8 @@ pub struct AppState {
     pub addressbooks: Arc<SqliteAddressbookStore>,
     pub i18n: Arc<I18n>,
     pub changes: broadcast::Sender<ChangeEvent>,
+    /// Development only (`config.dev_assets_dir`): fired when an asset file changes → `/dev/reload`.
+    pub dev_reload: broadcast::Sender<()>,
     pub http: reqwest::Client,
     pub vapid: Option<VapidKeypair>,
     pub started_at: chrono::DateTime<chrono::Utc>,

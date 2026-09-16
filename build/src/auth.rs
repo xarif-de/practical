@@ -104,9 +104,16 @@ pub struct LoginQuery {
     manual: Option<String>,
 }
 
-pub async fn get_login(State(state): State<SharedState>, ctx: PageCtx, Query(q): Query<LoginQuery>) -> Response {
+pub async fn get_login(State(state): State<SharedState>, session: Session, ctx: PageCtx, Query(q): Query<LoginQuery>) -> Response {
     if ctx.user.is_some() {
         return Redirect::to("/calendar").into_response();
+    }
+    if let (Some(id), Some(_)) = (&state.config.dev_login, &state.config.dev_assets_dir)
+        && let Ok(Some(user)) = state.principals.get_principal(id).await
+    {
+        tracing::warn!("development auto-login as {}", user.id);
+        let _ = session.insert(SESSION_USER, user.id).await;
+        return Redirect::to(&safe_redirect(q.redirect_uri.as_deref())).into_response();
     }
     let oidc_name = state.config.oidc.as_ref().map(|o| o.name.clone());
     let allow_password_login = state.config.allow_password_login;

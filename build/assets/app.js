@@ -4,6 +4,17 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = () => ($('meta[name=csrf]') || {}).content || '';
 
+  // development only (body[data-dev]): reload after a rebuild (new boot id) or an asset edit
+  if (document.body.dataset.dev) {
+    let boot = sessionStorage.devBoot; const connect = () => {
+      const es = new EventSource('/dev/reload');
+      es.addEventListener('boot', ev => { if (boot && boot !== ev.data) location.reload(); boot = sessionStorage.devBoot = ev.data; });
+      es.addEventListener('reload', () => location.reload());
+      es.onerror = () => { es.close(); setTimeout(connect, 700); };
+    };
+    connect();
+  }
+
   // light/dark toggle (choice persisted in the browser; server pref = initial default)
   const h = document.documentElement;
   const sb = $('#scheme');
