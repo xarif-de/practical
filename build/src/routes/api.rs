@@ -40,15 +40,15 @@ async fn changes(State(state): State<SharedState>, user: Principal) -> Sse<impl 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-fn tokio_stream_wrapper(mut rx: tokio::sync::broadcast::Receiver<crate::state::ChangeEvent>) -> impl Stream<Item = Result<crate::state::ChangeEvent, ()>> {
-    futures_util::stream::poll_fn(move |cx| {
-        let fut = rx.recv();
-        futures_util::pin_mut!(fut);
-        match fut.poll(cx) {
-            std::task::Poll::Ready(Ok(v)) => std::task::Poll::Ready(Some(Ok(v))),
-            std::task::Poll::Ready(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => std::task::Poll::Ready(Some(Err(()))),
-            std::task::Poll::Ready(Err(_)) => std::task::Poll::Ready(None),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+/// Broadcast receiver as a stream. `unfold` keeps the pending `recv()` future between polls, so its
+/// waker survives; a fresh `recv()` per poll would drop the waiter and the stream only moved on the
+/// SSE keep-alive tick (15 s) — measured 2026-09-16 with /dev/reload.
+fn tokio_stream_wrapper(rx: tokio::sync::broadcast::Receiver<crate::state::ChangeEvent>) -> impl Stream<Item = Result<crate::state::ChangeEvent, ()>> {
+    futures_util::stream::unfold(rx, |mut rx| async move {
+        match rx.recv().await {
+            Ok(v) => Some((Ok(v), rx)),
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => Some((Err(()), rx)),
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
         }
     })
 }
