@@ -284,8 +284,8 @@
   const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return m === 10080 ? AT.tWeek : AT.tWeeks.replace('{n}', m / 10080); if (m && m % 1440 === 0) return m === 1440 ? D.tDay : D.tDays.replace('{n}', m / 1440); if (m && m % 60 === 0) return m === 60 ? D.tHour : D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
   const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
-  const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; if (a.acknowledged) t += ' · ' + AT.tAcked; return t; };
-  const extrasOf = a => [a.repeat > 0 ? D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : '') : '', proxText(a), a.action === 'EMAIL' ? (a.attendees.length ? AT.tToTxt + ' ' + a.attendees.join(', ') : AT.tToMissing) : '', a.acknowledged ? AT.tAcked : '', a.description ? '„' + a.description + '“' : ''].filter(Boolean).join(' · ');
+  const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
+  const extrasOf = a => [a.repeat > 0 ? D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : '') : '', proxText(a), a.action === 'EMAIL' ? (a.attendees.length ? AT.tToTxt + ' ' + a.attendees.join(', ') : AT.tToMissing) : '', a.description ? '„' + a.description + '“' : ''].filter(Boolean).join(' · ');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const alIco = id => `<svg class="ico" aria-hidden="true"><use href="${id}"/></svg>`;
   const unitOf = m => { m = Math.abs(m); for (const u of [...AL_UNITS].reverse()) if (m && m % u === 0) return u; return 1; };
@@ -338,7 +338,7 @@
   // and the trigger (number + unit for a relative one, date and time for an absolute one); "after …"
   // only shows when the stored alarm already fires after its anchor (a valid but foreign setting)
   function alDetails(a, row) {
-    const rels = AT.tRels.split('|'), units = AT.tUnits.split('|'), acts = D.tActs.split('|'), prox = AT.tProxVals.split('|');
+    const rels = AT.tRels.split('|'), units = AT.tUnits.split('|'), acts = D.tActs.split('|');
     const relv = a.at ? 'at' : (a.minutes < 0 ? 'after-' : 'before-') + (a.related_end ? 'end' : 'start');
     const REL_ICO = { 'before-start': '#i-al-bs', 'before-end': '#i-al-be', 'after-start': '#i-al-as', 'after-end': '#i-al-ae', at: '#i-today' };
     const relOpts = [['before-start', rels[0]], ['before-end', rels[1]]].concat(a.minutes < 0 ? [['after-start', rels[2]], ['after-end', rels[3]]] : []).concat([['at', rels[4]]]);
@@ -346,14 +346,14 @@
     const d = $('.aldet', row);
     const relLabel = a.at ? rels[4] : a.minutes < 0 ? (a.related_end ? rels[3] : rels[2]) : (a.related_end ? rels[1] : rels[0]);
     const field = (label, inner) => `<div class="field"><span>${esc(label)}</span>${inner}</div>`;
-    d.innerHTML = `<div class="segs"><span class="seg" data-w="rel">${relOpts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v === relv}" title="${esc(l)}" aria-label="${esc(l)}">${alIco(REL_ICO[v])}</button>`).join('')}</span><span class="seg" data-w="act">${AL_ACTS.map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${v === a.action}" title="${esc(acts[i])}" aria-label="${esc(acts[i])}">${alIco(AL_ICO[v])}</button>`).join('')}</span></div>
+    const seg = (name, opts, cur, icons) => `<div class="segs"><span class="seg" data-w="${name}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v === cur}" title="${esc(l)}" aria-label="${esc(l)}">${alIco(icons[v])}</button>`).join('')}</span></div>`;
+    d.innerHTML = `${seg('rel', relOpts, relv, REL_ICO)}
       ${a.at ? field(relLabel, `<input type="datetime-local" data-w="at" value="${esc((a.at || '').slice(0, 16))}">`) : field(relLabel, `<div class="inl"><input type="text" inputmode="decimal" data-w="n" value="${fmtNum(Math.abs(a.minutes) / u)}"><select data-w="unit">${AL_UNITS.map((v, i) => `<option value="${v}" ${v === u ? 'selected' : ''}>${esc(units[i])}</option>`).join('')}</select></div>`)}
+      ${field(AT.tRepeat, `<div class="inl"><select data-w="repeat">${[0, 1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === a.repeat ? 'selected' : ''}>${n ? n + '×' : esc(AT.tNever)}</option>`).join('')}</select>${a.repeat > 0 ? `<span class="muted small">${esc(AT.tEvery)}</span><select data-w="every">${[1, 5, 10, 15, 30, 60].map(n => `<option value="${n}" ${n === a.duration_minutes ? 'selected' : ''}>${esc(amount(n))}</option>`).join('')}</select>` : ''}</div>`)}
+      ${seg('act', AL_ACTS.map((v, i) => [v, acts[i]]), a.action, AL_ICO)}
       ${a.action === 'DISPLAY' ? field(AT.tText, `<input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">`) : ''}
       ${a.action === 'AUDIO' ? field(AT.tSound, `<input type="url" data-w="attach" value="${esc(a.attach)}" placeholder="${esc(AT.tSoundHint)}">`) : ''}
       ${a.action === 'EMAIL' ? field(AT.tSubject, `<input type="text" data-w="subject" value="${esc(a.summary)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tBody, `<input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tTo, `<input type="text" data-w="to" value="${esc(a.attendees.join(', '))}" placeholder="${esc(AT.tToHint)}">`) : ''}
-      ${field(AT.tRepeat, `<div class="inl"><select data-w="repeat">${[0, 1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === a.repeat ? 'selected' : ''}>${n ? n + '×' : esc(AT.tNever)}</option>`).join('')}</select>${a.repeat > 0 ? `<span class="muted small">${esc(AT.tEvery)}</span><select data-w="every">${[1, 5, 10, 15, 30, 60].map(n => `<option value="${n}" ${n === a.duration_minutes ? 'selected' : ''}>${esc(amount(n))}</option>`).join('')}</select>` : ''}</div>`)}
-      ${field(AT.tProx, `<select data-w="prox"><option value="">${esc(AT.tProxNone)}</option>${AL_PROX.map((v, i) => `<option value="${v}" ${v === a.proximity ? 'selected' : ''}>${esc(prox[i])}</option>`).join('')}</select>`)}
-      <div class="chk"><label><input type="checkbox" data-w="ack" ${a.acknowledged ? 'checked' : ''}> ${esc(AT.tAck)}</label><small>${esc(AT.tAckHint)}${a.acknowledged ? ' (' + esc(AT.tAckSince) + ' ' + esc(fmtDT(a.acknowledged)) + ')' : ''}</small></div>
       <div class="foot"><button class="btn icon-btn pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}" aria-label="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
     const w = k => $(`[data-w=${k}]`, d);
     w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'; } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
@@ -366,8 +366,6 @@
     if (w('attach')) w('attach').onchange = () => { a.attach = w('attach').value.trim(); alRender(); refresh(); };
     w('repeat').onchange = () => { a.repeat = +w('repeat').value; a.duration_minutes = a.repeat ? (a.duration_minutes || 10) : 0; alRender(); refresh(); };
     if (w('every')) w('every').onchange = () => { a.duration_minutes = +w('every').value; alRender(); refresh(); };
-    w('prox').onchange = () => { a.proximity = w('prox').value; alRender(); refresh(); };
-    w('ack').onchange = () => { a.acknowledged = w('ack').checked ? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19) : null; alRender(); refresh(); };
     w('pset').onclick = () => { if (a.at) return; if (matchesPreset(a)) PRESETS = PRESETS.filter(p => presetSig(p) !== presetSig(a)); else { const { action, minutes, related_end, repeat, duration_minutes, attendees, attach, proximity } = a; PRESETS.push({ action, minutes, related_end, repeat, duration_minutes, attendees: [...attendees], attach, proximity }); } savePresets(); alRender(); };
   }
   // text edits update the row's summary and the mirror without rebuilding the entry (the field keeps its focus)
@@ -383,7 +381,7 @@
     $$('.row', alBox).forEach(r => r.remove());
     for (const a of ALARMS) {
       const r = addRow('alarms'); r.classList.toggle('open', !!a._open); r._alarm = a;
-      $('.txt', r).textContent = alarmText(a); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a);
+      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a);
       $('.pdot', r).classList.toggle('on', matchesPreset(a)); $('.act', r).setAttribute('aria-pressed', a._open ? 'true' : 'false');
       const d = $('.aldet', r); d.hidden = !a._open; if (a._open) alDetails(a, r);
     }
