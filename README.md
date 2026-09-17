@@ -11,8 +11,7 @@ person or group · app tokens · trash with restore · calendar views Day (ledge
 Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
-presets (before start, before end, at a time; display, sound or mail; repeats, location trigger,
-dismissed), recurrence with interval, weekdays, end and exceptions/extra dates,
+presets (before start, before end, at a time; display, sound or mail; repeats), recurrence with interval, weekdays, end and exceptions/extra dates,
 organizer and attendees, location with coordinates and map actions, status/busy/visibility/
 priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
@@ -80,7 +79,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
 - **Event editing** keeps what it does not model, too: the stored master VEVENT is split into the
   lines the editor writes (`MANAGED`) and everything else (STATUS, CLASS, ATTACH, COLOR, X-…, RFC 9073
   components), which is copied verbatim on every save; each VALARM keeps its position so its unmodelled
-  lines (UID, ACKNOWLEDGED, PROXIMITY, ATTACH, ATTENDEE) travel with the edited alarm, and RECURRENCE-ID
+  lines (UID, RELATED-TO, VLOCATION, binary and mail attachments, X-…) travel with the edited alarm, and RECURRENCE-ID
   overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
   VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
   series instances get the master's alarms (caldata builds them without VALARMs).
@@ -92,8 +91,9 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   unit, or date and time). The star in an entry saves its setting — without text, subject and
   acknowledgement — as a preset; presets are per user (`xui_user_settings.alarm_presets_json`,
   `/api/alarm-presets`), the built-in list applies until the user changes it. The editor writes
-  `ATTENDEE` (mail alarms), `ATTACH` (the sound of an audio alarm), `PROXIMITY` and `ACKNOWLEDGED`
-  (RFC 9074); "after start/end" appears only for an alarm that already fires after its anchor.
+  `ATTENDEE` (mail alarms) and `ATTACH` (the sound of an audio alarm); `PROXIMITY` and `ACKNOWLEDGED`
+  (RFC 9074) are kept as the client wrote them — a dismissed alarm shows struck through — and "after
+  start/end" appears only for an alarm that already fires after its anchor.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
