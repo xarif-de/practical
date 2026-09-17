@@ -508,29 +508,159 @@
   function gmApply() { const c = centre(); if (LOC.coords) { f.lat.value = c[0].toFixed(6); f.lon.value = c[1].toFixed(6); LOC.errCoords = false; LOC.invalid = false; } if (LOC.addr) { f.location.value = gmAddr; LOC.errAddr = false; } closeMap(); locRender(); syncDot(); refresh(); }
   $('#gm-ok').onclick = () => { if (LOC.addr && !gmAddrKnown) gmDetermine(); else gmApply(); };
   addEventListener('keydown', e => { if (e.key === 'Escape' && !gm.hidden) { e.stopImmediatePropagation(); closeMap(); } }, true);
-  // exceptions / extra dates: a date; timed events get the start time appended on save
-  const addDate = (list, iso) => { const r = addRow(list); w(r, 'd').value = (iso || '').slice(0, 10); $('.txt', r).textContent = iso ? fmtD(iso) : ''; return r; };
-  const datesOf = list => rows(list).map(r => w(r, 'd').value).filter(Boolean).map(d => f.all_day.checked ? d : `${d}T${f.from.value || '00:00'}:00`);
-  // recurrence: widgets for the common rules, raw text for everything else
-  const FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'], DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
-  $('#ed-days').innerHTML = DAYS.map((d, i) => `<button type="button" data-day="${d}" aria-pressed="false">${DOW[i]}</button>`).join('');
-  $$('#ed-days button').forEach(b => b.onclick = () => { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); refresh(); });
-  const parseRR = r => { const o = { freq: '', interval: 1, byday: [], count: 0, until: '', extra: false }; (r || '').split(';').forEach(p => { const [k, v] = p.split('='); if (k === 'FREQ') o.freq = v; else if (k === 'INTERVAL') o.interval = +v || 1; else if (k === 'BYDAY' && o.freq === 'WEEKLY') o.byday = v.split(','); else if (k === 'COUNT') o.count = +v; else if (k === 'UNTIL') o.until = v; else if (k && k !== 'WKST') o.extra = true; }); return o; };
-  function setRR(r, untilLocal) { const o = parseRR(r); const simple = FREQS.includes(o.freq) && !o.extra && !(o.byday.length && o.freq !== 'WEEKLY'); f.rrule.value = !r ? '' : simple ? o.freq : 'custom'; f.rrule_custom.value = simple ? '' : (r || ''); f.interval.value = o.interval; $$('#ed-days button').forEach(b => b.setAttribute('aria-pressed', o.byday.includes(b.dataset.day) ? 'true' : 'false')); f.rend.value = o.count ? 'count' : o.until ? 'until' : ''; f.count.value = o.count || 10; f.until.value = untilLocal || (o.until ? `${o.until.slice(0, 4)}-${o.until.slice(4, 6)}-${o.until.slice(6, 8)}` : ''); }
-  const buildRR = () => { const v = f.rrule.value; if (!v) return null; if (v === 'custom') return f.rrule_custom.value.trim() || null; let r = 'FREQ=' + v; if (+f.interval.value > 1) r += ';INTERVAL=' + f.interval.value; if (v === 'WEEKLY') { const d = $$('#ed-days [aria-pressed=true]').map(b => b.dataset.day); if (d.length) r += ';BYDAY=' + d.join(','); } if (f.rend.value === 'count') r += ';COUNT=' + (+f.count.value || 1); else if (f.rend.value === 'until' && f.until.value) r += ';UNTIL=' + f.until.value.replace(/-/g, ''); return r; };
-  const rrText = () => { const v = f.rrule.value; if (!v) return ''; if (v === 'custom') return f.rrule_custom.value; let t = f.rrule.selectedOptions[0].textContent; const units = D.tUnits.split('|'); if (+f.interval.value > 1) t += ', ' + D.tEvery.replace('{n}', f.interval.value) + ' ' + units[FREQS.indexOf(v)]; if (v === 'WEEKLY') { const d = $$('#ed-days [aria-pressed=true]').map(b => DOW[DAYS.indexOf(b.dataset.day)]); if (d.length) t += ' ' + D.tOn + ' ' + d.join(', '); } if (f.rend.value === 'count') t += ', ' + D.tCount.replace('{n}', f.count.value); else if (f.rend.value === 'until' && f.until.value) t += ', ' + D.tUntil + ' ' + fmtD(f.until.value); return t; };
-  function syncRR() { const v = f.rrule.value, on = v && v !== 'custom'; $('#ed-rr').hidden = !on; f.rrule_custom.hidden = v !== 'custom'; f.rrule_custom.closest('.field').hidden = v !== 'custom'; $('#ed-unit').textContent = on ? D.tUnits.split('|')[FREQS.indexOf(v)] : ''; $('#ed-days').hidden = v !== 'WEEKLY'; f.count.hidden = f.rend.value !== 'count'; $('.cnt', form).hidden = f.rend.value !== 'count'; f.until.hidden = f.rend.value !== 'until'; $('#ed-rrule-text').textContent = rrText(); ['exdates', 'rdates'].forEach(l => { const box = $('#ed-' + l); box.hidden = !v; box.classList.toggle('empty', !rows(l).length); }); }
+  // ---- recurrence (design C): the rule is a model painted on a scrollable week strip — the month in full
+  // with a neighbouring week on each side and separators around it; a click on a day toggles the pattern
+  // (weekday, day of month) or, in the exception mode, strikes an occurrence or adds an extra date. Interval
+  // and end are two pills with popovers; the end date is picked on the strip. Rules the strip cannot paint
+  // (BYSETPOS, several ordinals, BYHOUR …) stay a raw text that is saved as typed. The strip owns the wheel:
+  // one gesture moves at most to the neighbouring month, the next needs a short pause. ----
+  const RC = $('#ed-repeat-card'), RT = RC.dataset, rrBox = $('#ed-rr');
+  const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'], RR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+  const DOWL = lang === 'en' ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+  const blankRR = () => ({ freq: '', interval: 1, byday: [], mode: 'date', bymonthday: null, ordinal: 1, ordday: 'TU', bymonth: null, end: { kind: 'never', count: 10, until: '' }, exdates: [], rdates: [], raw: '' });
+  let RR = blankRR(), rrMode = 'pattern', rrPicking = false, rrFocus = null;
+  const rrIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const rrWd = d => (d.getDay() + 6) % 7; // 0 = Monday
+  const rrStart = () => parse((f.date.value || today).slice(0, 10));
+  const ordN = () => Math.ceil(rrStart().getDate() / 7);
+  // a stored rule → the model; parts the strip cannot paint keep the rule as raw text
+  function rrParse(r, untilLocal) {
+    const m = blankRR(); if (!r) return m;
+    const kv = {}; r.replace(/^RRULE:/i, '').split(';').forEach(p => { const [k, v] = p.split('='); if (k) kv[k.toUpperCase()] = (v || '').toUpperCase(); });
+    const raw = () => Object.assign(blankRR(), { freq: 'RAW', raw: r });
+    if (!RR_FREQS.includes(kv.FREQ)) return raw();
+    if (Object.keys(kv).some(k => !['FREQ', 'INTERVAL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'COUNT', 'UNTIL', 'WKST'].includes(k))) return raw();
+    m.freq = kv.FREQ; m.interval = +(kv.INTERVAL || 1) || 1;
+    if (kv.BYDAY) { const one = kv.BYDAY.match(/^([+-]?[1-4]|-1)([A-Z]{2})$/); if (one && m.freq !== 'WEEKLY') { m.mode = 'ordinal'; m.ordinal = +one[1]; m.ordday = one[2]; } else if (m.freq === 'WEEKLY' && /^([A-Z]{2})(,[A-Z]{2})*$/.test(kv.BYDAY)) m.byday = DAYS.filter(d => kv.BYDAY.split(',').includes(d)); else return raw(); }
+    if (kv.BYMONTHDAY) { if (!/^\d{1,2}$/.test(kv.BYMONTHDAY) || m.mode === 'ordinal') return raw(); m.bymonthday = +kv.BYMONTHDAY; }
+    if (kv.BYMONTH) { if (!/^\d{1,2}$/.test(kv.BYMONTH) || m.freq !== 'YEARLY') return raw(); m.bymonth = +kv.BYMONTH; }
+    if (kv.COUNT) m.end = { ...m.end, kind: 'count', count: +kv.COUNT || 1 };
+    if (kv.UNTIL) m.end = { ...m.end, kind: 'until', until: untilLocal || `${kv.UNTIL.slice(0, 4)}-${kv.UNTIL.slice(4, 6)}-${kv.UNTIL.slice(6, 8)}` };
+    return m;
+  }
+  const rrBuild = () => { const r = RR; if (!r.freq) return null; if (r.freq === 'RAW') return r.raw.trim() || null; const p = ['FREQ=' + r.freq]; if (r.interval > 1) p.push('INTERVAL=' + r.interval);
+    if (r.freq === 'WEEKLY' && r.byday.length) p.push('BYDAY=' + r.byday.join(','));
+    if ((r.freq === 'MONTHLY' || r.freq === 'YEARLY') && r.mode === 'ordinal') p.push('BYDAY=' + r.ordinal + r.ordday);
+    if ((r.freq === 'MONTHLY' || r.freq === 'YEARLY') && r.mode === 'date' && r.bymonthday) p.push('BYMONTHDAY=' + r.bymonthday);
+    if (r.freq === 'YEARLY' && r.bymonth) p.push('BYMONTH=' + r.bymonth);
+    if (r.end.kind === 'count') p.push('COUNT=' + r.end.count); if (r.end.kind === 'until' && r.end.until) p.push('UNTIL=' + r.end.until.replace(/-/g, '')); // the server turns a bare date into the local end of day
+    return p.join(';'); };
+  const rrUnit = () => RT.tUnits.split('|')[RR_FREQS.indexOf(RR.freq)] || '';
+  const rrOrdTxt = () => RT.tOrd.split('|')[RR.ordinal === -1 ? 4 : RR.ordinal - 1];
+  // the sentence of the view mode: "Wöchentlich am Dienstag, 6-mal"
+  function rrSentence() { const r = RR; if (!r.freq) return ''; if (r.freq === 'RAW') return r.raw; const longs = RT.tFreqsLong.split('|'), s0 = rrStart();
+    let t = r.interval > 1 ? D.tEvery.replace('{n}', r.interval) + ' ' + rrUnit() : longs[RR_FREQS.indexOf(r.freq) + 1];
+    if (r.freq === 'WEEKLY' && r.byday.length) t += ' ' + D.tOn + ' ' + r.byday.map(d => DOWL[DAYS.indexOf(d)]).join(', ');
+    if (r.freq === 'MONTHLY' || r.freq === 'YEARLY') { t += ' ' + D.tOn + ' ' + (r.mode === 'ordinal' ? `${rrOrdTxt()} ${DOWL[DAYS.indexOf(r.ordday)]}` : `${r.bymonthday || s0.getDate()}.`); if (r.freq === 'YEARLY') t += ' ' + RT.tIn + ' ' + MON[(r.bymonth || s0.getMonth() + 1) - 1]; }
+    if (r.end.kind === 'count') t += ', ' + D.tCount.replace('{n}', r.end.count); if (r.end.kind === 'until' && r.end.until) t += ', ' + D.tUntil + ' ' + fmtD(r.end.until);
+    return t.charAt(0).toUpperCase() + t.slice(1); }
+  // occurrences for the strip (the server's caldata is authoritative; this covers what the strip can paint)
+  function rrOccurrences(limit) { const r = RR, s0 = rrStart(), out = new Set(); if (!r.freq || r.freq === 'RAW') return out;
+    const max = r.end.kind === 'count' ? r.end.count : Infinity, until = r.end.kind === 'until' && r.end.until ? r.end.until : null;
+    const nth = (d, n, day) => { if (DAYS[rrWd(d)] !== day) return false; const dom = d.getDate(); if (n > 0) return Math.ceil(dom / 7) === n; const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); return Math.ceil((last - dom + 1) / 7) === -n; };
+    const week0 = Math.floor((s0.getTime() / 864e5 + 3) / 7); let n = 0;
+    for (let i = 0; i < limit && n < max; i++) { const d = new Date(s0); d.setDate(s0.getDate() + i); const iso = rrIso(d); if (until && iso > until) break; let ok = false;
+      if (r.freq === 'DAILY') ok = i % r.interval === 0;
+      else if (r.freq === 'WEEKLY') { const days = r.byday.length ? r.byday : [DAYS[rrWd(s0)]]; ok = days.includes(DAYS[rrWd(d)]) && (Math.floor((d.getTime() / 864e5 + 3) / 7) - week0) % r.interval === 0; }
+      else if (r.freq === 'MONTHLY') { const mi = (d.getFullYear() - s0.getFullYear()) * 12 + d.getMonth() - s0.getMonth(); ok = mi % r.interval === 0 && (r.mode === 'ordinal' ? nth(d, r.ordinal, r.ordday) : d.getDate() === (r.bymonthday || s0.getDate())); }
+      else if (r.freq === 'YEARLY') { ok = (d.getFullYear() - s0.getFullYear()) % r.interval === 0 && d.getMonth() + 1 === (r.bymonth || s0.getMonth() + 1) && (r.mode === 'ordinal' ? nth(d, r.ordinal, r.ordday) : d.getDate() === (r.bymonthday || s0.getDate())); }
+      if (ok) { out.add(iso); n++; } }
+    return out; }
+  const rrMirror = () => { f.rrule_json.value = RR.freq ? JSON.stringify(RR) : (RR.exdates.length || RR.rdates.length ? JSON.stringify(RR) : ''); };
+  function rrSync() { rrMirror(); $('#ed-rrule-text').textContent = rrSentence(); }
+  // popovers for the pills: a list of choices or a number entry
+  let rrOpenPop = null; const rrClosePop = () => { if (rrOpenPop) { rrOpenPop.remove(); rrOpenPop = null; document.removeEventListener('click', rrOutside, true); } };
+  function rrOutside(e) { if (rrOpenPop && !rrOpenPop.contains(e.target)) rrClosePop(); }
+  function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); p.style.left = `${r.left + scrollX}px`; p.style.top = `${r.bottom + scrollY + 4}px`; document.body.appendChild(p); rrOpenPop = p; p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
+  function rrAskNumber(anchor, label, value, on) { const p = rrPop(anchor, [], null, () => {}, `<div class="q">${esc(label)}</div><input type="number" min="1" max="999" value="${value}"><button type="button" class="ok">${esc(RT.tApply)}</button>`); const i = $('input', p); i.focus(); i.select(); const ok = () => { const n = +i.value; if (n >= 1) on(n); rrClosePop(); }; i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } }; $('.ok', p).onclick = ok; }
+  const rrSet = () => { rrRender(); refresh(); };
+  // ---- the strip ----
+  const ROWH = 32, GAP = 16, NWEEKS = 130;
+  const rrW0 = () => { const d = rrStart(); d.setDate(d.getDate() - rrWd(d) - 7 * 52); return d; }; // a year before the start, on a Monday
+  function rrRender() {
+    rrBox.innerHTML = ''; ed.classList.toggle('picking', rrPicking);
+    const s0 = rrStart(), freqs = RT.tFreqs.split('|'), longs = RT.tFreqsLong.split('|');
+    const isRaw = RR.freq === 'RAW';
+    rrBox.insertAdjacentHTML('beforeend', `<div class="rrsegs"><span class="seg" data-w="freq">${[''].concat(RR_FREQS).map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${RR.freq === v}" title="${esc(longs[i])}">${esc(freqs[i])}</button>`).join('')}${isRaw ? `<button type="button" data-v="RAW" aria-pressed="true" title="${esc(RT.tCustom)}">${esc(RT.tCustomShort)}</button>` : ''}</span></div>`);
+    $('[data-w=freq]', rrBox).onclick = e => { const b = e.target.closest('button'); if (!b) return; RR.freq = b.dataset.v; if (RR.freq === 'WEEKLY' && !RR.byday.length) RR.byday = [DAYS[rrWd(s0)]]; rrSet(); };
+    if (isRaw) { rrBox.insertAdjacentHTML('beforeend', `<div class="rrhint">${esc(RT.tCustomHint)}</div><div class="rrraw"><input type="text" value="${esc(RR.raw)}" placeholder="FREQ=…"></div>`); $('.rrraw input', rrBox).onchange = e => { RR.raw = e.target.value.trim(); rrSet(); }; }
+    if (rrPicking) { rrBox.insertAdjacentHTML('beforeend', `<div class="pickmsg"><svg class="ico" aria-hidden="true"><use href="#i-today"/></svg><span>${esc(RT.tPick)}</span><button class="btn" type="button">${esc(RT.tCancel)}</button></div>`); $('.pickmsg .btn', rrBox).onclick = () => { rrPicking = false; rrRender(); }; }
+    else rrBox.insertAdjacentHTML('beforeend', `<div class="rrhint">${esc(rrMode === 'pattern' ? RT.tHintPattern : RT.tHintEx)}</div>`);
+    // week rows
+    const occ = rrOccurrences(1100), ex = new Set(RR.exdates), rd = new Set(RR.rdates), untilD = RR.end.kind === 'until' ? RR.end.until : null, W0 = rrW0();
+    if (rrFocus == null) rrFocus = s0.getFullYear() * 12 + s0.getMonth();
+    const cal = document.createElement('div'); cal.className = 'calstrip'; cal.innerHTML = `<div class="calhead"><b></b><div class="dows">${DOW.map(d => `<span>${d}</span>`).join('')}</div></div><div class="calscroll"><div class="weeks${rrPicking ? ' pick' : ''}"></div></div>`;
+    const weeks = $('.weeks', cal), scroller = $('.calscroll', cal), head = $('.calhead b', cal); let html = ''; const startIso = rrIso(s0);
+    for (let i = 0; i < NWEEKS; i++) { const ws = new Date(W0); ws.setDate(W0.getDate() + i * 7); let row = '';
+      for (let k = 0; k < 7; k++) { const d = new Date(ws); d.setDate(ws.getDate() + k); const iso = rrIso(d), mi = d.getFullYear() * 12 + d.getMonth();
+        const cls = [iso === startIso ? 'start' : '', ex.has(iso) ? 'ex' : rd.has(iso) ? 'rd' : occ.has(iso) ? 'occ' : '', iso === untilD ? 'until' : '', iso < startIso ? 'past' : '', mi !== rrFocus ? 'dim' : '', k >= 5 ? 'we' : ''].filter(Boolean).join(' ');
+        row += `<b data-d="${iso}" data-m="${mi}" class="${cls}">${d.getDate()}</b>`; }
+      html += `<div class="wrow">${row}</div>`; }
+    weeks.innerHTML = html;
+    const weekStart = i => { const d = new Date(W0); d.setDate(W0.getDate() + i * 7); return d; };
+    const monthOf = i => { const t = weekStart(i); t.setDate(t.getDate() + 3); return t.getFullYear() * 12 + t.getMonth(); }; // the heading follows the week's Thursday
+    const rowsOf = mi => { let a = -1, b = -1; for (let i = 0; i < NWEEKS; i++) { const ws = weekStart(i), we = new Date(ws); we.setDate(ws.getDate() + 6); const m0 = ws.getFullYear() * 12 + ws.getMonth(), m1 = we.getFullYear() * 12 + we.getMonth(); if (mi === m0 || mi === m1) { if (a < 0) a = i; b = i; } } return [a, b]; }; // every week holding a day of the month
+    const rowEl = i => weeks.children[i], rowTop = i => rowEl(i).getBoundingClientRect().top - weeks.getBoundingClientRect().top;
+    const drawSeps = (mi, nextM) => { $$('.wrow.sep-before, .wrow.sep-after', weeks).forEach(el => el.classList.remove('sep-before', 'sep-after')); const [a, b] = rowsOf(mi); if (a < 0) return; rowEl(a).classList.add('sep-before'); rowEl(b).classList.add('sep-after'); if (nextM != null) { const [na, nb] = rowsOf(nextM); if (na >= 0) { if (nextM > mi) rowEl(nb).classList.add('sep-after'); else rowEl(na).classList.add('sep-before'); } } }; // while scrolling only the far edge of the neighbour is pre-drawn
+    const snapTopOf = mi => Math.max(0, rowTop(rowsOf(mi)[0]) - GAP - ROWH);
+    let glideRaf = 0, gliding = false;
+    const glide = to => { cancelAnimationFrame(glideRaf); const from = scroller.scrollTop, dist = to - from; if (Math.abs(dist) < 1) return; const t0 = performance.now(), ms = Math.min(420, 200 + Math.abs(dist) * 0.8); gliding = true; const step = now => { const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; scroller.scrollTop = from + dist * e; if (k < 1) glideRaf = requestAnimationFrame(step); else gliding = false; }; glideRaf = requestAnimationFrame(step); };
+    const stopGlide = () => { cancelAnimationFrame(glideRaf); gliding = false; };
+    const applyFocus = (mi, animate, nextM) => { if (rowsOf(mi)[0] < 0) return; rrFocus = mi; const [a, b] = rowsOf(mi);
+      const centre = scroller.scrollTop + scroller.clientHeight / 2; let anchor = 0; for (let k = 0; k < NWEEKS; k++) if (rowTop(k) <= centre) anchor = k; const before = rowTop(anchor);
+      drawSeps(mi, nextM); if (animate) scroller.scrollTop += rowTop(anchor) - before; // moving the separators shifts the rows: keep the row under the centre where it is
+      const top = snapTopOf(mi), bottom = rowTop(b) + ROWH + GAP + ROWH; scroller.style.height = `${bottom - top}px`;
+      head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; $$('b[data-m]', weeks).forEach(el => el.classList.toggle('dim', +el.dataset.m !== mi)); if (animate) glide(top); else scroller.scrollTop = top; };
+    const centreMonth = () => { const centre = scroller.scrollTop + scroller.clientHeight / 2; let i = 0; for (let k = 0; k < NWEEKS; k++) if (rowTop(k) <= centre) i = k; return monthOf(i); };
+    const nearestMonth = () => { const cur = rrFocus, st = scroller.scrollTop; let best = cur, dist = Math.abs(snapTopOf(cur) - st); for (const mi of [cur - 1, cur + 1]) { if (rowsOf(mi)[0] < 0) continue; const d = Math.abs(snapTopOf(mi) - st); if (d < dist) { best = mi; dist = d; } } return best; }; // past half the way the neighbour wins
+    const settle = () => applyFocus(nearestMonth(), true, null);
+    const PAUSE = 40, DRAG = 0.8; let lastWheel = 0, gestureFrom = null, gestureDir = 0, settleT = 0;
+    scroller.addEventListener('wheel', e => { e.preventDefault(); stopGlide(); const now = performance.now(); if (now - lastWheel > PAUSE || gestureFrom == null) { gestureFrom = rrFocus; gestureDir = 0; } lastWheel = now;
+      const dir = Math.sign(e.deltaY); if (dir && dir !== gestureDir) { gestureDir = dir; drawSeps(rrFocus, rowsOf(rrFocus + dir)[0] >= 0 ? rrFocus + dir : null); }
+      const lo = rowsOf(gestureFrom - 1)[0] >= 0 ? snapTopOf(gestureFrom - 1) : snapTopOf(gestureFrom), hi = rowsOf(gestureFrom + 1)[0] >= 0 ? snapTopOf(gestureFrom + 1) : snapTopOf(gestureFrom);
+      const target = Math.min(hi, Math.max(lo, scroller.scrollTop + e.deltaY * DRAG)); scroller.scrollTop = target;
+      clearTimeout(settleT); if ((target === hi && dir > 0) || (target === lo && dir < 0)) settle(); else settleT = setTimeout(settle, 120); }, { passive: false });
+    scroller.addEventListener('pointerdown', stopGlide); scroller.addEventListener('touchstart', stopGlide, { passive: true });
+    scroller.addEventListener('scroll', () => { const mi = centreMonth(); head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; if (gliding || performance.now() - lastWheel < PAUSE) return; clearTimeout(settleT); settleT = setTimeout(settle, 120); });
+    weeks.addEventListener('click', e => { const b = e.target.closest('b[data-d]'); if (!b) return; const iso = b.dataset.d, d = parse(iso);
+      if (rrPicking) { if (iso < startIso) return; RR.end = { ...RR.end, kind: 'until', until: iso }; rrPicking = false; rrSet(); return; }
+      if (isRaw) return;
+      if (rrMode === 'pattern') { if (!RR.freq) RR.freq = 'WEEKLY'; if (RR.freq === 'WEEKLY') { const day = DAYS[rrWd(d)]; RR.byday = RR.byday.includes(day) ? RR.byday.filter(x => x !== day) : DAYS.filter(x => RR.byday.includes(x) || x === day); if (!RR.byday.length) RR.byday = [day]; } else if (RR.freq === 'MONTHLY' || RR.freq === 'YEARLY') { RR.mode = 'date'; RR.bymonthday = d.getDate(); if (RR.freq === 'YEARLY') RR.bymonth = d.getMonth() + 1; } }
+      else { if (occ.has(iso)) RR.exdates = ex.has(iso) ? RR.exdates.filter(x => x !== iso) : RR.exdates.concat(iso); else if (ex.has(iso)) RR.exdates = RR.exdates.filter(x => x !== iso); else RR.rdates = rd.has(iso) ? RR.rdates.filter(x => x !== iso) : RR.rdates.concat(iso); }
+      rrSet(); });
+    rrBox.appendChild(cal); applyFocus(rrFocus, false, null);
+    const lg = RT.tLegend.split('|');
+    rrBox.insertAdjacentHTML('beforeend', `<div class="rrlegend"><span><i style="background:var(--accent)"></i>${esc(lg[0])}</span><span><i style="background:var(--bg-3)"></i>${esc(lg[1])}</span><span><i style="background:var(--c2)"></i>${esc(lg[2])}</span><span><i style="outline:2px solid var(--c5);outline-offset:-2px"></i>${esc(lg[3])}</span>${untilD ? `<span><i style="background:var(--c4)"></i>${esc(lg[4])}</span>` : ''}</div>`);
+    if (RR.freq && !isRaw) {
+      const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
+      const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
+      const endLabel = () => RR.end.kind === 'count' ? D.tCount.replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
+      rrBox.insertAdjacentHTML('beforeend', `<hr class="rrsep"><div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i">${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e">${esc(endLabel())}</button></div>`);
+      $('.rrbottom', rrBox).onclick = e => { const b = e.target.closest('.pillbtn'); if (!b) return;
+        if (b.dataset.s === 'i') rrPop(b, [1, 2, 3, 4, 6].map(n => ({ v: n, label: n === 1 ? each : D.tEvery.replace('{n}', n) + ' ' + u })).concat({ v: 'n', label: RT.tN }), RR.interval, v => { if (v === 'n') rrAskNumber(b, RT.tIntQ.replace('{u}', u), RR.interval, n => { RR.interval = n; rrSet(); }); else { RR.interval = +v; rrSet(); } });
+        else rrPop(b, [{ v: 'never', label: RT.tNoEnd }, { v: 'count', label: RT.tEndCount + ' …' }, { v: 'until', label: RT.tEndUntil + ' …' }], RR.end.kind, v => { if (v === 'count') rrAskNumber(b, RT.tCountQ, RR.end.count, n => { RR.end = { ...RR.end, kind: 'count', count: n }; rrSet(); }); else if (v === 'until') { rrPicking = true; rrRender(); } else { RR.end = { ...RR.end, kind: 'never' }; rrSet(); } }); };
+    }
+    const md = RT.tMode.split('|');
+    rrBox.insertAdjacentHTML('beforeend', `<hr class="rrsep"><div class="rrmode"><span>${esc(md[0])}</span><span class="seg" data-w="mode"><button type="button" data-v="pattern" aria-pressed="${rrMode === 'pattern'}">${esc(md[1])}</button><button type="button" data-v="ex" aria-pressed="${rrMode === 'ex'}">${esc(md[2])}</button></span></div>`);
+    $('[data-w=mode]', rrBox).onclick = e => { const b = e.target.closest('button'); if (b) { rrMode = b.dataset.v; rrRender(); } };
+    rrMirror();
+  }
+  // view mode rows for exceptions and extra dates (edited on the strip)
+  const addDate = (list, iso) => { const r = addRow(list); $('.txt', r).textContent = iso ? fmtD(iso) : ''; return r; };
+  function rrInit(rule, untilLocal, exdates, rdates) { RR = rrParse(rule, untilLocal); RR.exdates = (exdates || []).map(x => x.slice(0, 10)); RR.rdates = (rdates || []).map(x => x.slice(0, 10)); rrMode = 'pattern'; rrPicking = false; rrFocus = null; rrClosePop(); RR.exdates.forEach(x => addDate('exdates', x)); RR.rdates.forEach(x => addDate('rdates', x)); rrRender(); }
+  const rrDates = list => RR[list].map(d => f.all_day.checked ? d : `${d}T${f.from.value || '00:00'}:00`);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && rrPicking && !ed.hidden) { e.stopImmediatePropagation(); rrPicking = false; rrRender(); } }, true);
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
   const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.tags .chip', card) || $$('.rows .row', card).length > 0;
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
-  const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',') + '|' + $$('#ed-days [aria-pressed=true]', form).length;
+  const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
   function updateButtons() { const changed = serialize() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); syncRR(); grow(); alTimeline(); updateButtons(); }
-  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); requestAnimationFrame(fitAddrLines); }
+  function refresh() { whenLine(); rrSync(); grow(); alTimeline(); updateButtons(); }
+  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
@@ -546,11 +676,11 @@
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       alarmsInit(d.alarms); if (d.organizer) addPerson(d.organizer, 'ORGANIZER'); d.attendees.forEach(p => addPerson(p, p.role || 'REQ-PARTICIPANT'));
-      setRR(d.rrule, d.rrule_until); d.exdates.forEach(x => addDate('exdates', x)); d.rdates.forEach(x => addDate('rdates', x));
+      rrInit(d.rrule, d.rrule_until, d.exdates, d.rdates);
       f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); d.links.forEach(addLink); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
       $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); setRR('', ''); setColor(''); alarmsInit([]); $('#ed-hint').textContent = '';
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
@@ -562,13 +692,13 @@
     ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
   form.addEventListener('input', refresh);
-  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } refresh(); });
+  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } refresh(); });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : l === 'people' ? addPerson({ name: '', email: '', status: '', cutype: '', extra: [] }, rows('people').length ? 'REQ-PARTICIPANT' : 'ORGANIZER') : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
-    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
@@ -594,7 +724,7 @@
     const endDate = f.end_date.value || f.date.value;
     const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
     const people = peopleOf();
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: buildRR(), exdates: datesOf('exdates'), rdates: datesOf('rdates'), alarms: alarmsOf(), organizer: people.organizer, attendees: people.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), links: linksOf(), timezone: root.dataset.tz, etag: f.etag.value };
+    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: people.organizer, attendees: people.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), links: linksOf(), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });

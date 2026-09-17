@@ -602,7 +602,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 /* ---- editor: day line blocks are positioned by JS (7:00–21:00) ---- */
 .ed .dayline .blk { cursor: pointer; }
 .ed .presetchips { display: flex; gap: 6px; flex-wrap: wrap; } .ed .presetchips button { border-radius: 999px; padding: 3px 10px; font-size: 12px; }
-.ed input[name=rrule_custom] { margin-top: 6px; }
 .tip { max-width: 60vw; }
 /* real titles are long: never let a nowrap label widen the grid */
 .month { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -849,21 +848,51 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }
-.ed .cardform .rr-opts { padding: 2px 0; }
-.ed .cardform .field.inline { grid-template-columns: auto 1fr; grid-template-areas: "l v"; align-items: center; gap: 0 10px; }
-.ed .cardform .field.inline > span:first-child { font-size: 13px; color: var(--fg-2); }
-.ed .cardform .field.inline .inl { display: flex; gap: 8px; align-items: center; }
-.ed .cardform .field.inline input[type=number] { width: 64px; }
-.ed .cardform .field.inline input[type=date], .ed .cardform .field.inline select { width: auto; }
-.ed .cardform .days { display: flex; gap: 4px; padding: 6px 0 4px 26px; }
-.ed .cardform .days button { all: unset; cursor: pointer; width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; background: var(--bg); color: var(--fg-2); }
-.ed .cardform .days button[aria-pressed=true] { background: var(--accent); color: #fff; }
+/* ---- recurrence (design C): frequency switch, a scrollable week strip (one month in full with a neighbouring
+   week on each side, separators moving with the month), legend, two pills for interval and end, mode switch ---- */
+.ed .cardform .rr { display: grid; gap: 4px; }
+.ed .cardform .rr .rrsegs { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 4px 0 2px 26px; }
+.ed .cardform .rr .rrsegs .seg button { padding: 5px 9px; font-size: 12.5px; min-width: 0; }
+.ed .cardform .rr .rrhint { padding: 0 0 2px 26px; font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .rr .calstrip { margin-left: 26px; }
+.ed .cardform .rr .calhead { position: sticky; top: 0; background: var(--tile); padding: 2px 0 4px; z-index: 1; }
+.ed .cardform .rr .calhead b { display: block; font: 600 12.5px/1.4 var(--font); text-align: center; }
+.ed .cardform .rr .calhead .dows { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; } .ed .cardform .rr .calhead .dows span { text-align: center; font-size: 10px; color: var(--fg-3); }
+.ed .cardform .rr .calscroll { overflow-y: auto; overscroll-behavior: contain; transition: height .5s ease; }
+.ed .cardform .rr .wrow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; height: 32px; align-items: center; position: relative; }
+.ed .cardform .rr .wrow.sep-before { margin-top: 16px; } .ed .cardform .rr .wrow.sep-before::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.ed .cardform .rr .wrow.sep-after { margin-bottom: 16px; } .ed .cardform .rr .wrow.sep-after::after { content: ''; position: absolute; left: 0; right: 0; bottom: -8px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.ed .cardform .rr .wrow b { all: unset; cursor: pointer; text-align: center; height: 30px; line-height: 30px; border-radius: 8px; font-size: 12.5px; color: var(--fg); user-select: none; background: var(--bg); }
+.ed .cardform .rr .wrow b.we { background: var(--tile-weekend); }
+.ed .cardform .rr .wrow b.dim { color: var(--fg-3); background: var(--tile-other); } .ed .cardform .rr .wrow b.dim.we { background: color-mix(in srgb, var(--tile-weekend) 55%, var(--tile)); }
+.ed .cardform .rr .wrow b:hover { background: var(--bg-3); }
+.ed .cardform .rr .wrow b.occ { background: var(--accent); color: #fff; } .ed .cardform .rr .wrow b.dim.occ { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.ed .cardform .rr .wrow b.ex { background: var(--bg-3); color: var(--fg-3); text-decoration: line-through; }
+.ed .cardform .rr .wrow b.rd { background: var(--c2); color: #fff; } .ed .cardform .rr .wrow b.dim.rd { background: color-mix(in srgb, var(--c2) 45%, transparent); }
+.ed .cardform .rr .wrow b.until { background: var(--c4); color: #fff; } .ed .cardform .rr .wrow b.until.occ { background: linear-gradient(135deg, var(--accent) 50%, var(--c4) 50%); }
+.ed .cardform .rr .wrow b.start { outline: 2px solid var(--c5); outline-offset: -2px; }
+.ed .cardform .rr .wrow b.occ:hover, .ed .cardform .rr .wrow b.rd:hover, .ed .cardform .rr .wrow b.until:hover { filter: brightness(.95); }
+.ed .cardform .rr .weeks.pick b:not(.past):hover { outline: 2px solid var(--c4); outline-offset: -2px; }
+.ed .cardform .rr .rrlegend { padding: 6px 0 4px 26px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .rr .rrlegend span { white-space: nowrap; } .ed .cardform .rr .rrlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.ed .cardform .rr .rrsep { margin: 8px 0 6px 26px; border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.ed .cardform .rr .rrbottom { padding-left: 26px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 34px; }
+.ed .cardform .rr .pillbtn { all: unset; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 12.5px; background: var(--bg); color: var(--fg); }
+.ed .cardform .rr .pillbtn.ghost { border-style: dashed; color: var(--fg-3); }
+.ed .cardform .rr .rrmode { padding: 8px 0 2px 26px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--fg-3); }
+.ed .cardform .rr .pickmsg { margin: 4px 0 8px 26px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--c4) 18%, transparent); color: var(--fg); font-size: 13px; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.ed .cardform .rr .pickmsg .btn { grid-column: 2; justify-self: end; padding: 4px 10px; font-size: 13px; } /* the narrow card: the button goes under the text */
+.ed .cardform .rr .rrraw { padding: 4px 0 0 26px; } .ed .cardform .rr .rrraw input { font-family: ui-monospace, monospace; font-size: 12.5px; }
+/* picking the end date: everything but the strip and the prompt is dimmed and inert */
+.ed.picking header, .ed.picking footer, .ed.picking .dayline, .ed.picking .presetchips, .ed.picking .addmenu, .ed.picking .card:not([data-card=repeat]), .ed.picking .card[data-card=repeat] > :not(.rr), .ed.picking .rr > :not(.calstrip):not(.pickmsg) { opacity: .3; pointer-events: none; filter: grayscale(1); }
+/* the popover of the pills (interval, end, number entry) */
+.rrpop { position: absolute; z-index: 60; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; min-width: 150px; }
+.rrpop button { all: unset; display: block; width: 100%; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; white-space: nowrap; }
+.rrpop button:hover { background: var(--tile); } .rrpop button[aria-current] { color: var(--accent); font-weight: 600; } .rrpop button.ok { color: var(--accent); font-weight: 600; }
+.rrpop .q { padding: 4px 10px; font-size: 12px; color: var(--fg-3); } .rrpop input { margin: 4px 6px; width: calc(100% - 12px); background: var(--tile); border: 0; border-radius: 6px; padding: 5px 8px; font: inherit; color: var(--fg); }
 .ed .cardform .sub h4 { margin: 8px 0 0 26px; font: 600 12px/1.4 var(--font-display); color: var(--fg-3); text-transform: uppercase; letter-spacing: .03em; }
 .ed .cardform .sub:empty, .ed .cardform.mode-view .sub.empty { display: none; }
 .ed .cardform .row.xd { grid-template-columns: 1fr auto; grid-template-areas: "v acts"; }
-.ed .cardform .row.xd input[type=date] { width: auto; grid-area: v; }
-.ed .cardform.mode-view .row.xd input { display: none; }
-.ed .cardform.mode-edit .row.xd .txt { display: none; }
 .ed .cardform .row.pe { grid-template-columns: 1fr auto; grid-template-areas: "v acts" "t acts"; }
 .ed .cardform.mode-edit .row.pe { grid-template-columns: 110px 1fr auto; grid-template-areas: "t v acts"; }
 .ed .cardform .row.pe .pv { grid-area: v; display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; align-items: center; }

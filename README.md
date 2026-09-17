@@ -11,7 +11,7 @@ person or group · app tokens · trash with restore · calendar views Day (ledge
 Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
-presets (before start, before end, at a time; display, sound or mail; repeats), recurrence with interval, weekdays, end and exceptions/extra dates,
+presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),
 organizer and attendees, location with coordinates and map actions, status/busy/visibility/
 priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
@@ -94,6 +94,15 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   `ATTENDEE` (mail alarms) and `ATTACH` (the sound of an audio alarm); `PROXIMITY` and `ACKNOWLEDGED`
   (RFC 9074) are kept as the client wrote them — a dismissed alarm shows struck through — and "after
   start/end" appears only for an alarm that already fires after its anchor.
+- **Recurrence** (event card): the rule is painted on a scrollable week strip — one month in full, a
+  neighbouring week on each side, separators around the month that move with it. In the pattern mode a
+  click on a day toggles its weekday (weekly) or sets the day of month (monthly, yearly); in the exception
+  mode a click strikes an occurrence (`EXDATE`) or adds an extra date (`RDATE`). Interval and end are two
+  pills; "until" is picked on the strip while the rest of the dialog is dimmed. The strip owns the mouse
+  wheel: one gesture moves at most to the neighbouring month. Its preview of occurrences is a small
+  client-side expander for what the strip can paint; caldata on the server stays authoritative. Rules with
+  parts the strip cannot paint (`BYSETPOS`, several ordinals, `BYHOUR` …) show as a custom rule text and are
+  saved as typed.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
