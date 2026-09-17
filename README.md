@@ -13,7 +13,7 @@ Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
 presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),
 organizer and attendees as chips (display only, with a jump to the matching address-book entry), location with coordinates and map actions, status/busy/visibility/
-priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
+priority as four tiles whose icon follows the value, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
@@ -83,6 +83,12 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
   VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
   series instances get the master's alarms (caldata builds them without VALARMs).
+- **Status** (event card): STATUS, TRANSP, CLASS and PRIORITY are four tiles; the icon follows the
+  value (check/question/cross, calendar with or without an entry, group/person/agent, arrows) and is grey
+  while nothing is set, a click opens the chooser. The hidden selects behind the tiles stay the model, so
+  dirty tracking, reset and submit are untouched; the view mode reads the values as one line. TRANSP and
+  CLASS have RFC defaults (OPAQUE, PUBLIC), shown as "default" so an unset value stays unset in the file.
+  A priority outside 1/5/9 (Outlook writes 2) keeps its number and maps to the RFC bands for the icon.
 - **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
   would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
   chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,

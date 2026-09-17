@@ -397,6 +397,23 @@
   const alarmAdd = () => { const a = newAlarm(); ALARMS.push(a); alRender(); return $$('.row', alBox).pop(); }; // the new entry stays collapsed; the row header, the dots or the marker open it
   const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, _dragX, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
+  // ---- status card (design K): the four hidden selects stay the model (dirty tracking, reset, submit work as
+  // before); the tiles are their face. Each select carries its label and one icon per option (`data-icons`),
+  // so the tile's icon follows the value; a priority outside 1/5/9 (Outlook writes 2) maps by the RFC bands. ----
+  const SC = $('#ed-status-card'), SSEL = ['status', 'transp', 'class', 'priority'].map(n => f[n]);
+  const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, sel.selectedIndex)] || ic[0]; };
+  const stText = sel => sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value;
+  function stRender() {
+    $('#ed-status-tiles').innerHTML = SSEL.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('');
+    const t = SC.dataset, parts = [];
+    if (f.status.value) parts.push(stText(f.status));
+    if (f.transp.value) parts.push(f.transp.value === 'OPAQUE' ? t.tViewOpaque : t.tViewTransparent);
+    if (f.class.value) parts.push(stText(f.class));
+    if (f.priority.value) parts.push(t.tViewPrio.replace('{n}', stText(f.priority)));
+    $('#ed-status-text').textContent = parts.join(' · ');
+  }
+  $('#ed-status-tiles').addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b) return; const sel = f[b.dataset.sel];
+    rrPop(b, [...sel.options].map(o => ({ v: o.value, label: o.textContent })), sel.value, v => { sel.value = v; stRender(); refresh(); }, `<div class="q">${esc(sel.dataset.label)}</div>`); b.setAttribute('aria-expanded', 'true'); });
   // ---- people (design C, display only): ORGANIZER/ATTENDEE are shown as chips whose ring colour is the
   // reply, a click opens a detail card with role, reply, delegation, address and the actions. Nothing is
   // editable: RustiCal does no scheduling, so the list is a record, not an invitation tool; the persons are
@@ -719,10 +736,10 @@
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       alarmsInit(d.alarms); peopleInit(d.organizer, d.attendees);
       rrInit(d.rrule, d.rrule_until, d.exdates, d.rdates);
-      f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); d.links.forEach(addLink); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
+      f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); stRender(); d.links.forEach(addLink); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
       $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); $('#ed-hint').textContent = '';
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
@@ -740,7 +757,7 @@
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
