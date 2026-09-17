@@ -854,7 +854,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: var(--accent); }
 .ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
-.ed .cardform .card[data-card=alarm] { column-span: all; margin-top: 12px; } /* the strip and the entries need the full width; the cards before it stay in two columns; margins next to the column break are truncated, hence the explicit top margin */
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }
 .ed .cardform .rr-opts { padding: 2px 0; }
