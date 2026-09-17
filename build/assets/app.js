@@ -567,7 +567,7 @@
       if (ok) { out.add(iso); n++; } }
     return out; }
   const rrMirror = () => { f.rrule_json.value = RR.freq ? JSON.stringify(RR) : (RR.exdates.length || RR.rdates.length ? JSON.stringify(RR) : ''); };
-  function rrSync() { rrMirror(); $('#ed-rrule-text').textContent = rrSentence(); }
+  function rrSync() { rrMirror(); $('#ed-rrule-text').textContent = rrSentence(); $('#ed-exdates').classList.toggle('empty', !RR.exdates.length); $('#ed-rdates').classList.toggle('empty', !RR.rdates.length); } // the view lists show only when set
   // popovers for the pills: a list of choices or a number entry
   let rrOpenPop = null; const rrClosePop = () => { if (rrOpenPop) { rrOpenPop.remove(); rrOpenPop = null; document.removeEventListener('click', rrOutside, true); } };
   function rrOutside(e) { if (rrOpenPop && !rrOpenPop.contains(e.target)) rrClosePop(); }
