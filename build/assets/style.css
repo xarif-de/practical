@@ -907,3 +907,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .locsub .errtxt { font-size: 11.5px; color: #ff3b30; }
 .ed .cardform .act.map.hot { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
 .geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
+/* view mode: the address in lines (split at commas), a line too long for the card shrinks its text */
+.ed .cardform .addr-lines { font-size: 15px; line-height: 1.35; padding: 2px 0; }
+.ed .cardform .addr-lines .ln { display: block; white-space: nowrap; overflow: hidden; }
+.ed .cardform .addr-lines .ln.wrap { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.geomap footer .col .val { max-width: 320px; }

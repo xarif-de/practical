@@ -309,8 +309,13 @@
     if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LT.tAddr : LT.tGeo}"><svg class="ico" aria-hidden="true"><use href="#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LT.tRmAddr : LT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LT.tErrAddr : LT.tErrCoords}</span>` : ''); }
     else h = `<button class="chip ghost" type="button" data-locadd="${O}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> ${O === 'addr' ? LT.tAddAddr : LT.tAddCoords}</button>`;
     locsub.innerHTML = h;
+    const addr = f.location.value.trim(); $('#ed-loc-view').hidden = !addr; $('#ed-geo-view').hidden = !geoOf();
+    $('#ed-addr-lines').innerHTML = addr.split(/,\s*/).filter(Boolean).map(l => `<span class="ln">${l.replace(/</g, '&lt;')}</span>`).join('');
     $('#ed-geo-txt').textContent = coordsText();
+    requestAnimationFrame(fitAddrLines);
   }
+  // a line wider than the card shrinks its text until it fits (never below 10 px)
+  function fitAddrLines() { $$('#ed-addr-lines .ln').forEach(l => { l.style.fontSize = ''; l.classList.remove('wrap'); const w = l.clientWidth; if (!w || l.scrollWidth <= w) return; const fs = 15 * w / l.scrollWidth - 0.3; if (fs >= 9) l.style.fontSize = fs.toFixed(1) + 'px'; else { l.style.fontSize = '11px'; l.classList.add('wrap'); } }); } // below 9 px the line wraps instead of becoming unreadable
   async function geoSearch(q, near) { const u = new URL('/api/geo/search', location.origin); u.searchParams.set('q', q); if (near) { u.searchParams.set('lat', near[0]); u.searchParams.set('lon', near[1]); } const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.json(); }
   async function geoReverse(lat, lon) { const r = await fetch(`/api/geo/reverse?lat=${(+lat).toFixed(6)}&lon=${(+lon).toFixed(6)}`); if (r.status === 404) return null; if (!r.ok) throw new Error(r.status); return r.json(); }
   // derive the secondary part from the primary one (only when that part is in use)
@@ -341,14 +346,22 @@
   const assetV = (($('script[src*="app.js"]') || {}).src || '').split('?')[1] || '';
   const loadLeaflet = () => new Promise((res, rej) => { if (window.L) return res(); const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assets/leaflet.css?' + assetV; document.head.appendChild(css); const js = document.createElement('script'); js.src = '/assets/leaflet.js?' + assetV; js.onload = res; js.onerror = () => rej(new Error('leaflet')); document.head.appendChild(js); });
   const centre = () => { const c = map.getCenter(); return [+c.lat.toFixed(6), +c.lng.toFixed(6)]; };
+  const coordsChanged = () => { const c = centre(), g = geoOf(); return !g || Math.abs(g[0] - c[0]) > 5e-6 || Math.abs(g[1] - c[1]) > 5e-6; };
+  // one main button: "determine address" (red) while the address for the crosshair is unknown, else
+  // "apply" — green when there is something new to apply, grey when nothing changed
   function gmState() {
-    const c = map ? centre() : null; $('#gm-coords').textContent = c ? `${c[0].toFixed(5)}, ${c[1].toFixed(5)}` : '';
-    $('#gm-addr-col').hidden = !LOC.addr;
+    const c = map ? centre() : null;
+    $('#gm-addr-col').hidden = !LOC.addr; $('#gm-coords-col').hidden = !LOC.coords;
+    $('#gm-coords').textContent = c && LOC.coords ? `${c[0].toFixed(5)}, ${c[1].toFixed(5)}` : '';
     const at = $('#gm-addr-txt'); at.textContent = gmAddrErr ? gm.dataset.tNone : gmAddrKnown ? gmAddr : ''; at.classList.toggle('unknown', gmAddrErr || !gmAddrKnown);
-    const ba = $('#gm-addr'), bp = $('#gm-ok');
-    ba.disabled = gmAddrKnown && !gmAddrErr; ba.classList.toggle('hot', !gmAddrKnown || gmAddrErr);
-    const ok = !LOC.addr || gmAddrKnown; bp.disabled = LOC.addr && !gmAddrKnown && !gmAddrErr; bp.classList.toggle('good', ok && !gmAddrErr); bp.classList.toggle('hot', gmAddrErr);
+    const b = $('#gm-ok'), determine = LOC.addr && !gmAddrKnown;
+    $('#gm-ok-txt').textContent = determine ? b.dataset.tDetermine : b.dataset.tApply;
+    $('#gm-ok-ico').setAttribute('href', determine ? '#i-pin' : '#i-check');
+    const changed = LOC.addr ? gmMoved : (map ? coordsChanged() : false);
+    b.classList.toggle('hot', determine); b.classList.toggle('good', !determine && changed);
+    b.disabled = gmBusy || (!determine && !changed);
   }
+  let gmBusy = false;
   async function openMap() {
     gm.hidden = false; $('#gm-hint').textContent = ''; const seq = ++gmSeq; gmMoved = false; gmAddrErr = false; gmAddr = f.location.value.trim(); gmAddrKnown = LOC.addr && !!gmAddr && !LOC.errAddr && !LOC.errCoords;
     try { await loadLeaflet(); } catch (_) { $('#gm-hint').textContent = gm.dataset.tError; return; }
@@ -363,10 +376,9 @@
   }
   const closeMap = () => { gm.hidden = true; };
   $('#gm-close').onclick = closeMap;
-  $('#gm-addr').onclick = async () => { const c = centre(); const b = $('#gm-addr'); b.disabled = true; $('#gm-hint').textContent = '…'; try { const p = await geoReverse(c[0], c[1]); if (p) { gmAddr = p.label; gmAddrKnown = true; gmAddrErr = false; } else { gmAddrKnown = false; gmAddrErr = true; } $('#gm-hint').textContent = ''; } catch (_) { gmAddrKnown = false; gmAddrErr = true; $('#gm-hint').textContent = gm.dataset.tError; } gmState(); };
-  $('#gm-ok').onclick = () => { const c = centre(); if (LOC.coords) { f.lat.value = c[0].toFixed(6); f.lon.value = c[1].toFixed(6); LOC.errCoords = false; LOC.invalid = false; }
-    if (LOC.addr) { if (gmAddrKnown) { f.location.value = gmAddr; LOC.errAddr = false; } else LOC.errAddr = true; }
-    closeMap(); locRender(); syncDot(); refresh(); };
+  async function gmDetermine() { const c = centre(); gmBusy = true; gmState(); $('#gm-hint').textContent = '…'; try { const p = await geoReverse(c[0], c[1]); if (p) { gmAddr = p.label; gmAddrKnown = true; gmAddrErr = false; } else { gmAddrKnown = false; gmAddrErr = true; } $('#gm-hint').textContent = ''; } catch (_) { gmAddrKnown = false; gmAddrErr = true; $('#gm-hint').textContent = gm.dataset.tError; } gmBusy = false; gmState(); }
+  function gmApply() { const c = centre(); if (LOC.coords) { f.lat.value = c[0].toFixed(6); f.lon.value = c[1].toFixed(6); LOC.errCoords = false; LOC.invalid = false; } if (LOC.addr) { f.location.value = gmAddr; LOC.errAddr = false; } closeMap(); locRender(); syncDot(); refresh(); }
+  $('#gm-ok').onclick = () => { if (LOC.addr && !gmAddrKnown) gmDetermine(); else gmApply(); };
   addEventListener('keydown', e => { if (e.key === 'Escape' && !gm.hidden) { e.stopImmediatePropagation(); closeMap(); } }, true);
   // exceptions / extra dates: a date; timed events get the start time appended on save
   const addDate = (list, iso) => { const r = addRow(list); w(r, 'd').value = (iso || '').slice(0, 10); $('.txt', r).textContent = iso ? fmtD(iso) : ''; return r; };
@@ -382,7 +394,7 @@
   function syncRR() { const v = f.rrule.value, on = v && v !== 'custom'; $('#ed-rr').hidden = !on; f.rrule_custom.hidden = v !== 'custom'; f.rrule_custom.closest('.field').hidden = v !== 'custom'; $('#ed-unit').textContent = on ? D.tUnits.split('|')[FREQS.indexOf(v)] : ''; $('#ed-days').hidden = v !== 'WEEKLY'; f.count.hidden = f.rend.value !== 'count'; $('.cnt', form).hidden = f.rend.value !== 'count'; f.until.hidden = f.rend.value !== 'until'; $('#ed-rrule-text').textContent = rrText(); ['exdates', 'rdates'].forEach(l => { const box = $('#ed-' + l); box.hidden = !v; box.classList.toggle('empty', !rows(l).length); }); }
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
-  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.chip', card) || $$('.rows .row', card).length > 0;
+  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.tags .chip', card) || $$('.rows .row', card).length > 0;
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',') + '|' + $$('#ed-days [aria-pressed=true]', form).length;
@@ -390,7 +402,7 @@
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
   function refresh() { whenLine(); syncRR(); grow(); updateButtons(); }
-  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); }
+  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
