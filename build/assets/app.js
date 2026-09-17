@@ -574,9 +574,18 @@
   function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); p.style.left = `${r.left + scrollX}px`; p.style.top = `${r.bottom + scrollY + 4}px`; document.body.appendChild(p); rrOpenPop = p; p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
   function rrAskNumber(anchor, label, value, on) { const p = rrPop(anchor, [], null, () => {}, `<div class="q">${esc(label)}</div><input type="number" min="1" max="999" value="${value}"><button type="button" class="ok">${esc(RT.tApply)}</button>`); const i = $('input', p); i.focus(); i.select(); const ok = () => { const n = +i.value; if (n >= 1) on(n); rrClosePop(); }; i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } }; $('.ok', p).onclick = ok; }
   const rrSet = () => { rrRender(); refresh(); };
-  // ---- the strip ----
+  // a short eased glide of a scroll container (200–420 ms); any input stops it
+  function rrGlide(el) { let raf = 0, on = false; const stop = () => { cancelAnimationFrame(raf); on = false; };
+    const to = target => { stop(); const from = el.scrollTop, dist = target - from; if (Math.abs(dist) < 1) return; const t0 = performance.now(), ms = Math.min(420, 200 + Math.abs(dist) * 0.8); on = true;
+      const step = now => { const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; el.scrollTop = from + dist * e; if (k < 1) raf = requestAnimationFrame(step); else on = false; }; raf = requestAnimationFrame(step); };
+    return { to, stop, active: () => on }; }
+  // ---- the strip: NWEEKS rows of ROWH px, starting a year before the event on a Monday; the separators are the
+  // only variable spacing (a GAP margin above / below at most three rows), so every row position is arithmetic ----
   const ROWH = 32, GAP = 16, NWEEKS = 130;
-  const rrW0 = () => { const d = rrStart(); d.setDate(d.getDate() - rrWd(d) - 7 * 52); return d; }; // a year before the start, on a Monday
+  const GESTURE_PAUSE = 40; // ms without wheel input that end a gesture — the next one may reach the next month
+  const SETTLE_MS = 120;    // ms after the last input before the strip glides to the nearest month
+  const WHEEL_DRAG = 0.8;   // share of the wheel distance the strip follows
+  const rrW0 = () => { const d = rrStart(); d.setDate(d.getDate() - rrWd(d) - 364); return d; };
   function rrRender() {
     rrBox.innerHTML = ''; ed.classList.toggle('picking', rrPicking);
     const s0 = rrStart(), freqs = RT.tFreqs.split('|'), longs = RT.tFreqsLong.split('|');
@@ -597,38 +606,44 @@
         row += `<b data-d="${iso}" data-m="${mi}" class="${cls}">${d.getDate()}</b>`; }
       html += `<div class="wrow">${row}</div>`; }
     weeks.innerHTML = html;
-    const weekStart = i => { const d = new Date(W0); d.setDate(W0.getDate() + i * 7); return d; };
-    const monthOf = i => { const t = weekStart(i); t.setDate(t.getDate() + 3); return t.getFullYear() * 12 + t.getMonth(); }; // the heading follows the week's Thursday
-    const rowsOf = mi => { let a = -1, b = -1; for (let i = 0; i < NWEEKS; i++) { const ws = weekStart(i), we = new Date(ws); we.setDate(ws.getDate() + 6); const m0 = ws.getFullYear() * 12 + ws.getMonth(), m1 = we.getFullYear() * 12 + we.getMonth(); if (mi === m0 || mi === m1) { if (a < 0) a = i; b = i; } } return [a, b]; }; // every week holding a day of the month
-    const rowEl = i => weeks.children[i], rowTop = i => rowEl(i).getBoundingClientRect().top - weeks.getBoundingClientRect().top;
-    const drawSeps = (mi, nextM) => { $$('.wrow.sep-before, .wrow.sep-after', weeks).forEach(el => el.classList.remove('sep-before', 'sep-after')); const [a, b] = rowsOf(mi); if (a < 0) return; rowEl(a).classList.add('sep-before'); rowEl(b).classList.add('sep-after'); if (nextM != null) { const [na, nb] = rowsOf(nextM); if (na >= 0) { if (nextM > mi) rowEl(nb).classList.add('sep-after'); else rowEl(na).classList.add('sep-before'); } } }; // while scrolling only the far edge of the neighbour is pre-drawn
-    const snapTopOf = mi => Math.max(0, rowTop(rowsOf(mi)[0]) - GAP - ROWH);
-    let glideRaf = 0, gliding = false;
-    const glide = to => { cancelAnimationFrame(glideRaf); const from = scroller.scrollTop, dist = to - from; if (Math.abs(dist) < 1) return; const t0 = performance.now(), ms = Math.min(420, 200 + Math.abs(dist) * 0.8); gliding = true; const step = now => { const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; scroller.scrollTop = from + dist * e; if (k < 1) glideRaf = requestAnimationFrame(step); else gliding = false; }; glideRaf = requestAnimationFrame(step); };
-    const stopGlide = () => { cancelAnimationFrame(glideRaf); gliding = false; };
-    const applyFocus = (mi, animate, nextM) => { if (rowsOf(mi)[0] < 0) return; rrFocus = mi; const [a, b] = rowsOf(mi);
-      const centre = scroller.scrollTop + scroller.clientHeight / 2; let anchor = 0; for (let k = 0; k < NWEEKS; k++) if (rowTop(k) <= centre) anchor = k; const before = rowTop(anchor);
-      drawSeps(mi, nextM); if (animate) scroller.scrollTop += rowTop(anchor) - before; // moving the separators shifts the rows: keep the row under the centre where it is
-      const top = snapTopOf(mi), bottom = rowTop(b) + ROWH + GAP + ROWH; scroller.style.height = `${bottom - top}px`;
-      head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; $$('b[data-m]', weeks).forEach(el => el.classList.toggle('dim', +el.dataset.m !== mi)); if (animate) glide(top); else scroller.scrollTop = top; };
-    const centreMonth = () => { const centre = scroller.scrollTop + scroller.clientHeight / 2; let i = 0; for (let k = 0; k < NWEEKS; k++) if (rowTop(k) <= centre) i = k; return monthOf(i); };
-    const nearestMonth = () => { const cur = rrFocus, st = scroller.scrollTop; let best = cur, dist = Math.abs(snapTopOf(cur) - st); for (const mi of [cur - 1, cur + 1]) { if (rowsOf(mi)[0] < 0) continue; const d = Math.abs(snapTopOf(mi) - st); if (d < dist) { best = mi; dist = d; } } return best; }; // past half the way the neighbour wins
-    const settle = () => applyFocus(nearestMonth(), true, null);
-    const PAUSE = 40, DRAG = 0.8; let lastWheel = 0, gestureFrom = null, gestureDir = 0, settleT = 0;
-    scroller.addEventListener('wheel', e => { e.preventDefault(); stopGlide(); const now = performance.now(); if (now - lastWheel > PAUSE || gestureFrom == null) { gestureFrom = rrFocus; gestureDir = 0; } lastWheel = now;
-      const dir = Math.sign(e.deltaY); if (dir && dir !== gestureDir) { gestureDir = dir; drawSeps(rrFocus, rowsOf(rrFocus + dir)[0] >= 0 ? rrFocus + dir : null); }
-      const lo = rowsOf(gestureFrom - 1)[0] >= 0 ? snapTopOf(gestureFrom - 1) : snapTopOf(gestureFrom), hi = rowsOf(gestureFrom + 1)[0] >= 0 ? snapTopOf(gestureFrom + 1) : snapTopOf(gestureFrom);
-      const target = Math.min(hi, Math.max(lo, scroller.scrollTop + e.deltaY * DRAG)); scroller.scrollTop = target;
-      clearTimeout(settleT); if ((target === hi && dir > 0) || (target === lo && dir < 0)) settle(); else settleT = setTimeout(settle, 120); }, { passive: false });
-    scroller.addEventListener('pointerdown', stopGlide); scroller.addEventListener('touchstart', stopGlide, { passive: true });
-    scroller.addEventListener('scroll', () => { const mi = centreMonth(); head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; if (gliding || performance.now() - lastWheel < PAUSE) return; clearTimeout(settleT); settleT = setTimeout(settle, 120); });
+    // geometry without layout reads
+    const rowOf = d => Math.floor(Math.round((d - W0) / 864e5) / 7); // rounding absorbs the DST hour
+    const monthRows = mi => { const y = Math.floor(mi / 12), m = mi % 12; return [rowOf(new Date(y, m, 1)), rowOf(new Date(y, m + 1, 0))]; }; // first and last week holding a day of the month
+    const inRange = mi => { const [a, b] = monthRows(mi); return a >= 0 && b < NWEEKS; };
+    const rowMonth = i => { const t = new Date(W0); t.setDate(W0.getDate() + i * 7 + 3); return t.getFullYear() * 12 + t.getMonth(); }; // the heading follows the week's Thursday
+    let seps = { before: [], after: [] }; // rows carrying the GAP margin above / below
+    const rowTop = i => i * ROWH + GAP * (seps.before.filter(r => r <= i).length + seps.after.filter(r => r < i).length);
+    const rowAt = y => { let i = 0; while (i + 1 < NWEEKS && rowTop(i + 1) <= y) i++; return i; };
+    const setSeps = (mi, nextM) => { const [a, b] = monthRows(mi); seps = { before: [a], after: [b] }; if (nextM != null && inRange(nextM)) { const [na, nb] = monthRows(nextM); if (nextM > mi) seps.after.push(nb); else seps.before.push(na); } // while scrolling only the far edge of the neighbour is pre-drawn
+      $$('.wrow.sep-before, .wrow.sep-after', weeks).forEach(el => el.classList.remove('sep-before', 'sep-after')); seps.before.forEach(r => weeks.children[r].classList.add('sep-before')); seps.after.forEach(r => weeks.children[r].classList.add('sep-after')); };
+    const snapTop = mi => Math.max(0, rowTop(monthRows(mi)[0]) - GAP - ROWH);
+    const glide = rrGlide(scroller);
+    const focusMonth = (mi, animate, nextM) => { if (!inRange(mi)) return; rrFocus = mi;
+      const anchor = rowAt(scroller.scrollTop + scroller.clientHeight / 2), before = rowTop(anchor);
+      setSeps(mi, nextM); if (animate) scroller.scrollTop += rowTop(anchor) - before; // the separators moved the rows: keep the row under the centre in place
+      const top = snapTop(mi); scroller.style.height = `${rowTop(monthRows(mi)[1]) + ROWH + GAP + ROWH - top}px`;
+      head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; $$('b[data-m]', weeks).forEach(el => el.classList.toggle('dim', +el.dataset.m !== mi));
+      if (!animate || Math.abs(scroller.scrollTop - top) <= GAP) scroller.scrollTop = top; else glide.to(top); }; // a gap-sized rest is set at once: a glide would fight an ongoing gesture
+    const nearestMonth = () => { const st = scroller.scrollTop; let best = rrFocus, dist = Math.abs(snapTop(rrFocus) - st); for (const mi of [rrFocus - 1, rrFocus + 1]) if (inRange(mi) && Math.abs(snapTop(mi) - st) < dist) { best = mi; dist = Math.abs(snapTop(mi) - st); } return best; }; // past half the way the neighbour wins
+    const settle = () => focusMonth(nearestMonth(), true, null);
+    // the strip owns the wheel: one gesture reaches at most the neighbouring month and snaps in on arrival
+    let lastWheel = 0, gestureFrom = null, gestureDir = 0, settleT = 0;
+    scroller.addEventListener('wheel', e => { e.preventDefault(); glide.stop(); const now = e.timeStamp; // the input's own time: a busy main thread must not split a gesture
+      if (now - lastWheel > GESTURE_PAUSE || gestureFrom == null) { gestureFrom = rrFocus; gestureDir = 0; } lastWheel = now;
+      const dir = Math.sign(e.deltaY); if (dir && dir !== gestureDir) { gestureDir = dir; setSeps(rrFocus, rrFocus + dir); }
+      const lo = snapTop(inRange(gestureFrom - 1) ? gestureFrom - 1 : gestureFrom), hi = snapTop(inRange(gestureFrom + 1) ? gestureFrom + 1 : gestureFrom);
+      const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroller.clientHeight : 1) * WHEEL_DRAG;
+      const target = Math.min(hi, Math.max(lo, scroller.scrollTop + delta)); scroller.scrollTop = target;
+      clearTimeout(settleT); if ((target === hi && dir > 0) || (target === lo && dir < 0)) settle(); else settleT = setTimeout(settle, SETTLE_MS); }, { passive: false });
+    scroller.addEventListener('pointerdown', glide.stop); scroller.addEventListener('touchstart', glide.stop, { passive: true });
+    scroller.addEventListener('scroll', () => { const mi = rowMonth(rowAt(scroller.scrollTop + scroller.clientHeight / 2)); head.textContent = `${MON[mi % 12]} ${Math.floor(mi / 12)}`; /* the heading follows at once */ if (glide.active() || performance.now() - lastWheel < SETTLE_MS) return; clearTimeout(settleT); settleT = setTimeout(settle, SETTLE_MS); });
     weeks.addEventListener('click', e => { const b = e.target.closest('b[data-d]'); if (!b) return; const iso = b.dataset.d, d = parse(iso);
       if (rrPicking) { if (iso < startIso) return; RR.end = { ...RR.end, kind: 'until', until: iso }; rrPicking = false; rrSet(); return; }
       if (isRaw) return;
       if (rrMode === 'pattern') { if (!RR.freq) RR.freq = 'WEEKLY'; if (RR.freq === 'WEEKLY') { const day = DAYS[rrWd(d)]; RR.byday = RR.byday.includes(day) ? RR.byday.filter(x => x !== day) : DAYS.filter(x => RR.byday.includes(x) || x === day); if (!RR.byday.length) RR.byday = [day]; } else if (RR.freq === 'MONTHLY' || RR.freq === 'YEARLY') { RR.mode = 'date'; RR.bymonthday = d.getDate(); if (RR.freq === 'YEARLY') RR.bymonth = d.getMonth() + 1; } }
       else { if (occ.has(iso)) RR.exdates = ex.has(iso) ? RR.exdates.filter(x => x !== iso) : RR.exdates.concat(iso); else if (ex.has(iso)) RR.exdates = RR.exdates.filter(x => x !== iso); else RR.rdates = rd.has(iso) ? RR.rdates.filter(x => x !== iso) : RR.rdates.concat(iso); }
       rrSet(); });
-    rrBox.appendChild(cal); applyFocus(rrFocus, false, null);
+    rrBox.appendChild(cal); focusMonth(rrFocus, false, null);
     const lg = RT.tLegend.split('|');
     rrBox.insertAdjacentHTML('beforeend', `<div class="rrlegend"><span><i style="background:var(--accent)"></i>${esc(lg[0])}</span><span><i style="background:var(--bg-3)"></i>${esc(lg[1])}</span><span><i style="background:var(--c2)"></i>${esc(lg[2])}</span><span><i style="outline:2px solid var(--c5);outline-offset:-2px"></i>${esc(lg[3])}</span>${untilD ? `<span><i style="background:var(--c4)"></i>${esc(lg[4])}</span>` : ''}</div>`);
     if (RR.freq && !isRaw) {
