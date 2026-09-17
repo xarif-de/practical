@@ -389,7 +389,7 @@
     alRender(); refresh();
   });
   function alarmsInit(list) { ALARMS = list.map(a => newAlarm({ ...a, attendees: [...(a.attendees || [])] })); alRender(); }
-  const alarmAdd = () => { const a = newAlarm(); ALARMS.forEach(x => x._open = false); a._open = true; ALARMS.push(a); alRender(); return $(`.row.open`, alBox); };
+  const alarmAdd = () => { const a = newAlarm(); ALARMS.push(a); alRender(); return $$('.row', alBox).pop(); }; // the new entry stays collapsed; the row header, the dots or the marker open it
   const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
