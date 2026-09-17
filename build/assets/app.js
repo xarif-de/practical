@@ -272,7 +272,7 @@
   let ALARMS = [], alSeq = 0;
   const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-bell', AUDIO: '#i-sound', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
   const SNAP_START = [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], SNAP_END_ALL = [5, 10, 15, 30, 60], AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months
-  const DEFAULT_PRESETS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880, 10080].map(m => ({ action: 'DISPLAY', minutes: m, related_end: false, repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '' }));
+  const DEFAULT_PRESETS = [0, 10].map(m => ({ action: 'DISPLAY', minutes: m, related_end: false, repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '' }));
   let PRESETS = (() => { try { const p = JSON.parse($('#alarm-presets-data').textContent || 'null'); return Array.isArray(p) ? p : DEFAULT_PRESETS; } catch (_) { return DEFAULT_PRESETS; } })();
   const newAlarm = o => ({ idx: null, action: 'DISPLAY', minutes: 15, related_end: false, at: null, description: '', summary: '', repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '', acknowledged: null, ...o, _id: ++alSeq });
   // a preset is the setting without text, subject and acknowledgement; an absolute trigger cannot be one
@@ -312,10 +312,11 @@
     for (const [k, list] of groups) {
       const g = document.createElement('div'); g.className = 'mkg'; g.style.left = `${k / 10}%`;
       for (const a of list) {
-        const mk = document.createElement('div'); mk.className = `mk${a._open ? ' sel' : ''}${a.acknowledged ? ' ack' : ''}`; mk.title = alarmText(a); mk.innerHTML = `<span class="lab">${esc(whenText(a))}</span>${alIco(AL_ICO[a.action] || AL_ICO.DISPLAY)}`;
-        mk.onpointerdown = e => { e.preventDefault(); const rect = tline.getBoundingClientRect();
-          const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); if (c.related_end === a.related_end && c.minutes === a.minutes && !a.at) return; a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; ALARMS.forEach(x => x._open = x === a); alRender(); refresh(); };
-          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); ALARMS.forEach(x => x._open = x === a); alRender(); refresh(); };
+        const mk = document.createElement('div'); mk.className = `mk${a._open || a._drag ? ' sel' : ''}${a.acknowledged ? ' ack' : ''}`; mk.title = alarmText(a); mk.innerHTML = `<span class="lab">${esc(whenText(a))}</span>${alIco(AL_ICO[a.action] || AL_ICO.DISPLAY)}`;
+        // a click on the marker opens or closes the entry; a drag only moves the alarm and leaves the entries as they are
+        mk.onpointerdown = e => { e.preventDefault(); const rect = tline.getBoundingClientRect(); let moved = false;
+          const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); if (c.related_end === a.related_end && c.minutes === a.minutes && !a.at) return; moved = true; a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; a._drag = true; alRender(); refresh(); };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); delete a._drag; if (!moved) ALARMS.forEach(x => x._open = x === a ? !x._open : false); alRender(); refresh(); };
           document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); };
         g.appendChild(mk);
       }
@@ -363,7 +364,7 @@
     w('pset').onclick = () => { if (a.at) return; if (matchesPreset(a)) PRESETS = PRESETS.filter(p => presetSig(p) !== presetSig(a)); else { const { action, minutes, related_end, repeat, duration_minutes, attendees, attach, proximity } = a; PRESETS.push({ action, minutes, related_end, repeat, duration_minutes, attendees: [...attendees], attach, proximity }); } savePresets(); alRender(); };
   }
   // text edits update the row's summary and the mirror without rebuilding the entry (the field keeps its focus)
-  const alMirror = () => { f.alarms_json.value = JSON.stringify(ALARMS.map(({ _id, _open, ...a }) => a)); };
+  const alMirror = () => { f.alarms_json.value = JSON.stringify(ALARMS.map(({ _id, _open, _drag, ...a }) => a)); };
   function alSync(row, a) { $('.txt', row).textContent = alarmText(a); $('.extra', row).textContent = extrasOf(a); alMirror(); refresh(); }
   let alBusy = false;
   function alRender() {
@@ -389,7 +390,7 @@
   });
   function alarmsInit(list) { ALARMS = list.map(a => newAlarm({ ...a, attendees: [...(a.attendees || [])] })); alRender(); }
   const alarmAdd = () => { const a = newAlarm(); ALARMS.forEach(x => x._open = false); a._open = true; ALARMS.push(a); alRender(); return $(`.row.open`, alBox); };
-  const alarmsOf = () => ALARMS.map(({ _id, _open, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
+  const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
   const addPerson = (p, role) => { const r = addRow('people'); r._orig = p; w(r, 'role').value = role; w(r, 'name').value = p.name || ''; w(r, 'email').value = p.email || ''; $('.st', r).textContent = [statusText(p), p.cutype === 'RESOURCE' || p.cutype === 'ROOM' ? p.cutype.toLowerCase() : ''].filter(Boolean).join(' · '); return r; };

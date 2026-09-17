@@ -814,7 +814,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .tline .mk.ack { opacity: .45; }
 .ed .cardform .tline .mk .lab { display: none; position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; color: var(--fg-2); }
 .ed .cardform .tline .mk.sel .lab { display: block; }
-.ed .cardform .apre { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 8px 26px; align-items: center; }
+.ed .cardform .apre { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0 26px; padding: 10px 0 2px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); align-items: center; }
 .ed .cardform .apre .lbl { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
 .ed .cardform .apre button { border-radius: 999px; padding: 4px 11px; font-size: 13px; background: var(--bg); border: 1px solid var(--line); display: inline-flex; gap: 5px; align-items: center; }
 .ed .cardform .apre button .ico { width: 12px; height: 12px; }
@@ -853,7 +853,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: var(--accent); }
 .ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
-.ed .cardform .card[data-card=alarm] { column-span: all; } /* the strip and the entries need the full width; the cards before it stay in two columns */
+.ed .cardform .card[data-card=alarm] { column-span: all; margin-top: 12px; } /* the strip and the entries need the full width; the cards before it stay in two columns; margins next to the column break are truncated, hence the explicit top margin */
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }
 .ed .cardform .rr-opts { padding: 2px 0; }
