@@ -78,7 +78,15 @@ pub async fn create_event(State(state): State<SharedState>, user: Principal, ctx
 
 async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
-    Ok(Json(events::get_event(&state, &user, &p, &c, &id, vc.tz).await?))
+    let mut d = events::get_event(&state, &user, &p, &c, &id, vc.tz).await?;
+    if d.organizer.is_some() || !d.attendees.is_empty() {
+        let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
+        let all = contacts::contacts_for(&state, &abs).await?;
+        for person in d.organizer.iter_mut().chain(d.attendees.iter_mut()) {
+            person.contacts = contacts::matches(&all, &person.name, &person.email, &person.cutype);
+        }
+    }
+    Ok(Json(d))
 }
 
 #[derive(Deserialize)]

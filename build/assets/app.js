@@ -259,7 +259,7 @@
   const tagIn = $('.tags input', form);
   tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(tagIn.value); tagIn.value = ''; refresh(); } else if (e.key === 'Backspace' && !tagIn.value) { const c = tagIn.previousElementSibling; if (c && c.classList.contains('chip')) { c.remove(); refresh(); } } });
   tagIn.addEventListener('blur', () => { if (tagIn.value.trim()) { addChip(tagIn.value); tagIn.value = ''; refresh(); } });
-  // ---- list rows from <template>: reminders, people, exceptions, extra dates ----
+  // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
   const w = (row, k) => $(`[data-w=${k}]`, row);
@@ -397,9 +397,35 @@
   const alarmAdd = () => { const a = newAlarm(); ALARMS.push(a); alRender(); return $$('.row', alBox).pop(); }; // the new entry stays collapsed; the row header, the dots or the marker open it
   const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, _dragX, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
+  // ---- people (design C, display only): ORGANIZER/ATTENDEE are shown as chips whose ring colour is the
+  // reply, a click opens a detail card with role, reply, delegation, address and the actions. Nothing is
+  // editable: RustiCal does no scheduling, so the list is a record, not an invitation tool; the persons are
+  // sent back unchanged on save (with every preserved parameter). `contacts` per person come from the
+  // server (exact e-mail, else similar name); one hit jumps to the address book, several open a chooser. ----
+  const PC = $('#ed-people-card'), PT = PC.dataset; let PEOPLE = { organizer: null, attendees: [] };
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
-  const addPerson = (p, role) => { const r = addRow('people'); r._orig = p; w(r, 'role').value = role; w(r, 'name').value = p.name || ''; w(r, 'email').value = p.email || ''; $('.st', r).textContent = [statusText(p), p.cutype === 'RESOURCE' || p.cutype === 'ROOM' ? p.cutype.toLowerCase() : ''].filter(Boolean).join(' · '); return r; };
-  const peopleOf = () => { const all = rows('people').map(r => ({ ...(r._orig || { status: '', cutype: '', extra: [] }), role: w(r, 'role').value, name: w(r, 'name').value.trim(), email: w(r, 'email').value.trim() })).filter(p => p.email); const org = all.find(p => p.role === 'ORGANIZER'); return { organizer: org ? { ...org, role: '' } : null, attendees: all.filter(p => p.role !== 'ORGANIZER') }; };
+  const peStatus = p => ({ ACCEPTED: 'acc', DECLINED: 'dec', TENTATIVE: 'ten', DELEGATED: 'del' })[p.status] || 'nee';
+  const peRole = p => { const r = PT.tRoles.split('|'); return p.role === 'ORGANIZER' ? r[0] : { CHAIR: r[1], 'REQ-PARTICIPANT': r[2], 'OPT-PARTICIPANT': r[3], 'NON-PARTICIPANT': r[4] }[p.role] || r[2]; };
+  const peType = p => { const t = PT.tTypes.split('|'); return { GROUP: t[0], ROOM: t[1], RESOURCE: t[2] }[p.cutype] || ''; };
+  const peAll = () => [...(PEOPLE.organizer ? [{ ...PEOPLE.organizer, role: 'ORGANIZER' }] : []), ...PEOPLE.attendees];
+  const peName = p => p.name || p.email;
+  const peShort = uri => { const e = uri.replace(/^mailto:/i, ''); const q = peAll().find(x => x.email === e); return q ? peName(q).split(' ')[0] : e; };
+  const peDeleg = p => { const f = p.extra.find(x => x[0] === 'DELEGATED-FROM'), t = p.extra.find(x => x[0] === 'DELEGATED-TO'); return f ? PT.tFrom.replace('{n}', peShort(f[1])) : t ? PT.tTo.replace('{n}', peShort(t[1])) : ''; };
+  const peAv = p => { const ic = p.cutype === 'GROUP' ? 'i-users' : p.cutype === 'ROOM' ? 'i-room' : p.cutype === 'RESOURCE' ? 'i-res' : null; const ini = peName(p).split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'; const c = p.contacts && p.contacts.length === 1 ? p.contacts[0] : null;
+    return ic ? `<span class="pav none" title="${esc(peType(p))}"><svg class="ico"><use href="#${ic}"/></svg></span>` : c ? `<span class="pav" style="background:var(--c${c.color_index})" title="${esc(PT.tKnown)}">${esc(ini)}</span>` : `<span class="pav none" title="${esc(PT.tUnknown)}">${esc(ini)}</span>`; };
+  function peopleInit(organizer, attendees) { PEOPLE = { organizer: organizer || null, attendees: attendees || [] }; peopleRender(); }
+  function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $('#ed-people-detail').innerHTML = '';
+    $('#ed-people').innerHTML = all.map((p, i) => `<button class="pchip ${p.role === 'ORGANIZER' ? '' : peStatus(p)}" type="button" data-i="${i}" title="${esc(p.email)}">${peAv(p)}<span>${esc(peName(p))}</span>${p.role === 'ORGANIZER' ? `<small>${esc(PT.tOrgShort)}</small>` : p.role === 'OPT-PARTICIPANT' ? `<small>${esc(PT.tOptShort)}</small>` : ''}</button>`).join(''); }
+  function peopleDetail(i) { const p = peAll()[i]; const n = (p.contacts || []).length; const status = p.role === 'ORGANIZER' ? '' : `<span class="pst ${peStatus(p)}">${esc(statusText(p) || D.tStatus.split('|')[0])}</span>`;
+    $('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
+    $$('.pchip', PC).forEach(b => b.setAttribute('aria-expanded', b.dataset.i === String(i))); }
+  PC.addEventListener('click', e => { const chip = e.target.closest('.pchip'); const act = e.target.closest('[data-pact]');
+    if (chip) { const i = +chip.dataset.i; const open = chip.getAttribute('aria-expanded') === 'true'; if (open) { $('#ed-people-detail').innerHTML = ''; chip.setAttribute('aria-expanded', 'false'); } else peopleDetail(i); return; }
+    if (!act) return; const p = peAll()[+$('.pchip[aria-expanded=true]', PC).dataset.i];
+    if (act.dataset.pact === 'mail') location.href = 'mailto:' + p.email;
+    else if (act.dataset.pact === 'copy') navigator.clipboard.writeText(p.email).then(() => { act.title = D.tCopied; act.style.color = 'var(--accent)'; setTimeout(() => act.style.color = '', 800); });
+    else if (p.contacts.length === 1) location.href = '/contacts#' + p.contacts[0].key;
+    else rrPop(act, [], null, key => { location.href = '/contacts#' + key; }, `<div class="q">${esc(PT.tPick)}</div>` + p.contacts.map(c => `<button type="button" class="pk" data-v="${esc(c.key)}"><span class="pav" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></button>`).join('')); });
   // links: URL / attachment / conference; an embedded (binary) attachment is shown read-only and never re-sent
   const addLink = l => { const r = addRow('links'); r._orig = l; w(r, 'kind').value = l.kind || 'url'; w(r, 'uri').value = l.uri || ''; w(r, 'label').value = l.embedded ? D.tEmbedded + (l.label ? ' · ' + l.label : '') : (l.label || ''); if (l.embedded) { w(r, 'uri').placeholder = ''; $$('input, select, .rm', r).forEach(x => x.disabled = true); $('[data-act=open]', r).hidden = true; } return r; };
   const linksOf = () => rows('links').filter(r => !(r._orig || {}).embedded).map(r => ({ ...(r._orig || { extra: [] }), embedded: false, kind: w(r, 'kind').value, uri: w(r, 'uri').value.trim(), label: w(r, 'label').value.trim() })).filter(l => l.uri);
@@ -571,7 +597,7 @@
   // popovers for the pills: a list of choices or a number entry
   let rrOpenPop = null; const rrClosePop = () => { if (rrOpenPop) { rrOpenPop.remove(); rrOpenPop = null; document.removeEventListener('click', rrOutside, true); } };
   function rrOutside(e) { if (rrOpenPop && !rrOpenPop.contains(e.target)) rrClosePop(); }
-  function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); p.style.left = `${r.left + scrollX}px`; p.style.top = `${r.bottom + scrollY + 4}px`; document.body.appendChild(p); rrOpenPop = p; p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
+  function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); document.body.appendChild(p); const box = anchor.closest('.box'); const maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; p.style.left = `${Math.max(8, Math.min(r.left, maxRight - p.offsetWidth)) + scrollX}px`; p.style.top = `${r.bottom + scrollY + 4}px`; rrOpenPop = p; /* kept inside the dialog box */ p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
   function rrAskNumber(anchor, label, value, on) { const p = rrPop(anchor, [], null, () => {}, `<div class="q">${esc(label)}</div><input type="number" min="1" max="999" value="${value}"><button type="button" class="ok">${esc(RT.tApply)}</button>`); const i = $('input', p); i.focus(); i.select(); const ok = () => { const n = +i.value; if (n >= 1) on(n); rrClosePop(); }; i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } }; $('.ok', p).onclick = ok; }
   const rrSet = () => { rrRender(); refresh(); };
   // a short eased glide of a scroll container (200–420 ms); any input stops it
@@ -668,7 +694,7 @@
   addEventListener('keydown', e => { if (e.key === 'Escape' && rrPicking && !ed.hidden) { e.stopImmediatePropagation(); rrPicking = false; rrRender(); } }, true);
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
-  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.tags .chip', card) || $$('.rows .row', card).length > 0;
+  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.tags .chip, .pchips .pchip', card) || $$('.rows .row', card).length > 0;
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
@@ -691,12 +717,12 @@
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
-      alarmsInit(d.alarms); if (d.organizer) addPerson(d.organizer, 'ORGANIZER'); d.attendees.forEach(p => addPerson(p, p.role || 'REQ-PARTICIPANT'));
+      alarmsInit(d.alarms); peopleInit(d.organizer, d.attendees);
       rrInit(d.rrule, d.rrule_until, d.exdates, d.rdates);
       f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); d.links.forEach(addLink); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
       $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); $('#ed-hint').textContent = '';
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
@@ -711,9 +737,9 @@
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } refresh(); });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
-    if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : l === 'people' ? addPerson({ name: '', email: '', status: '', cutype: '', extra: [] }, rows('people').length ? 'REQ-PARTICIPANT' : 'ORGANIZER') : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
+    if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
-    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
+    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
     if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
@@ -739,8 +765,7 @@
     const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00';
     const endDate = f.end_date.value || f.date.value;
     const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
-    const people = peopleOf();
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: people.organizer, attendees: people.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), links: linksOf(), timezone: root.dataset.tz, etag: f.etag.value };
+    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: PEOPLE.organizer, attendees: PEOPLE.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), links: linksOf(), timezone: root.dataset.tz, etag: f.etag.value };
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });

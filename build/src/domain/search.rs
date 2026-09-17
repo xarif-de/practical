@@ -33,14 +33,7 @@ pub struct EventHit {
     pub cal_name: String,
 }
 
-#[derive(Debug, serde::Serialize)]
-pub struct ContactHit {
-    pub key: String,
-    pub name: String,
-    pub sub: String,
-    pub initials: String,
-    pub color_index: usize,
-}
+pub use crate::domain::contacts::ContactHit;
 
 const MONTHS_DE: [&str; 12] = ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "dezember"];
 const MONTHS_EN: [&str; 12] = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -128,7 +121,7 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
         for c in contacts::contacts_for(state, &abs).await? {
             if c.full_name.to_lowercase().contains(&ql) || c.org.to_lowercase().contains(&ql) || c.primary_email().to_lowercase().contains(&ql) {
                 let sub = if !c.birthday.is_empty() { format!("🎂 {}", c.birthday_label()) } else if !c.org.is_empty() { c.org.clone() } else { c.category() };
-                ct_hits.push(ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index() });
+                ct_hits.push(ContactHit::of(&c, sub));
                 if ct_hits.len() >= 6 {
                     break;
                 }

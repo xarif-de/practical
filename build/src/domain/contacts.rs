@@ -312,6 +312,50 @@ pub fn contact_from(vc: &VcardContact, raw: &[RawLine], ab: &AbInfo, object_id: 
     }
 }
 
+/// A contact as a search hit or as the address-book entry behind an ORGANIZER/ATTENDEE.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ContactHit {
+    pub key: String,
+    pub name: String,
+    pub sub: String,
+    pub initials: String,
+    pub color_index: usize,
+}
+
+impl ContactHit {
+    pub fn of(c: &Contact, sub: String) -> Self {
+        ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index() }
+    }
+}
+
+/// Address-book entries that look like this ORGANIZER/ATTENDEE. An exact e-mail match wins; without one
+/// the names are compared: equal, or same family name with given names equal or one a prefix of the
+/// other ("Max" ~ "Maximilian"). A single-word name never matches (it would hit every namesake); rooms
+/// and resources are never matched. At most five hits, the caller offers a choice when there are several.
+pub fn matches(all: &[Contact], name: &str, email: &str, cutype: &str) -> Vec<ContactHit> {
+    if matches!(cutype, "ROOM" | "RESOURCE") {
+        return vec![];
+    }
+    let sub = |c: &Contact| { let e = c.primary_email(); if !e.is_empty() { e } else { c.org.clone() } };
+    let email = email.trim().to_lowercase();
+    if !email.is_empty() {
+        let by_mail: Vec<ContactHit> = all.iter().filter(|c| c.emails.iter().any(|e| e.value.trim().eq_ignore_ascii_case(&email))).map(|c| ContactHit::of(c, sub(c))).collect();
+        if !by_mail.is_empty() {
+            return by_mail;
+        }
+    }
+    let toks = |s: &str| s.to_lowercase().split(|ch: char| !ch.is_alphanumeric()).filter(|t| t.len() >= 2).map(str::to_string).collect::<Vec<_>>();
+    let n = toks(name);
+    let Some((n_last, n_given)) = n.split_last() else { return vec![] };
+    let Some(n_first) = n_given.first() else { return vec![] };
+    let similar = |c: &Contact| {
+        let full = toks(&c.full_name);
+        let Some((c_last, c_given)) = full.split_last() else { return false };
+        full == n || (c_last == n_last && c_given.first().is_some_and(|c_first| c_first.starts_with(n_first.as_str()) || n_first.starts_with(c_first.as_str())))
+    };
+    all.iter().filter(|c| similar(c)).take(5).map(|c| ContactHit::of(c, sub(c))).collect()
+}
+
 pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Contact>> {
     let mut out = vec![];
     for ab in abs {
@@ -531,6 +575,23 @@ pub async fn delete_contact(state: &AppState, user: &Principal, principal: &str,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn person_matches_address_book() {
+        let c = |id: &str, name: &str, mail: &str| Contact { principal: "p".into(), ab_id: "a".into(), object_id: id.into(), full_name: name.into(), emails: if mail.is_empty() { vec![] } else { vec![Typed { kind: "home".into(), value: mail.into(), pref: false }] }, ..Default::default() };
+        let all = vec![c("1", "Erika Musterfrau", "erika@example.org"), c("2", "Max Mustermann", "max.mustermann@firma.de"), c("3", "Maximilian Mustermann", "mm@example.org"), c("4", "Max Müller", ""), c("5", "Thomas Steinbach", "Thomas@Example.org")];
+        let keys = |v: Vec<ContactHit>| v.into_iter().map(|h| h.key).collect::<Vec<_>>();
+        // e-mail wins, case-insensitively, even when the name differs
+        assert_eq!(keys(matches(&all, "T. Steinbach", "thomas@example.org", "")), vec!["p/a/5"]);
+        assert_eq!(matches(&all, "Erika Musterfrau", "erika@example.org", "INDIVIDUAL")[0].sub, "erika@example.org");
+        // no e-mail hit: similar names, several candidates
+        assert_eq!(keys(matches(&all, "Max Mustermann", "max@example.org", "")), vec!["p/a/2", "p/a/3"]);
+        assert_eq!(keys(matches(&all, "Erika Musterfrau", "", "")), vec!["p/a/1"]);
+        // a lone first name, an unknown person, a room: nothing
+        assert!(matches(&all, "Max", "", "").is_empty());
+        assert!(matches(&all, "Lena Beispiel", "lena@example.org", "").is_empty());
+        assert!(matches(&all, "Max Mustermann", "max.mustermann@firma.de", "ROOM").is_empty());
+    }
 
     #[test]
     fn vcard_roundtrip() {

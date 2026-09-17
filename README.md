@@ -12,7 +12,7 @@ Week (stream), Month (tiles with continuous multi-day bars) and the "More" views
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
 presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),
-organizer and attendees, location with coordinates and map actions, status/busy/visibility/
+organizer and attendees as chips (display only, with a jump to the matching address-book entry), location with coordinates and map actions, status/busy/visibility/
 priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
@@ -83,6 +83,14 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
   VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
   series instances get the master's alarms (caldata builds them without VALARMs).
+- **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
+  would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
+  chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,
+  address, mail/copy actions). `GET /api/events/{key}` adds `contacts` to every person: the address-book
+  entries with the same e-mail, else a similar name (`contacts::matches`: same family name, given names
+  equal or one a prefix of the other; rooms and resources never match). One hit becomes a jump to
+  `/contacts#key`, several open a chooser. On save the persons go back unchanged, every parameter
+  included (RSVP, DELEGATED-*, MEMBER, SENT-BY, DIR, LANGUAGE, SCHEDULE-*, X-…).
 - **Reminders** (event card): the edit mode shows the alarms on a timeline strip (a marker follows
   the pointer and snaps to the user's snap points — settings, "Reminders: snap points" — each
   point owning an equal share of the strip), a row of preset chips

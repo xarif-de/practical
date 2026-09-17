@@ -401,6 +401,9 @@ pub struct Person {
     pub cutype: String,
     #[serde(default)]
     pub extra: Vec<(String, String)>,
+    /// address-book entries that look like this person (`contacts::matches`); output only
+    #[serde(default, skip_deserializing, skip_serializing_if = "Vec::is_empty")]
+    pub contacts: Vec<crate::domain::contacts::ContactHit>,
 }
 
 fn persons_of(props: &[String], name: &str) -> Vec<Person> {
