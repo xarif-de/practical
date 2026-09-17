@@ -879,6 +879,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .rr .rrbottom { padding-left: 26px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 34px; }
 .ed .cardform .rr .pillbtn { all: unset; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 12.5px; background: var(--bg); color: var(--fg); }
 .ed .cardform .rr .pillbtn.ghost { border-style: dashed; color: var(--fg-3); }
+.ed .cardform .rr .pillbtn:disabled { cursor: default; opacity: .6; }
 .ed .cardform .rr .rrmode { padding: 8px 0 2px 26px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--fg-3); }
 .ed .cardform .rr .pickmsg { margin: 4px 0 8px 26px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--c4) 18%, transparent); color: var(--fg); font-size: 13px; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 .ed .cardform .rr .pickmsg .btn { grid-column: 2; justify-self: end; padding: 4px 10px; font-size: 13px; } /* the narrow card: the button goes under the text */

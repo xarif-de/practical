@@ -240,6 +240,7 @@ ed-rr-custom-hint = Diese Regel hat Teile, die der Kalender nicht malen kann. Si
 ed-rr-each = jeden Tag|jede Woche|jeden Monat|jedes Jahr
 ed-rr-in = im
 ed-rr-ord = ersten|zweiten|dritten|vierten|letzten
+ed-rr-interval = Intervall
 ed-rr-no-end = ohne Ende
 ed-rr-count-q = Wie oft insgesamt?
 ed-rr-int-q = Alle wie viele { $u }?

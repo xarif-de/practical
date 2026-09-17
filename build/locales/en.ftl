@@ -240,6 +240,7 @@ ed-rr-custom-hint = This rule has parts the calendar cannot paint. It is kept as
 ed-rr-each = every day|every week|every month|every year
 ed-rr-in = in
 ed-rr-ord = first|second|third|fourth|last
+ed-rr-interval = Interval
 ed-rr-no-end = no end
 ed-rr-count-q = How many times in total?
 ed-rr-int-q = Every how many { $u }?

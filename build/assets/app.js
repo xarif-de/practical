@@ -592,6 +592,7 @@
     const isRaw = RR.freq === 'RAW';
     rrBox.insertAdjacentHTML('beforeend', `<div class="rrsegs"><span class="seg" data-w="freq">${[''].concat(RR_FREQS).map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${RR.freq === v}" title="${esc(longs[i])}">${esc(freqs[i])}</button>`).join('')}${isRaw ? `<button type="button" data-v="RAW" aria-pressed="true" title="${esc(RT.tCustom)}">${esc(RT.tCustomShort)}</button>` : ''}</span></div>`);
     $('[data-w=freq]', rrBox).onclick = e => { const b = e.target.closest('button'); if (!b) return; RR.freq = b.dataset.v; if (RR.freq === 'WEEKLY' && !RR.byday.length) RR.byday = [DAYS[rrWd(s0)]]; rrSet(); };
+    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled>${esc(RT.tInterval)}</button><button class="pillbtn ghost" type="button" disabled>${esc(RT.tEnd)}</button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
     if (RR.freq && !isRaw) {
       const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
       const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
