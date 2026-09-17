@@ -264,10 +264,132 @@
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
   const w = (row, k) => $(`[data-w=${k}]`, row);
   const setSel = (sel, v, unit = '') => { v = String(v); if (![...sel.options].some(o => o.value === v)) sel.add(new Option(v + unit, v)); sel.value = v; };
-  // reminders: minutes before start | before end | at a time; audio/mail and repeats are shown, extra lines ride along in the row's original
-  const alarmText = a => { let t; if (a.at) t = fmtDT(a.at); else if (a.minutes === 0) t = D.tAt0; else { const m = Math.abs(a.minutes); t = m === 1440 ? D.tDay : m === 60 ? D.tHour : m % 1440 === 0 ? D.tDays.replace('{n}', m / 1440) : m % 60 === 0 ? D.tHours.replace('{n}', m / 60) : D.tMin.replace('{n}', m); t += ' ' + (a.related_end ? D.tBeforeEnd : D.tBefore); } const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
-  const addAlarm = a => { const r = addRow('alarms'); r._orig = a; setSel(w(r, 'min'), a.minutes, ' min'); w(r, 'rel').value = a.at ? 'at' : a.related_end ? 'end' : 'start'; w(r, 'at').value = a.at ? a.at.slice(0, 16) : ''; w(r, 'at').hidden = !a.at; w(r, 'act').value = a.action || 'DISPLAY'; w(r, 'text').value = a.description && a.description !== f.summary.value ? a.description : ''; $('.txt', r).textContent = alarmText(a); return r; };
-  const alarmsOf = () => rows('alarms').map(r => { const rel = w(r, 'rel').value; return { ...(r._orig || { idx: null, repeat: 0, duration_minutes: 0 }), action: w(r, 'act').value, minutes: +w(r, 'min').value, related_end: rel === 'end', at: rel === 'at' && w(r, 'at').value ? w(r, 'at').value + ':00' : null, description: w(r, 'text').value.trim() }; });
+  // ---- reminders (design K): a model of alarms rendered as a timeline strip (markers snap to the
+  // usual offsets), a bar of per-user preset chips (a click adds or removes the matching alarm) and
+  // one expandable entry per alarm whose settings follow the chosen kind and trigger. The model is
+  // mirrored into the hidden `alarms_json` input so dirty tracking and reset work like for any field. ----
+  const AL = $('#ed-alarm-card'), AT = AL.dataset, alBox = $('[data-list="alarms"]', AL), tline = $('#ed-tline'), apre = $('#ed-apre');
+  let ALARMS = [], alSeq = 0;
+  const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-bell', AUDIO: '#i-sound', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
+  const SNAP_START = [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], SNAP_END_ALL = [5, 10, 15, 30, 60], AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months
+  const DEFAULT_PRESETS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880, 10080].map(m => ({ action: 'DISPLAY', minutes: m, related_end: false, repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '' }));
+  let PRESETS = (() => { try { const p = JSON.parse($('#alarm-presets-data').textContent || 'null'); return Array.isArray(p) ? p : DEFAULT_PRESETS; } catch (_) { return DEFAULT_PRESETS; } })();
+  const newAlarm = o => ({ idx: null, action: 'DISPLAY', minutes: 15, related_end: false, at: null, description: '', summary: '', repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '', acknowledged: null, ...o, _id: ++alSeq });
+  // a preset is the setting without text, subject and acknowledgement; an absolute trigger cannot be one
+  const presetSig = a => a.at ? null : JSON.stringify([!!a.related_end, a.minutes, a.action, a.repeat, a.duration_minutes, a.proximity || '', a.attach || '', [...(a.attendees || [])].sort()]);
+  const fromPreset = p => newAlarm({ action: p.action, minutes: p.minutes, related_end: !!p.related_end, repeat: p.repeat || 0, duration_minutes: p.duration_minutes || 0, attendees: [...(p.attendees || [])], attach: p.attach || '', proximity: p.proximity || '' });
+  const matchesPreset = a => !a.at && PRESETS.some(p => presetSig(p) === presetSig(a));
+  async function savePresets() { try { const r = await fetch('/api/alarm-presets', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(PRESETS) }); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
+  const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return m === 10080 ? AT.tWeek : AT.tWeeks.replace('{n}', m / 10080); if (m && m % 1440 === 0) return m === 1440 ? D.tDay : D.tDays.replace('{n}', m / 1440); if (m && m % 60 === 0) return m === 60 ? D.tHour : D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
+  const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
+  const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
+  const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; if (a.acknowledged) t += ' · ' + AT.tAcked; return t; };
+  const extrasOf = a => [a.repeat > 0 ? D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : '') : '', proxText(a), a.action === 'EMAIL' ? (a.attendees.length ? AT.tToTxt + ' ' + a.attendees.join(', ') : AT.tToMissing) : '', a.acknowledged ? AT.tAcked : '', a.description ? '„' + a.description + '“' : ''].filter(Boolean).join(' · ');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const alIco = id => `<svg class="ico" aria-hidden="true"><use href="${id}"/></svg>`;
+  const unitOf = m => { m = Math.abs(m); for (const u of [...AL_UNITS].reverse()) if (m && m % u === 0) return u; return 1; };
+  const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
+  // the event on the strip: start and length in minutes from the "when" card
+  const evStart = () => new Date((f.date.value || today) + 'T' + (f.all_day.checked ? '00:00' : (f.from.value || '00:00')) + ':00');
+  const evLen = () => { const s = evStart(); const e = f.all_day.checked ? new Date(nextDay(f.end_date.value || f.date.value || today) + 'T00:00:00') : new Date((f.end_date.value || f.date.value || today) + 'T' + (f.to.value || f.from.value || '00:00') + ':00'); return Math.max(1, Math.round((e - s) / 60000)); };
+  const minutesBefore = a => a.at ? Math.round((evStart() - new Date(a.at)) / 60000) : a.related_end ? a.minutes - evLen() : a.minutes;
+  // axis: a concave scale (minutes^0.35) — small offsets sit close to the event, larger ones spread out
+  const AL_P = 0.35, EV0 = 0.72, EV1 = 0.97, SPAN = 20160;
+  const xs = m => EV0 * (1 - Math.pow(Math.min(m, SPAN) / SPAN, AL_P));
+  const xe = (e, len) => EV1 - (EV1 - EV0) * Math.pow(Math.min(e, len) / len, AL_P);
+  const alCands = () => { const len = evLen(); const ends = SNAP_END_ALL.filter(m => m < len); return [...SNAP_START].reverse().map(m => ({ related_end: false, minutes: m, x: xs(m) })).concat([{ related_end: false, minutes: 0, x: EV0 }], [...ends].reverse().map(m => ({ related_end: true, minutes: m, x: xe(m, len) })), [{ related_end: true, minutes: 0, x: EV1 }]); };
+  const xa = a => { const len = evLen(), mb = minutesBefore(a); if (mb >= 0) return xs(mb); const e = len + mb; return e <= 0 ? EV1 + 0.01 : xe(e, len); };
+  const snapX = f => alCands().reduce((b, c) => Math.abs(c.x - f) < Math.abs(b.x - f) ? c : b);
+  function alTimeline() {
+    if (!form.classList.contains('mode-edit') || AL.hidden) return;
+    const len = evLen(), color = $('#ed-dot').style.background || '';
+    let h = `<div class="axis"></div><div class="evb" style="left:${EV0 * 100}%;width:${(EV1 - EV0) * 100}%;--evc:${color}">${esc(AT.tEvent)}</div>`;
+    h += alCands().filter(c => c.minutes).map(c => `<i class="snap" style="left:${c.x * 100}%"></i>`).join('');
+    h += [5, 60, 1440, 10080].map(m => `<span class="tick" style="left:${xs(m) * 100}%">${esc(amount(m))}</span>`).join('');
+    tline.innerHTML = h;
+    const groups = new Map();
+    for (const a of ALARMS) { const k = Math.round(xa(a) * 1000); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); }
+    for (const [k, list] of groups) {
+      const g = document.createElement('div'); g.className = 'mkg'; g.style.left = `${k / 10}%`;
+      for (const a of list) {
+        const mk = document.createElement('div'); mk.className = `mk${a._open ? ' sel' : ''}${a.acknowledged ? ' ack' : ''}`; mk.title = alarmText(a); mk.innerHTML = `<span class="lab">${esc(whenText(a))}</span>${alIco(AL_ICO[a.action] || AL_ICO.DISPLAY)}`;
+        mk.onpointerdown = e => { e.preventDefault(); const rect = tline.getBoundingClientRect();
+          const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); if (c.related_end === a.related_end && c.minutes === a.minutes && !a.at) return; a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; ALARMS.forEach(x => x._open = x === a); alRender(); refresh(); };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); ALARMS.forEach(x => x._open = x === a); alRender(); refresh(); };
+          document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); };
+        g.appendChild(mk);
+      }
+      tline.appendChild(g);
+    }
+    void len;
+  }
+  const presetLabel = p => { const acts = D.tActs.split('|'); let t = !p.related_end && p.minutes > 0 ? amount(p.minutes) : whenText({ ...p, at: null, attendees: p.attendees || [] }); if (p.action === 'AUDIO') t += ' · ' + acts[1]; if (p.action === 'EMAIL') t += ' · ' + acts[2]; if (p.repeat) t += ` · ${p.repeat}×`; if (p.proximity) t += ' · ' + proxText(p); return t; };
+  function alPresets() {
+    const order = [...PRESETS].sort((p, q) => (!!p.related_end) - (!!q.related_end) || q.minutes - p.minutes);
+    apre.innerHTML = `<span class="lbl">${esc(AT.tPresets)}</span>` + order.map(p => { const sig = presetSig(p); return `<button type="button" data-sig="${esc(sig)}" aria-pressed="${ALARMS.some(a => presetSig(a) === sig)}">${p.action !== 'DISPLAY' ? alIco(AL_ICO[p.action]) : ''}${esc(presetLabel(p))}</button>`; }).join('');
+  }
+  apre.addEventListener('click', e => { const b = e.target.closest('button[data-sig]'); if (!b) return; const sig = b.dataset.sig; const ex = ALARMS.find(a => presetSig(a) === sig); if (ex) ALARMS = ALARMS.filter(a => a !== ex); else { const p = PRESETS.find(q => presetSig(q) === sig); if (p) ALARMS.push(fromPreset(p)); } alRender(); refresh(); });
+  // the settings of one entry: the fields follow the kind (text | sound | subject, message, recipients)
+  // and the trigger (number + unit for a relative one, date and time for an absolute one); "after …"
+  // only shows when the stored alarm already fires after its anchor (a valid but foreign setting)
+  function alDetails(a, row) {
+    const rels = AT.tRels.split('|'), units = AT.tUnits.split('|'), acts = D.tActs.split('|'), prox = AT.tProxVals.split('|');
+    const relv = a.at ? 'at' : (a.minutes < 0 ? 'after-' : 'before-') + (a.related_end ? 'end' : 'start');
+    const relOpts = [['before-start', rels[0]], ['before-end', rels[1]]].concat(a.minutes < 0 ? [['after-start', rels[2]], ['after-end', rels[3]]] : []).concat([['at', rels[4]]]);
+    const u = unitOf(a.minutes), isPreset = matchesPreset(a);
+    const d = $('.aldet', row);
+    d.innerHTML = `<span>${esc(AT.tWhen)}</span><span class="l"><span class="seg" data-w="rel">${relOpts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v === relv}">${esc(l)}</button>`).join('')}</span>${a.at ? `<input type="datetime-local" data-w="at" value="${esc((a.at || '').slice(0, 16))}">` : `<input type="text" inputmode="decimal" data-w="n" value="${fmtNum(Math.abs(a.minutes) / u)}"><select data-w="unit">${AL_UNITS.map((v, i) => `<option value="${v}" ${v === u ? 'selected' : ''}>${esc(units[i])}</option>`).join('')}</select>`}</span>
+      <span>${esc(AT.tKind)}</span><span class="seg" data-w="act">${AL_ACTS.map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${v === a.action}">${alIco(AL_ICO[v])} ${esc(acts[i])}</button>`).join('')}</span>
+      ${a.action === 'DISPLAY' ? `<span>${esc(AT.tText)}</span><input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">` : ''}
+      ${a.action === 'AUDIO' ? `<span>${esc(AT.tSound)}</span><input type="url" data-w="attach" value="${esc(a.attach)}" placeholder="${esc(AT.tSoundHint)}">` : ''}
+      ${a.action === 'EMAIL' ? `<span>${esc(AT.tSubject)}</span><input type="text" data-w="subject" value="${esc(a.summary)}" placeholder="${esc(AT.tTextHint)}"><span>${esc(AT.tBody)}</span><input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}"><span>${esc(AT.tTo)}</span><input type="text" data-w="to" value="${esc(a.attendees.join(', '))}" placeholder="${esc(AT.tToHint)}">` : ''}
+      <span>${esc(AT.tRepeat)}</span><span class="l"><select data-w="repeat">${[0, 1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === a.repeat ? 'selected' : ''}>${n ? n + '×' : esc(AT.tNever)}</option>`).join('')}</select>${a.repeat > 0 ? `<span class="muted small">${esc(AT.tEvery)}</span><select data-w="every">${[1, 5, 10, 15, 30, 60].map(n => `<option value="${n}" ${n === a.duration_minutes ? 'selected' : ''}>${esc(amount(n))}</option>`).join('')}</select>` : ''}</span>
+      <span>${esc(AT.tProx)}</span><select data-w="prox"><option value="">${esc(AT.tProxNone)}</option>${AL_PROX.map((v, i) => `<option value="${v}" ${v === a.proximity ? 'selected' : ''}>${esc(prox[i])}</option>`).join('')}</select>
+      <span>${esc(AT.tAck)}</span><label class="muted small"><input type="checkbox" data-w="ack" ${a.acknowledged ? 'checked' : ''}> ${esc(AT.tAckHint)}${a.acknowledged ? ' (' + esc(AT.tAckSince) + ' ' + esc(fmtDT(a.acknowledged)) + ')' : ''}</label>
+      <div class="foot"><button class="pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')} ${esc(isPreset ? AT.tPreset : AT.tPresetAdd)}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
+    const w = k => $(`[data-w=${k}]`, d);
+    w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'; } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
+    if (w('n')) { const apply = () => { const n = parseFloat(w('n').value.replace(',', '.')); if (isNaN(n) || n < 0) { w('n').classList.add('err'); return; } a.minutes = Math.sign(a.minutes || 1) * Math.round(n * +w('unit').value); alRender(); refresh(); }; w('n').onchange = apply; w('unit').onchange = apply; w('n').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }; }
+    if (w('at')) w('at').onchange = () => { if (w('at').value) { a.at = w('at').value + ':00'; alRender(); refresh(); } };
+    w('act').onclick = e => { const b = e.target.closest('button'); if (b) { a.action = b.dataset.v; alRender(); refresh(); } };
+    if (w('text')) w('text').oninput = () => { a.description = w('text').value; alSync(row, a); };
+    if (w('subject')) w('subject').oninput = () => { a.summary = w('subject').value; alSync(row, a); };
+    if (w('to')) w('to').onchange = () => { a.attendees = w('to').value.split(/[,;\s]+/).filter(Boolean); alRender(); refresh(); };
+    if (w('attach')) w('attach').onchange = () => { a.attach = w('attach').value.trim(); alRender(); refresh(); };
+    w('repeat').onchange = () => { a.repeat = +w('repeat').value; a.duration_minutes = a.repeat ? (a.duration_minutes || 10) : 0; alRender(); refresh(); };
+    if (w('every')) w('every').onchange = () => { a.duration_minutes = +w('every').value; alRender(); refresh(); };
+    w('prox').onchange = () => { a.proximity = w('prox').value; alRender(); refresh(); };
+    w('ack').onchange = () => { a.acknowledged = w('ack').checked ? new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19) : null; alRender(); refresh(); };
+    w('pset').onclick = () => { if (a.at) return; if (matchesPreset(a)) PRESETS = PRESETS.filter(p => presetSig(p) !== presetSig(a)); else { const { action, minutes, related_end, repeat, duration_minutes, attendees, attach, proximity } = a; PRESETS.push({ action, minutes, related_end, repeat, duration_minutes, attendees: [...attendees], attach, proximity }); } savePresets(); alRender(); };
+  }
+  // text edits update the row's summary and the mirror without rebuilding the entry (the field keeps its focus)
+  const alMirror = () => { f.alarms_json.value = JSON.stringify(ALARMS.map(({ _id, _open, ...a }) => a)); };
+  function alSync(row, a) { $('.txt', row).textContent = alarmText(a); $('.extra', row).textContent = extrasOf(a); alMirror(); refresh(); }
+  let alBusy = false;
+  function alRender() {
+    if (alBusy) return; alBusy = true; // a field inside a row commits on blur when its row is rebuilt; that nested render is skipped, the model is current anyway
+    try { alRenderNow(); } finally { alBusy = false; }
+  }
+  function alRenderNow() {
+    if (alBox.contains(document.activeElement)) document.activeElement.blur();
+    $$('.row', alBox).forEach(r => r.remove());
+    for (const a of ALARMS) {
+      const r = addRow('alarms'); r.classList.toggle('open', !!a._open); r._alarm = a;
+      $('.txt', r).textContent = alarmText(a); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a);
+      $('.pdot', r).classList.toggle('on', matchesPreset(a)); $('.act', r).setAttribute('aria-pressed', a._open ? 'true' : 'false');
+      const d = $('.aldet', r); d.hidden = !a._open; if (a._open) alDetails(a, r);
+    }
+    $('#ed-alarm-n').textContent = ALARMS.length ? `(${ALARMS.length})` : '';
+    alPresets(); alTimeline(); alMirror();
+  }
+  alBox.addEventListener('click', e => {
+    const b = e.target.closest('[data-al-open], [data-rm]'); if (!b) return; e.stopPropagation(); const row = b.closest('.row'), a = row && row._alarm; if (!a) return;
+    if (b.hasAttribute('data-rm')) ALARMS = ALARMS.filter(x => x !== a); else ALARMS.forEach(x => x._open = x === a ? !x._open : false);
+    alRender(); refresh();
+  });
+  function alarmsInit(list) { ALARMS = list.map(a => newAlarm({ ...a, attendees: [...(a.attendees || [])] })); alRender(); }
+  const alarmAdd = () => { const a = newAlarm(); ALARMS.forEach(x => x._open = false); a._open = true; ALARMS.push(a); alRender(); return $(`.row.open`, alBox); };
+  const alarmsOf = () => ALARMS.map(({ _id, _open, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
   const addPerson = (p, role) => { const r = addRow('people'); r._orig = p; w(r, 'role').value = role; w(r, 'name').value = p.name || ''; w(r, 'email').value = p.email || ''; $('.st', r).textContent = [statusText(p), p.cutype === 'RESOURCE' || p.cutype === 'ROOM' ? p.cutype.toLowerCase() : ''].filter(Boolean).join(' · '); return r; };
@@ -401,7 +523,7 @@
   function updateButtons() { const changed = serialize() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); syncRR(); grow(); updateButtons(); }
+  function refresh() { whenLine(); syncRR(); grow(); alTimeline(); updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
@@ -417,12 +539,12 @@
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
-      d.alarms.forEach(addAlarm); if (d.organizer) addPerson(d.organizer, 'ORGANIZER'); d.attendees.forEach(p => addPerson(p, p.role || 'REQ-PARTICIPANT'));
+      alarmsInit(d.alarms); if (d.organizer) addPerson(d.organizer, 'ORGANIZER'); d.attendees.forEach(p => addPerson(p, p.role || 'REQ-PARTICIPANT'));
       setRR(d.rrule, d.rrule_until); d.exdates.forEach(x => addDate('exdates', x)); d.rdates.forEach(x => addDate('rdates', x));
       f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); d.links.forEach(addLink); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
       $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); setRR('', ''); setColor(''); $('#ed-hint').textContent = '';
+      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); setRR('', ''); setColor(''); alarmsInit([]); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
@@ -434,13 +556,13 @@
     ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
   form.addEventListener('input', refresh);
-  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t.dataset.w === 'rel') w(t.closest('.row'), 'at').hidden = t.value !== 'at'; refresh(); });
+  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } refresh(); });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
-    if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? addAlarm({ idx: null, action: 'DISPLAY', minutes: 15, related_end: false, at: null, description: '', repeat: 0, duration_minutes: 0 }) : l === 'people' ? addPerson({ name: '', email: '', status: '', cutype: '', extra: [] }, rows('people').length ? 'REQ-PARTICIPANT' : 'ORGANIZER') : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
+    if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : l === 'people' ? addPerson({ name: '', email: '', status: '', cutype: '', extra: [] }, rows('people').length ? 'REQ-PARTICIPANT' : 'ORGANIZER') : l === 'links' ? addLink({ kind: rows('links').some(r => w(r, 'kind').value === 'url') ? 'attach' : 'url', uri: '', label: '', embedded: false, extra: [] }) : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'people') $('[data-add=people]', c).click(); else if (b.dataset.cardAdd === 'links') $('[data-add=links]', c).click(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }

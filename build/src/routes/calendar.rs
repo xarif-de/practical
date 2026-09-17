@@ -46,6 +46,8 @@ pub struct CalendarPage {
     pub view_label: String,
     pub in_more: bool,
     pub presets_json: String,
+    /// reminder presets of the event editor; `null` = the editor's defaults
+    pub alarm_presets_json: String,
 }
 
 #[derive(Template)]
@@ -154,6 +156,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         view_label,
         in_more,
         presets_json: p.presets_json.unwrap_or_else(|| "[]".into()),
+        alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
     }
     .into_response())
 }

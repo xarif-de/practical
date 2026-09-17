@@ -510,8 +510,8 @@ fn normalize_until(rrule: &str, all_day: bool, tz: chrono_tz::Tz) -> String {
 }
 
 /// One VALARM as the editor sees it. `idx` is the alarm's position in the stored object: on
-/// save the lines the editor does not model (UID, ACKNOWLEDGED, PROXIMITY, ATTACH, ATTENDEE,
-/// X-…) are copied from that alarm; a new alarm has none.
+/// save the lines the editor does not model (UID, RELATED-TO, binary ATTACH, an EMAIL's
+/// attachments, VLOCATION, X-…) are copied from that alarm; a new alarm has none.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Alarm {
     #[serde(default)]
@@ -528,13 +528,69 @@ pub struct Alarm {
     /// absolute trigger in the user's zone (TRIGGER;VALUE=DATE-TIME); wins over `minutes`
     #[serde(default)]
     pub at: Option<NaiveDateTime>,
+    /// DESCRIPTION: the text shown (DISPLAY) or the mail body (EMAIL); empty = the event's title
     #[serde(default)]
     pub description: String,
+    /// SUMMARY: the mail subject (EMAIL only); empty = the event's title
+    #[serde(default)]
+    pub summary: String,
     /// DURATION/REPEAT pair: repeat the alarm `repeat` more times every `duration_minutes`
     #[serde(default)]
     pub repeat: i64,
     #[serde(default)]
     pub duration_minutes: i64,
+    /// ATTENDEE mail addresses (EMAIL only)
+    #[serde(default)]
+    pub attendees: Vec<String>,
+    /// ATTACH: the sound's URI (AUDIO only); binary and EMAIL attachments are preserved, not edited
+    #[serde(default)]
+    pub attach: String,
+    /// PROXIMITY (RFC 9074): ARRIVE | DEPART | CONNECT | DISCONNECT, empty = none
+    #[serde(default)]
+    pub proximity: String,
+    /// ACKNOWLEDGED (RFC 9074) in the user's zone: the alarm was dismissed at that time
+    #[serde(default)]
+    pub acknowledged: Option<NaiveDateTime>,
+}
+
+/// Preset of a reminder setting, kept per user (`xui_user_settings.alarm_presets_json`): the
+/// same shape as `Alarm` without idx, text, subject and acknowledgement — those belong to one event.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct AlarmPreset {
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub minutes: i64,
+    #[serde(default)]
+    pub related_end: bool,
+    #[serde(default)]
+    pub repeat: i64,
+    #[serde(default)]
+    pub duration_minutes: i64,
+    #[serde(default)]
+    pub attendees: Vec<String>,
+    #[serde(default)]
+    pub attach: String,
+    #[serde(default)]
+    pub proximity: String,
+}
+
+pub const PROXIMITY: &[&str] = &["ARRIVE", "DEPART", "CONNECT", "DISCONNECT"];
+
+/// Rejects a preset list that could not have come from the editor (bounds the stored JSON, too).
+pub fn validate_presets(list: &[AlarmPreset]) -> AppResult<()> {
+    if list.len() > 50 {
+        return Err(AppError::BadRequest("too many presets".into()));
+    }
+    for p in list {
+        if one_of(&p.action, &["DISPLAY", "AUDIO", "EMAIL"]).is_none() || (!p.proximity.is_empty() && one_of(&p.proximity, PROXIMITY).is_none()) {
+            return Err(AppError::BadRequest("invalid preset".into()));
+        }
+        if p.minutes.abs() > 366 * 1440 || p.repeat < 0 || p.repeat > 100 || p.duration_minutes < 0 || p.attach.len() > 1000 || p.attendees.len() > 20 {
+            return Err(AppError::BadRequest("invalid preset".into()));
+        }
+    }
+    Ok(())
 }
 
 // ---- raw access to the stored object: whatever the editor does not model survives a save ----
@@ -558,7 +614,7 @@ fn is_managed(line: &str) -> bool {
     }
     MANAGED.contains(&name.as_str())
 }
-const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT"];
+const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT", "PROXIMITY", "ACKNOWLEDGED"];
 
 fn prop_name(line: &str) -> String {
     line.split([';', ':']).next().unwrap_or("").to_ascii_uppercase()
@@ -613,6 +669,7 @@ pub fn split_ics(ics: &str) -> (RawMaster, Vec<String>) {
 
 fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Alarm {
     let mut a = Alarm { idx: Some(idx), action: "DISPLAY".into(), ..Default::default() };
+    let mut attach = String::new(); // the first non-binary ATTACH; it is the sound only for AUDIO (ACTION may follow it)
     for l in lines {
         let (name, params, value) = ical::split_line(l);
         let param = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.to_ascii_uppercase());
@@ -629,13 +686,38 @@ fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Alarm {
                 }
             }
             "DESCRIPTION" => a.description = ical::unescape(&value),
-            "SUMMARY" if a.description.is_empty() => a.description = ical::unescape(&value),
+            "SUMMARY" => a.summary = ical::unescape(&value),
             "DURATION" => a.duration_minutes = parse_duration(&value).map(|d| d.num_minutes()).unwrap_or(0),
             "REPEAT" => a.repeat = value.trim().parse().unwrap_or(0),
+            "ATTENDEE" => a.attendees.push(value.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:").to_string()),
+            "ATTACH" if attach.is_empty() && !is_binary_attach(&params) => attach = value.trim().to_string(),
+            "PROXIMITY" => a.proximity = one_of(&value, PROXIMITY).unwrap_or("").to_string(),
+            "ACKNOWLEDGED" => {
+                if let Ok(utc) = NaiveDateTime::parse_from_str(value.trim().trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
+                    a.acknowledged = Some(chrono::Utc.from_utc_datetime(&utc).with_timezone(&tz).naive_local());
+                }
+            }
             _ => {}
         }
     }
+    if a.action == "AUDIO" {
+        a.attach = attach;
+    }
     a
+}
+
+/// A stored VALARM line `build_valarm` rewrites for this alarm: the managed set, ATTENDEEs of an
+/// EMAIL alarm and the (non-binary) sound of an AUDIO alarm; an EMAIL's attachments stay verbatim.
+fn alarm_line_managed(line: &str, action: &str) -> bool {
+    let name = prop_name(line);
+    match name.as_str() {
+        "ATTENDEE" => action == "EMAIL",
+        "ATTACH" => {
+            let (_, params, _) = ical::split_line(line);
+            action == "AUDIO" && !is_binary_attach(&params)
+        }
+        _ => ALARM_MANAGED.contains(&name.as_str()),
+    }
 }
 
 fn fmt_trigger_offset(minutes: i64) -> String {
@@ -660,15 +742,33 @@ fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz: chrono_tz
     if action != "AUDIO" {
         l.push(format!("DESCRIPTION:{}", ical::escape(text)));
     }
+    let src = a.idx.and_then(|i| raw.and_then(|r| r.alarms.get(i)));
     if action == "EMAIL" {
-        l.push(format!("SUMMARY:{}", ical::escape(text)));
+        let subject = if a.summary.trim().is_empty() { summary } else { a.summary.trim() };
+        l.push(format!("SUMMARY:{}", ical::escape(subject)));
+        for m in a.attendees.iter().map(|m| m.trim()).filter(|m| m.contains('@')) {
+            // the stored line keeps its parameters (CN, …) while the address is unchanged
+            let kept = src.and_then(|s| s.iter().find(|x| prop_name(x) == "ATTENDEE" && ical::split_line(x).2.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:") == m));
+            l.push(kept.cloned().unwrap_or_else(|| format!("ATTENDEE:mailto:{m}")));
+        }
+    }
+    if action == "AUDIO" && !a.attach.trim().is_empty() {
+        let uri = a.attach.trim();
+        let kept = src.and_then(|s| s.iter().find(|x| prop_name(x) == "ATTACH" && ical::split_line(x).2.trim() == uri));
+        l.push(kept.cloned().unwrap_or_else(|| format!("ATTACH:{uri}"))); // a kept line carries its FMTTYPE
     }
     if a.repeat > 0 && a.duration_minutes > 0 {
         l.push(format!("DURATION:{}", fmt_trigger_offset(-a.duration_minutes)));
         l.push(format!("REPEAT:{}", a.repeat));
     }
-    if let Some(src) = a.idx.and_then(|i| raw.and_then(|r| r.alarms.get(i))) {
-        l.extend(src.iter().filter(|x| !ALARM_MANAGED.contains(&prop_name(x).as_str())).cloned());
+    if let Some(p) = one_of(&a.proximity, PROXIMITY) {
+        l.push(format!("PROXIMITY:{p}"));
+    }
+    if let Some(ack) = a.acknowledged {
+        l.push(format!("ACKNOWLEDGED:{}", ical::to_utc(ack, tz).format("%Y%m%dT%H%M%SZ")));
+    }
+    if let Some(src) = src {
+        l.extend(src.iter().filter(|x| !alarm_line_managed(x, action)).cloned());
     }
     l.push("END:VALARM".into());
     l
@@ -1067,6 +1167,40 @@ mod tests {
         assert!(flat.contains("ATTACH;FMTTYPE=text/plain;ENCODING=BASE64;VALUE=BINARY:SGFsbG8gRGVtbyE=") && flat.contains("GEO:51.050407;13.737262") && flat.contains("COLOR:tomato"), "{flat}");
         assert_eq!(flat.matches("\nURL:").count(), 1);
         assert_eq!(main.expand_recurrence(None, None, overrides).len(), 6, "5 rule instances after the exclusion + the RDATE");
+    }
+
+    #[test]
+    fn alarm_fields_round_trip() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let ics = include_str!("../../tests/fixtures/demo-event-full.ics");
+        let (raw, _) = split_ics(ics);
+        let mut alarms: Vec<Alarm> = raw.alarms.iter().enumerate().map(|(n, a)| parse_alarm(n, a, tz)).collect();
+        // the fixture's fields land in the model
+        assert_eq!(alarms[2].attach, "https://example.org/ping.au");
+        assert_eq!((alarms[3].summary.as_str(), alarms[3].attendees.as_slice()), ("Erinnerung: Demo-Termin", &["thomas@example.org".to_string()][..]));
+        assert_eq!(alarms[4].proximity, "DEPART");
+        assert_eq!(alarms[1].acknowledged, NaiveDate::from_ymd_opt(2026, 9, 15).unwrap().and_hms_opt(19, 0, 0)); // 17:00Z in Berlin
+        // edited: a second recipient and a new subject, a new sound, a proximity change, an acknowledgement now
+        alarms[3].attendees.push("anna@example.org".into());
+        alarms[3].summary = "Neuer Betreff".into();
+        alarms[2].attach = "https://example.org/pong.au".into();
+        alarms[4].proximity = "ARRIVE".into();
+        alarms[0].acknowledged = NaiveDate::from_ymd_opt(2026, 9, 17).unwrap().and_hms_opt(14, 0, 0);
+        let out: Vec<String> = alarms.iter().flat_map(|a| build_valarm(a, "Titel", Some(&raw), tz)).collect();
+        let flat = out.join("\n");
+        assert!(flat.contains("ATTENDEE:mailto:thomas@example.org\nATTENDEE:mailto:anna@example.org"), "{flat}");
+        assert!(flat.contains("SUMMARY:Neuer Betreff") && flat.contains("DESCRIPTION:Morgen Abend im Kulturpalast."), "{flat}");
+        assert!(flat.contains("ATTACH:https://example.org/pong.au") && !flat.contains("ping.au"), "{flat}");
+        assert!(flat.contains("PROXIMITY:ARRIVE") && !flat.contains("DEPART"), "{flat}");
+        assert!(flat.contains("ACKNOWLEDGED:20260917T120000Z") && flat.contains("ACKNOWLEDGED:20260915T170000Z"), "{flat}");
+        assert_eq!(flat.matches("UID:demo-alarm-").count(), 2, "alarm UIDs ride along: {flat}");
+        // unchanged: the sound keeps its FMTTYPE, the edited alarm still parses to the same model
+        let kept: Vec<String> = build_valarm(&parse_alarm(2, &raw.alarms[2], tz), "Titel", Some(&raw), tz);
+        assert!(kept.iter().any(|l| l == "ATTACH;FMTTYPE=audio/basic:https://example.org/ping.au"), "{kept:?}");
+        let again = parse_alarm(0, &out[out.iter().position(|l| l == "BEGIN:VALARM").unwrap() + 1..out.iter().position(|l| l == "END:VALARM").unwrap()], tz);
+        assert_eq!((again.minutes, again.acknowledged), (15, alarms[0].acknowledged));
+        assert!(validate_presets(&[AlarmPreset { action: "EMAIL".into(), minutes: 30, ..Default::default() }]).is_ok());
+        assert!(validate_presets(&[AlarmPreset { action: "PROCEDURE".into(), ..Default::default() }]).is_err());
     }
 
     #[test]

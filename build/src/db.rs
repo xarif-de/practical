@@ -79,6 +79,11 @@ CREATE TABLE xui_holidays (
         // colour per address book — RustiCal's addressbooks table carries none (calendars do)
         "CREATE TABLE xui_addressbook_colors (principal TEXT NOT NULL, id TEXT NOT NULL, color TEXT NOT NULL, PRIMARY KEY (principal, id));",
     ),
+    (
+        4,
+        // reminder presets of the event editor, per user (NULL = the built-in defaults)
+        "ALTER TABLE xui_user_settings ADD COLUMN alarm_presets_json TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

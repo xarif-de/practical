@@ -10,8 +10,9 @@ calendar, contacts and tasks views.
 person or group · app tokens · trash with restore · calendar views Day (ledger + document),
 Week (stream), Month (tiles with continuous multi-day bars) and the "More" views Year planner,
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
-(view mode behind a lock, cards only where data is): several reminders per event (before start,
-before end, at a time), recurrence with interval, weekdays, end and exceptions/extra dates,
+(view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
+presets (before start, before end, at a time; display, sound or mail; repeats, location trigger,
+dismissed), recurrence with interval, weekdays, end and exceptions/extra dates,
 organizer and attendees, location with coordinates and map actions, status/busy/visibility/
 priority, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
@@ -83,6 +84,15 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
   VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
   series instances get the master's alarms (caldata builds them without VALARMs).
+- **Reminders** (event card): the edit mode shows the alarms on a timeline strip (markers snap to
+  the usual offsets, small ones close to the event, the far ones spread out), a row of preset chips
+  that add or remove the matching alarm with one click, and one expandable entry per alarm whose
+  fields follow the kind (text · sound file · subject, message, recipients) and the trigger (number +
+  unit, or date and time). The star in an entry saves its setting — without text, subject and
+  acknowledgement — as a preset; presets are per user (`xui_user_settings.alarm_presets_json`,
+  `/api/alarm-presets`), the built-in list applies until the user changes it. The editor writes
+  `ATTENDEE` (mail alarms), `ATTACH` (the sound of an audio alarm), `PROXIMITY` and `ACKNOWLEDGED`
+  (RFC 9074); "after start/end" appears only for an alarm that already fires after its anchor.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
@@ -95,7 +105,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   an identifying User-Agent, so it only answers the map dialog's button). Both go through the sidecar
   (`/api/geo/search`, `/api/geo/reverse`): it sends the User-Agent, throttles each provider to one
   request per second, caches answers for a week and keeps the users' IPs at home. The browser asks
-  only after an 800 ms typing pause (the ring in the field counts it down) or on a button. The map
+  only after a 2 s typing pause (the ring in the field counts it down) or on a button. The map
   dialog is Leaflet 1.9.4 (vendored, BSD-2, loaded on first use) with tiles from
   tile.openstreetmap.org, attribution shown as the tile policy requires.
 - **Holidays** come from `openholidaysapi.org` (`HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`, per-user

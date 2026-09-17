@@ -6,6 +6,7 @@ use crate::csrf;
 use crate::domain::contacts::{self, Contact, ContactInput};
 use crate::domain::events::{self, EventDetail, EventInput};
 use crate::domain::geo;
+use crate::domain::prefs;
 use crate::domain::search;
 use crate::domain::tasks::{self, TaskInput};
 use crate::error::{AppError, AppResult};
@@ -285,8 +286,25 @@ async fn geo_reverse(State(state): State<SharedState>, _user: Principal, ctx: cr
     geo::reverse(&state, q.lat, q.lon, &ctx.lang).await?.map(Json).ok_or(AppError::NotFound)
 }
 
+/// The user's reminder presets (event editor); `null` = not customised yet, the editor shows its defaults.
+async fn alarm_presets_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Option<Vec<events::AlarmPreset>>>> {
+    let p = prefs::get(&state.db, &user.id).await?;
+    Ok(Json(p.alarm_presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok())))
+}
+
+/// Replaces the user's reminder presets (the star in a reminder's settings toggles one).
+async fn alarm_presets_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(list): Json<Vec<events::AlarmPreset>>) -> AppResult<Json<Vec<events::AlarmPreset>>> {
+    check_csrf(&session, &headers).await?;
+    events::validate_presets(&list)?;
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    p.alarm_presets_json = Some(serde_json::to_string(&list).unwrap());
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(Json(list))
+}
+
 pub fn router() -> Router<SharedState> {
     Router::new()
+        .route("/api/alarm-presets", get(alarm_presets_get).put(alarm_presets_put))
         .route("/api/geo/search", get(geo_search))
         .route("/api/geo/reverse", get(geo_reverse))
         .route("/api/changes", get(changes))

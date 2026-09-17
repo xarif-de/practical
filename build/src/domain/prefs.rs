@@ -15,6 +15,8 @@ pub struct Prefs {
     pub presets_json: Option<String>,
     pub contact_columns_json: Option<String>,
     pub contact_list_fields_json: Option<String>,
+    /// reminder presets of the event editor (`Vec<events::AlarmPreset>` as JSON)
+    pub alarm_presets_json: Option<String>,
 }
 
 impl Prefs {
@@ -42,6 +44,7 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             presets_json: r.get("presets_json"),
             contact_columns_json: r.get("contact_columns_json"),
             contact_list_fields_json: r.get("contact_list_fields_json"),
+            alarm_presets_json: r.get("alarm_presets_json"),
         },
     })
 }
@@ -56,13 +59,14 @@ pub async fn get_lang(db: &SqlitePool, principal: &str) -> Result<Option<String>
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_subdivision, vacation_days, vacation_rule_json, presets_json, contact_columns_json, contact_list_fields_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_subdivision, vacation_days, vacation_rule_json, presets_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
            holiday_subdivision=excluded.holiday_subdivision, vacation_days=excluded.vacation_days,
            vacation_rule_json=excluded.vacation_rule_json, presets_json=excluded.presets_json,
-           contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json, updated_at=CURRENT_TIMESTAMP",
+           contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
+           alarm_presets_json=excluded.alarm_presets_json, updated_at=CURRENT_TIMESTAMP",
     )
     .bind(principal)
     .bind(&p.lang)
@@ -76,6 +80,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(&p.presets_json)
     .bind(&p.contact_columns_json)
     .bind(&p.contact_list_fields_json)
+    .bind(&p.alarm_presets_json)
     .execute(db)
     .await?;
     Ok(())
