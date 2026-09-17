@@ -297,16 +297,23 @@
   const AL_P = 0.35, EV0 = 0.72, EV1 = 0.97, SPAN = 20160;
   const xs = m => EV0 * (1 - Math.pow(Math.min(m, SPAN) / SPAN, AL_P));
   const xe = (e, len) => EV1 - (EV1 - EV0) * Math.pow(Math.min(e, len) / len, AL_P);
-  const alCands = () => { const len = evLen(); const ends = SNAP_END_ALL.filter(m => m < len); return [...SNAP_START].reverse().map(m => ({ related_end: false, minutes: m, x: xs(m) })).concat([{ related_end: false, minutes: 0, x: EV0 }], [...ends].reverse().map(m => ({ related_end: true, minutes: m, x: xe(m, len) })), [{ related_end: true, minutes: 0, x: EV1 }]); };
+  // snap points: the concave scale, then a minimum pixel gap pushed outwards from the event so the dots never overlap on a narrow card
+  const alCands = () => { const len = evLen(), ends = SNAP_END_ALL.filter(m => m < len), g = 9 / (tline.clientWidth || 600);
+    const starts = [{ related_end: false, minutes: 0, x: EV0 }].concat(SNAP_START.map(m => ({ related_end: false, minutes: m, x: xs(m) })));
+    for (let i = 1; i < starts.length; i++) starts[i].x = Math.min(starts[i].x, starts[i - 1].x - g);
+    const endsC = [{ related_end: true, minutes: 0, x: EV1 }].concat(ends.map(m => ({ related_end: true, minutes: m, x: xe(m, len) })));
+    for (let i = 1; i < endsC.length; i++) endsC[i].x = Math.max(EV0 + g, Math.min(endsC[i].x, endsC[i - 1].x - g));
+    return starts.reverse().concat(endsC.reverse()); };
   const xa = a => { const len = evLen(), mb = minutesBefore(a); if (mb >= 0) return xs(mb); const e = len + mb; return e <= 0 ? EV1 + 0.01 : xe(e, len); };
   const snapX = f => alCands().reduce((b, c) => Math.abs(c.x - f) < Math.abs(b.x - f) ? c : b);
   function alTimeline() {
     if (!form.classList.contains('mode-edit') || AL.hidden) return;
     const len = evLen(), color = $('#ed-dot').style.background || '';
-    let h = `<div class="axis"></div><div class="evb" style="left:${EV0 * 100}%;width:${(EV1 - EV0) * 100}%;--evc:${color}">${esc(AT.tEvent)}</div>`;
-    h += alCands().filter(c => c.minutes).map(c => `<i class="snap" style="left:${c.x * 100}%"></i>`).join('');
-    h += [5, 60, 1440, 10080].map(m => `<span class="tick" style="left:${xs(m) * 100}%">${esc(amount(m))}</span>`).join('');
+    let h = `<div class="axis"></div><div class="evb" style="left:${EV0 * 100}%;width:${(EV1 - EV0) * 100}%;--evc:${color}"></div>`;
+    const cx = alCands(); h += cx.filter(c => c.minutes).map(c => `<i class="snap" style="left:${c.x * 100}%"></i>`).join('');
+    h += [60, 1440, 10080].map(m => `<span class="tick" style="left:${cx.find(c => !c.related_end && c.minutes === m).x * 100}%">${esc(amount(m))}</span>`).join('');
     tline.innerHTML = h;
+    { let prev = null; for (const t of $$('.tick', tline).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)) { const r = t.getBoundingClientRect(); if (prev !== null && r.left < prev + 4) { t.remove(); continue; } prev = r.right; } } // left to right: a label that would run into its kept neighbour is dropped (narrow card)
     const groups = new Map();
     for (const a of ALARMS) { const k = Math.round(xa(a) * 1000); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); }
     for (const [k, list] of groups) {
@@ -336,18 +343,19 @@
   function alDetails(a, row) {
     const rels = AT.tRels.split('|'), units = AT.tUnits.split('|'), acts = D.tActs.split('|'), prox = AT.tProxVals.split('|');
     const relv = a.at ? 'at' : (a.minutes < 0 ? 'after-' : 'before-') + (a.related_end ? 'end' : 'start');
+    const REL_ICO = { 'before-start': '#i-al-bs', 'before-end': '#i-al-be', 'after-start': '#i-al-as', 'after-end': '#i-al-ae', at: '#i-today' };
     const relOpts = [['before-start', rels[0]], ['before-end', rels[1]]].concat(a.minutes < 0 ? [['after-start', rels[2]], ['after-end', rels[3]]] : []).concat([['at', rels[4]]]);
     const u = unitOf(a.minutes), isPreset = matchesPreset(a);
     const d = $('.aldet', row);
-    d.innerHTML = `<span>${esc(AT.tWhen)}</span><span class="l"><span class="seg small" data-w="rel">${relOpts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v === relv}">${esc(l)}</button>`).join('')}</span>${a.at ? `<input type="datetime-local" data-w="at" value="${esc((a.at || '').slice(0, 16))}">` : `<input type="text" inputmode="decimal" data-w="n" value="${fmtNum(Math.abs(a.minutes) / u)}"><select data-w="unit">${AL_UNITS.map((v, i) => `<option value="${v}" ${v === u ? 'selected' : ''}>${esc(units[i])}</option>`).join('')}</select>`}</span>
-      <span>${esc(AT.tKind)}</span><span class="seg small" data-w="act">${AL_ACTS.map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${v === a.action}">${alIco(AL_ICO[v])} ${esc(acts[i])}</button>`).join('')}</span>
+    d.innerHTML = `<span>${esc(AT.tWhen)}</span><span class="l"><span class="seg" data-w="rel">${relOpts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v === relv}" title="${esc(l)}" aria-label="${esc(l)}">${alIco(REL_ICO[v])}</button>`).join('')}</span>${a.at ? `<input type="datetime-local" data-w="at" value="${esc((a.at || '').slice(0, 16))}">` : `<input type="text" inputmode="decimal" data-w="n" value="${fmtNum(Math.abs(a.minutes) / u)}"><select data-w="unit">${AL_UNITS.map((v, i) => `<option value="${v}" ${v === u ? 'selected' : ''}>${esc(units[i])}</option>`).join('')}</select>`}</span>
+      <span>${esc(AT.tKind)}</span><span class="seg" data-w="act">${AL_ACTS.map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${v === a.action}" title="${esc(acts[i])}" aria-label="${esc(acts[i])}">${alIco(AL_ICO[v])}</button>`).join('')}</span>
       ${a.action === 'DISPLAY' ? `<span>${esc(AT.tText)}</span><input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">` : ''}
       ${a.action === 'AUDIO' ? `<span>${esc(AT.tSound)}</span><input type="url" data-w="attach" value="${esc(a.attach)}" placeholder="${esc(AT.tSoundHint)}">` : ''}
       ${a.action === 'EMAIL' ? `<span>${esc(AT.tSubject)}</span><input type="text" data-w="subject" value="${esc(a.summary)}" placeholder="${esc(AT.tTextHint)}"><span>${esc(AT.tBody)}</span><input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}"><span>${esc(AT.tTo)}</span><input type="text" data-w="to" value="${esc(a.attendees.join(', '))}" placeholder="${esc(AT.tToHint)}">` : ''}
       <span>${esc(AT.tRepeat)}</span><span class="l"><select data-w="repeat">${[0, 1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === a.repeat ? 'selected' : ''}>${n ? n + '×' : esc(AT.tNever)}</option>`).join('')}</select>${a.repeat > 0 ? `<span class="muted small">${esc(AT.tEvery)}</span><select data-w="every">${[1, 5, 10, 15, 30, 60].map(n => `<option value="${n}" ${n === a.duration_minutes ? 'selected' : ''}>${esc(amount(n))}</option>`).join('')}</select>` : ''}</span>
       <span>${esc(AT.tProx)}</span><select data-w="prox"><option value="">${esc(AT.tProxNone)}</option>${AL_PROX.map((v, i) => `<option value="${v}" ${v === a.proximity ? 'selected' : ''}>${esc(prox[i])}</option>`).join('')}</select>
       <span>${esc(AT.tAck)}</span><label class="muted small"><input type="checkbox" data-w="ack" ${a.acknowledged ? 'checked' : ''}> ${esc(AT.tAckHint)}${a.acknowledged ? ' (' + esc(AT.tAckSince) + ' ' + esc(fmtDT(a.acknowledged)) + ')' : ''}</label>
-      <div class="foot"><button class="pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')} ${esc(isPreset ? AT.tPreset : AT.tPresetAdd)}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
+      <div class="foot"><button class="btn icon-btn pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}" aria-label="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
     const w = k => $(`[data-w=${k}]`, d);
     w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'; } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
     if (w('n')) { const apply = () => { const n = parseFloat(w('n').value.replace(',', '.')); if (isNaN(n) || n < 0) { w('n').classList.add('err'); return; } a.minutes = Math.sign(a.minutes || 1) * Math.round(n * +w('unit').value); alRender(); refresh(); }; w('n').onchange = apply; w('unit').onchange = apply; w('n').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }; }

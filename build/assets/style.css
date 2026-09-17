@@ -670,11 +670,10 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .nav a { display: grid; place-items: center; padding: 6px 9px; }
 .tabbar .ico { width: 22px; height: 22px; }
 .icon-btn, .seg button { display: inline-grid; place-items: center; }
+.seg button { min-height: 32px; min-width: 36px; box-sizing: border-box; } /* icon-only segments (contacts list/table, reminder settings) get the height of the text ones and of .icon-btn */
 .seg button .ico { width: 16px; height: 16px; }
-/* compact variant of the segmented control for forms (reminder settings): smaller text, icon and label side by side */
-.seg.small button { display: inline-flex; gap: 4px; align-items: center; padding: 3px 9px; font-size: 12.5px; color: var(--fg-2); }
-.seg.small button[aria-pressed=true] { color: var(--fg); }
-.seg.small button .ico { width: 14px; height: 14px; }
+.btn[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
 .btn.icon-btn { padding: 6px 9px; }
 
 /* card forms (contacts + event editor): one button set, icons switch between "new" (form.new) and "edit" */
@@ -806,7 +805,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
    expandable entry per alarm whose settings follow the chosen kind and trigger ---- */
 .ed .cardform .tline { margin: 4px 0 8px 26px; position: relative; height: 84px; user-select: none; }
 .ed .cardform .tline .axis { position: absolute; left: 0; right: 0; top: 52px; height: 2px; background: var(--line); }
-.ed .cardform .tline .evb { position: absolute; top: 44px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--evc, var(--c5)) 25%, transparent); border-left: 3px solid var(--evc, var(--c5)); font-size: 10px; line-height: 18px; padding: 0 5px; color: var(--fg-2); white-space: nowrap; overflow: hidden; }
+.ed .cardform .tline .evb { position: absolute; top: 44px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--evc, var(--c5)) 25%, transparent); border-left: 3px solid var(--evc, var(--c5)); }
 .ed .cardform .tline .snap { position: absolute; z-index: 1; top: 50px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--fg-3); opacity: .5; }
 .ed .cardform .tline .tick { position: absolute; top: 60px; font-size: 10px; color: var(--fg-3); transform: translateX(-50%); white-space: nowrap; }
 .ed .cardform .tline .tick::before { content: ''; position: absolute; left: 50%; top: -6px; height: 5px; border-left: 1px solid var(--line); }
@@ -836,7 +835,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .row.al .pdot.on { background: var(--accent); }
 .ed .cardform.mode-edit .row.al .act { display: inline-grid; }
 .ed .cardform .row.al .act[aria-pressed=true] { color: var(--accent); }
-.ed .cardform .aldet { grid-area: d; justify-self: stretch; display: grid; grid-template-columns: 96px 1fr; gap: 7px 10px; padding: 6px 0; font-size: 13.5px; align-items: center; justify-items: start; } /* .edits alone would push the block to the end; the row's own padding aligns the labels with the fields of the other cards */
+.ed .cardform .aldet { grid-area: d; justify-self: stretch; display: grid; grid-template-columns: minmax(56px, auto) 1fr; gap: 6px 8px; padding: 6px 0; font-size: 13.5px; align-items: center; justify-items: start; } /* .edits alone would push the block to the end; the row's own padding aligns the labels with the fields of the other cards */
 .ed .cardform .aldet[hidden] { display: none; }
 .ed .cardform .aldet > span:nth-child(odd) { color: var(--fg-3); font-size: 12px; }
 .ed .cardform .aldet input:not([type=hidden]), .ed .cardform .aldet select { font-size: 13.5px; }
@@ -846,13 +845,11 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .aldet input[data-w=n].err { color: #ff3b30; border-bottom-color: #ff3b30; }
 .ed .cardform .aldet input[type=datetime-local] { width: auto; }
 .ed .cardform .aldet input[type=checkbox] { width: auto; }
-.ed .cardform .aldet .l { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ed .cardform .aldet .l { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-self: stretch; }
+.ed .cardform .aldet .l input[data-w=n] { flex: 0 0 48px; width: 48px; }
 .ed .cardform .aldet .foot { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); margin-top: 2px; font-size: 12.5px; color: var(--fg-3); }
-.ed .cardform .aldet .pset { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg-2); font-size: 12.5px; }
-.ed .cardform .aldet .pset .ico { width: 13px; height: 13px; }
-.ed .cardform .aldet .pset[aria-pressed=true] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: var(--accent); }
-.ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
+.ed .cardform .aldet .pset .ico { width: 18px; height: 18px; } /* the size of the other icon buttons */
+.ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: currentColor; }
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }
