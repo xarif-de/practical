@@ -4,6 +4,7 @@
 use crate::csrf;
 use crate::ctx::{PageCtx, set_flash};
 use crate::domain::collections::{self, AbInfo, CalInfo, NewCalendar, Owner, PALETTE};
+use crate::domain::events;
 use crate::domain::groups::{self, GroupInfo, RemoveOutcome, TrashedGroup};
 use crate::domain::prefs::{self, Prefs};
 use crate::domain::tokens;
@@ -45,6 +46,9 @@ pub struct SettingsPage {
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
+    /// reminder strip snap points as typed ("2 min, 1 h, …")
+    pub alarm_snaps_start: String,
+    pub alarm_snaps_end: String,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -79,7 +83,10 @@ impl SettingsPage {
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
     let new_token: Option<String> = session.remove(SESSION_NEW_TOKEN).await?;
+    let snaps = events::alarm_snaps(prefs::get(&state.db, &user.id).await?.alarm_snaps_json.as_deref());
     Ok(SettingsPage {
+        alarm_snaps_start: events::fmt_offsets(&snaps.start),
+        alarm_snaps_end: events::fmt_offsets(&snaps.end),
         groups: groups::list_for_user(&state, &user).await?,
         individuals: groups::individuals(&state).await?,
         trashed: groups::trashed_for_user(&state, &user).await?,
@@ -426,6 +433,10 @@ struct PrefsForm {
     vacation_kind: String,
     #[serde(default)]
     vacation_value: String,
+    #[serde(default)]
+    alarm_snaps_start: String,
+    #[serde(default)]
+    alarm_snaps_end: String,
 }
 
 async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
@@ -441,6 +452,11 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
         let kind = if f.vacation_kind == "calendar" { "calendar" } else { "category" };
         p.vacation_rule_json = Some(serde_json::json!({ "kind": kind, "value": f.vacation_value.trim() }).to_string());
+        // reminder strip snap points: an empty list falls back to the built-in one; a bad token rejects the form
+        let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
+        let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
+        let snaps = events::AlarmSnaps { start: if start.is_empty() { events::AlarmSnaps::default().start } else { start }, end };
+        p.alarm_snaps_json = if snaps == events::AlarmSnaps::default() { None } else { Some(serde_json::to_string(&snaps).unwrap()) };
         prefs::set(&state.db, &user.id, &p).await?;
         if let Some(l) = &p.lang {
             session.insert(crate::ctx::SESSION_LANG, l).await?;

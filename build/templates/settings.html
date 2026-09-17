@@ -215,6 +215,11 @@
       <label class="inl">{{ ctx.t("vacation-rule-value") }} <input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values" size="28"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></label>
       <div class="muted small">{{ ctx.t("vacation-rule-hint") }}</div>
     </fieldset>
+    <fieldset class="row"><legend>{{ ctx.t("pref-snaps") }}</legend>
+      <label class="inl">{{ ctx.t("pref-snaps-start") }} <input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}" size="48"></label>
+      <label class="inl">{{ ctx.t("pref-snaps-end") }} <input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}" size="24"></label>
+      <div class="muted small">{{ ctx.t("pref-snaps-hint") }}</div>
+    </fieldset>
     <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
   </form>
 

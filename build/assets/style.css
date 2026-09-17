@@ -807,7 +807,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .tline { margin: 4px 0 8px 26px; position: relative; height: 84px; user-select: none; }
 .ed .cardform .tline .axis { position: absolute; left: 0; right: 0; top: 52px; height: 2px; background: var(--line); }
 .ed .cardform .tline .evb { position: absolute; top: 44px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--evc, var(--c5)) 25%, transparent); border-left: 3px solid var(--evc, var(--c5)); }
-.ed .cardform .tline .snap { position: absolute; z-index: 1; top: 50px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--fg-3); opacity: .5; }
 .ed .cardform .tline .tick { position: absolute; top: 60px; font-size: 10px; color: var(--fg-3); transform: translateX(-50%); white-space: nowrap; }
 .ed .cardform .tline .tick::before { content: ''; position: absolute; left: 50%; top: -6px; height: 5px; border-left: 1px solid var(--line); }
 .ed .cardform .tline .mkg { position: absolute; top: 12px; transform: translateX(-50%); display: flex; gap: 2px; }

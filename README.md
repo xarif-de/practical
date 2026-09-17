@@ -84,8 +84,9 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   overrides of other clients stay untouched. `build/tests/fixtures/demo-event-full.ics` carries every
   VEVENT property there is and `unchanged_save_keeps_every_property` proves the round trip. Generated
   series instances get the master's alarms (caldata builds them without VALARMs).
-- **Reminders** (event card): the edit mode shows the alarms on a timeline strip (markers snap to
-  the usual offsets, small ones close to the event, the far ones spread out), a row of preset chips
+- **Reminders** (event card): the edit mode shows the alarms on a timeline strip (a marker follows
+  the pointer and snaps to the user's snap points — settings, "Reminders: snap points" — each
+  point owning an equal share of the strip), a row of preset chips
   that add or remove the matching alarm with one click, and one expandable entry per alarm whose
   fields follow the kind (text · sound file · subject, message, recipients) and the trigger (number +
   unit, or date and time). The star in an entry saves its setting — without text, subject and

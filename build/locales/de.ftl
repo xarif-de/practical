@@ -90,6 +90,10 @@ pref-holidays-public = Feiertage anzeigen
 pref-holidays-school = Schulferien anzeigen
 pref-subdivision = Bundesland
 pref-vacation-days = Urlaubstage pro Jahr
+pref-snaps = Erinnerungen: Rastpunkte der Zeitleiste
+pref-snaps-start = vor Beginn
+pref-snaps-end = vor Ende
+pref-snaps-hint = Abstände mit Komma getrennt, Einheiten min, h (Std.), d (Tage), w (Wochen), z. B. „2 min, 1 h, 1 d, 2 w“. Leer = Standardliste.
 confirm-remove-member = { $name } aus der Gruppe entfernen?
 confirm-leave = Gruppe „{ $name }“ verlassen?
 confirm-trash-collection = „{ $name }“ in den Papierkorb legen?

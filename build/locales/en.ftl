@@ -90,6 +90,10 @@ pref-holidays-public = Show public holidays
 pref-holidays-school = Show school holidays
 pref-subdivision = Region
 pref-vacation-days = Vacation days per year
+pref-snaps = Reminders: snap points of the strip
+pref-snaps-start = before start
+pref-snaps-end = before end
+pref-snaps-hint = Offsets separated by commas, units min, h, d, w, e.g. “2 min, 1 h, 1 d, 2 w”. Empty = the built-in list.
 confirm-remove-member = Remove { $name } from the group?
 confirm-leave = Leave the group “{ $name }”?
 confirm-trash-collection = Move “{ $name }” to the trash?

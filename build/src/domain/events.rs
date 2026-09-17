@@ -577,6 +577,59 @@ pub struct AlarmPreset {
 
 pub const PROXIMITY: &[&str] = &["ARRIVE", "DEPART", "CONNECT", "DISCONNECT"];
 
+/// Snap points of the reminder strip in minutes: before the start and before the end.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AlarmSnaps {
+    pub start: Vec<i64>,
+    pub end: Vec<i64>,
+}
+
+impl Default for AlarmSnaps {
+    fn default() -> Self {
+        Self { start: vec![2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], end: vec![5, 10, 15, 30, 60] }
+    }
+}
+
+/// The snap points from a user's setting or the built-in list.
+pub fn alarm_snaps(json: Option<&str>) -> AlarmSnaps {
+    json.and_then(|j| serde_json::from_str::<AlarmSnaps>(j).ok()).filter(|s| !s.start.is_empty()).unwrap_or_default()
+}
+
+/// A comma-separated list of offsets as typed in the settings ("2 min, 1 h, 1 d, 2 w"; German
+/// unit words work too) → ascending, distinct minutes. Errors name the token that did not parse.
+pub fn parse_offsets(text: &str) -> Result<Vec<i64>, String> {
+    let mut out = vec![];
+    for tok in text.split([',', ';', '\n']).map(str::trim).filter(|t| !t.is_empty()) {
+        let t = tok.to_lowercase(); // the comma separates entries, so a fraction uses a dot ("1.5 h")
+        let split = t.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(t.len());
+        let (num, unit) = (t[..split].trim(), t[split..].trim().trim_end_matches('.'));
+        let n: f64 = num.parse().map_err(|_| tok.to_string())?;
+        let factor = match unit.chars().next() {
+            None | Some('m') => 1.0,
+            Some('h') | Some('s') => 60.0,
+            Some('d') | Some('t') => 1440.0,
+            Some('w') => 10080.0,
+            _ => return Err(tok.to_string()),
+        };
+        let minutes = (n * factor).round() as i64;
+        if minutes <= 0 || minutes > 366 * 1440 {
+            return Err(tok.to_string());
+        }
+        out.push(minutes);
+    }
+    out.sort_unstable();
+    out.dedup();
+    if out.len() > 30 {
+        return Err("too many".into());
+    }
+    Ok(out)
+}
+
+/// The inverse of `parse_offsets` for the settings form: "2 min, 1 h, 1 d, 2 w".
+pub fn fmt_offsets(list: &[i64]) -> String {
+    list.iter().map(|&m| if m % 10080 == 0 { format!("{} w", m / 10080) } else if m % 1440 == 0 { format!("{} d", m / 1440) } else if m % 60 == 0 { format!("{} h", m / 60) } else { format!("{m} min") }).collect::<Vec<_>>().join(", ")
+}
+
 /// Rejects a preset list that could not have come from the editor (bounds the stored JSON, too).
 pub fn validate_presets(list: &[AlarmPreset]) -> AppResult<()> {
     if list.len() > 50 {
@@ -1201,6 +1254,18 @@ mod tests {
         assert_eq!((again.minutes, again.acknowledged), (15, alarms[0].acknowledged));
         assert!(validate_presets(&[AlarmPreset { action: "EMAIL".into(), minutes: 30, ..Default::default() }]).is_ok());
         assert!(validate_presets(&[AlarmPreset { action: "PROCEDURE".into(), ..Default::default() }]).is_err());
+    }
+
+    #[test]
+    fn snap_point_lists() {
+        assert_eq!(parse_offsets("2 min, 1 h, 1 Std., 1 Tag, 2 Tage, 1 Wo, 30, 1.5h"), Ok(vec![2, 30, 60, 90, 1440, 2880, 10080]));
+        assert_eq!(parse_offsets(""), Ok(vec![]));
+        assert_eq!(parse_offsets("5 min, x"), Err("x".into()));
+        assert_eq!(parse_offsets("0 min"), Err("0 min".into()));
+        assert_eq!(fmt_offsets(&[2, 90, 60, 1440, 20160]), "2 min, 90 min, 1 h, 1 d, 2 w");
+        assert_eq!(alarm_snaps(None), AlarmSnaps::default());
+        assert_eq!(alarm_snaps(Some("{\"start\":[],\"end\":[]}")), AlarmSnaps::default(), "an empty start list means the default");
+        assert_eq!(alarm_snaps(Some("{\"start\":[10],\"end\":[]}")).start, vec![10]);
     }
 
     #[test]

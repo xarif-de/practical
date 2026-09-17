@@ -271,7 +271,8 @@
   const AL = $('#ed-alarm-card'), AT = AL.dataset, alBox = $('[data-list="alarms"]', AL), tline = $('#ed-tline'), apre = $('#ed-apre');
   let ALARMS = [], alSeq = 0;
   const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-bell', AUDIO: '#i-sound', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
-  const SNAP_START = [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], SNAP_END_ALL = [5, 10, 15, 30, 60], AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months
+  const SNAPS = (() => { try { const j = JSON.parse($('#alarm-snaps-data').textContent); if (Array.isArray(j.start) && j.start.length) return j; } catch (_) {} return { start: [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], end: [5, 10, 15, 30, 60] }; })(); // per-user snap points of the strip (settings)
+  const SNAP_START = SNAPS.start, SNAP_END_ALL = SNAPS.end, AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months
   const DEFAULT_PRESETS = [0, 10].map(m => ({ action: 'DISPLAY', minutes: m, related_end: false, repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '' }));
   let PRESETS = (() => { try { const p = JSON.parse($('#alarm-presets-data').textContent || 'null'); return Array.isArray(p) ? p : DEFAULT_PRESETS; } catch (_) { return DEFAULT_PRESETS; } })();
   const newAlarm = o => ({ idx: null, action: 'DISPLAY', minutes: 15, related_end: false, at: null, description: '', summary: '', repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '', acknowledged: null, ...o, _id: ++alSeq });
@@ -293,25 +294,22 @@
   const evStart = () => new Date((f.date.value || today) + 'T' + (f.all_day.checked ? '00:00' : (f.from.value || '00:00')) + ':00');
   const evLen = () => { const s = evStart(); const e = f.all_day.checked ? new Date(nextDay(f.end_date.value || f.date.value || today) + 'T00:00:00') : new Date((f.end_date.value || f.date.value || today) + 'T' + (f.to.value || f.from.value || '00:00') + ':00'); return Math.max(1, Math.round((e - s) / 60000)); };
   const minutesBefore = a => a.at ? Math.round((evStart() - new Date(a.at)) / 60000) : a.related_end ? a.minutes - evLen() : a.minutes;
-  // axis: a concave scale (minutes^0.35) — small offsets sit close to the event, larger ones spread out
-  const AL_P = 0.35, EV0 = 0.72, EV1 = 0.97, SPAN = 20160;
-  const xs = m => EV0 * (1 - Math.pow(Math.min(m, SPAN) / SPAN, AL_P));
-  const xe = (e, len) => EV1 - (EV1 - EV0) * Math.pow(Math.min(e, len) / len, AL_P);
-  // snap points: the concave scale, then a minimum pixel gap pushed outwards from the event so the dots never overlap on a narrow card
-  const alCands = () => { const len = evLen(), ends = SNAP_END_ALL.filter(m => m < len), g = 9 / (tline.clientWidth || 600);
-    const starts = [{ related_end: false, minutes: 0, x: EV0 }].concat(SNAP_START.map(m => ({ related_end: false, minutes: m, x: xs(m) })));
-    for (let i = 1; i < starts.length; i++) starts[i].x = Math.min(starts[i].x, starts[i - 1].x - g);
-    const endsC = [{ related_end: true, minutes: 0, x: EV1 }].concat(ends.map(m => ({ related_end: true, minutes: m, x: xe(m, len) })));
-    for (let i = 1; i < endsC.length; i++) endsC[i].x = Math.max(EV0 + g, Math.min(endsC[i].x, endsC[i - 1].x - g));
-    return starts.reverse().concat(endsC.reverse()); };
-  const xa = a => { const len = evLen(), mb = minutesBefore(a); if (mb >= 0) return xs(mb); const e = len + mb; return e <= 0 ? EV1 + 0.01 : xe(e, len); };
+  // axis: every snap point owns a zone of the same width (the strip is ordinal, not to scale) — the
+  // marker follows the pointer and the value changes at regular intervals; an alarm off the grid sits
+  // between its neighbours
+  const SPAN = SNAP_START[SNAP_START.length - 1];
+  const alCands = () => { const len = evLen(), ends = SNAP_END_ALL.filter(m => m < len);
+    const order = [...SNAP_START].reverse().map(m => ({ related_end: false, minutes: m })).concat([{ related_end: false, minutes: 0 }], [...ends].reverse().map(m => ({ related_end: true, minutes: m })), [{ related_end: true, minutes: 0 }]);
+    const step = 1 / (order.length + 1); return order.map((c, i) => ({ ...c, x: step * (i + 1), mb: c.related_end ? c.minutes - len : c.minutes })); };
+  const evEdges = () => { const c = alCands(); return [c.find(k => !k.related_end && k.minutes === 0).x, c[c.length - 1].x]; };
+  const xa = a => { if (a._dragX != null) return a._dragX; const mb = minutesBefore(a), pts = alCands(); if (mb >= pts[0].mb) return pts[0].x; if (mb <= pts[pts.length - 1].mb) return pts[pts.length - 1].x; for (let i = 0; i < pts.length - 1; i++) { const p = pts[i], q = pts[i + 1]; if (mb <= p.mb && mb >= q.mb) return p.mb === q.mb ? p.x : p.x + (q.x - p.x) * (p.mb - mb) / (p.mb - q.mb); } return pts[0].x; };
   const snapX = f => alCands().reduce((b, c) => Math.abs(c.x - f) < Math.abs(b.x - f) ? c : b);
   function alTimeline() {
     if (!form.classList.contains('mode-edit') || AL.hidden) return;
-    const len = evLen(), color = $('#ed-dot').style.background || '';
+    const color = $('#ed-dot').style.background || '';
+    const [EV0, EV1] = evEdges(), cx = alCands();
     let h = `<div class="axis"></div><div class="evb" style="left:${EV0 * 100}%;width:${(EV1 - EV0) * 100}%;--evc:${color}"></div>`;
-    const cx = alCands(); h += cx.filter(c => c.minutes).map(c => `<i class="snap" style="left:${c.x * 100}%"></i>`).join('');
-    h += [60, 1440, 10080].map(m => `<span class="tick" style="left:${cx.find(c => !c.related_end && c.minutes === m).x * 100}%">${esc(amount(m))}</span>`).join('');
+    h += [60, 1440, 10080].map(m => cx.find(c => !c.related_end && c.minutes === m)).filter(Boolean).map(c => `<span class="tick" style="left:${c.x * 100}%">${esc(amount(c.minutes))}</span>`).join('');
     tline.innerHTML = h;
     { let prev = null; for (const t of $$('.tick', tline).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)) { const r = t.getBoundingClientRect(); if (prev !== null && r.left < prev + 4) { t.remove(); continue; } prev = r.right; } } // left to right: a label that would run into its kept neighbour is dropped (narrow card)
     const groups = new Map();
@@ -322,14 +320,13 @@
         const mk = document.createElement('div'); mk.className = `mk${a._open || a._drag ? ' sel' : ''}${a.acknowledged ? ' ack' : ''}`; mk.title = alarmText(a); mk.innerHTML = `<span class="lab">${esc(whenText(a))}</span>${alIco(AL_ICO[a.action] || AL_ICO.DISPLAY)}`;
         // a click on the marker opens or closes the entry; a drag only moves the alarm and leaves the entries as they are
         mk.onpointerdown = e => { e.preventDefault(); const rect = tline.getBoundingClientRect(); let moved = false;
-          const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); if (c.related_end === a.related_end && c.minutes === a.minutes && !a.at) return; moved = true; a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; a._drag = true; alRender(); refresh(); };
-          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); delete a._drag; if (!moved) ALARMS.forEach(x => x._open = x === a ? !x._open : false); alRender(); refresh(); };
+          const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); a._dragX = fr; moved = true; if (!(c.related_end === a.related_end && c.minutes === a.minutes && !a.at)) { a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; } a._drag = true; alRender(); refresh(); };
+          const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); delete a._drag; delete a._dragX; if (!moved) ALARMS.forEach(x => x._open = x === a ? !x._open : false); alRender(); refresh(); };
           document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); };
         g.appendChild(mk);
       }
       tline.appendChild(g);
     }
-    void len;
   }
   const presetLabel = p => { const acts = D.tActs.split('|'); let t = !p.related_end && p.minutes > 0 ? amount(p.minutes) : whenText({ ...p, at: null, attendees: p.attendees || [] }); if (p.action === 'AUDIO') t += ' · ' + acts[1]; if (p.action === 'EMAIL') t += ' · ' + acts[2]; if (p.repeat) t += ` · ${p.repeat}×`; if (p.proximity) t += ' · ' + proxText(p); return t; };
   function alPresets() {
@@ -374,7 +371,7 @@
     w('pset').onclick = () => { if (a.at) return; if (matchesPreset(a)) PRESETS = PRESETS.filter(p => presetSig(p) !== presetSig(a)); else { const { action, minutes, related_end, repeat, duration_minutes, attendees, attach, proximity } = a; PRESETS.push({ action, minutes, related_end, repeat, duration_minutes, attendees: [...attendees], attach, proximity }); } savePresets(); alRender(); };
   }
   // text edits update the row's summary and the mirror without rebuilding the entry (the field keeps its focus)
-  const alMirror = () => { f.alarms_json.value = JSON.stringify(ALARMS.map(({ _id, _open, _drag, ...a }) => a)); };
+  const alMirror = () => { f.alarms_json.value = JSON.stringify(ALARMS.map(({ _id, _open, _drag, _dragX, ...a }) => a)); };
   function alSync(row, a) { $('.txt', row).textContent = alarmText(a); $('.extra', row).textContent = extrasOf(a); alMirror(); refresh(); }
   let alBusy = false;
   function alRender() {
@@ -400,7 +397,7 @@
   });
   function alarmsInit(list) { ALARMS = list.map(a => newAlarm({ ...a, attendees: [...(a.attendees || [])] })); alRender(); }
   const alarmAdd = () => { const a = newAlarm(); ALARMS.push(a); alRender(); return $$('.row', alBox).pop(); }; // the new entry stays collapsed; the row header, the dots or the marker open it
-  const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
+  const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, _dragX, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
   const addPerson = (p, role) => { const r = addRow('people'); r._orig = p; w(r, 'role').value = role; w(r, 'name').value = p.name || ''; w(r, 'email').value = p.email || ''; $('.st', r).textContent = [statusText(p), p.cutype === 'RESOURCE' || p.cutype === 'ROOM' ? p.cutype.toLowerCase() : ''].filter(Boolean).join(' · '); return r; };

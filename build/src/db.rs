@@ -84,6 +84,11 @@ CREATE TABLE xui_holidays (
         // reminder presets of the event editor, per user (NULL = the built-in defaults)
         "ALTER TABLE xui_user_settings ADD COLUMN alarm_presets_json TEXT;",
     ),
+    (
+        5,
+        // snap points of the reminder strip, per user (NULL = the built-in list)
+        "ALTER TABLE xui_user_settings ADD COLUMN alarm_snaps_json TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
