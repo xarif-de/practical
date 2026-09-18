@@ -985,9 +985,9 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .rb { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .rb .rb-x { font-size: 10.5px; color: var(--fg-3); } /* chip + plain text after it ("angepasst", "gilt für neue Termine", "(geändert)") */
 .rb.changed .rbadge { color: var(--c4); background: color-mix(in srgb, var(--c4) 14%, transparent); } .rb.changed .rb-x { color: var(--c4); } /* the event deviates from this template */
 .ed .cardform.mode-view .rfoot { display: none; } /* rule footers belong to editing */
-.ed .cardform .rfoot { margin-top: 8px; padding: 6px 0 0 26px; border-top: 1px solid var(--line); display: grid; gap: 3px; font-size: 11.5px; color: var(--fg-3); } /* templates and locks of the card (event) / mode chips (rule editor) */
+.ed .cardform .rfoot { margin-top: 8px; padding: 6px 0 0 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: fit-content(40%) 1fr; gap: 3px 6px; align-items: center; font-size: 11.5px; color: var(--fg-3); } /* label column as wide as the longest label (at most half, then ellipsis), chips right behind it, aligned; minmax(0, 50%) would always grow to 50% */ /* templates and locks of the card (event) / mode chips (rule editor) */
 .ed .cardform .rfoot:empty { display: none; }
-.ed .cardform .rf-row { display: flex; align-items: center; gap: 8px; min-width: 0; } .ed .cardform .rf-name { flex: 1; min-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ed .cardform .rf-row .rb { min-width: 0; } /* a long badge wraps instead of squeezing the name away */
+.ed .cardform .rf-row { display: contents; } .ed .cardform .rf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ed .cardform .rf-row .rb { min-width: 0; justify-content: flex-start; }
 button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } button.rbadge:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-2); }
 .ed .cardform .lk-row.locked { opacity: .55; }
 .ed .cardform .stile.locked { cursor: default; opacity: .55; }
