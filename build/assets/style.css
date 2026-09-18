@@ -377,12 +377,12 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .ed { position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); display: grid; place-items: center; padding: 16px; }
 .ed[hidden] { display: none; }
 .ed .box { width: min(720px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: var(--bg); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); border: 1px solid var(--line); }
-.ed header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.ed header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; } /* above the sticky month head of the repeat strip (z 1) */
 .ed header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c1); }
 .ed header h2 { margin: 0; font-size: 16px; flex: 1; }
 .ed header .vsw { display: flex; gap: 4px; font-size: 12px; } .ed header .vsw button { padding: 3px 8px; font-size: 12px; } .ed header .vsw button[aria-pressed=true] { background: var(--accent); color: #fff; }
 .ed .body { padding: 16px 18px; }
-.ed footer { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: var(--bg); }
+.ed footer { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: var(--bg); z-index: 2; }
 .ed footer .spacer { flex: 1; } .ed footer .danger { color: var(--today); }
 .ed .pane { display: none; } .ed .pane.on { display: block; }
 .ed input[type=text], .ed input[type=date], .ed input[type=time], .ed select, .ed textarea { font: inherit; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; width: 100%; }
@@ -1096,7 +1096,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .geomap .confirm, .ed .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, #ff3b30 10%, var(--bg)); font-size: 13.5px; }
 .geomap .confirm[hidden], .ed .confirm[hidden] { display: none; }
 .geomap .confirm span, .ed .confirm span { flex: 1; }
-.ed .confirm { position: sticky; bottom: 58px; z-index: 1; border-top: 1px solid var(--line); }
+.ed .confirm { position: sticky; bottom: 58px; z-index: 2; border-top: 1px solid var(--line); }
 .leaflet-container { font: inherit; }
 .leaflet-control-attribution { font-size: 10px; }
 /* location (design G): one primary field, the other part derived and shown as a chip below; errors in red */
