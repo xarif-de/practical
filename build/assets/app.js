@@ -296,8 +296,8 @@
     return { fx, over, alarms, links }; }
   // effect line of a category row: one item per setting, struck through when an upper category wins ("überstimmt");
   // deviation from a template is shown in the card footers, not here
-  const ctFx = (c, over) => { const r = RULES[c]; if (!r) return `<span class="ct-f">${esc(CTT.tNorule)}</span>`; const out = [];
-    const item = (key, mode, label) => { const by = over[c] && over[c][key]; out.push(`<div class="ct-l"><span class="ct-f ${mode === 'lock' ? 'lock' : ''} ${by ? 'over' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg><span>${label}</span></span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}</div>`); }; /* one rule per line, wrapping inside the line */
+  const ctFx = (c, over) => { const r = RULES[c]; if (!r) return `<div class="ct-l"><span class="ct-t full">${esc(CTT.tNorule)}</span></div>`; const out = [];
+    const item = (key, mode, label) => { const by = over[c] && over[c][key]; out.push(`<div class="ct-l${mode === 'lock' ? ' lock' : ''}${by ? ' over' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg><span class="ct-t">${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}</div>`); }; /* one rule per line: icon | text, "überschrieben von" below the text */
     SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) item(fld, st.mode, `${esc(CTF[FLD[fld][1]])}: ${fxVal(fld, st.value)}`); });
     ((r.alarm || {}).alarms || []).forEach(a => item('alarm:' + alarmKey(a), a.mode, `${esc(CTF[4])}: ${esc(alarmText(a))}`));
     ((r.links || {}).links || []).forEach(l => item('link:' + l.uri, l.mode, `${esc(CTF[10])}: ${esc(l.label || lkHost(l.uri) || l.uri)}`));

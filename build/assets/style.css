@@ -964,12 +964,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .ct-row .ct-x { all: unset; cursor: pointer; color: var(--fg-3); text-align: center; font-size: 14px; }
 .ed .cardform .ct-row .chip { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: 13px; padding: 3px 10px; background: var(--bg); border-color: transparent; color: var(--fg); }
 .ed .cardform .ct-fx { grid-column: 2 / 4; display: grid; gap: 3px; font-size: 11.5px; color: var(--fg-3); min-width: 0; } /* one rule per line */
-.ed .cardform .ct-fx .ct-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
-.ed .cardform .ct-fx .ct-f { display: inline-flex; align-items: flex-start; gap: 4px; min-width: 0; } .ed .cardform .ct-fx .ct-f > span { overflow-wrap: anywhere; } .ed .cardform .ct-fx .ct-f .ico { flex: none; margin-top: 2px; }
-.ed .cardform .ct-fx .ct-f .ico { width: 11px; height: 11px; }
-.ed .cardform .ct-fx .ct-f.lock { color: var(--fg-2); }
-.ed .cardform .ct-fx .ct-f.over { text-decoration: line-through; opacity: .7; }
-.ed .cardform .ct-fx .ct-by { font-size: 11px; }
+.ed .cardform .ct-fx .ct-l { display: grid; grid-template-columns: 11px 1fr; column-gap: 4px; align-items: start; min-width: 0; } .ed .cardform .ct-fx .ct-l .ico { width: 11px; height: 11px; margin-top: 2px; } .ed .cardform .ct-fx .ct-t { overflow-wrap: anywhere; } .ed .cardform .ct-fx .ct-t.full { grid-column: 1 / -1; } .ed .cardform .ct-fx .ct-l.lock { color: var(--fg-2); } .ed .cardform .ct-fx .ct-l.over .ct-t { text-decoration: line-through; opacity: .7; }
+.ed .cardform .ct-fx .ct-by { grid-column: 2; font-size: 11px; } /* aligned with the text above, not with the icon */
 .ed .cardform .ct-fx a { color: var(--accent); text-decoration: none; }
 .ed .cardform .ct-sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; vertical-align: -1px; }
 .ed .cardform .ct-in { padding-left: 26px; margin-top: 4px; }
