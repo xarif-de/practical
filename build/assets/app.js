@@ -284,12 +284,15 @@
   const fxVal = (fld, v) => fld === 'all_day' ? esc(v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : STATUS_KEYS.includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
   const curVal = fld => fld === 'all_day' ? f.all_day.checked : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
   const sameVal = (fld, v) => fld === 'all_day' ? f.all_day.checked === !!v : fld === 'color' ? (colorOf() || '').toLowerCase() === String(v).toLowerCase() : String(curVal(fld)) === String(v);
-  // effective rules of the event's categories: scalars first-wins per field, list entries first-wins per key
-  function effective() { const fx = {}, over = {}, alarms = [], links = [], seenA = new Map(), seenL = new Map();
+  // effective rules of the event's categories: per setting (scalars by field, reminders and links by key) a lock
+  // beats a template, among equals the upper category wins; every loser is recorded as overridden by the winner
+  function effective() { const fx = {}, over = {}, alarms = [], links = [], cand = {};
+    const push = (key, c) => { (cand[key] ||= []).push(c); };
     CATS.forEach(c => { const r = RULES[c]; if (!r) return;
-      SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (!st) return; if (fx[fld]) (over[c] ||= {})[fld] = fx[fld].cat; else fx[fld] = { cat: c, ...st }; });
-      ((r.alarm || {}).alarms || []).forEach(a => { const k = alarmKey(a); if (seenA.has(k)) (over[c] ||= {})['alarm:' + k] = seenA.get(k); else { seenA.set(k, c); alarms.push({ cat: c, mode: a.mode, entry: a }); } });
-      ((r.links || {}).links || []).forEach(l => { const k = l.uri; if (!k) return; if (seenL.has(k)) (over[c] ||= {})['link:' + k] = seenL.get(k); else { seenL.set(k, c); links.push({ cat: c, mode: l.mode, entry: l }); } }); });
+      SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) push(fld, { cat: c, ...st }); });
+      ((r.alarm || {}).alarms || []).forEach(a => push('alarm:' + alarmKey(a), { cat: c, mode: a.mode, entry: a }));
+      ((r.links || {}).links || []).forEach(l => { if (l.uri) push('link:' + l.uri, { cat: c, mode: l.mode, entry: l }); }); });
+    Object.entries(cand).forEach(([key, list]) => { const win = list.find(x => x.mode === 'lock') || list[0]; list.forEach(x => { if (x !== win) (over[x.cat] ||= {})[key] = win.cat; }); if (key.startsWith('alarm:')) alarms.push(win); else if (key.startsWith('link:')) links.push(win); else fx[key] = win; });
     return { fx, over, alarms, links }; }
   // effect line of a category row: one item per setting, struck through when an upper category wins ("überstimmt");
   // deviation from a template is shown in the card footers, not here

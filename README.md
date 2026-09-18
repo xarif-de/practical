@@ -112,9 +112,9 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   reminders, repeat, status/busy/visibility/priority and links, each as a *template* (prefilled when
   the category is added, editable) or a *lock* (set on open and fixed in this UI; a differing stored value is
   replaced silently, the field shows the forced value). Location and repeat carry one mode per card, all-day/calendar/colour
-  and the four status values one per setting, reminders and links one per entry. For one setting the
-  first category wins; the category rows show what a rule does, strike through what a category above
-  overrides and mark a template the event deviates from as "changed". Every card lists the templates
+  and the four status values one per setting, reminders and links one per entry. For one setting a lock beats a
+  template, among equals the upper category wins; the category rows show what a rule does, strike
+  through what another category overrides and mark a template the event deviates from as "changed". Every card lists the templates
   and locks that touch it in a footer below a rule (name · badge · category · "changed");
   locked settings are greyed out. The rule editor is the same dialog in a rule mode with the same
   cards; its footers carry a chip per setting or entry that switches between "any" (setting disabled,
