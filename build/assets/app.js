@@ -414,6 +414,81 @@
   }
   $('#ed-status-tiles').addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b) return; const sel = f[b.dataset.sel];
     rrPop(b, [...sel.options].map(o => ({ v: o.value, label: o.textContent })), sel.value, v => { sel.value = v; stRender(); refresh(); }, `<div class="q">${esc(sel.dataset.label)}</div>`); b.setAttribute('aria-expanded', 'true'); });
+  // ---- note (round 17): the textarea stays plain text (DESCRIPTION). Suggestions while typing come from a
+  // lazily loaded index (contacts, categories, events, tasks) even without a prefix; picking one inserts
+  // @Name / #Category / !Title. Detected persons, links and categories are offered as chips that create the
+  // entry in the matching card. The view mode renders links, mentions and "- " lists. ----
+  const NC = $('#ed-note-card'), NT = NC.dataset, ntView = $('#ed-note-view'), ntFound = $('#ed-note-found');
+  let NTX = null, ntLoading = null, ntPop = null, ntTimer = 0;
+  const ntIndex = () => NTX ? Promise.resolve(NTX) : (ntLoading ||= fetch('/api/mentions').then(r => r.ok ? r.json() : { contacts: [], categories: [], events: [], tasks: [] }).then(d => (NTX = d)).catch(() => { ntLoading = null; return { contacts: [], categories: [], events: [], tasks: [] }; }));
+  const ntInvalidate = () => { NTX = null; ntLoading = null; };
+  const RE_URL = /\bhttps?:\/\/[^\s<>"')\]]+/gi, RE_MAIL = /(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, RE_TEL = /(?<![\w@.+-])\+?\d[\d ()\/-]{6,}\d(?![\w@])/g, RE_MENTION = /(?<![\w.])([@#!])(\p{L}[\p{L}\p{N}.-]*(?: \p{Lu}[\p{L}\p{N}.-]*){0,2})/gu;
+  const ntWordAtCaret = () => { const t = f.description, v = t.value.slice(0, t.selectionStart); const m = /(^|\s)([@#!]?)([^\s@#!]{1,60})$/.exec(v); return m ? { prefix: m[2], word: m[3], start: v.length - m[2].length - m[3].length } : null; };
+  const ntClosePop = () => { if (ntPop) { ntPop.remove(); ntPop = null; } };
+  async function ntSuggest() {
+    const w = ntWordAtCaret();
+    if (!w || (w.prefix ? w.word.length < 1 : w.word.length < 3)) { ntClosePop(); return; }
+    const ix = await ntIndex(), q = w.word.toLowerCase(), has = s => s.toLowerCase().includes(q);
+    const hits = [];
+    if (!w.prefix || w.prefix === '@') ix.contacts.filter(c => has(c.name)).slice(0, 4).forEach(c => hits.push({ p: '@', v: c.name, sub: NT.tContact + (c.email ? ' · ' + c.email : '') }));
+    if (!w.prefix || w.prefix === '#') ix.categories.filter(c => has(c.name)).slice(0, 3).forEach(c => hits.push({ p: '#', v: c.name, sub: NT.tCat + ' · ' + c.count }));
+    if (!w.prefix || w.prefix === '!') { ix.events.filter(e => has(e.summary)).slice(0, 3).forEach(e => hits.push({ p: '!', v: e.summary, sub: NT.tEvent + (e.date ? ' · ' + fmtD(e.date) : '') })); ix.tasks.filter(e => has(e.summary)).slice(0, 2).forEach(e => hits.push({ p: '!', v: e.summary, sub: NT.tTask })); }
+    ntClosePop();
+    if (!hits.length || ntWordAtCaret()?.word !== w.word) return;
+    ntPop = document.createElement('div'); ntPop.className = 'rrpop';
+    ntPop.innerHTML = hits.slice(0, 7).map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><span class="nt-pre">${h.p}</span><span>${esc(h.v)}</span><small>${esc(h.sub)}</small></button>`).join('');
+    document.body.appendChild(ntPop);
+    const r = f.description.getBoundingClientRect(), box = f.description.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
+    ntPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - ntPop.offsetWidth)) + scrollX}px`; ntPop.style.top = `${r.bottom + scrollY + 4}px`;
+    ntPop.addEventListener('mousedown', e => e.preventDefault()); // keep the textarea focused
+    ntPop.addEventListener('click', e => { const b = e.target.closest('.lk-hit'); if (b) ntPick(hits[+b.dataset.h]); });
+    ntPop._pick = () => ntPick(hits[0]);
+  }
+  function ntPick(h) { const w = ntWordAtCaret(); if (!w) return; const t = f.description, v = t.value, ins = h.p + h.v + ' '; t.value = v.slice(0, w.start) + ins + v.slice(t.selectionStart); const c = w.start + ins.length; t.setSelectionRange(c, c); ntClosePop(); ntChanged(); }
+  f.description.addEventListener('keydown', e => { if (ntPop && (e.key === 'Tab' || e.key === 'Enter') && e.target === f.description) { e.preventDefault(); ntPop._pick(); } else if (e.key === 'Escape' && ntPop) { e.stopPropagation(); ntClosePop(); } });
+  f.description.addEventListener('blur', () => setTimeout(ntClosePop, 150));
+  f.description.addEventListener('input', () => { ntSuggest(); clearTimeout(ntTimer); ntTimer = setTimeout(ntDetect, 300); });
+  const ntChanged = () => { grow(); refresh(); ntDetect(); };
+  // detection: what the note mentions that the other cards do not have yet
+  async function ntDetect() {
+    const text = f.description.value; ntFound.innerHTML = '';
+    if (!text.trim() || !form.classList.contains('mode-edit')) return;
+    const ix = await ntIndex(); if (f.description.value !== text) return;
+    const chips = [];
+    const present = new Set(peAll().map(p => p.email.toLowerCase()));
+    const mentioned = new Set([...text.matchAll(RE_MENTION)].filter(m => m[1] === '@').map(m => m[2].replace(/[.,;:!?]+$/, '').toLowerCase()));
+    ix.contacts.filter(c => c.email && !present.has(c.email.toLowerCase())).filter(c => mentioned.has(c.name.toLowerCase()) || (c.name.length >= 5 && new RegExp('(?<![\\p{L}])' + c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}])', 'iu').test(text))).slice(0, 4).forEach(c => chips.push({ k: 'person', icon: 'i-users', text: c.name, sub: NT.tPeople, data: c }));
+    [...new Set((text.match(RE_URL) || []).map(u => u.replace(/[.,;:!?]+$/, '')))].filter(u => !LK.links.some(l => l.uri === u)).slice(0, 4).forEach(u => chips.push({ k: 'link', icon: 'i-ext', text: u.replace(/^https?:\/\/(www\.)?/i, ''), sub: NT.tLinks, data: u }));
+    const have = new Set(chips2().map(c => c.toLowerCase()));
+    const tags = new Set([...text.matchAll(RE_MENTION)].filter(m => m[1] === '#').map(m => m[2].replace(/[.,;:!?]+$/, '')));
+    ix.categories.filter(c => c.name.length >= 4 && new RegExp('(?<![\\p{L}#])' + c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}])', 'iu').test(text)).forEach(c => tags.add(c.name));
+    [...tags].filter(t => !have.has(t.toLowerCase())).slice(0, 4).forEach(t => chips.push({ k: 'cat', icon: 'i-tag', text: t, sub: NT.tCats, data: t }));
+    [...new Set(text.match(RE_TEL) || [])].slice(0, 2).forEach(t => chips.push({ k: 'tel', icon: 'i-phone', text: t.trim(), sub: NT.tCall, data: 'tel:' + t.replace(/[^\d+]/g, ''), ghost: true }));
+    [...new Set(text.match(RE_MAIL) || [])].filter(m => !present.has(m.toLowerCase())).slice(0, 2).forEach(m => chips.push({ k: 'mail', icon: 'i-mail', text: m, sub: NT.tMail, data: 'mailto:' + m, ghost: true }));
+    ntFound.innerHTML = chips.map((c, i) => `<button class="pillbtn${c.ghost ? ' ghost' : ''}" type="button" data-nt="${i}"><svg class="ico"><use href="#${c.icon}"/></svg><span>${esc(c.text)}</span><small>${esc(c.sub)}</small></button>`).join('');
+    ntFound._chips = chips;
+  }
+  const chips2 = () => chips(); // categories currently on the event (the chips widget)
+  ntFound.addEventListener('click', e => { const b = e.target.closest('[data-nt]'); if (!b) return; const c = ntFound._chips[+b.dataset.nt];
+    if (c.k === 'person') { addCard('people'); PEOPLE.attendees.push({ name: c.data.name, email: c.data.email, role: 'REQ-PARTICIPANT', status: '', cutype: '', extra: [], contacts: [{ key: c.data.key, name: c.data.name, sub: c.data.email, initials: c.data.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(), color_index: 1 }] }); peopleRender(); }
+    else if (c.k === 'link') { addCard('links'); lkAddUri(c.data); }
+    else if (c.k === 'cat') { catAdd(c.data); }
+    else { location.href = c.data; return; }
+    refresh(); ntDetect(); });
+  const catAdd = v => { addCard('cats'); addChip(v); refresh(); };
+  // view mode: links, phone numbers, e-mail addresses and @ # ! mentions become clickable; "- " lines are bullets
+  function ntRender() {
+    const t = f.description.value;
+    let h = esc(t).replace(RE_URL, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(RE_MAIL, m => `<a href="mailto:${m}">${m}</a>`).replace(RE_TEL, m => `<a href="tel:${m.replace(/[^\d+]/g, '')}">${m}</a>`);
+    h = h.replace(RE_MENTION, (_, p, v) => { const name = v.replace(/[.,;:!?]+$/, ''), rest = v.slice(name.length); return `<span class="nt-m" data-k="${p}" data-v="${esc(name)}">${esc(name)}</span>${rest}`; }).replace(/^- (.*)$/gm, '• $1');
+    ntView.innerHTML = h;
+  }
+  const ntSearch = v => { const q = $('#q'); if (q) { q.value = v; q.focus(); q.dispatchEvent(new Event('input', { bubbles: true })); } };
+  ntView.addEventListener('click', async e => { const m = e.target.closest('.nt-m'); if (!m) return; const k = m.dataset.k, v = m.dataset.v.toLowerCase();
+    if (k === '#') { ntSearch(m.dataset.v); return; }
+    const ix = await ntIndex();
+    if (k === '@') { const c = ix.contacts.find(x => x.name.toLowerCase() === v); location.href = c ? '/contacts#' + c.key : '/contacts'; }
+    else { const ev = ix.events.find(x => x.summary.toLowerCase() === v) || ix.events.find(x => x.summary.toLowerCase().startsWith(v)); const tk = !ev && (ix.tasks.find(x => x.summary.toLowerCase() === v) || ix.tasks.find(x => x.summary.toLowerCase().startsWith(v))); if (ev) openEditor(ev.key); else if (tk) location.href = '/tasks#' + tk.key; else ntSearch(m.dataset.v); } });
   // ---- people (design C, display only): ORGANIZER/ATTENDEE are shown as chips whose ring colour is the
   // reply, a click opens a detail card with role, reply, delegation, address and the actions. Nothing is
   // editable: RustiCal does no scheduling, so the list is a record, not an invitation tool; the persons are
@@ -431,7 +506,7 @@
   const peAv = p => { const ic = p.cutype === 'GROUP' ? 'i-users' : p.cutype === 'ROOM' ? 'i-room' : p.cutype === 'RESOURCE' ? 'i-res' : null; const ini = peName(p).split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'; const c = p.contacts && p.contacts.length === 1 ? p.contacts[0] : null;
     return ic ? `<span class="pav none" title="${esc(peType(p))}"><svg class="ico"><use href="#${ic}"/></svg></span>` : c ? `<span class="pav" style="background:var(--c${c.color_index})" title="${esc(PT.tKnown)}">${esc(ini)}</span>` : `<span class="pav none" title="${esc(PT.tUnknown)}">${esc(ini)}</span>`; };
   function peopleInit(organizer, attendees) { PEOPLE = { organizer: organizer || null, attendees: attendees || [] }; peopleRender(); }
-  function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $('#ed-people-detail').innerHTML = '';
+  function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $('#ed-people-detail').innerHTML = ''; f.people_json.value = all.length ? JSON.stringify(all.map(p => [p.role, p.email])) : '';
     $('#ed-people').innerHTML = all.map((p, i) => `<button class="pchip ${p.role === 'ORGANIZER' ? '' : peStatus(p)}" type="button" data-i="${i}" title="${esc(p.email)}">${peAv(p)}<span>${esc(peName(p))}</span>${p.role === 'ORGANIZER' ? `<small>${esc(PT.tOrgShort)}</small>` : p.role === 'OPT-PARTICIPANT' ? `<small>${esc(PT.tOptShort)}</small>` : ''}</button>`).join(''); }
   function peopleDetail(i) { const p = peAll()[i]; const n = (p.contacts || []).length; const status = p.role === 'ORGANIZER' ? '' : `<span class="pst ${peStatus(p)}">${esc(statusText(p) || D.tStatus.split('|')[0])}</span>`;
     $('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
@@ -790,7 +865,7 @@
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
   function refresh() { whenLine(); rrSync(); grow(); alTimeline(); updateButtons(); }
-  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
+  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
@@ -828,7 +903,7 @@
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
@@ -858,7 +933,7 @@
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
       if (!r.ok) { $('#ed-error').textContent = (r.status === 409 ? T.conflict : T.err + ' ' + r.status) + ': ' + (await r.text()).slice(0, 200); return; }
-      close(); load(false);
+      ntInvalidate(); close(); load(false);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
   $('#ed-delete').onclick = async () => { if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };

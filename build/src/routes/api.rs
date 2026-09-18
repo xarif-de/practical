@@ -91,6 +91,35 @@ async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate
     Ok(Json(d))
 }
 
+#[derive(serde::Serialize)]
+pub struct Mentions {
+    pub contacts: Vec<MentionContact>,
+    pub categories: Vec<MentionCategory>,
+    pub events: Vec<MentionEvent>,
+    pub tasks: Vec<MentionEvent>,
+}
+#[derive(serde::Serialize)]
+pub struct MentionContact { pub name: String, pub email: String, pub key: String }
+#[derive(serde::Serialize)]
+pub struct MentionCategory { pub name: String, pub count: usize }
+#[derive(serde::Serialize)]
+pub struct MentionEvent { pub summary: String, pub key: String, pub uid: String, pub date: Option<chrono::NaiveDate> }
+
+/// Index for the note editor's suggestions and detection: contacts, categories with counts,
+/// events (90 days back, a year ahead, one per UID, at most 500) and open tasks. Loaded on the
+/// first keystroke in a note and cached in the page.
+async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx) -> AppResult<Json<Mentions>> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
+    let contacts = contacts::contacts_for(&state, &abs).await?.into_iter().map(|c| MentionContact { name: c.full_name.clone(), email: c.primary_email(), key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id) }).filter(|c| !c.name.trim().is_empty()).collect();
+    let categories = events::category_counts(&state, &user).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
+    let cals = events::visible_calendars(&state, &user, None).await?;
+    let mut seen = std::collections::HashSet::new();
+    let events = events::instances(&state, &cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
+    let tasks = tasks::tasks_for(&state, &cals, vc.tz).await?.into_iter().filter(|t| !t.completed).map(|t| MentionEvent { summary: t.summary.clone(), key: t.key(), uid: t.uid.clone(), date: t.due.map(|d| d.date()) }).collect();
+    Ok(Json(Mentions { contacts, categories, events, tasks }))
+}
+
 /// The n-th embedded (base64) ATTACH of an event as a download.
 async fn event_attachment(State(state): State<SharedState>, user: Principal, Path((p, c, id, n)): Path<(String, String, String, usize)>) -> AppResult<axum::response::Response> {
     use axum::response::IntoResponse;
@@ -337,6 +366,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{p}/{c}/{id}", axum::routing::put(update_task).delete(delete_task))
         .route("/api/search", get(api_search))
+        .route("/api/mentions", get(mentions))
         .route("/api/push/key", get(push_key))
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
         .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64

@@ -877,9 +877,9 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .rr .rrlegend span { white-space: nowrap; } .ed .cardform .rr .rrlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
 .ed .cardform .rr .rrsep { margin: 8px 0 6px 26px; border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
 .ed .cardform .rr .rrbottom { padding-left: 26px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 34px; }
-.ed .cardform .rr .pillbtn { all: unset; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 12.5px; background: var(--bg); color: var(--fg); }
-.ed .cardform .rr .pillbtn.ghost { border-style: dashed; color: var(--fg-3); }
-.ed .cardform .rr .pillbtn:disabled { cursor: default; opacity: .6; }
+.ed .cardform .pillbtn { all: unset; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 12.5px; background: var(--bg); color: var(--fg); }
+.ed .cardform .pillbtn.ghost { border-style: dashed; color: var(--fg-3); }
+.ed .cardform .pillbtn:disabled { cursor: default; opacity: .6; }
 .ed .cardform .rr .rrmode { padding: 8px 0 2px 26px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--fg-3); }
 .ed .cardform .rr .pickmsg { margin: 4px 0 8px 26px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--c4) 18%, transparent); color: var(--fg); font-size: 13px; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 .ed .cardform .rr .pickmsg .btn { grid-column: 2; justify-self: end; padding: 4px 10px; font-size: 13px; } /* the narrow card: the button goes under the text */
@@ -934,6 +934,19 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .stile b { font-weight: 600; font-size: 13.5px; }
 .ed .cardform .stile.off .ico { color: var(--fg-3); }
 .ed .cardform .stile.off b { font-weight: 400; color: var(--fg-3); }
+/* note (round 17): the textarea edits, a rendered view (links, mentions, lists), detection chips
+   that create entries in the people/links/categories cards, suggestion popover rows */
+.ed .cardform .nt-view { padding: 2px 0 4px 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ed .cardform .nt-view a { color: var(--accent); text-decoration: none; }
+.ed .cardform .nt-view .nt-m { cursor: pointer; border-radius: 5px; padding: 0 3px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ed .cardform .nt-view .nt-m[data-k="#"] { color: var(--c2); background: color-mix(in srgb, var(--c2) 12%, transparent); }
+.ed .cardform .nt-view .nt-m[data-k="!"] { color: var(--c5); background: color-mix(in srgb, var(--c5) 12%, transparent); }
+.ed .cardform .nt-found { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0 26px; }
+.ed .cardform .nt-found:empty { display: none; }
+.ed .cardform .nt-found .pillbtn .ico { width: 12px; height: 12px; }
+.ed .cardform .nt-found .pillbtn small { color: var(--fg-3); }
+.ed .cardform .nt-found .pillbtn span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrpop .nt-pre { color: var(--fg-3); font-family: ui-monospace, monospace; font-size: 11px; margin-right: 4px; }
 /* status / links cards, colour and coordinates */
 .ev.cancelled { text-decoration: line-through; opacity: .55; }
 .ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }

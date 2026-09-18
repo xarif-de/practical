@@ -98,6 +98,13 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   The entries are grouped: a conference gets a join card with provider, meeting id (Zoom `/j/…`,
   Meet code) and a "password in the link" hint, then "in this calendar", then "on the internet".
   FMTTYPE, FILENAME, SIZE and FEATURE are modelled, other parameters ride along untouched.
+- **Notes** (event card): the note stays plain text (DESCRIPTION). While typing, an index of
+  contacts, categories, events and tasks (`GET /api/mentions`, loaded on the first keystroke) offers
+  suggestions even without a prefix; picking one inserts `@Name`, `#Category` or `!Title`. Persons,
+  links and categories the note mentions are offered as chips that create the entry in the matching
+  card; phone numbers and e-mail addresses become call/write chips. The view renders links, numbers,
+  mentions (contact, category search, event) and "- " lists. A changed description drops Outlook's
+  `X-ALT-DESC` and `STYLED-DESCRIPTION`, which would otherwise keep showing the old text elsewhere.
 - **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
   would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
   chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,

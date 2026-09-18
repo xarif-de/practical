@@ -389,6 +389,27 @@ fn related_lines(list: &[Related]) -> Vec<String> {
     }).collect()
 }
 
+/// CATEGORIES across every visible calendar (events and tasks), most used first. Values a
+/// client stamps on every object ("Come From :com.appgenix.bizcal") are not categories and are hidden.
+pub async fn category_counts(state: &AppState, user: &Principal) -> AppResult<Vec<(String, usize)>> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for cal in visible_calendars(state, user, None).await? {
+        for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+            let cats = match obj.get_inner().get_inner() {
+                CalendarInnerData::Event(ev, _) => ical::list(ev, "CATEGORIES"),
+                CalendarInnerData::Todo(t, _) => ical::list(t, "CATEGORIES"),
+                _ => vec![],
+            };
+            for c in cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty() && !c.starts_with("Come From :")) {
+                *counts.entry(c).or_default() += 1;
+            }
+        }
+    }
+    let mut out: Vec<(String, usize)> = counts.into_iter().collect();
+    out.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.to_lowercase().cmp(&b.0.to_lowercase())));
+    Ok(out)
+}
+
 /// Fills `target` of every RELATED-TO whose UID is an event or task in a visible calendar. One
 /// scan of all objects (≈ 320 ms in a debug build on 3 800 objects), only called when the
 /// event has RELATED-TO lines.
@@ -1107,8 +1128,15 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
         // binary ATTACHs are kept only when the client sent them back with `keep` (else: removed)
         let keep: HashSet<usize> = input.links.iter().filter(|x| x.embedded && x.keep && x.data.is_none()).filter_map(|x| x.bin_index).collect();
         let mut bin = 0usize;
+        // a changed DESCRIPTION makes Outlook's X-ALT-DESC (and STYLED-DESCRIPTION) stale: drop them then
+        let stored = r.props.iter().find(|x| prop_name(x) == "DESCRIPTION").map(|x| ical::unescape(ical::split_line(x).2.trim())).unwrap_or_default();
+        let desc_changed = stored.trim() != input.description.trim();
         for x in r.props.iter().filter(|x| !is_managed(x)) {
-            if prop_name(x) == "ATTACH" && is_binary_attach(&ical::split_line(x).1) {
+            let name = prop_name(x);
+            if desc_changed && (name == "X-ALT-DESC" || name == "STYLED-DESCRIPTION") {
+                continue;
+            }
+            if name == "ATTACH" && is_binary_attach(&ical::split_line(x).1) {
                 let i = bin;
                 bin += 1;
                 if !keep.contains(&i) {
@@ -1361,6 +1389,18 @@ mod tests {
 
     /// The demo fixture carries every VEVENT property there is (RFC 5545/7986/9073/9074 + X-);
     /// an unchanged round trip through the editor's model must keep all of them, alarm by alarm.
+
+    #[test]
+    fn changed_description_drops_stale_html_description() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let (raw, _) = split_ics(include_str!("../../tests/fixtures/demo-event-full.ics"));
+        let mut input: EventInput = serde_json::from_str(r#"{"principal":"p","cal_id":"c","summary":"s","description":"Zeilen mit Umbruch\nund Sonderzeichen, Komma; Semikolon.\nZweiter Absatz.","start":"2026-09-22T19:00:00","end":"2026-09-22T20:00:00"}"#).unwrap();
+        let same = build_vevent("u", 1, &input, tz, Some(&raw)).unwrap().join("\n");
+        assert!(same.contains("X-ALT-DESC") && same.contains("STYLED-DESCRIPTION"), "{same}");
+        input.description = "neuer Text".into();
+        let changed = build_vevent("u", 1, &input, tz, Some(&raw)).unwrap().join("\n");
+        assert!(!changed.contains("X-ALT-DESC") && !changed.contains("STYLED-DESCRIPTION") && changed.contains("DESCRIPTION:neuer Text"), "{changed}");
+    }
 
     #[test]
     fn links_related_and_embedded_attachments() {
