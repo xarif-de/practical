@@ -4,6 +4,7 @@
 use crate::domain::collections;
 use crate::domain::contacts;
 use crate::domain::events::{self, Instance};
+use crate::domain::tasks;
 use crate::error::AppResult;
 use crate::state::AppState;
 use chrono::{Datelike, Duration, NaiveDate};
@@ -14,6 +15,18 @@ pub struct SearchResult {
     pub jump: Option<JumpTo>,
     pub events: Vec<EventHit>,
     pub contacts: Vec<ContactHit>,
+    /// open tasks first; used by the event editor's "link a task" search
+    pub tasks: Vec<TaskHit>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TaskHit {
+    pub key: String,
+    pub uid: String,
+    pub summary: String,
+    pub due: Option<NaiveDate>,
+    pub completed: bool,
+    pub cal_name: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -26,6 +39,7 @@ pub struct JumpTo {
 #[derive(Debug, serde::Serialize)]
 pub struct EventHit {
     pub key: String,
+    pub uid: String,
     pub summary: String,
     pub date: NaiveDate,
     pub time: String,
@@ -100,6 +114,7 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
     let ql = q.trim().to_lowercase();
     let mut ev_hits = vec![];
     let mut ct_hits = vec![];
+    let mut task_hits = vec![];
     if ql.len() >= 2 {
         let cals = events::visible_calendars(state, user, None).await?;
         // ±2 years around today: scanning 4 000 objects takes ~40 ms on the real store
@@ -112,7 +127,7 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
             if !seen.insert((i.key(), i.start)) {
                 continue;
             }
-            ev_hits.push(EventHit { key: i.key(), summary: i.summary.clone(), date: i.start.date(), time: i.time_label(), color: i.color.clone(), cal_name: i.cal_name.clone() });
+            ev_hits.push(EventHit { key: i.key(), uid: i.uid.clone(), summary: i.summary.clone(), date: i.start.date(), time: i.time_label(), color: i.color.clone(), cal_name: i.cal_name.clone() });
             if ev_hits.len() >= 6 {
                 break;
             }
@@ -127,8 +142,16 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
                 }
             }
         }
+        for t in tasks::tasks_for(state, &cals, tz).await? {
+            if t.summary.to_lowercase().contains(&ql) {
+                task_hits.push(TaskHit { key: t.key(), uid: t.uid.clone(), summary: t.summary.clone(), due: t.due.map(|d| d.date()), completed: t.completed, cal_name: t.cal_name.clone() });
+                if task_hits.len() >= 6 {
+                    break;
+                }
+            }
+        }
     }
-    Ok(SearchResult { jump, events: ev_hits, contacts: ct_hits })
+    Ok(SearchResult { jump, events: ev_hits, contacts: ct_hits, tasks: task_hits })
 }
 
 #[cfg(test)]

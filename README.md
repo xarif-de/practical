@@ -12,7 +12,7 @@ Week (stream), Month (tiles with continuous multi-day bars) and the "More" views
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
 presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),
-organizer and attendees as chips (display only, with a jump to the matching address-book entry), location with coordinates and map actions, status/busy/visibility/
+organizer and attendees as chips (display only, with a jump to the matching address-book entry), links grouped as conference / in this calendar / internet with a join card, embedded files and event/task links, location with coordinates and map actions, status/busy/visibility/
 priority as four tiles whose icon follows the value, links, attachments and conference URIs, an event colour, categories, notes, presets ·
 contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
@@ -89,6 +89,15 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   dirty tracking, reset and submit are untouched; the view mode reads the values as one line. TRANSP and
   CLASS have RFC defaults (OPAQUE, PUBLIC), shown as "default" so an unset value stays unset in the file.
   A priority outside 1/5/9 (Outlook writes 2) keeps its number and maps to the RFC bands for the icon.
+- **Links & attachments** (event card): one paste field detects the kind of a link (Zoom, Teams,
+  Meet, Jitsi, Webex, BigBlueButton hosts → conference; file extensions → attachment; else website),
+  a search over events and tasks links them as RELATED-TO (resolved to a title and date on load), and
+  a drop zone embeds files up to 2 MiB each (6 MiB per save) as base64 ATTACH with FMTTYPE and
+  FILENAME; larger files belong in the cloud as a link. Embedded attachments are downloadable
+  (`GET /api/events/{key}/attach/{n}`) and can be removed again (the client sends the ones to keep).
+  The entries are grouped: a conference gets a join card with provider, meeting id (Zoom `/j/…`,
+  Meet code) and a "password in the link" hint, then "in this calendar", then "on the internet".
+  FMTTYPE, FILENAME, SIZE and FEATURE are modelled, other parameters ride along untouched.
 - **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
   would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
   chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,

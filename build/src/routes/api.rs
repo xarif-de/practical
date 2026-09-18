@@ -21,6 +21,7 @@ use axum::Json;
 use futures_util::StreamExt;
 use futures_util::stream::Stream;
 use rustical_store::auth::Principal;
+use rustical_store::CalendarReadStore;
 use serde::Deserialize;
 use std::convert::Infallible;
 use tower_sessions::Session;
@@ -79,6 +80,7 @@ pub async fn create_event(State(state): State<SharedState>, user: Principal, ctx
 async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let mut d = events::get_event(&state, &user, &p, &c, &id, vc.tz).await?;
+    events::resolve_related(&state, &user, &mut d.related, vc.tz).await?;
     if d.organizer.is_some() || !d.attendees.is_empty() {
         let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
         let all = contacts::contacts_for(&state, &abs).await?;
@@ -87,6 +89,17 @@ async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate
         }
     }
     Ok(Json(d))
+}
+
+/// The n-th embedded (base64) ATTACH of an event as a download.
+async fn event_attachment(State(state): State<SharedState>, user: Principal, Path((p, c, id, n)): Path<(String, String, String, usize)>) -> AppResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    crate::domain::collections::ensure_owner(&user, &p)?;
+    let obj = state.calendars.get_object(&p, &c, &id, false).await?;
+    let (raw, _) = events::split_ics(&obj.get_ics());
+    let (fmt, name, bytes) = events::embedded_attachment(&raw.props, n).ok_or(AppError::NotFound)?;
+    let safe: String = name.chars().filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ')).collect();
+    Ok(([(axum::http::header::CONTENT_TYPE, fmt), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", if safe.trim().is_empty() { format!("anhang-{}", n + 1) } else { safe })), (axum::http::header::CACHE_CONTROL, "private, max-age=0".into())], bytes).into_response())
 }
 
 #[derive(Deserialize)]
@@ -317,6 +330,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/geo/reverse", get(geo_reverse))
         .route("/api/changes", get(changes))
         .route("/api/events/{p}/{c}/{id}", get(get_event).put(update_event).delete(delete_event))
+        .route("/api/events/{p}/{c}/{id}/attach/{n}", get(event_attachment))
         .route("/api/contacts", post(create_contact))
         .route("/api/contacts/{p}/{a}/{id}", get(get_contact).put(update_contact).delete(delete_contact))
         .route("/api/contacts/{p}/{a}/{id}/vcf", get(contact_vcf))
@@ -325,4 +339,5 @@ pub fn router() -> Router<SharedState> {
         .route("/api/search", get(api_search))
         .route("/api/push/key", get(push_key))
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
+        .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64
 }

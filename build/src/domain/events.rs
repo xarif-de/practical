@@ -200,6 +200,8 @@ pub struct EventDetail {
     pub geo: Option<(f64, f64)>,
     /// URL, ATTACH (URIs) and CONFERENCE
     pub links: Vec<Link>,
+    /// RELATED-TO, resolved to events/tasks where the UID is known
+    pub related: Vec<Related>,
     pub etag: String,
     pub has_overrides: bool,
     pub timezone: String,
@@ -245,6 +247,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         color: ical::text(main, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_default(),
         geo: ical::text(main, "GEO").and_then(|g| { let (a, b) = g.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) }),
         links: links_of(&raw.props),
+        related: related_of(&raw.props),
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
         timezone,
@@ -295,12 +298,15 @@ pub struct EventInput {
     #[serde(default)]
     pub links: Vec<Link>,
     #[serde(default)]
+    pub related: Vec<Related>,
+    #[serde(default)]
     pub timezone: Option<String>,
 }
 
-/// URL / ATTACH (URI form) / CONFERENCE as one list; parameters the editor does not model
-/// (FMTTYPE, FEATURE, X-…) ride along in `extra`. Binary ATTACHs are not modelled: they stay
-/// in the preserved lines and are shown read-only as `embedded`.
+/// URL / ATTACH / CONFERENCE as one list. FMTTYPE, FILENAME, SIZE and FEATURE are fields, every
+/// other parameter (X-NC-…, X-…) rides along in `extra`. An embedded (BASE64) ATTACH is read as
+/// `embedded` with its `bin_index` (position among the binary lines of the master); the client
+/// sends it back with `keep=true` to retain it, and a new file as `data` (base64, input only).
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Link {
     /// url | attach | conference
@@ -313,7 +319,121 @@ pub struct Link {
     #[serde(default)]
     pub embedded: bool,
     #[serde(default)]
+    pub filename: String,
+    /// FMTTYPE (media type)
+    #[serde(default)]
+    pub fmt: String,
+    /// bytes: SIZE parameter, or the decoded length of an embedded file
+    #[serde(default)]
+    pub size: Option<u64>,
+    /// CONFERENCE FEATURE values (AUDIO, VIDEO, CHAT, SCREEN, PHONE, FEED, MODERATOR)
+    #[serde(default)]
+    pub features: Vec<String>,
+    #[serde(default)]
+    pub bin_index: Option<usize>,
+    #[serde(default)]
+    pub keep: bool,
+    #[serde(default, skip_serializing)]
+    pub data: Option<String>,
+    #[serde(default)]
     pub extra: Vec<(String, String)>,
+}
+
+/// RELATED-TO: a link to another event or task by UID; `target` is resolved for the editor
+/// (`resolve_related`), never read back from the client.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Related {
+    #[serde(default)]
+    pub uid: String,
+    /// RELTYPE (PARENT | CHILD | SIBLING), empty = no parameter
+    #[serde(default)]
+    pub reltype: String,
+    #[serde(default)]
+    pub extra: Vec<(String, String)>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub target: Option<RelatedTarget>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RelatedTarget {
+    /// event | task
+    pub kind: String,
+    pub key: String,
+    pub summary: String,
+    /// start (event) or due (task) as a local date
+    pub date: Option<NaiveDate>,
+    pub done: bool,
+}
+
+fn related_of(props: &[String]) -> Vec<Related> {
+    props.iter().filter(|l| prop_name(l) == "RELATED-TO").map(|l| {
+        let (_, params, value) = ical::split_line(l);
+        let mut r = Related { uid: value.trim().to_string(), ..Default::default() };
+        for (k, v) in params {
+            if k == "RELTYPE" { r.reltype = v.to_ascii_uppercase() } else { r.extra.push((k, v)) }
+        }
+        r
+    }).collect()
+}
+
+fn related_lines(list: &[Related]) -> Vec<String> {
+    list.iter().filter(|r| !r.uid.trim().is_empty() && !r.uid.contains(['\n', '\r', ';', ':'])).map(|r| {
+        let mut line = "RELATED-TO".to_string();
+        if let Some(t) = one_of(&r.reltype, &["PARENT", "CHILD", "SIBLING"]) {
+            line.push_str(&format!(";RELTYPE={t}"));
+        }
+        for (k, v) in &r.extra {
+            line.push_str(&format!(";{k}={v}"));
+        }
+        format!("{line}:{}", r.uid.trim())
+    }).collect()
+}
+
+/// Fills `target` of every RELATED-TO whose UID is an event or task in a visible calendar. One
+/// scan of all objects (≈ 320 ms in a debug build on 3 800 objects), only called when the
+/// event has RELATED-TO lines.
+pub async fn resolve_related(state: &AppState, user: &Principal, related: &mut [Related], tz: chrono_tz::Tz) -> AppResult<()> {
+    let wanted: HashSet<String> = related.iter().map(|r| r.uid.trim().to_string()).filter(|u| !u.is_empty()).collect();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let mut found: std::collections::HashMap<String, RelatedTarget> = std::collections::HashMap::new();
+    for cal in visible_calendars(state, user, None).await? {
+        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+            let uid = obj.get_uid().to_string();
+            if !wanted.contains(&uid) || found.contains_key(&uid) {
+                continue;
+            }
+            let key = format!("{}/{}/{}", cal.principal, cal.id, id);
+            match obj.get_inner().get_inner() {
+                CalendarInnerData::Event(ev, _) => {
+                    found.insert(uid, RelatedTarget { kind: "event".into(), key, summary: ical::text(ev, "SUMMARY").unwrap_or_default(), date: Some(ical::local(&ev.dtstart.0, tz).0.date()), done: ev.get_property("STATUS").is_some_and(|s| s.value.eq_ignore_ascii_case("CANCELLED")) });
+                }
+                CalendarInnerData::Todo(t, _) => {
+                    found.insert(uid, RelatedTarget { kind: "task".into(), key, summary: ical::text(t, "SUMMARY").unwrap_or_default(), date: t.due.as_ref().map(|d| ical::local(&d.0, tz).0.date()), done: t.get_property("STATUS").is_some_and(|s| s.value.eq_ignore_ascii_case("COMPLETED")) || t.get_property("COMPLETED").is_some() });
+                }
+                _ => {}
+            }
+            if found.len() == wanted.len() {
+                break;
+            }
+        }
+    }
+    for r in related.iter_mut() {
+        r.target = found.get(r.uid.trim()).cloned();
+    }
+    Ok(())
+}
+
+/// 2 MiB per embedded file, 6 MiB of new files per save (the JSON body carries them as base64).
+pub const EMBED_FILE_MAX: usize = 2 * 1024 * 1024;
+pub const EMBED_TOTAL_MAX: usize = 6 * 1024 * 1024;
+
+/// Decoded byte length of a base64 text (ignoring whitespace), without decoding it.
+fn base64_len(b64: &str) -> usize {
+    let n = b64.bytes().filter(|b| !b.is_ascii_whitespace()).count();
+    let pad = b64.trim_end().bytes().rev().take_while(|b| *b == b'=').count();
+    n / 4 * 3 - pad
 }
 
 fn is_binary_attach(params: &[(String, String)]) -> bool {
@@ -321,25 +441,46 @@ fn is_binary_attach(params: &[(String, String)]) -> bool {
 }
 
 fn links_of(props: &[String]) -> Vec<Link> {
+    let mut bin = 0usize;
     props.iter().filter_map(|l| {
         let (name, params, value) = ical::split_line(l);
         let kind = match name.as_str() { "URL" => "url", "ATTACH" => "attach", "CONFERENCE" => "conference", _ => return None };
         let mut link = Link { kind: kind.into(), uri: value.trim().to_string(), ..Default::default() };
-        if kind == "attach" && is_binary_attach(&params) {
+        let binary = kind == "attach" && is_binary_attach(&params);
+        if binary {
             link.embedded = true;
+            link.keep = true;
             link.uri = String::new();
-            link.label = params.iter().find(|(k, _)| k == "FMTTYPE").map(|(_, v)| v.clone()).unwrap_or_default();
-            return Some(link);
+            link.size = Some(base64_len(value.trim()) as u64);
+            link.bin_index = Some(bin);
+            bin += 1;
         }
         for (k, v) in params {
             match k.as_str() {
                 "LABEL" => link.label = v.trim_matches('"').to_string(),
-                "VALUE" => {}
+                "FMTTYPE" => link.fmt = v.trim_matches('"').to_string(),
+                "FILENAME" | "X-FILENAME" => link.filename = v.trim_matches('"').trim_start_matches('/').to_string(),
+                "SIZE" => link.size = v.trim().parse().ok().or(link.size),
+                "FEATURE" => link.features = v.split(',').map(|f| f.trim().to_ascii_uppercase()).filter(|f| !f.is_empty()).collect(),
+                "VALUE" | "ENCODING" => {}
                 _ => link.extra.push((k, v)),
             }
         }
         Some(link)
     }).collect()
+}
+
+/// The n-th embedded ATTACH of a stored master: (media type, file name, bytes).
+pub fn embedded_attachment(props: &[String], n: usize) -> Option<(String, String, Vec<u8>)> {
+    use base64ct::Encoding;
+    let line = props.iter().filter(|l| prop_name(l) == "ATTACH" && is_binary_attach(&ical::split_line(l).1)).nth(n)?;
+    let (_, params, value) = ical::split_line(line);
+    let get = |k: &str| params.iter().find(|(pk, _)| pk == k).map(|(_, v)| v.trim_matches('"').to_string());
+    let fmt = get("FMTTYPE").filter(|f| f.contains('/')).unwrap_or_else(|| "application/octet-stream".into());
+    let name = get("FILENAME").or_else(|| get("X-FILENAME")).map(|n| n.trim_start_matches('/').to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("anhang-{}", n + 1));
+    let clean: String = value.chars().filter(|c| !c.is_whitespace()).collect();
+    let bytes = base64ct::Base64::decode_vec(&clean).ok()?;
+    Some((fmt, name, bytes))
 }
 
 fn link_lines(links: &[Link]) -> Vec<String> {
@@ -361,16 +502,61 @@ fn link_lines(links: &[Link]) -> Vec<String> {
         if name == "CONFERENCE" {
             line.push_str(";VALUE=URI");
         }
-        for (k, v) in &l.extra {
-            line.push_str(&format!(";{k}={v}"));
-        }
+        line.push_str(&link_params(l, name == "CONFERENCE"));
         let label = l.label.trim().replace('"', "");
-        if !label.is_empty() && name != "URL" {
-            line.push_str(&format!(";LABEL=\"{label}\""));
+        if !label.is_empty() {
+            line.push_str(&format!(";LABEL=\"{label}\"")); // LABEL is registered for CONFERENCE (RFC 7986); on URL/ATTACH it is an other-param every parser ignores
         }
         out.push(format!("{line}:{uri}"));
     }
     out
+}
+
+/// FMTTYPE / FILENAME / SIZE / FEATURE / extra as parameter text (leading `;`).
+fn link_params(l: &Link, conference: bool) -> String {
+    let mut p = String::new();
+    let clean = |v: &str| v.trim().replace(['"', ';', ':', '\n', '\r'], "");
+    if !l.fmt.trim().is_empty() {
+        p.push_str(&format!(";FMTTYPE={}", clean(&l.fmt)));
+    }
+    if !l.filename.trim().is_empty() {
+        let n = clean(&l.filename);
+        p.push_str(&if n.contains([',', ' ']) { format!(";FILENAME=\"{n}\"") } else { format!(";FILENAME={n}") });
+    }
+    if let Some(sz) = l.size.filter(|_| !l.embedded) {
+        p.push_str(&format!(";SIZE={sz}"));
+    }
+    if conference && !l.features.is_empty() {
+        p.push_str(&format!(";FEATURE={}", l.features.iter().map(|f| clean(f).to_ascii_uppercase()).collect::<Vec<_>>().join(",")));
+    }
+    for (k, v) in &l.extra {
+        p.push_str(&format!(";{k}={v}"));
+    }
+    p
+}
+
+/// New embedded files as `ATTACH;…;ENCODING=BASE64;VALUE=BINARY:` lines, size-checked.
+fn embedded_lines(links: &[Link]) -> AppResult<Vec<String>> {
+    let mut out = vec![];
+    let mut total = 0usize;
+    for l in links.iter().filter(|l| l.embedded) {
+        let Some(data) = l.data.as_deref() else { continue };
+        let clean: String = data.chars().filter(|c| !c.is_whitespace()).collect();
+        if clean.is_empty() || !clean.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=') {
+            return Err(AppError::BadRequest("attachment is not base64".into()));
+        }
+        let n = base64_len(&clean);
+        total += n;
+        if n > EMBED_FILE_MAX || total > EMBED_TOTAL_MAX {
+            return Err(AppError::BadRequest(format!("attachment too large: {} bytes (limit {} per file, {} per save)", n, EMBED_FILE_MAX, EMBED_TOTAL_MAX)));
+        }
+        let mut line = "ATTACH".to_string();
+        line.push_str(&link_params(l, false));
+        line.push_str(";ENCODING=BASE64;VALUE=BINARY:");
+        line.push_str(&clean);
+        out.push(line);
+    }
+    Ok(out)
 }
 
 pub fn valid_color(c: &str) -> bool {
@@ -659,7 +845,7 @@ pub struct RawMaster {
 }
 
 /// Properties `build_vevent` writes itself; every other master line is carried over verbatim.
-const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE", "EXDATE", "RDATE", "ORGANIZER", "ATTENDEE", "STATUS", "TRANSP", "CLASS", "PRIORITY", "URL", "COLOR", "GEO", "ATTACH", "CONFERENCE"];
+const MANAGED: &[&str] = &["UID", "DTSTAMP", "SEQUENCE", "LAST-MODIFIED", "SUMMARY", "DTSTART", "DTEND", "DURATION", "LOCATION", "DESCRIPTION", "CATEGORIES", "RRULE", "EXDATE", "RDATE", "ORGANIZER", "ATTENDEE", "STATUS", "TRANSP", "CLASS", "PRIORITY", "URL", "COLOR", "GEO", "ATTACH", "CONFERENCE", "RELATED-TO"];
 
 /// A line `build_vevent` rewrites; binary ATTACHs are the exception and stay verbatim.
 fn is_managed(line: &str) -> bool {
@@ -914,9 +1100,23 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
         l.push(format!("GEO:{lat:.6};{lon:.6}"));
     }
     l.extend(link_lines(&input.links));
+    l.extend(embedded_lines(&input.links)?);
+    l.extend(related_lines(&input.related));
     l.push(format!("LAST-MODIFIED:{}", ical::fmt_utc_now()));
     if let Some(r) = raw {
-        l.extend(r.props.iter().filter(|x| !is_managed(x)).cloned());
+        // binary ATTACHs are kept only when the client sent them back with `keep` (else: removed)
+        let keep: HashSet<usize> = input.links.iter().filter(|x| x.embedded && x.keep && x.data.is_none()).filter_map(|x| x.bin_index).collect();
+        let mut bin = 0usize;
+        for x in r.props.iter().filter(|x| !is_managed(x)) {
+            if prop_name(x) == "ATTACH" && is_binary_attach(&ical::split_line(x).1) {
+                let i = bin;
+                bin += 1;
+                if !keep.contains(&i) {
+                    continue;
+                }
+            }
+            l.push(x.clone());
+        }
     }
     for a in &input.alarms {
         l.extend(build_valarm(a, input.summary.trim(), raw, tz));
@@ -1120,6 +1320,7 @@ mod tests {
             color: String::new(),
             geo: None,
             links: vec![],
+            related: vec![],
             timezone: None,
         };
         let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
@@ -1160,6 +1361,55 @@ mod tests {
 
     /// The demo fixture carries every VEVENT property there is (RFC 5545/7986/9073/9074 + X-);
     /// an unchanged round trip through the editor's model must keep all of them, alarm by alarm.
+
+    #[test]
+    fn links_related_and_embedded_attachments() {
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let raw = RawMaster { props: vec![
+            "ATTACH;FMTTYPE=application/pdf;FILENAME=/x.pdf;X-NC-FILE-ID=1:https://cloud.example.org/x.pdf".into(),
+            "ATTACH;FMTTYPE=image/jpeg;X-FILENAME=scan.jpg;ENCODING=BASE64;VALUE=BINARY:aGVsbG8=".into(),
+            "ATTACH;ENCODING=BASE64;VALUE=BINARY:d29ybGQ=".into(),
+            "CONFERENCE;VALUE=URI;FEATURE=audio,phone:tel:+49691234".into(),
+            "RELATED-TO:abc".into(),
+            "RELATED-TO;RELTYPE=CHILD;X-FOO=1:def".into(),
+        ], alarms: vec![] };
+        let links = links_of(&raw.props);
+        assert_eq!(links.len(), 4);
+        assert_eq!((links[0].fmt.as_str(), links[0].filename.as_str(), links[0].extra.len(), links[0].embedded), ("application/pdf", "x.pdf", 1, false));
+        assert_eq!((links[1].embedded, links[1].bin_index, links[1].size, links[1].filename.as_str(), links[1].keep), (true, Some(0), Some(5), "scan.jpg", true));
+        assert_eq!((links[2].bin_index, links[2].size), (Some(1), Some(5)));
+        assert_eq!(links[3].features, vec!["AUDIO", "PHONE"]);
+        let (fmt, name, bytes) = embedded_attachment(&raw.props, 1).unwrap();
+        assert_eq!((fmt.as_str(), name.as_str(), bytes.as_slice()), ("application/octet-stream", "anhang-2", b"world".as_slice()));
+        assert_eq!(embedded_attachment(&raw.props, 0).unwrap().1, "scan.jpg");
+        assert!(embedded_attachment(&raw.props, 2).is_none());
+        let related = related_of(&raw.props);
+        assert_eq!(related.len(), 2);
+        assert_eq!((related[1].reltype.as_str(), related[1].extra.len()), ("CHILD", 1));
+        // save: drop the first embedded file, keep the second, add a new one, keep the RELATED-TOs
+        let mut input: EventInput = serde_json::from_str(r#"{"principal":"p","cal_id":"c","summary":"s","description":"","start":"2026-09-22T19:00:00","end":"2026-09-22T20:00:00"}"#).unwrap();
+        input.links = links.clone();
+        input.links[1].keep = false;
+        input.links.push(Link { kind: "attach".into(), embedded: true, data: Some("aGk=".into()), fmt: "text/plain".into(), filename: "new file.txt".into(), ..Default::default() });
+        input.related = related;
+        let lines = build_vevent("u", 1, &input, tz, Some(&raw)).unwrap();
+        let flat = lines.join("\n");
+        assert!(!flat.contains("aGVsbG8="), "{flat}");
+        assert!(flat.contains("ATTACH;ENCODING=BASE64;VALUE=BINARY:d29ybGQ="), "{flat}");
+        assert!(flat.contains("ATTACH;FMTTYPE=text/plain;FILENAME=\"new file.txt\";ENCODING=BASE64;VALUE=BINARY:aGk="), "{flat}");
+        assert!(flat.contains("ATTACH;FMTTYPE=application/pdf;FILENAME=x.pdf;X-NC-FILE-ID=1:https://cloud.example.org/x.pdf"), "{flat}");
+        assert!(flat.contains("CONFERENCE;VALUE=URI;FEATURE=AUDIO,PHONE:tel:+49691234"), "{flat}");
+        assert!(flat.contains("RELATED-TO:abc") && flat.contains("RELATED-TO;RELTYPE=CHILD;X-FOO=1:def"), "{flat}");
+        assert_eq!(flat.matches("RELATED-TO").count(), 2);
+        // limits
+        let big = "A".repeat(4 * (EMBED_FILE_MAX / 3 + 10));
+        input.links.push(Link { kind: "attach".into(), embedded: true, data: Some(big), ..Default::default() });
+        assert!(build_vevent("u", 1, &input, tz, Some(&raw)).is_err());
+        input.links.pop();
+        input.links.push(Link { kind: "attach".into(), embedded: true, data: Some("not base64!".into()), ..Default::default() });
+        assert!(build_vevent("u", 1, &input, tz, Some(&raw)).is_err());
+    }
+
     #[test]
     fn unchanged_save_keeps_every_property() {
         let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
@@ -1195,9 +1445,12 @@ mod tests {
             color: "tomato".into(),
             geo: Some((51.050407, 13.737262)),
             links: links_of(&raw.props),
+            related: related_of(&raw.props),
             timezone: Some("Europe/Berlin".into()),
         };
         assert_eq!(input.links.iter().map(|l| (l.kind.as_str(), l.embedded)).collect::<Vec<_>>(), vec![("url", false), ("conference", false), ("attach", false), ("attach", true)]);
+        assert_eq!(input.links[1].features, vec!["AUDIO", "VIDEO"]);
+        assert_eq!((input.related.len(), input.related[0].reltype.as_str(), input.related[0].uid.as_str()), (1, "PARENT", "parent-event@xarif.de"));
         assert_eq!(input.links[1].label, "Videocall");
         assert_eq!(input.exdates, vec!["2026-10-06T19:00:00"]);
         assert_eq!(input.rdates, vec!["2026-10-10T19:00:00"]);
