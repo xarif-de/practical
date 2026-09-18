@@ -245,10 +245,6 @@
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
   const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;
   let current = null, openDate = null, baseline = '';
-  const presets = (() => { try { return JSON.parse($('#presets-data').textContent || '[]'); } catch (_) { return []; } })();
-  const presetBox = $('#ed-presets');
-  if (presets.length) presetBox.innerHTML = presets.map((p, i) => `<button type="button" class="btn" data-preset="${i}">${p.title}</button>`).join('');
-  $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) catAdd(p.category); if (p.all_day) setAllDay(true); syncDot(); refresh(); });
   function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
   $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); }
@@ -274,15 +270,15 @@
   const RULES = JSON.parse(($('#category-rules-data') || {}).textContent || '{}');
   let CATS = [], CT_IDX = null, ctPop = null, RFX = {}, RFXL = { alarms: [], links: [] }, RLOCK = new Set(), ruleMode = null, ruleBack = null, ruleReturn = null, RM = {};
   const CTF = CTT.tFields.split('|');
-  const FLD = { all_day: ['when', 0], calendar: ['when', 1], color: ['when', 2], location: ['where', 3], rrule: ['repeat', 5], status: ['status', 6], transp: ['status', 7], class: ['status', 8], priority: ['status', 9] };
+  const FLD = { summary: ['title', 11], all_day: ['when', 0], calendar: ['when', 1], color: ['when', 2], location: ['where', 3], rrule: ['repeat', 5], status: ['status', 6], transp: ['status', 7], class: ['status', 8], priority: ['status', 9] };
   const SCALARS = Object.keys(FLD), WHEN_KEYS = ['all_day', 'calendar', 'color'], STATUS_KEYS = ['status', 'transp', 'class', 'priority'], RULE_CARDS = ['when', 'where', 'alarm', 'repeat', 'status', 'links'];
-  const ruleSetting = (r, fld) => { if (fld === 'location') { const p = r.where; return p && p.mode !== 'off' && (p.location || p.geo) ? { mode: p.mode, value: p.location || '', geo: p.geo } : null; } if (fld === 'rrule') { const p = r.repeat; return p && p.mode !== 'off' && p.rrule ? { mode: p.mode, value: p.rrule } : null; } const st = (r[FLD[fld][0]] || {})[fld]; return st && st.value != null && st.value !== '' ? { mode: st.mode, value: st.value } : null; };
+  const ruleSetting = (r, fld) => { if (fld === 'summary') { const st = r.title; return st && st.value ? { mode: st.mode, value: st.value } : null; } if (fld === 'location') { const p = r.where; return p && p.mode !== 'off' && (p.location || p.geo) ? { mode: p.mode, value: p.location || '', geo: p.geo } : null; } if (fld === 'rrule') { const p = r.repeat; return p && p.mode !== 'off' && p.rrule ? { mode: p.mode, value: p.rrule } : null; } const st = (r[FLD[fld][0]] || {})[fld]; return st && st.value != null && st.value !== '' ? { mode: st.mode, value: st.value } : null; };
   const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');
   const chips = () => CATS.slice();
   const ctMirror = () => { f.cats_json.value = CATS.length ? JSON.stringify(CATS) : ''; };
   const optText = (sel, v) => ([...sel.options].find(o => o.value === String(v)) || {}).textContent || String(v);
   const fxVal = (fld, v) => fld === 'all_day' ? esc(v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : STATUS_KEYS.includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
-  const curVal = fld => fld === 'all_day' ? f.all_day.checked : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
+  const curVal = fld => fld === 'summary' ? f.summary.value.trim() : fld === 'all_day' ? f.all_day.checked : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
   const sameVal = (fld, v) => fld === 'all_day' ? f.all_day.checked === !!v : fld === 'color' ? (colorOf() || '').toLowerCase() === String(v).toLowerCase() : String(curVal(fld)) === String(v);
   // effective rules of the event's categories: per setting (scalars by field, reminders and links by key) a lock
   // beats a template, among equals the upper category wins; every loser is recorded as overridden by the winner
@@ -338,6 +334,7 @@
   const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); }; /* a lock shows no "adjusted": the forced value is visible in the field */
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
+    f.summary.readOnly = !ruleMode && RLOCK.has('summary'); f.summary.disabled = !!ruleMode && RLOCK.has('summary'); /* event: a locked title; rule editor: "beliebig" */
     f.all_day.disabled = RLOCK.has('all_day'); f.calendar.disabled = RLOCK.has('calendar');
     f.color.disabled = f.color_cal.disabled = RLOCK.has('color'); $('#ed-color-cal').classList.toggle('locked', RLOCK.has('color'));
     $('.card[data-card="where"]', form).classList.toggle('locked-where', RLOCK.has('location'));
@@ -349,6 +346,7 @@
     const isNew = form.classList.contains('new'), prefill = reason === 'add' || reason === 'new';
     let adjusted = false;
     const set = (fld, differs, apply) => { const e = fx[fld]; if (!e) return; if (e.mode === 'lock' ? differs() : (prefill && differs())) { apply(e.value); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } };
+    set('summary', () => fx.summary.mode === 'lock' ? f.summary.value.trim() !== String(fx.summary.value).trim() : !f.summary.value.trim(), v => { f.summary.value = v; });
     set('all_day', () => fx.all_day.mode === 'lock' ? f.all_day.checked !== !!fx.all_day.value : !f.all_day.checked && !!fx.all_day.value, v => setAllDay(!!v));
     if (isNew) set('calendar', () => f.calendar.value !== fx.calendar.value && [...f.calendar.options].some(o => o.value === fx.calendar.value), v => { f.calendar.value = v; syncDot(); }); else RLOCK.delete('calendar'); /* an existing event cannot move */
     set('color', () => fx.color.mode === 'lock' ? (colorOf() || '').toLowerCase() !== String(fx.color.value).toLowerCase() : !colorOf(), v => { setColor(v); syncDot(); });
@@ -368,6 +366,7 @@
     const foot = {}; const add = (card, name, chip) => { (foot[card] ||= []).push(`<div class="rf-row"><span class="rf-name">${esc(name)}</span>${chip}</div>`); };
     if (ruleMode) {
       const chip = (key, mode) => `<button type="button" class="rbadge ${mode}" data-rmode="${esc(key)}" title="${esc(CTT.tRulemode)}"><svg class="ico"><use href="#${modeIcon(mode)}"/></svg>${esc(modeText(mode))}</button>`;
+      add('title', CTF[11], chip('summary', RM.summary || 'off'));
       WHEN_KEYS.forEach(k => add('when', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       add('where', CTF[3], chip('location', RM.location || 'off'));
       ALARMS.forEach(a => add('alarm', alarmText(a), chip('alarm:' + a._id, a._mode || 'off')));
@@ -376,6 +375,7 @@
       LK.links.forEach((l, i) => { if (!l.embedded) add('links', lkTitle(l), chip('link:' + i, l._mode || 'off')); });
     } else {
       const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, '', !present && e.mode === 'default');
+      if (fx.summary) add('title', CTF[11], ruleBadge('summary', curVal('summary')));
       WHEN_KEYS.forEach(k => { if (fx[k]) add('when', CTF[FLD[k][1]], ruleBadge(k, curVal(k))); });
       if (fx.location) add('where', CTF[3], ruleBadge('location', f.location.value.trim()));
       RFXL.alarms.forEach(e => add('alarm', alarmText(e.entry), entry(e, ALARMS.some(x => alarmKey(x) === alarmKey(e.entry)))));
@@ -383,7 +383,7 @@
       STATUS_KEYS.forEach(k => { if (fx[k]) add('status', CTF[FLD[k][1]], ruleBadge(k, f[k].value)); });
       RFXL.links.forEach(e => add('links', e.entry.label || lkHost(e.entry.uri) || e.entry.uri, entry(e, LK.links.some(x => x.uri === e.entry.uri))));
     }
-    RULE_CARDS.forEach(c => { $(`.rfoot[data-rfoot="${c}"]`, form).innerHTML = (foot[c] || []).join(''); });
+    ['title', ...RULE_CARDS].forEach(c => { $(`.rfoot[data-rfoot="${c}"]`, form).innerHTML = (foot[c] || []).join(''); });
     if (!ruleMode) ctRender();
   }
   // ---- rule editor: the dialog in rule mode. The cards are the event cards; the footer chips carry the mode per
@@ -406,21 +406,21 @@
     const st = k => ((r[FLD[k][0]] || {})[k]) || null, where = r.where || { mode: 'off' }, repeat = r.repeat || { mode: 'off' }, ralarms = (r.alarm || {}).alarms || [], rlinks = (r.links || {}).links || [];
     const calv = st('calendar') && [...f.calendar.options].some(o => o.value === st('calendar').value) ? st('calendar').value.split('/') : cal;
     ruleMode = name; form.classList.add('rulemode'); ed.classList.add('rulemode');
-    RM = {}; WHEN_KEYS.concat(STATUS_KEYS).forEach(k => { RM[k] = st(k) ? st(k).mode : 'off'; }); RM.location = where.mode || 'off'; RM.rrule = repeat.mode || 'off';
-    fill({ principal: calv[0], cal_id: calv[1], object_id: '', uid: '', summary: name, location: where.mode !== 'off' ? where.location || '' : '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: st('all_day') ? !!st('all_day').value : false, rrule: repeat.mode !== 'off' ? repeat.rrule || null : null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: ralarms.map(({ mode, ...a }) => a), categories: [], status: st('status') ? st('status').value : '', transp: st('transp') ? st('transp').value : '', class: st('class') ? st('class').value : '', priority: st('priority') ? st('priority').value : null, color: st('color') ? st('color').value : '', geo: where.mode !== 'off' ? where.geo || null : null, links: rlinks.map(({ mode, ...l }) => l), related: [], etag: '', has_overrides: false });
+    RM = {}; WHEN_KEYS.concat(STATUS_KEYS).forEach(k => { RM[k] = st(k) ? st(k).mode : 'off'; }); RM.summary = r.title ? r.title.mode : 'off'; RM.location = where.mode || 'off'; RM.rrule = repeat.mode || 'off';
+    fill({ principal: calv[0], cal_id: calv[1], object_id: '', uid: '', summary: r.title ? r.title.value : '', location: where.mode !== 'off' ? where.location || '' : '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: st('all_day') ? !!st('all_day').value : false, rrule: repeat.mode !== 'off' ? repeat.rrule || null : null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: ralarms.map(({ mode, ...a }) => a), categories: [], status: st('status') ? st('status').value : '', transp: st('transp') ? st('transp').value : '', class: st('class') ? st('class').value : '', priority: st('priority') ? st('priority').value : null, color: st('color') ? st('color').value : '', geo: where.mode !== 'off' ? where.geo || null : null, links: rlinks.map(({ mode, ...l }) => l), related: [], etag: '', has_overrides: false });
     ralarms.forEach((a, i) => { if (ALARMS[i]) ALARMS[i]._mode = a.mode; }); rlinks.forEach((l, i) => { if (LK.links[i]) LK.links[i]._mode = l.mode; });
     const has = { when: true, where: RM.location !== 'off', alarm: ALARMS.length > 0, repeat: RM.rrule !== 'off', status: STATUS_KEYS.some(k => RM[k] !== 'off'), links: LK.links.length > 0 };
     RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); if (has[n]) c.dataset.added = '1'; else delete c.dataset.added; });
-    mode('edit'); rulesApply('open'); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = ''; $('#ed-hint').textContent = ''; /* no series hint: a rule is no event */
+    mode('edit'); rulesApply('open'); f.summary.placeholder = D.tTitle; f.summary.required = false; $('#ed-sub').textContent = D.tRuleTitle.replace('{name}', name); $('#ed-hint').textContent = ''; /* the title field holds the title template; the rule name goes to the subtitle; no series hint */
     ed.hidden = false; baseline = sig(); updateButtons(); $('#ed-delete').disabled = !RULES[name];
   }
   function ruleOf() {
     const setting = (k, v) => (RM[k] || 'off') !== 'off' && v !== '' && v != null ? { mode: RM[k], value: v } : null;
     const alarms = alarmsOf().map((a, i) => ({ mode: ALARMS[i]._mode || 'default', ...a })).filter(a => a.mode !== 'off'), plain = LK.links.filter(l => !l.embedded), links = linksOf().links.filter(l => !l.embedded).map((l, i) => ({ mode: (plain[i] || {})._mode || 'default', ...l })).filter(l => l.mode !== 'off');
-    return { when: { all_day: setting('all_day', f.all_day.checked), calendar: setting('calendar', f.calendar.value), color: setting('color', colorOf()) }, where: { mode: RM.location || 'off', location: f.location.value.trim(), geo: geoOf() }, alarm: { alarms }, repeat: { mode: RM.rrule || 'off', rrule: rrBuild() || '' }, status: Object.fromEntries(STATUS_KEYS.map(k => [k, setting(k, k === 'priority' ? (f.priority.value === '' ? null : +f.priority.value) : f[k].value)])), links: { links } }; }
+    return { title: setting('summary', f.summary.value.trim()), when: { all_day: setting('all_day', f.all_day.checked), calendar: setting('calendar', f.calendar.value), color: setting('color', colorOf()) }, where: { mode: RM.location || 'off', location: f.location.value.trim(), geo: geoOf() }, alarm: { alarms }, repeat: { mode: RM.rrule || 'off', rrule: rrBuild() || '' }, status: Object.fromEntries(STATUS_KEYS.map(k => [k, setting(k, k === 'priority' ? (f.priority.value === '' ? null : +f.priority.value) : f[k].value)])), links: { links } }; }
   // leaving rule mode: back to the event it was opened from (rules re-applied by `fill`), or to the page it
   // was called from (`?back=`), or simply closed
-  function ruleLeave() { if (!ruleMode) return false; ruleMode = null; RM = {}; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; $$('.rfoot', form).forEach(el => { el.innerHTML = ''; });
+  function ruleLeave() { if (!ruleMode) return false; ruleMode = null; RM = {}; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; f.summary.disabled = false; f.summary.required = true; $$('.rfoot', form).forEach(el => { el.innerHTML = ''; });
     if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
     if (ruleBack) { const to = ruleBack; ruleBack = null; location.href = to; return true; }
     return false; }

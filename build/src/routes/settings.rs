@@ -42,29 +42,12 @@ pub struct SettingsPage {
     pub default_timezone: String,
     pub holidays_country: String,
     pub holidays_subdivision: String,
-    pub presets: Vec<Preset>,
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
     /// reminder strip snap points as typed ("2 min, 1 h, …")
     pub alarm_snaps_start: String,
     pub alarm_snaps_end: String,
-}
-
-#[derive(serde::Deserialize, Default)]
-pub struct Preset {
-    #[serde(default)]
-    pub title: String,
-    #[serde(default)]
-    pub calendar: String,
-    #[serde(default)]
-    pub all_day: bool,
-    #[serde(default)]
-    pub category: String,
-}
-
-fn presets_of(p: &Prefs) -> Vec<Preset> {
-    p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default()
 }
 
 fn vacation_rule(p: &Prefs) -> (String, String) {
@@ -103,7 +86,6 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         default_timezone: state.config.default_timezone.clone(),
         holidays_country: state.config.holidays_country.clone(),
         holidays_subdivision: state.config.holidays_subdivision.clone(),
-        presets: presets_of(&prefs::get(&state.db, &user.id).await?),
         calendars_all: collections::calendars_for(&state, &user, false).await?,
         vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
         vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
@@ -522,52 +504,6 @@ async fn import_addressbook(State(state): State<SharedState>, user: Principal, s
     Ok(axum::Json(Imported { imported: crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await? }))
 }
 
-#[derive(Deserialize)]
-struct PresetForm {
-    csrf: String,
-    title: String,
-    #[serde(default)]
-    calendar: String,
-    #[serde(default)]
-    all_day: Option<String>,
-    #[serde(default)]
-    category: String,
-}
-
-/// Event presets (plan D14): quick-fill chips in the editor.
-async fn preset_add(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PresetForm>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
-        if f.title.trim().is_empty() {
-            return Err(AppError::BadRequest("title required".into()));
-        }
-        let mut p = prefs::get(&state.db, &user.id).await?;
-        let mut list: Vec<serde_json::Value> = p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
-        list.push(serde_json::json!({ "title": f.title.trim(), "calendar": f.calendar, "all_day": f.all_day.is_some(), "category": f.category.trim() }));
-        p.presets_json = Some(serde_json::to_string(&list).unwrap());
-        prefs::set(&state.db, &user.id, &p).await?;
-        Ok("flash-saved")
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "prefs").await
-}
-
-async fn preset_delete(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path(idx): Path<usize>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
-        let mut p = prefs::get(&state.db, &user.id).await?;
-        let mut list: Vec<serde_json::Value> = p.presets_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
-        if idx < list.len() {
-            list.remove(idx);
-        }
-        p.presets_json = Some(serde_json::to_string(&list).unwrap());
-        prefs::set(&state.db, &user.id, &p).await?;
-        Ok("flash-saved")
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "prefs").await
-}
-
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/settings", get(page))
@@ -597,6 +533,4 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
-        .route("/settings/presets", post(preset_add))
-        .route("/settings/presets/{idx}/delete", post(preset_delete))
 }

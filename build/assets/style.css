@@ -601,7 +601,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 
 /* ---- editor: day line blocks are positioned by JS (7:00–21:00) ---- */
 .ed .dayline .blk { cursor: pointer; }
-.ed .presetchips { display: flex; gap: 6px; flex-wrap: wrap; } .ed .presetchips button { border-radius: 999px; padding: 3px 10px; font-size: 12px; }
 .tip { max-width: 60vw; }
 /* real titles are long: never let a nowrap label widen the grid */
 .month { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -792,7 +791,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .when { padding: 4px 0 6px 26px; font-size: 15px; }
 .ed .cardform .when b { font-weight: 600; }
 .ed .cardform .toggle { margin: 6px 0 2px 26px; }
-.ed .cardform .presetchips { padding-left: 26px; margin: 2px 0 6px; }
 .ed .cardform textarea { min-height: 60px; }
 .ed .cardform .hint { padding-left: 26px; }
 .ed footer .actions { margin: 0; padding: 0; border: 0; position: static; width: 100%; }
@@ -885,7 +883,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .rr .pickmsg .btn { grid-column: 2; justify-self: end; padding: 4px 10px; font-size: 13px; } /* the narrow card: the button goes under the text */
 .ed .cardform .rr .rrraw { padding: 4px 0 0 26px; } .ed .cardform .rr .rrraw input { font-family: ui-monospace, monospace; font-size: 12.5px; }
 /* picking the end date: everything but the strip and the prompt is dimmed and inert */
-.ed.picking header, .ed.picking footer, .ed.picking .dayline, .ed.picking .presetchips, .ed.picking .addmenu, .ed.picking .card:not([data-card=repeat]), .ed.picking .card[data-card=repeat] > :not(.rr), .ed.picking .rr > :not(.calstrip):not(.pickmsg) { opacity: .3; pointer-events: none; filter: grayscale(1); }
+.ed.picking header, .ed.picking footer, .ed.picking .dayline, .ed.picking .addmenu, .ed.picking .card:not([data-card=repeat]), .ed.picking .card[data-card=repeat] > :not(.rr), .ed.picking .rr > :not(.calstrip):not(.pickmsg) { opacity: .3; pointer-events: none; filter: grayscale(1); }
 /* the popover of the pills (interval, end, number entry) */
 .rrpop { position: absolute; z-index: 60; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; min-width: 150px; }
 .rrpop button { all: unset; display: block; width: 100%; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; white-space: nowrap; }
@@ -985,6 +983,9 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform.mode-view .rfoot { display: none; } /* rule footers belong to editing */
 .ed .cardform .rfoot { margin-top: 8px; padding: 6px 0 0 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: fit-content(40%) 1fr; gap: 3px 6px; align-items: start; font-size: 11.5px; color: var(--fg-3); } /* label column as wide as the longest label (at most half, then ellipsis), chips right behind it, aligned; minmax(0, 50%) would always grow to 50% */ /* templates and locks of the card (event) / mode chips (rule editor) */
 .ed .cardform .rfoot:empty { display: none; }
+.ed .cardform header .rfoot { padding-left: 0; margin-top: 4px; border-top: 0; } /* the title's rule line sits under the title field */
+.ed .cardform.rulemode.mode-edit #ed-sub { display: block !important; } /* rule mode: the rule name lives in the subtitle, the title field holds the title template */
+.ed .cardform #edh:read-only { opacity: .5; } /* title locked by a rule */
 .ed .cardform .rf-row { display: contents; } .ed .cardform .rf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 17px; } /* the label sits on the chip line; wrapped qualifier text goes below on its own */ .ed .cardform .rf-row .rb { min-width: 0; justify-content: flex-start; }
 button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } button.rbadge:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-2); }
 .ed .cardform .lk-row.locked { opacity: .55; }

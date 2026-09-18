@@ -13,7 +13,7 @@ Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
 presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),
 organizer and attendees as chips (display only, with a jump to the matching address-book entry), links grouped as conference / in this calendar / internet with a join card, embedded files and event/task links, location with coordinates and map actions, status/busy/visibility/
-priority as four tiles whose icon follows the value, links, attachments and conference URIs, an event colour, categories, notes, presets ·
+priority as four tiles whose icon follows the value, links, attachments and conference URIs, an event colour, categories, notes ·
 contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
@@ -108,7 +108,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
 - **Categories and rules** (event card, settings tab "Categories"): categories are ordered rows with a
   grip; typing offers the known categories with counts ("existing") or creates a new one, the rest of
   the known ones sit in a cloud below. A rule per category (`xui_category_rules`, JSON per user, see
-  `domain::catrules`) puts values on an event: all-day, calendar (new events only), colour, location,
+  `domain::catrules`) puts values on an event: title, all-day, calendar (new events only), colour, location,
   reminders, repeat, status/busy/visibility/priority and links, each as a *template* (prefilled when
   the category is added, editable) or a *lock* (set on open and fixed in this UI; a differing stored value is
   replaced silently, the field shows the forced value). Location and repeat carry one mode per card, all-day/calendar/colour

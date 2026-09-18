@@ -36,7 +36,7 @@ CREATE TABLE xui_user_settings (
     holiday_subdivision TEXT,
     vacation_days INTEGER,
     vacation_rule_json TEXT,
-    presets_json TEXT,
+    presets_json TEXT, -- unused since the event presets were removed (category rules replace them); kept for existing databases
     contact_columns_json TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -230,19 +230,6 @@
     <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
   </form>
 
-  <h3>{{ ctx.t("presets") }}</h3>
-  <p class="muted small">{{ ctx.t("presets-hint") }}</p>
-  {% for p in presets %}<div class="trash-row"><b>{{ p.title }}</b> <small class="muted">{% if p.all_day %}{{ ctx.t("ed-allday") }} · {% endif %}{{ p.calendar }}{% if !p.category.is_empty() %} · {{ p.category }}{% endif %}</small><span class="grow"></span><form method="post" action="/settings/presets/{{ loop.index0 }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit">{{ ctx.t("delete") }}</button></form></div>{% endfor %}
-  {% if presets.is_empty() %}<p class="muted">{{ ctx.t("presets-none") }}</p>{% endif %}
-  <form method="post" action="/settings/presets" class="inline-form">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <input type="text" name="title" required placeholder="{{ ctx.t("preset-title") }}">
-    <select name="calendar">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select>
-    <input type="text" name="category" placeholder="{{ ctx.t("col-category") }}" size="12">
-    <label class="inl"><input type="checkbox" name="all_day" checked> {{ ctx.t("ed-allday") }}</label>
-    <button class="btn" type="submit">{{ ctx.t("preset-add") }}</button>
-  </form>
-
   <h3>{{ ctx.t("push-title") }}</h3>
   {% if ctx.push_enabled %}
   <p class="muted small">{{ ctx.t("push-hint") }}</p>

@@ -98,6 +98,9 @@ pub struct LinksRule {
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Rule {
+    /// the event title as template or lock
+    #[serde(default)]
+    pub title: Option<Setting<String>>,
     #[serde(default)]
     pub when: WhenRule,
     #[serde(default, rename = "where")]
@@ -115,7 +118,7 @@ pub struct Rule {
 impl Rule {
     /// true when the rule sets anything at all
     pub fn is_empty(&self) -> bool {
-        self.when.all_day.is_none() && self.when.calendar.is_none() && self.when.color.is_none() && self.where_.mode == "off" && self.alarm.alarms.is_empty() && self.repeat.mode == "off" && self.status.status.is_none() && self.status.transp.is_none() && self.status.class.is_none() && self.status.priority.is_none() && self.links.links.is_empty()
+        self.title.is_none() && self.when.all_day.is_none() && self.when.calendar.is_none() && self.when.color.is_none() && self.where_.mode == "off" && self.alarm.alarms.is_empty() && self.repeat.mode == "off" && self.status.status.is_none() && self.status.transp.is_none() && self.status.class.is_none() && self.status.priority.is_none() && self.links.links.is_empty()
     }
 }
 
@@ -126,9 +129,14 @@ pub fn validate(r: &Rule) -> AppResult<()> {
             return Err(bad(m));
         }
     }
-    let modes: Vec<&String> = r.when.all_day.iter().map(|s| &s.mode).chain(r.when.calendar.iter().map(|s| &s.mode)).chain(r.when.color.iter().map(|s| &s.mode)).chain(r.status.status.iter().map(|s| &s.mode)).chain(r.status.transp.iter().map(|s| &s.mode)).chain(r.status.class.iter().map(|s| &s.mode)).chain(r.status.priority.iter().map(|s| &s.mode)).chain(r.alarm.alarms.iter().map(|a| &a.mode)).chain(r.links.links.iter().map(|l| &l.mode)).collect();
+    let modes: Vec<&String> = r.title.iter().map(|s| &s.mode).chain(r.when.all_day.iter().map(|s| &s.mode)).chain(r.when.calendar.iter().map(|s| &s.mode)).chain(r.when.color.iter().map(|s| &s.mode)).chain(r.status.status.iter().map(|s| &s.mode)).chain(r.status.transp.iter().map(|s| &s.mode)).chain(r.status.class.iter().map(|s| &s.mode)).chain(r.status.priority.iter().map(|s| &s.mode)).chain(r.alarm.alarms.iter().map(|a| &a.mode)).chain(r.links.links.iter().map(|l| &l.mode)).collect();
     if let Some(m) = modes.iter().find(|m| !setting_mode(m)) {
         return Err(bad(m));
+    }
+    if let Some(t) = &r.title
+        && (t.value.trim().is_empty() || t.value.chars().count() > 200)
+    {
+        return Err(AppError::BadRequest("invalid title".into()));
     }
     if let Some(c) = &r.when.color
         && !events::valid_color(&c.value)
