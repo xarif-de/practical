@@ -255,7 +255,6 @@ ed-ct-up = nach oben
 ed-ct-down = nach unten
 ed-ct-newonly = gilt für neue Termine
 ed-ct-changed = geändert
-ed-ct-adjusted = angepasst
 ed-ct-no = nein
 ed-ct-fields = Ganztägig|Kalender|Farbe|Ort|Erinnerung|Wiederholung|Status|Zeit blockieren|Sichtbarkeit|Priorität|Links
 ed-ct-any = beliebig

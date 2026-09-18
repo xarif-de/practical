@@ -255,7 +255,6 @@ ed-ct-up = move up
 ed-ct-down = move down
 ed-ct-newonly = applies to new events
 ed-ct-changed = changed
-ed-ct-adjusted = adjusted
 ed-ct-no = no
 ed-ct-fields = All day|Calendar|Colour|Location|Reminder|Repeat|Status|Block time|Visibility|Priority|Links
 ed-ct-any = any

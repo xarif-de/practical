@@ -110,12 +110,12 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   the known ones sit in a cloud below. A rule per category (`xui_category_rules`, JSON per user, see
   `domain::catrules`) puts values on an event: all-day, calendar (new events only), colour, location,
   reminders, repeat, status/busy/visibility/priority and links, each as a *template* (prefilled when
-  the category is added, editable) or a *lock* (set on open, fixed in this UI, shown as "adjusted"
-  when the stored value differed). Location and repeat carry one mode per card, all-day/calendar/colour
+  the category is added, editable) or a *lock* (set on open and fixed in this UI; a differing stored value is
+  replaced silently, the field shows the forced value). Location and repeat carry one mode per card, all-day/calendar/colour
   and the four status values one per setting, reminders and links one per entry. For one setting the
   first category wins; the category rows show what a rule does, strike through what a category above
   overrides and mark a template the event deviates from as "changed". Every card lists the templates
-  and locks that touch it in a footer below a rule (name · badge · category · "changed"/"adjusted");
+  and locks that touch it in a footer below a rule (name · badge · category · "changed");
   locked settings are greyed out. The rule editor is the same dialog in a rule mode with the same
   cards; its footers carry a chip per setting or entry that switches between "any" (setting disabled,
   not part of the rule), template and lock. Opened from an event ("Rule" in a row) the editor stacks

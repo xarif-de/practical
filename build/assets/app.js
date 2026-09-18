@@ -332,7 +332,7 @@
   const modeText = m => m === 'lock' ? CTT.tLock : m === 'default' ? CTT.tDefault : CTT.tAny;
   // badge "Vorlage · Kat" / "Vorgabe · Kat"; `extra` appended with " · "; `changed` = the event deviates from a template → orange, " (geändert)"
   const ruleBadgeHtml = (e, extra, changed) => `<span class="rb${changed ? ' changed' : ''}"><span class="rbadge ${e.mode}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}</span>${extra ? `<span class="rb-x">${esc(extra)}</span>` : ''}${changed ? `<span class="rb-x">(${esc(CTT.tChanged)})</span>` : ''}</span>`;
-  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); };
+  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); }; /* a lock shows no "adjusted": the forced value is visible in the field */
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
     f.all_day.disabled = RLOCK.has('all_day'); f.calendar.disabled = RLOCK.has('calendar');
@@ -372,7 +372,7 @@
       STATUS_KEYS.forEach(k => add('status', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       LK.links.forEach((l, i) => { if (!l.embedded) add('links', lkTitle(l), chip('link:' + i, l._mode || 'off')); });
     } else {
-      const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : '', !present && e.mode === 'default');
+      const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, '', !present && e.mode === 'default');
       WHEN_KEYS.forEach(k => { if (fx[k]) add('when', CTF[FLD[k][1]], ruleBadge(k, curVal(k))); });
       if (fx.location) add('where', CTF[3], ruleBadge('location', f.location.value.trim()));
       RFXL.alarms.forEach(e => add('alarm', alarmText(e.entry), entry(e, ALARMS.some(x => alarmKey(x) === alarmKey(e.entry)))));
