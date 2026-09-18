@@ -984,18 +984,33 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .rbadge.lock { color: var(--fg-2); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .ed .cardform .rbadges { padding-left: 26px; display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11.5px; color: var(--fg-3); }
 .ed .cardform .rbadges:empty { display: none; }
-.ed .cardform .stile.locked { cursor: default; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.ed .cardform .stile.locked { cursor: default; opacity: .55; }
 .ed .cardform .stile.locked:hover { border-color: transparent; }
 .ed .cardform .stile .rbadge { grid-column: 1 / 3; justify-self: start; margin-top: 4px; }
-.ed .cardform .row.locked .aldet { pointer-events: none; opacity: .85; }
-.ed .cardform .rr.locked > *:not(h3) { pointer-events: none; }
-.ed .cardform .card.locked-where #ed-locp, .ed .cardform .card.locked-where #ed-loc-sub { pointer-events: none; opacity: .85; }
-.ed .cardform input:disabled, .ed .cardform select:disabled { color: var(--fg); opacity: 1; -webkit-text-fill-color: var(--fg); } /* locked by a rule: readable, the badge says why */
+.ed .cardform .row.locked { opacity: .55; } .ed .cardform .row.locked .aldet { pointer-events: none; }
+.ed .cardform .rr.locked > *:not(h3) { pointer-events: none; opacity: .55; }
+.ed .cardform .card.locked-where #ed-locp, .ed .cardform .card.locked-where #ed-loc-sub { pointer-events: none; opacity: .55; }
+.ed .cardform input:disabled, .ed .cardform select:disabled, .ed .cardform .toggle:has(input:disabled), .ed .cardform #ed-color-cal.locked { opacity: .5; } .ed .cardform .toggle:has(input:disabled), .ed .cardform #ed-color-cal.locked { pointer-events: none; } /* locked by a rule: visibly disabled, the badge says why */
 .ed .cardform .rule-seg { display: none; margin-left: 6px; }
 .ed .cardform .rule-seg button { padding: 3px 8px; font-size: 11.5px; min-height: 0; min-width: 0; }
 .cardform.rulemode .rule-seg { display: inline-flex; }
 .cardform.rulemode .rule-hide, .ed.rulemode .rule-hide { display: none !important; }
-.cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"], .cardform.rulemode .rbadges, .cardform.rulemode .card .rm { display: none !important; }
+.cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"], .cardform.rulemode .rbadges { display: none !important; }
+.ed .cardform .rule-body, .ed .cardform .rule-adds { display: none; }
+.cardform.rulemode .rule-body { display: grid; gap: 4px; padding-left: 26px; }
+.cardform.rulemode .rule-adds { display: flex; gap: 6px; flex-wrap: wrap; padding-left: 26px; margin-top: 8px; }
+.cardform.rulemode .rule-adds:empty { display: none; }
+.ed .cardform .rule-row { display: grid; grid-template-columns: auto 1fr 20px; gap: 4px 8px; align-items: center; }
+.ed .cardform .rule-mode button { padding: 3px 8px; font-size: 11.5px; min-height: 0; min-width: 0; } /* compact mode segment in rule rows, reminder and link rows */
+.ed .cardform .rule-row .rule-val { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ed .cardform .rule-row .rule-val > span:first-child { color: var(--fg-3); font-size: 11.5px; white-space: nowrap; }
+.ed .cardform .rule-row .rule-val select, .ed .cardform .rule-row .rule-val input { flex: 1; min-width: 0; }
+.ed .cardform .rule-row .ct-x { all: unset; cursor: pointer; color: var(--fg-3); text-align: center; font-size: 14px; }
+.ed .cardform .row.al .rule-mode { grid-column: 1 / -1; justify-self: start; margin: 0 0 2px 26px; }
+.ed .cardform .lk-row .rule-mode { grid-column: 2; justify-self: start; }
+.ed .cardform .ct-fx .ct-f.changed { text-decoration: line-through; color: var(--c4); }
+.ed .cardform .ct-fx .ct-changed { color: var(--c4); font-size: 11px; }
+.ed.rulemode .cols3 { grid-template-columns: 1fr; } .ed.rulemode .dayline { display: none; } /* no day line in rule mode */
 .cat-list { display: grid; gap: 4px; margin: 8px 0 12px; }
 .cat-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .cat-row small { color: var(--fg-3); }

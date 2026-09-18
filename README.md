@@ -109,13 +109,17 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   grip; typing offers the known categories with counts ("existing") or creates a new one, the rest of
   the known ones sit in a cloud below. A rule per category (`xui_category_rules`, JSON per user, see
   `domain::catrules`) puts values on an event: all-day, calendar (new events only), colour, location,
-  reminders, repeat, status/busy/visibility/priority and links, each card either as a *default*
-  (prefilled when the category is added, editable) or a *lock* (set on open, fixed in this UI, shown as
-  "adjusted" when the stored value differed). For one field the first category wins; the rows show
-  what a rule does and strike through what a category above overrides. Locked values carry a lock
-  badge, defaults a tag badge ("changed" once edited). Rules are edited in the same event dialog in a
-  rule mode (`/calendar?rule=<name>`, or the "Rule" link in a row): only the rule cards, a
-  "— / Default / Lock" segment per card. Locks hold in this UI only; other clients change freely.
+  reminders, repeat, status/busy/visibility/priority and links, each as a *template* (prefilled when
+  the category is added, editable) or a *lock* (set on open, fixed in this UI, shown as "adjusted"
+  when the stored value differed). Location and repeat carry one mode per card, all-day/calendar/colour
+  and the four status values one per setting, reminders and links one per entry. For one setting the
+  first category wins; the rows show what a rule does, strike through what a category above overrides
+  and mark a template the event deviates from as "changed". Locked values are greyed out and carry a
+  lock badge, templates a tag badge. Rules are edited in the same dialog in a rule mode: only the rule
+  cards, on demand like in an event, settings and entries added via "+ Template" / "+ Lock". Opened
+  from an event ("Rule" in a row) the editor stacks over it and returns with the rules re-applied;
+  from the settings tab (`/calendar?rule=<name>&back=…`) it returns to the tab. Locks hold in this UI
+  only; other clients change freely.
 - **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
   would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
   chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,

@@ -55,9 +55,9 @@
     const catPanel = $('#categories');
     if (catPanel) {
       const t = catPanel.dataset, list = $('#cat-list'), csrfTok = ($('meta[name=csrf]') || {}).content || '', h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      const load = async () => { const r = await fetch('/api/categories'); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="/calendar?rule=${encodeURIComponent(c.name)}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
+      const load = async () => { const r = await fetch('/api/categories'); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="/calendar?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
       list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
-      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = '/calendar?rule=' + encodeURIComponent(n); });
+      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = '/calendar?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
       load();
     }
   }
@@ -92,7 +92,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.'};
+  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.'};
   const iso = d => d.toISOString().slice(0, 10);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
@@ -255,34 +255,53 @@
   const tl = $('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
-  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; ruleLeave(); }
-  const dirty = () => form.classList.contains('mode-edit') && serialize() !== baseline;
+  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); }
+  const dirty = () => form.classList.contains('mode-edit') && sig() !== baseline;
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
   const fmtD = s => { const d = parse(s.slice(0, 10)); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
   // ---- categories and category rules (round 17): `CATS` is the ordered list mirrored into `cats_json`. A rule
-  // (`RULES`, per user, see domain::catrules) puts values on the event as a default (prefilled, editable) or a
-  // lock (fixed here). Order matters: for one field the first category wins, the others are struck through.
-  // `rulesApply` sets and locks the fields; every card asks `ruleBadge(field)` for its badge. ----
+  // (`RULES`, per user, see domain::catrules) puts values on the event as a template ("Vorlage": prefilled,
+  // editable) or a lock ("Vorgabe": fixed here). Where and repeat carry one mode per card; when and status one
+  // per setting; reminders and links one per entry. Order matters: per setting the first category wins, the
+  // others are struck through. `rulesApply` sets and locks the fields; the cards ask `ruleBadge()` for badges.
+  // The same dialog edits a rule (rule mode, `openRuleEditor`): only the rule cards, entries added as template or
+  // lock ("+ Vorlage" / "+ Vorgabe"). Opened from an event the event is snapshotted and restored afterwards. ----
   const CT = $('#ed-cats-card'), CTT = CT.dataset, ctRows = $('#ed-ct-rows'), ctIn = $('#ed-ct-in'), ctCloud = $('#ed-ct-cloud');
   const RULES = JSON.parse(($('#category-rules-data') || {}).textContent || '{}');
-  let CATS = [], CT_IDX = null, ctPop = null, RFX = {}, RLOCK = new Set(), ruleMode = null;
+  let CATS = [], CT_IDX = null, ctPop = null, RFX = {}, RLOCK = new Set(), ruleMode = null, ruleBack = null, ruleReturn = null, RW = {}, RS = {}, lkPendingMode = null;
   const CTF = CTT.tFields.split('|');
-  const RF = { all_day: ['when', 'all_day', 0], calendar: ['when', 'calendar', 1], color: ['when', 'color', 2], location: ['where', 'location', 3], alarms: ['alarm', 'alarms', 4], rrule: ['repeat', 'rrule', 5], status: ['status', 'status', 6], transp: ['status', 'transp', 7], class: ['status', 'class', 8], priority: ['status', 'priority', 9], links: ['links', 'links', 10] };
-  const ruleHas = (r, fld) => { const [part, key] = RF[fld]; const p = r[part]; if (!p || p.mode === 'off') return false; const v = p[key]; return Array.isArray(v) ? v.length > 0 : !(v == null || v === ''); };
+  const FLD = { all_day: ['when', 0], calendar: ['when', 1], color: ['when', 2], location: ['where', 3], rrule: ['repeat', 5], status: ['status', 6], transp: ['status', 7], class: ['status', 8], priority: ['status', 9] };
+  const SCALARS = Object.keys(FLD), WHEN_KEYS = ['all_day', 'calendar', 'color'], STATUS_KEYS = ['status', 'transp', 'class', 'priority'];
+  const ruleSetting = (r, fld) => { if (fld === 'location') { const p = r.where; return p && p.mode !== 'off' && (p.location || p.geo) ? { mode: p.mode, value: p.location || '', geo: p.geo } : null; } if (fld === 'rrule') { const p = r.repeat; return p && p.mode !== 'off' && p.rrule ? { mode: p.mode, value: p.rrule } : null; } const st = (r[FLD[fld][0]] || {})[fld]; return st && st.value != null && st.value !== '' ? { mode: st.mode, value: st.value } : null; };
+  const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');
   const chips = () => CATS.slice();
   const ctMirror = () => { f.cats_json.value = CATS.length ? JSON.stringify(CATS) : ''; };
   const optText = (sel, v) => ([...sel.options].find(o => o.value === String(v)) || {}).textContent || String(v);
-  const fxVal = (fld, v) => fld === 'all_day' ? (v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : Array.isArray(v) ? CTT.tN.replace('{n}', v.length) : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : ['status', 'transp', 'class', 'priority'].includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
-  function effective() { const fx = {}, over = {}; CATS.forEach(c => { const r = RULES[c]; if (!r) return; Object.keys(RF).forEach(fld => { if (!ruleHas(r, fld)) return; if (fx[fld]) (over[c] ||= {})[fld] = fx[fld].cat; else fx[fld] = { cat: c, mode: r[RF[fld][0]].mode, value: r[RF[fld][0]][RF[fld][1]] }; }); }); return { fx, over }; }
-  const ctRuleLink = c => `<a href="/calendar?rule=${encodeURIComponent(c)}" target="_blank" rel="noopener">${esc(CTT.tRule)}</a>`;
+  const fxVal = (fld, v) => fld === 'all_day' ? esc(v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : STATUS_KEYS.includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
+  const curVal = fld => fld === 'all_day' ? f.all_day.checked : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
+  const sameVal = (fld, v) => fld === 'all_day' ? f.all_day.checked === !!v : fld === 'color' ? (colorOf() || '').toLowerCase() === String(v).toLowerCase() : String(curVal(fld)) === String(v);
+  // effective rules of the event's categories: scalars first-wins per field, list entries first-wins per key
+  function effective() { const fx = {}, over = {}, alarms = [], links = [], seenA = new Map(), seenL = new Map();
+    CATS.forEach(c => { const r = RULES[c]; if (!r) return;
+      SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (!st) return; if (fx[fld]) (over[c] ||= {})[fld] = fx[fld].cat; else fx[fld] = { cat: c, ...st }; });
+      ((r.alarm || {}).alarms || []).forEach(a => { const k = alarmKey(a); if (seenA.has(k)) (over[c] ||= {})['alarm:' + k] = seenA.get(k); else { seenA.set(k, c); alarms.push({ cat: c, mode: a.mode, entry: a }); } });
+      ((r.links || {}).links || []).forEach(l => { const k = l.uri; if (!k) return; if (seenL.has(k)) (over[c] ||= {})['link:' + k] = seenL.get(k); else { seenL.set(k, c); links.push({ cat: c, mode: l.mode, entry: l }); } }); });
+    return { fx, over, alarms, links }; }
+  // effect line of a category row: one item per setting; struck through when an upper category wins ("überstimmt"),
+  // marked "geändert" when the event deviates from a template value
+  const ctFx = (c, over) => { const r = RULES[c]; if (!r) return `<span class="ct-f">${esc(CTT.tNorule)}</span>`; const out = [];
+    const item = (key, mode, label, same) => { const by = over[c] && over[c][key]; const changed = !ruleMode && !by && mode === 'default' && !same; out.push(`<span class="ct-f ${mode === 'lock' ? 'lock' : ''} ${by ? 'over' : ''} ${changed ? 'changed' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : changed ? `<span class="ct-changed">${esc(CTT.tChanged)}</span>` : ''}`); };
+    SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) item(fld, st.mode, `${esc(CTF[FLD[fld][1]])}: ${fxVal(fld, st.value)}`, sameVal(fld, st.value)); });
+    ((r.alarm || {}).alarms || []).forEach(a => item('alarm:' + alarmKey(a), a.mode, `${esc(CTF[4])}: ${esc(alarmText(a))}`, ALARMS.some(x => alarmKey(x) === alarmKey(a))));
+    ((r.links || {}).links || []).forEach(l => item('link:' + l.uri, l.mode, `${esc(CTF[10])}: ${esc(l.label || lkHost(l.uri) || l.uri)}`, LK.links.some(x => x.uri === l.uri)));
+    return out.join(''); };
   function ctRender() {
     ctMirror();
     const { over } = effective();
-    ctRows.innerHTML = CATS.map((c, i) => { const r = RULES[c]; const fx = r ? Object.keys(RF).filter(fld => ruleHas(r, fld)).map(fld => { const [part, key] = RF[fld]; const m = r[part].mode, by = over[c] && over[c][fld]; return `<span class="ct-f ${m === 'lock' ? 'lock' : ''} ${by ? 'over' : ''}" title="${esc(m === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${m === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${esc(CTF[RF[fld][2]])}: ${fxVal(fld, r[part][key])}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}`; }).join('') : '';
-      return `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="chip">${esc(c)}</span><button class="ct-x edits" type="button" data-ct-rm="${i}" title="${esc(D.tRmcard ? '' : '')}">×</button><span class="ct-fx">${fx || (r ? '' : `<span class="ct-f">${esc(CTT.tNorule)}</span>`)}<span class="ct-f edits">${ctRuleLink(c)}</span></span></div>`; }).join('');
+    ctRows.innerHTML = CATS.map((c, i) => `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="chip">${esc(c)}</span><button class="ct-x edits" type="button" data-ct-rm="${i}">×</button><span class="ct-fx">${ctFx(c, over)}<button class="ct-f edits ct-rule" type="button" data-ct-rule="${esc(c)}">${esc(CTT.tRule)}</button></span></div>`).join('');
     ctCloudRender();
   }
   const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories').then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
@@ -296,10 +315,11 @@
     ctPop = document.createElement('div'); ctPop.className = 'rrpop'; ctPop.innerHTML = hits.map(c => `<button type="button" class="ct-hit" data-v="${esc(c.name)}">${esc(c.name)}<small>${esc(CTT.tExisting)}${c.count ? ' · ' + c.count : ''}</small></button>`).join('') + (exact ? '' : `<button type="button" class="ct-hit new" data-v="${esc(ctIn.value.replace(/,/g, '').trim())}">${esc(CTT.tNew.replace('{n}', ctIn.value.replace(/,/g, '').trim()))}</button>`);
     document.body.appendChild(ctPop); const r = ctIn.getBoundingClientRect(), box = ctIn.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; ctPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - ctPop.offsetWidth)) + scrollX}px`; ctPop.style.top = `${r.bottom + scrollY + 4}px`;
     ctPop.addEventListener('mousedown', e => e.preventDefault()); ctPop.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { catAdd(b.dataset.v); ctIn.value = ''; ctClosePop(); } }); });
-  ctIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const first = ctPop && $('.ct-hit:not(.new)', ctPop); if (first && e.key === 'Enter') catAdd(first.dataset.v); else catAdd(ctIn.value); /* Enter takes the first existing suggestion; a new name is created via the last entry or a comma */ ctIn.value = ''; ctClosePop(); } else if (e.key === 'Escape') ctClosePop(); });
+  ctIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const first = ctPop && $('.ct-hit:not(.new)', ctPop); if (first && e.key === 'Enter') catAdd(first.dataset.v); else catAdd(ctIn.value); ctIn.value = ''; ctClosePop(); } else if (e.key === 'Escape') ctClosePop(); }); /* Enter takes the first existing suggestion; a new name is created via the last entry or a comma */
   ctIn.addEventListener('blur', () => { setTimeout(ctClosePop, 150); if (ctIn.value.trim()) { catAdd(ctIn.value); ctIn.value = ''; } });
   CT.addEventListener('click', e => { const rm = e.target.closest('[data-ct-rm]'); if (rm) { CATS.splice(+rm.dataset.ctRm, 1); ctRender(); rulesApply('change'); refresh(); return; }
     const add = e.target.closest('[data-ct-add]'); if (add) { catAdd(add.dataset.ctAdd); return; }
+    const rl = e.target.closest('[data-ct-rule]'); if (rl) { openRuleEditor(rl.dataset.ctRule, true); return; }
     const grip = e.target.closest('.ct-grip'); if (grip) { const i = +grip.closest('.ct-row').dataset.i; rrPop(grip, [{ v: 'up', label: CTT.tUp }, { v: 'down', label: CTT.tDown }], null, v => { const j = v === 'up' ? i - 1 : i + 1; if (j < 0 || j >= CATS.length) return; [CATS[i], CATS[j]] = [CATS[j], CATS[i]]; ctRender(); rulesApply('change'); refresh(); }); } });
   let ctDrag = null;
   ctRows.addEventListener('dragstart', e => { const row = e.target.closest('.ct-row'); if (!row) return; ctDrag = +row.dataset.i; row.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
@@ -308,57 +328,87 @@
   ctRows.addEventListener('dragend', () => { ctDrag = null; $$('.ct-row.dragging, .ct-row.over', ctRows).forEach(x => x.classList.remove('dragging', 'over')); });
   // ---- applying the rules to the fields ----
   const ruleBadgeHtml = (e, extra) => `<span class="rbadge ${e.mode}"><svg class="ico"><use href="#${e.mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${esc(e.mode === 'lock' ? CTT.tLock : CTT.tDefault)} · ${esc(e.cat)}${extra ? ' · ' + esc(extra) : ''}</span>`;
-  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || String(cur) === String(e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : (!same && e.mode === 'default') ? CTT.tChanged : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : ''); };
-  const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');
+  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : (!same && e.mode === 'default') ? CTT.tChanged : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : ''); };
   function rulesApply(reason) {
-    const { fx } = ruleMode ? { fx: {} } : effective(); RFX = fx; // in rule mode nothing is locked or badged RLOCK = new Set(Object.keys(fx).filter(k => fx[k].mode === 'lock'));
+    const { fx, alarms, links } = ruleMode ? { fx: {}, alarms: [], links: [] } : effective(); RFX = fx; RLOCK = new Set(Object.keys(fx).filter(k => fx[k].mode === 'lock')); /* in rule mode nothing is locked or badged */
     const isNew = form.classList.contains('new'), prefill = reason === 'add' || reason === 'new';
     let adjusted = false;
     const set = (fld, differs, apply) => { const e = fx[fld]; if (!e) return; if (e.mode === 'lock' ? differs() : (prefill && differs())) { apply(e.value); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } };
-    // when
     set('all_day', () => fx.all_day.mode === 'lock' ? f.all_day.checked !== !!fx.all_day.value : !f.all_day.checked && !!fx.all_day.value, v => setAllDay(!!v));
     f.all_day.disabled = RLOCK.has('all_day');
     if (isNew) { set('calendar', () => f.calendar.value !== fx.calendar.value && [...f.calendar.options].some(o => o.value === fx.calendar.value), v => { f.calendar.value = v; syncDot(); }); f.calendar.disabled = RLOCK.has('calendar'); } else f.calendar.disabled = false;
     set('color', () => fx.color.mode === 'lock' ? (colorOf() || '').toLowerCase() !== String(fx.color.value).toLowerCase() : !colorOf(), v => { setColor(v); syncDot(); });
     f.color.disabled = f.color_cal.disabled = RLOCK.has('color'); $('#ed-color-cal').classList.toggle('locked', RLOCK.has('color'));
-    // where
-    set('location', () => fx.location.mode === 'lock' ? f.location.value.trim() !== String(fx.location.value).trim() : !f.location.value.trim(), v => { f.location.value = v; const g = RULES[fx.location.cat].where.geo; if (g) { f.lat.value = g[0]; f.lon.value = g[1]; } locInit(); });
+    set('location', () => fx.location.mode === 'lock' ? f.location.value.trim() !== String(fx.location.value).trim() : !f.location.value.trim(), v => { f.location.value = v; const g = fx.location.geo; if (g) { f.lat.value = g[0]; f.lon.value = g[1]; } locInit(); });
     $('.card[data-card="where"]', form).classList.toggle('locked-where', RLOCK.has('location'));
-    // alarms and links: rule entries are matched by their key; locked ones cannot be removed or edited
     ALARMS.forEach(a => { delete a._rule; delete a._locked; });
-    if (fx.alarms) { const e = fx.alarms; e.value.forEach(ra => { let a = ALARMS.find(x => alarmKey(x) === alarmKey(ra)); if (!a && (e.mode === 'lock' || prefill)) { a = newAlarm({ ...ra, attendees: [...(ra.attendees || [])] }); ALARMS.push(a); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (a) { a._rule = e; a._locked = e.mode === 'lock'; } }); }
+    alarms.forEach(e => { let a = ALARMS.find(x => alarmKey(x) === alarmKey(e.entry)); if (!a && (e.mode === 'lock' || prefill)) { const { mode, ...ra } = e.entry; a = newAlarm({ ...ra, attendees: [...(ra.attendees || [])] }); ALARMS.push(a); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (a) { a._rule = e; a._locked = e.mode === 'lock'; } });
     LK.links.forEach(l => { delete l._rule; });
-    if (fx.links) { const e = fx.links; e.value.forEach(rl => { let l = LK.links.find(x => x.uri === rl.uri); if (!l && (e.mode === 'lock' || prefill)) { l = { ...rl, embedded: false, keep: false, features: rl.features || [], extra: rl.extra || [] }; LK.links.push(l); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (l) l._rule = e; }); }
-    // repeat
+    links.forEach(e => { let l = LK.links.find(x => x.uri === e.entry.uri); if (!l && (e.mode === 'lock' || prefill)) { const { mode, ...rl } = e.entry; l = { ...rl, embedded: false, keep: false, features: rl.features || [], extra: rl.extra || [] }; LK.links.push(l); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (l) l._rule = e; });
     if (fx.rrule) { const e = fx.rrule; const cur = rrBuild() || ''; if (e.mode === 'lock' ? cur !== e.value : (prefill && !cur)) { rrInit(e.value, null, [], []); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } }
-    rrLocked = RLOCK.has('rrule'); $('#ed-repeat-card').classList.toggle('locked', rrLocked); $('#ed-repeat-card h3 .rbadge')?.remove(); if (fx.rrule) $('#ed-repeat-card h3').insertAdjacentHTML('beforeend', ruleBadge('rrule', rrBuild() || ''));
-    // status
-    ['status', 'transp', 'class', 'priority'].forEach(fld => set(fld, () => fx[fld].mode === 'lock' ? f[fld].value !== String(fx[fld].value) : f[fld].value === '', v => { if (fld === 'priority') setSel(f.priority, v); else f[fld].value = String(v); }));
-    // render the badges
-    $('#ed-when-badges').innerHTML = [['all_day', f.all_day.checked], ['calendar', f.calendar.value], ['color', colorOf()]].filter(([k]) => fx[k]).map(([k, cur]) => `<span>${esc(CTF[RF[k][2]])} ${ruleBadge(k, cur)}</span>`).join('');
-    $('#ed-where-badges').innerHTML = fx.location ? `<span>${esc(CTF[3])} ${ruleBadge('location', f.location.value.trim())}</span>` : '';
-    stRender(); alRender(); lkRender();
+    rrLocked = RLOCK.has('rrule'); $('#ed-repeat-card').classList.toggle('locked', rrLocked);
+    STATUS_KEYS.forEach(fld => set(fld, () => fx[fld].mode === 'lock' ? f[fld].value !== String(fx[fld].value) : f[fld].value === '', v => { if (fld === 'priority') setSel(f.priority, v); else f[fld].value = String(v); }));
+    rulesMark(); stRender(); alRender(); lkRender(); cards(); /* cards that got rule entries must show */
     return adjusted;
   }
-  // ---- rule editor: the same dialog in rule mode, only the rule cards, a mode segment per card ----
+  // badges and effect lines follow the current values (a template that was edited reads "geändert"); called again on every change
+  function rulesMark() { const fx = RFX;
+    $('#ed-when-badges').innerHTML = [['all_day', f.all_day.checked], ['calendar', f.calendar.value], ['color', colorOf()]].filter(([k]) => fx[k]).map(([k, cur]) => `<span>${esc(CTF[FLD[k][1]])} ${ruleBadge(k, cur)}</span>`).join('');
+    $('#ed-where-badges').innerHTML = fx.location ? `<span>${esc(CTF[3])} ${ruleBadge('location', f.location.value.trim())}</span>` : '';
+    $('#ed-repeat-card h3 .rbadge')?.remove(); if (fx.rrule) $('#ed-repeat-card h3').insertAdjacentHTML('beforeend', ruleBadge('rrule', rrBuild() || ''));
+    if (!ruleMode) ctRender(); }
+  // ---- rule editor: the dialog in rule mode. Only the rule cards, on demand like in an event (the "when" card
+  // always). when/status settings live in `RW`/`RS` (rows with a mode segment), reminders and links carry `_mode`
+  // per entry, where and repeat one `.rule-seg` per card. `sig()` extends the dirty check by the modes. ----
   const RULE_CARDS = ['when', 'where', 'alarm', 'repeat', 'status', 'links'];
-  async function openRuleEditor(name) {
-    const r = RULES[name] || {}, p = k => r[k] || { mode: 'off' }, today = state.date || new Date().toISOString().slice(0, 10);
-    const cal = (f.calendar.options[0] || { value: '/' }).value.split('/');
+  const modeSeg = (mode, attr, id) => `<span class="seg rule-mode">${[['default', CTT.tDefault], ['lock', CTT.tLock]].map(([m, t]) => `<button type="button" ${attr}="${m}" data-id="${esc(String(id))}" aria-pressed="${mode === m}">${esc(t)}</button>`).join('')}</span>`;
+  const RULE_NEW = { all_day: () => true, calendar: () => (f.calendar.options[0] || {}).value || '', color: () => '#3478f6', status: () => 'CONFIRMED', transp: () => 'OPAQUE', class: () => 'PUBLIC', priority: () => 5 };
+  const ruleControl = (fld, v) => fld === 'all_day' ? `<select data-rv="all_day"><option value="1"${v ? ' selected' : ''}>${esc(CTT.tYes)}</option><option value="0"${!v ? ' selected' : ''}>${esc(CTT.tNo)}</option></select>` : fld === 'calendar' ? `<select data-rv="calendar">${[...f.calendar.options].map(o => `<option value="${esc(o.value)}"${o.value === v ? ' selected' : ''}>${esc(o.textContent)}</option>`).join('')}</select>` : fld === 'color' ? `<input type="color" data-rv="color" value="${esc(v || '#3478f6')}">` : `<select data-rv="${fld}">${[...f[fld].options].filter(o => o.value !== '').map(o => `<option value="${esc(o.value)}"${String(o.value) === String(v) ? ' selected' : ''}>${esc(o.textContent)}</option>`).join('')}</select>`;
+  const ruleRows = (model, keys) => keys.filter(k => model[k]).map(k => `<div class="rule-row" data-rk="${k}">${modeSeg(model[k].mode, 'data-rm-mode', k)}<span class="rule-val"><span>${esc(CTF[FLD[k][1]])}</span>${ruleControl(k, model[k].value)}</span><button class="ct-x" type="button" data-rrm="${k}">×</button></div>`).join('');
+  const addPills = part => `<button class="pillbtn ghost" type="button" data-rule-add="default" data-part="${part}">${esc(CTT.tAddDefault)}</button><button class="pillbtn ghost" type="button" data-rule-add="lock" data-part="${part}">${esc(CTT.tAddLock)}</button>`;
+  function ruleBodyRender() { if (!ruleMode) return; $('#ed-when-rule').innerHTML = ruleRows(RW, WHEN_KEYS); $('#ed-status-rule').innerHTML = ruleRows(RS, STATUS_KEYS); $$('.rule-adds', form).forEach(el => { el.innerHTML = addPills(el.dataset.ruleAdds); }); }
+  const ruleModel = k => WHEN_KEYS.includes(k) ? RW : RS;
+  form.addEventListener('click', e => { const b = e.target.closest('[data-rule-add], [data-rm-mode], [data-rrm], [data-al-mode], [data-lk-mode]'); if (!b || !ruleMode) return; e.stopPropagation();
+    if (b.dataset.ruleAdd) { const mode = b.dataset.ruleAdd, part = b.dataset.part;
+      if (part === 'when' || part === 'status') { const keys = (part === 'when' ? WHEN_KEYS : STATUS_KEYS).filter(k => !ruleModel(k)[k]); if (!keys.length) return; rrPop(b, keys.map(k => ({ v: k, label: CTF[FLD[k][1]] })), null, k => { ruleModel(k)[k] = { mode, value: RULE_NEW[k]() }; ruleBodyRender(); refresh(); }, `<div class="q">${esc(CTT.tPick)}</div>`); }
+      else if (part === 'alarm') { const a = newAlarm(); a._mode = mode; ALARMS.push(a); alRender(); refresh(); }
+      else if (part === 'links') { lkPendingMode = mode; $('#ed-lk-url').focus(); }
+      return; }
+    if (b.dataset.rmMode) { const k = b.dataset.id; if (ruleModel(k)[k]) { ruleModel(k)[k].mode = b.dataset.rmMode; ruleBodyRender(); refresh(); } return; }
+    if (b.dataset.rrm) { delete ruleModel(b.dataset.rrm)[b.dataset.rrm]; ruleBodyRender(); refresh(); return; }
+    if (b.dataset.alMode) { const row = b.closest('.row'), a = row && row._alarm; if (a) { a._mode = b.dataset.alMode; alRender(); refresh(); } return; }
+    if (b.dataset.lkMode) { const l = LK.links[+b.dataset.id]; if (l) { l._mode = b.dataset.lkMode; lkRender(); refresh(); } } });
+  form.addEventListener('change', e => { const t = e.target; if (!ruleMode || !t.dataset.rv) return; const k = t.dataset.rv; if (!ruleModel(k)[k]) return; ruleModel(k)[k].value = k === 'all_day' ? t.value === '1' : k === 'priority' ? +t.value : t.value; refresh(); });
+  const eventBody = () => { const [principal, cal_id] = f.calendar.value.split('/'); const allDay = f.all_day.checked; const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00'; const endDate = f.end_date.value || f.date.value; const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
+    return { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: PEOPLE.organizer, attendees: PEOPLE.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), ...linksOf(), timezone: root.dataset.tz, etag: f.etag.value }; };
+  const sig = () => serialize() + (ruleMode ? '|' + JSON.stringify(ruleOf()) : '');
+  function openRuleEditor(name, stack) {
+    if (stack && !ruleMode) ruleReturn = { detail: { ...eventBody(), object_id: f.key.value.split('/')[2] || '', uid: (current || {}).uid || '', rrule_until: RR.end.kind === 'until' ? RR.end.until : null, has_overrides: !!(current && current.has_overrides), related: LK.related }, baseline, isNew: form.classList.contains('new'), summaryPh: f.summary.placeholder, date: openDate };
+    const r = RULES[name] || {}, today = state.date || new Date().toISOString().slice(0, 10), cal = ((f.calendar.options[0] || {}).value || '/').split('/');
+    const where = r.where || { mode: 'off' }, repeat = r.repeat || { mode: 'off' }, ralarms = (r.alarm || {}).alarms || [], rlinks = (r.links || {}).links || [];
     ruleMode = name; form.classList.add('rulemode'); ed.classList.add('rulemode');
-    fill({ principal: cal[0], cal_id: cal[1], object_id: '', uid: '', summary: name, location: p('where').location || '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: !!p('when').all_day, rrule: p('repeat').rrule || null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: p('alarm').alarms || [], categories: [], status: p('status').status || '', transp: p('status').transp || '', class: p('status').class || '', priority: p('status').priority ?? null, color: p('when').color || '', geo: p('where').geo || null, links: p('links').links || [], related: [], etag: '', has_overrides: false, timezone: root.dataset.tz });
-    if (p('when').calendar && [...f.calendar.options].some(o => o.value === p('when').calendar)) { f.calendar.value = p('when').calendar; syncDot(); }
-    RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); c.dataset.added = '1'; c.hidden = false; });
-    $$('.rule-seg', form).forEach(seg => { const m = p(seg.dataset.rulePart).mode || 'off'; $$('button', seg).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m))); });
-    mode('edit'); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = '';
-    ed.hidden = false; baseline = serialize(); updateButtons(); $('#ed-save').disabled = false;
+    fill({ principal: cal[0], cal_id: cal[1], object_id: '', uid: '', summary: name, location: where.mode !== 'off' ? where.location || '' : '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: false, rrule: repeat.mode !== 'off' ? repeat.rrule || null : null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: ralarms.map(({ mode, ...a }) => a), categories: [], status: '', transp: '', class: '', priority: null, color: '', geo: where.mode !== 'off' ? where.geo || null : null, links: rlinks.map(({ mode, ...l }) => l), related: [], etag: '', has_overrides: false });
+    ralarms.forEach((a, i) => { if (ALARMS[i]) ALARMS[i]._mode = a.mode; }); rlinks.forEach((l, i) => { if (LK.links[i]) LK.links[i]._mode = l.mode; });
+    RW = {}; RS = {}; WHEN_KEYS.forEach(k => { const st = (r.when || {})[k]; if (st) RW[k] = { mode: st.mode, value: st.value }; }); STATUS_KEYS.forEach(k => { const st = (r.status || {})[k]; if (st) RS[k] = { mode: st.mode, value: st.value }; });
+    const has = { when: true, where: where.mode !== 'off', alarm: ALARMS.length > 0, repeat: repeat.mode !== 'off', status: Object.keys(RS).length > 0, links: LK.links.length > 0 };
+    RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); if (has[n]) c.dataset.added = '1'; else delete c.dataset.added; });
+    $$('.rule-seg', form).forEach(seg => { const m = (seg.dataset.rulePart === 'where' ? where : repeat).mode || 'off'; $$('button', seg).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m))); });
+    mode('edit'); ruleBodyRender(); alRender(); lkRender(); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = '';
+    ed.hidden = false; baseline = sig(); updateButtons(); $('#ed-delete').disabled = !RULES[name];
   }
   const ruleModes = () => Object.fromEntries($$('.rule-seg', form).map(seg => [seg.dataset.rulePart, ($('button[aria-pressed=true]', seg) || {}).dataset?.v || 'off']));
-  function ruleOf() { const m = ruleModes(); return { when: { mode: m.when, all_day: f.all_day.checked ? true : null, calendar: f.calendar.value || null, color: colorOf() || null }, where: { mode: m.where, location: f.location.value.trim(), geo: geoOf() }, alarm: { mode: m.alarm, alarms: alarmsOf() }, repeat: { mode: m.repeat, rrule: rrBuild() || '' }, status: { mode: m.status, status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value }, links: { mode: m.links, links: linksOf().links.filter(l => !l.embedded) } }; }
-  form.addEventListener('click', e => { const b = e.target.closest('.rule-seg button'); if (!b) return; $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('#ed-save').disabled = false; });
-  const ruleLeave = () => { if (!ruleMode) return; ruleMode = null; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; $$('.rule-seg button', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === 'off'))); };
-  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); ruleLeave(); close(); }
-  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); ruleLeave(); close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
+  function ruleOf() { const m = ruleModes(), setting = model => Object.fromEntries(Object.entries(model).map(([k, v]) => [k, { mode: v.mode, value: v.value }]));
+    const alarms = alarmsOf().map((a, i) => ({ mode: ALARMS[i]._mode || 'default', ...a })), plain = LK.links.filter(l => !l.embedded), links = linksOf().links.filter(l => !l.embedded).map((l, i) => ({ mode: (plain[i] || {})._mode || 'default', ...l }));
+    return { when: setting(RW), where: { mode: m.where || 'off', location: f.location.value.trim(), geo: geoOf() }, alarm: { alarms }, repeat: { mode: m.repeat || 'off', rrule: rrBuild() || '' }, status: setting(RS), links: { links } }; }
+  form.addEventListener('click', e => { const b = e.target.closest('.rule-seg button'); if (!b) return; $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', String(x === b))); refresh(); });
+  // leaving rule mode: back to the event it was opened from (rules re-applied by `fill`), or to the page it
+  // was called from (`?back=`), or simply closed
+  function ruleLeave() { if (!ruleMode) return false; ruleMode = null; lkPendingMode = null; RW = {}; RS = {}; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; $$('.rule-seg button', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === 'off'))); $('#ed-when-rule').innerHTML = ''; $('#ed-status-rule').innerHTML = ''; $$('.rule-adds', form).forEach(el => { el.innerHTML = ''; });
+    if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
+    if (ruleBack) { const to = ruleBack; ruleBack = null; location.href = to; return true; }
+    return false; }
+  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
+  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
@@ -481,7 +531,7 @@
     $$('.row', alBox).forEach(r => r.remove());
     for (const a of ALARMS) {
       const r = addRow('alarms'); r.classList.toggle('open', !!a._open); r._alarm = a;
-      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a); if (a._rule) $('.extra', r).insertAdjacentHTML('beforeend', ' ' + ruleBadgeHtml(a._rule, a._rule.adjusted ? CTT.tAdjusted : '')); r.classList.toggle('locked', !!a._locked); if (a._locked) $$('[data-rm]', r).forEach(x => x.hidden = true);
+      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a); if (a._rule) $('.extra', r).insertAdjacentHTML('beforeend', ' ' + ruleBadgeHtml(a._rule, a._rule.adjusted ? CTT.tAdjusted : '')); r.classList.toggle('locked', !!a._locked); if (a._locked) $$('[data-rm]', r).forEach(x => x.hidden = true); if (ruleMode) $('.sum', r).insertAdjacentHTML('afterend', modeSeg(a._mode || 'default', 'data-al-mode', a._id));
       $('.pdot', r).classList.toggle('on', matchesPreset(a)); $('.act', r).setAttribute('aria-pressed', a._open ? 'true' : 'false');
       const d = $('.aldet', r); d.hidden = !a._open; if (a._open) alDetails(a, r);
     }
@@ -495,7 +545,7 @@
   });
   function alarmsInit(list) { ALARMS = list.map(a => newAlarm({ ...a, attendees: [...(a.attendees || [])] })); alRender(); }
   const alarmAdd = () => { const a = newAlarm(); ALARMS.push(a); alRender(); return $$('.row', alBox).pop(); }; // the new entry stays collapsed; the row header, the dots or the marker open it
-  const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, _dragX, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
+  const alarmsOf = () => ALARMS.map(({ _id, _open, _drag, _dragX, _rule, _locked, _mode, ...a }) => ({ ...a, description: a.description.trim(), summary: a.summary.trim(), attach: a.attach.trim() }));
   // people: the organizer is the row with the ORGANIZER role
   // ---- status card (design K): the four hidden selects stay the model (dirty tracking, reset, submit work as
   // before); the tiles are their face. Each select carries its label and one icon per option (`data-icons`),
@@ -636,10 +686,10 @@
   const lkMirror = () => { f.links_json.value = LK.links.length || LK.related.length ? JSON.stringify([LK.links.map(l => [l.kind, l.uri, l.label, l.filename, l.keep, !!l.data]), LK.related.map(r => r.uid)]) : ''; };
   function linksInit(links, related) { LK = { links: (links || []).map(l => ({ ...l, keep: l.embedded ? true : false })), related: (related || []).map(r => ({ ...r })) }; lkSel = null; lkMsg.textContent = ''; lkRender(); }
   const lkSync = () => { lkMirror(); lkRender(); refresh(); };
-  const linksOf = () => ({ links: LK.links.map(l => ({ ...l, features: l.features || [], extra: l.extra || [] })), related: LK.related.map(({ target, ...r }) => ({ ...r, extra: r.extra || [] })) });
+  const linksOf = () => ({ links: LK.links.map(({ _rule, _mode, ...l }) => ({ ...l, features: l.features || [], extra: l.extra || [] })), related: LK.related.map(({ target, ...r }) => ({ ...r, extra: r.extra || [] })) });
   const lkMeeting = u => { const p = lkProvider(u); let id = '', pwd = false; try { const x = new URL(u); pwd = x.searchParams.has('pwd') || x.searchParams.has('passcode'); const m = x.pathname.match(/\/j\/(\d{9,11})/) || x.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})$/) || x.pathname.match(/\/([A-Za-z0-9._-]{6,})$/); if (m) id = m[1].replace(/^(\d{3})(\d{4})(\d{4})$/, '$1 $2 $3'); } catch {} return { provider: p || LKT.tConf, id, pwd }; };
   const lkActs = (i, kind) => { const l = LK.links[i]; const locked = l._rule && l._rule.mode === 'lock'; const view = l.embedded ? (f.key.value && l.bin_index != null ? [['download', 'i-download', LKT.tDownload]] : []) : [['open', 'i-ext', LKT.tOpen], ['copy', 'i-copy', LKT.tCopy]]; return `<span class="lk-acts">${view.map(([a, ic, t]) => `<button class="act views" type="button" data-lact="${a}" data-i="${i}" title="${esc(t)}"><svg class="ico"><use href="#${ic}"/></svg></button>`).join('')}${locked ? '' : `<button class="act edits${lkSel === i ? ' on' : ''}" type="button" data-lact="edit" data-i="${i}" title="${esc(LKT.tEdit)}"><svg class="ico"><use href="#i-dots"/></svg></button><button class="act edits" type="button" data-lact="rm" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button>`}</span>`; };
-  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}"><svg class="ico"><use href="#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}${l._rule ? ' ' + ruleBadgeHtml(l._rule, l._rule.adjusted ? CTT.tAdjusted : '') : ''}</span>${lkActs(i)}</div>`; };
+  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}"><svg class="ico"><use href="#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}${l._rule ? ' ' + ruleBadgeHtml(l._rule, l._rule.adjusted ? CTT.tAdjusted : '') : ''}</span>${ruleMode ? modeSeg(l._mode || 'default', 'data-lk-mode', i) : ''}${lkActs(i)}</div>`; };
   const lkRelRow = i => { const r = LK.related[i], t = r.target; return `<div class="lk-row"><svg class="ico"><use href="#${t && t.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span class="lk-t">${esc(t ? t.summary || r.uid : r.uid)}</span><span class="lk-s">${esc(t ? [t.kind === 'task' ? LKT.tTask : LKT.tEvent, t.date ? fmtD(t.date) : '', t.done ? LKT.tDone : ''].filter(Boolean).join(' · ') : LKT.tNotfound)}</span><span class="lk-acts">${t ? `<button class="act views" type="button" data-lact="goto" data-i="${i}" title="${esc(LKT.tOpen)}"><svg class="ico"><use href="#i-ext"/></svg></button>` : ''}<button class="act edits" type="button" data-lact="rmrel" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button></span></div>`; };
   const lkSec = (icon, title, body) => body ? `<div class="lk-sec"><h4><svg class="ico"><use href="#${icon}"/></svg> ${esc(title)}</h4>${body}</div>` : '';
   function lkRender() {
@@ -649,12 +699,12 @@
     let c = '';
     if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}">${esc(LKT.tJoin)}</button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
     c += conf.filter(i => i !== web[0] && !tel.includes(i)).map(lkRow).join('') + (web.length ? lkRow(web[0]) .replace('class="lk-row', 'class="lk-row edits') : '');
-    if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
+    if (!conf.length) c = `<button class="lk-pill edits rule-hide" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
     const internal = LK.related.map((r, i) => lkRelRow(i)).join('');
     const internet = idx.filter(i => LK.links[i].kind !== 'conference').map(lkRow).join('');
     const total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0);
     lkList.innerHTML = (conf.length || form.classList.contains('mode-edit') ? lkSec('i-chat', LKT.tConf, c) : '') + lkSec('i-calendar', LKT.tInternal, internal) + lkSec('i-globe', LKT.tInternet, internet);
-    if (!conf.length) $('.lk-sec', lkList)?.classList.add('edits');
+    if (!conf.length) $('.lk-sec', lkList)?.classList.add('edits', 'rule-hide'); /* a rule holds no Jitsi room: each event gets its own */
     $('#ed-lk-drop').title = total ? LKT.tTotal.replace('{n}', lkSize(total)) : '';
     lkDetailRender();
   }
@@ -664,7 +714,7 @@
     if (!l) { lkDetail.innerHTML = ''; return; }
     lkDetail.innerHTML = `<div class="lk-dh"><span>${esc(LKT.tEdit)}: ${esc(lkTitle(l))}</span><button type="button" data-lact="rm" data-i="${lkSel}">${esc(LKT.tRemove)}</button></div>` + (l.embedded ? `<div class="lk-kv" style="margin:0"><span>${esc(LKT.tAttach)}</span><span>${esc(l.filename || '')}</span><span>${esc(l.fmt ? 'Typ' : '')}</span><span>${esc(l.fmt || '')}</span></div>` : `<div class="field"><input type="url" class="aux mirror" data-lk="uri" value="${esc(l.uri)}"><span>${esc(LKT.tAddress)}</span></div><div class="field"><input type="text" class="aux mirror" data-lk="label" value="${esc(l.label || '')}" placeholder="${esc(lkHost(l.uri))}"><span>${esc(LKT.tLabel)}</span></div><span class="seg">${[['url', 'i-ext', LKT.tUrl], ['attach', 'i-download', LKT.tAttach], ['conference', 'i-chat', LKT.tConfk]].map(([k, ic, t]) => `<button type="button" data-lk-kind="${k}" aria-pressed="${l.kind === k}"><svg class="ico"><use href="#${ic}"/></svg> ${esc(t)}</button>`).join('')}</span>`);
   }
-  const lkAddUri = (uri, label) => { uri = uri.trim(); if (!uri) return; if (!/^[a-z][a-z0-9+.-]*:/i.test(uri)) uri = 'https://' + uri; const kind = lkKind(uri); if (LK.links.some(l => l.uri === uri)) return; LK.links.push({ kind, uri, label: label || '', embedded: false, filename: '', fmt: '', size: null, features: kind === 'conference' && /^https?:/i.test(uri) ? ['AUDIO', 'VIDEO'] : [], extra: [], keep: false }); lkSel = null; lkSync(); };
+  const lkAddUri = (uri, label) => { uri = uri.trim(); if (!uri) return; if (!/^[a-z][a-z0-9+.-]*:/i.test(uri)) uri = 'https://' + uri; const kind = lkKind(uri); if (LK.links.some(l => l.uri === uri)) return; LK.links.push({ kind, uri, label: label || '', embedded: false, filename: '', fmt: '', size: null, features: kind === 'conference' && /^https?:/i.test(uri) ? ['AUDIO', 'VIDEO'] : [], extra: [], keep: false, _mode: lkPendingMode || 'default' }); lkPendingMode = null; lkSel = null; lkSync(); };
   const lkAddFiles = files => { let total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0); const errs = []; [...files].forEach(file => { if (file.size > 2 * 1024 * 1024 || total + file.size > 6 * 1024 * 1024) { errs.push(LKT.tToobig.replace('{name}', file.name)); return; } total += file.size; const rd = new FileReader(); rd.onload = () => { LK.links.push({ kind: 'attach', uri: '', label: '', embedded: true, filename: file.name, fmt: file.type || 'application/octet-stream', size: file.size, features: [], extra: [], keep: false, data: String(rd.result).replace(/^data:[^,]*,/, '') }); lkSync(); }; rd.readAsDataURL(file); }); lkMsg.className = 'lk-msg' + (errs.length ? ' err' : ''); lkMsg.textContent = errs.join(' · '); };
   const lkClosePop = () => { if (lkPop) { lkPop.remove(); lkPop = null; } };
   let lkSearchT = 0;
@@ -715,15 +765,15 @@
   const suggShow = items => { suggItems = items; suggIdx = -1; sugg.innerHTML = items.length ? items.map((p, i) => `<button type="button" role="option" data-i="${i}">${p.label.replace(/</g, '&lt;')}</button>`).join('') : `<div class="none">${T.suggNone}</div>`; sugg.hidden = false; locin.setAttribute('aria-expanded', 'true'); };
   function locRender() {
     const P = LOC.primary, O = other();
-    $('#ed-loc-lbl').textContent = P === 'addr' ? LKT.tAddr : LKT.tGeo;
-    locin.placeholder = P === 'addr' ? D.tLocation || '' : LKT.tCoordsHint;
+    $('#ed-loc-lbl').textContent = P === 'addr' ? LT.tAddr : LT.tGeo;
+    locin.placeholder = P === 'addr' ? D.tLocation || '' : LT.tCoordsHint;
     if (document.activeElement !== locin) locin.value = P === 'addr' ? f.location.value : coordsText();
-    const err = $('#ed-loc-err'); err.textContent = LOC.invalid ? LKT.tErrInvalid : ''; err.hidden = !LOC.invalid; $('#ed-locp').classList.toggle('err', LOC.invalid);
+    const err = $('#ed-loc-err'); err.textContent = LOC.invalid ? LT.tErrInvalid : ''; err.hidden = !LOC.invalid; $('#ed-locp').classList.toggle('err', LOC.invalid);
     $('#ed-loc-swap').hidden = !LOC[O];
     $('[data-geo=map]', form).classList.toggle('hot', LOC.errAddr || LOC.errCoords);
     let h = '';
-    if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LKT.tAddr : LKT.tGeo}"><svg class="ico" aria-hidden="true"><use href="#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LKT.tRmAddr : LKT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LKT.tErrAddr : LKT.tErrCoords}</span>` : ''); }
-    else h = `<button class="chip ghost" type="button" data-locadd="${O}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> ${O === 'addr' ? LKT.tAddAddr : LKT.tAddCoords}</button>`;
+    if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LT.tAddr : LT.tGeo}"><svg class="ico" aria-hidden="true"><use href="#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LT.tRmAddr : LT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LT.tErrAddr : LT.tErrCoords}</span>` : ''); }
+    else h = `<button class="chip ghost" type="button" data-locadd="${O}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> ${O === 'addr' ? LT.tAddAddr : LT.tAddCoords}</button>`;
     locsub.innerHTML = h;
     const addr = f.location.value.trim(); $('#ed-loc-view').hidden = !addr; $('#ed-geo-view').hidden = !geoOf();
     $('#ed-addr-lines').innerHTML = addr.split(/,\s*/).filter(Boolean).map(l => `<span class="ln">${l.replace(/</g, '&lt;')}</span>`).join('');
@@ -744,7 +794,7 @@
   const suggPick = i => { const p = suggItems[i]; if (!p) return; locin.value = p.label; f.location.value = p.label; primaryTouched = false; if (LOC.coords) { f.lat.value = p.lat.toFixed(6); f.lon.value = p.lon.toFixed(6); LOC.errCoords = false; } suggClose(); ringStop(); locRender(); syncDot(); refresh(); };
   locin.addEventListener('input', () => { primaryTouched = true; clearTimeout(suggTimer); const q = locin.value.trim();
     if (LOC.primary === 'addr') { f.location.value = q; if (q.length < 3) { ringStop(); suggClose(); refresh(); return; } ringCount(SUGG_DELAY); suggTimer = setTimeout(async () => { if (document.activeElement !== locin) return; const seq = ++suggSeq; ring.classList.add('busy'); try { const items = await geoSearch(q, geoOf()); if (seq !== suggSeq || document.activeElement !== locin) return; suggShow(items); } catch (_) { suggClose(); } finally { if (seq === suggSeq) ringStop(); } }, SUGG_DELAY); }
-    else { LOC.invalid = false; $('#ed-locp').classList.remove('err'); ringCount(SUGG_DELAY); suggTimer = setTimeout(() => { if (document.activeElement === locin) { ringStop(); commitPrimary(); } }, SUGG_DELAY); }
+    else { LOC.invalid = false; $('#ed-locp').classList.remove('err'); ringStop(); suggTimer = setTimeout(() => { if (document.activeElement === locin) commitPrimary(); }, SUGG_DELAY); } // coordinates commit after the same pause, but without the ring: it signals the address lookup only
     refresh(); });
   locin.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!sugg.hidden && suggIdx >= 0) suggPick(suggIdx); else locin.blur(); return; } if (sugg.hidden) return; if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); suggIdx = (suggIdx + (e.key === 'ArrowDown' ? 1 : -1) + suggItems.length) % Math.max(1, suggItems.length); $$('button', sugg).forEach((b, i) => b.setAttribute('aria-selected', i === suggIdx ? 'true' : 'false')); } else if (e.key === 'Escape') { e.stopPropagation(); suggClose(); } });
   sugg.addEventListener('mousedown', e => { const b = e.target.closest('button[data-i]'); if (b) { e.preventDefault(); suggPick(+b.dataset.i); } });
@@ -960,7 +1010,7 @@
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
-  function updateButtons() { const changed = serialize() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  function updateButtons() { const changed = sig() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
   function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
   function refresh() { whenLine(); rrSync(); grow(); alTimeline(); updateButtons(); }
@@ -996,20 +1046,20 @@
     ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
   form.addEventListener('input', refresh);
-  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } refresh(); });
+  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
   form.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
-    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (ruleMode) { const seg = $('.rule-seg', c); if (seg && !$('button[aria-pressed=true]:not([data-v=off])', seg)) $$('button', seg).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === 'default'))); } /* a rule card starts as template */ if (b.dataset.cardAdd === 'alarm') { if (!ruleMode) $('[data-add=alarms]', c).click(); } else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode && c.dataset.card === 'status') { RS = {}; ruleBodyRender(); } delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
-  $('#ed-reset').onclick = () => fill(current, openDate);
+  $('#ed-reset').onclick = () => { if (ruleMode) openRuleEditor(ruleMode); else fill(current, openDate); };
   async function dayline() {
     const box = $('#ed-dayline'); const day = f.date.value; if (!day) return;
     let h = ''; for (let i = 0; i < 7; i++) h += `<span class="h" style="top:${(i * 14.3).toFixed(1)}%">${7 + i * 2}:00</span>`;
@@ -1023,12 +1073,7 @@
   form.addEventListener('submit', async e => {
     e.preventDefault();
     if (ruleMode) { await ruleSave(); return; }
-    const [principal, cal_id] = f.calendar.value.split('/');
-    const allDay = f.all_day.checked;
-    const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00';
-    const endDate = f.end_date.value || f.date.value;
-    const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
-    const body = { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: PEOPLE.organizer, attendees: PEOPLE.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), ...linksOf(), timezone: root.dataset.tz, etag: f.etag.value };
+    const body = eventBody();
     const key = f.key.value;
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
@@ -1036,11 +1081,11 @@
       ntInvalidate(); ctInvalidate(); close(); load(false);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
-  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.del)) await ruleDelete(); return; } if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
+  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
   wire();
   window.rusticalCal = { go, openEditor };
-  window.rusticalCal.openRuleEditor = openRuleEditor; { const rp = new URLSearchParams(location.search).get('rule'); if (rp) openRuleEditor(rp); }
+  window.rusticalCal.openRuleEditor = openRuleEditor; { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
 })();
 
 /* ===== universal search ===== */
