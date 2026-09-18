@@ -407,7 +407,7 @@
     ralarms.forEach((a, i) => { if (ALARMS[i]) ALARMS[i]._mode = a.mode; }); rlinks.forEach((l, i) => { if (LK.links[i]) LK.links[i]._mode = l.mode; });
     const has = { when: true, where: RM.location !== 'off', alarm: ALARMS.length > 0, repeat: RM.rrule !== 'off', status: STATUS_KEYS.some(k => RM[k] !== 'off'), links: LK.links.length > 0 };
     RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); if (has[n]) c.dataset.added = '1'; else delete c.dataset.added; });
-    mode('edit'); rulesApply('open'); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = '';
+    mode('edit'); rulesApply('open'); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = ''; $('#ed-hint').textContent = ''; /* no series hint: a rule is no event */
     ed.hidden = false; baseline = sig(); updateButtons(); $('#ed-delete').disabled = !RULES[name];
   }
   function ruleOf() {
@@ -712,12 +712,12 @@
     let c = '';
     if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}">${esc(LKT.tJoin)}</button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
     c += conf.filter(i => i !== web[0] && !tel.includes(i)).map(lkRow).join('') + (web.length ? lkRow(web[0]) .replace('class="lk-row', 'class="lk-row edits') : '');
-    if (!conf.length) c = `<button class="lk-pill edits rule-hide" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
+    if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
     const internal = LK.related.map((r, i) => lkRelRow(i)).join('');
     const internet = idx.filter(i => LK.links[i].kind !== 'conference').map(lkRow).join('');
     const total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0);
     lkList.innerHTML = (conf.length || form.classList.contains('mode-edit') ? lkSec('i-chat', LKT.tConf, c) : '') + lkSec('i-calendar', LKT.tInternal, internal) + lkSec('i-globe', LKT.tInternet, internet);
-    if (!conf.length) $('.lk-sec', lkList)?.classList.add('edits', 'rule-hide'); /* a rule holds no Jitsi room: each event gets its own */
+    if (!conf.length) $('.lk-sec', lkList)?.classList.add('edits');
     $('#ed-lk-drop').title = total ? LKT.tTotal.replace('{n}', lkSize(total)) : '';
     lkDetailRender();
   }
@@ -753,7 +753,7 @@
     else if (a === 'rm') { LK.links.splice(i, 1); lkSel = null; lkSync(); }
     else if (a === 'rmrel') { LK.related.splice(i, 1); lkSync(); }
     else if (a === 'goto') { const t = LK.related[i].target; if (t.kind === 'task') location.href = '/tasks#' + t.key; else if (serialize() !== baseline) { $('#ed-error').textContent = LKT.tSaveFirst; } else openEditor(t.key); }
-    else if (a === 'jitsi') { const slug = (f.summary.value || 'raum').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'raum'; lkAddUri(`https://meet.jit.si/${slug}-${Math.random().toString(36).slice(2, 8)}`, 'Jitsi'); } });
+    else if (a === 'jitsi') { const slug = (ruleMode || f.summary.value || 'raum') /* a rule's room is named after the category */.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'raum'; lkAddUri(`https://meet.jit.si/${slug}-${Math.random().toString(36).slice(2, 8)}`, 'Jitsi'); } });
   // colour: a hex input plus a "calendar colour" toggle that means "no COLOR property"
   const toHex = c => { if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase(); const el = document.createElement('i'); el.style.color = c; document.body.appendChild(el); const rgb = getComputedStyle(el).color.match(/\d+/g); el.remove(); return rgb && rgb.length >= 3 ? '#' + rgb.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('') : '#3478f6'; };
   const setColor = c => { const own = !!c; f.color_cal.checked = !own; $('#ed-color-cal').classList.toggle('on', !own); f.color.value = toHex(own ? c : (f.calendar.selectedOptions[0] || {}).dataset?.color || '#3478f6'); f.color.disabled = !own; };
