@@ -291,13 +291,13 @@
       ((r.alarm || {}).alarms || []).forEach(a => { const k = alarmKey(a); if (seenA.has(k)) (over[c] ||= {})['alarm:' + k] = seenA.get(k); else { seenA.set(k, c); alarms.push({ cat: c, mode: a.mode, entry: a }); } });
       ((r.links || {}).links || []).forEach(l => { const k = l.uri; if (!k) return; if (seenL.has(k)) (over[c] ||= {})['link:' + k] = seenL.get(k); else { seenL.set(k, c); links.push({ cat: c, mode: l.mode, entry: l }); } }); });
     return { fx, over, alarms, links }; }
-  // effect line of a category row: one item per setting; struck through when an upper category wins ("überstimmt"),
-  // marked "geändert" when the event deviates from a template value
+  // effect line of a category row: one item per setting, struck through when an upper category wins ("überstimmt");
+  // deviation from a template is shown in the card footers, not here
   const ctFx = (c, over) => { const r = RULES[c]; if (!r) return `<span class="ct-f">${esc(CTT.tNorule)}</span>`; const out = [];
-    const item = (key, mode, label, same) => { const by = over[c] && over[c][key]; const changed = !ruleMode && !by && mode === 'default' && !same; out.push(`<span class="ct-f ${mode === 'lock' ? 'lock' : ''} ${by ? 'over' : ''} ${changed ? 'changed' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : changed ? `<span class="ct-changed">${esc(CTT.tChanged)}</span>` : ''}`); };
-    SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) item(fld, st.mode, `${esc(CTF[FLD[fld][1]])}: ${fxVal(fld, st.value)}`, sameVal(fld, st.value)); });
-    ((r.alarm || {}).alarms || []).forEach(a => item('alarm:' + alarmKey(a), a.mode, `${esc(CTF[4])}: ${esc(alarmText(a))}`, ALARMS.some(x => alarmKey(x) === alarmKey(a))));
-    ((r.links || {}).links || []).forEach(l => item('link:' + l.uri, l.mode, `${esc(CTF[10])}: ${esc(l.label || lkHost(l.uri) || l.uri)}`, LK.links.some(x => x.uri === l.uri)));
+    const item = (key, mode, label) => { const by = over[c] && over[c][key]; out.push(`<span class="ct-f ${mode === 'lock' ? 'lock' : ''} ${by ? 'over' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}`); };
+    SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) item(fld, st.mode, `${esc(CTF[FLD[fld][1]])}: ${fxVal(fld, st.value)}`); });
+    ((r.alarm || {}).alarms || []).forEach(a => item('alarm:' + alarmKey(a), a.mode, `${esc(CTF[4])}: ${esc(alarmText(a))}`));
+    ((r.links || {}).links || []).forEach(l => item('link:' + l.uri, l.mode, `${esc(CTF[10])}: ${esc(l.label || lkHost(l.uri) || l.uri)}`));
     return out.join(''); };
   function ctRender() {
     ctMirror();
@@ -330,8 +330,9 @@
   // ---- applying the rules to the fields ----
   const modeIcon = m => m === 'lock' ? 'i-lock' : m === 'default' ? 'i-tag' : 'i-dots';
   const modeText = m => m === 'lock' ? CTT.tLock : m === 'default' ? CTT.tDefault : CTT.tAny;
-  const ruleBadgeHtml = (e, extra) => `<span class="rbadge ${e.mode}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}${extra ? ' · ' + esc(extra) : ''}</span>`;
-  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : (!same && e.mode === 'default') ? CTT.tChanged : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : ''); };
+  // badge "Vorlage · Kat" / "Vorgabe · Kat"; `extra` appended with " · "; `changed` = the event deviates from a template → orange, " (geändert)"
+  const ruleBadgeHtml = (e, extra, changed) => `<span class="rbadge ${e.mode}${changed ? ' changed' : ''}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}${extra ? ' · ' + esc(extra) : ''}${changed ? ' (' + esc(CTT.tChanged) + ')' : ''}</span>`;
+  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); };
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
     f.all_day.disabled = RLOCK.has('all_day'); f.calendar.disabled = RLOCK.has('calendar');
@@ -371,7 +372,7 @@
       STATUS_KEYS.forEach(k => add('status', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       LK.links.forEach((l, i) => { if (!l.embedded) add('links', lkTitle(l), chip('link:' + i, l._mode || 'off')); });
     } else {
-      const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : (!present && e.mode === 'default') ? CTT.tChanged : '');
+      const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : '', !present && e.mode === 'default');
       WHEN_KEYS.forEach(k => { if (fx[k]) add('when', CTF[FLD[k][1]], ruleBadge(k, curVal(k))); });
       if (fx.location) add('where', CTF[3], ruleBadge('location', f.location.value.trim()));
       RFXL.alarms.forEach(e => add('alarm', alarmText(e.entry), entry(e, ALARMS.some(x => alarmKey(x) === alarmKey(e.entry)))));

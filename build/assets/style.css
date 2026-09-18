@@ -996,8 +996,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .ed .cardform input:disabled, .ed .cardform select:disabled, .ed .cardform .toggle:has(input:disabled), .ed .cardform #ed-color-cal.locked { opacity: .5; } .ed .cardform .toggle:has(input:disabled), .ed .cardform #ed-color-cal.locked { pointer-events: none; } /* locked by a rule: visibly disabled, the badge says why */
 .cardform.rulemode .rule-hide, .ed.rulemode .rule-hide { display: none !important; }
 .cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"] { display: none !important; }
-.ed .cardform .ct-fx .ct-f.changed { text-decoration: line-through; color: var(--c4); }
-.ed .cardform .ct-fx .ct-changed { color: var(--c4); font-size: 11px; }
+.rbadge.changed { color: var(--c4); } /* the event deviates from this template */
 .ed.rulemode .cols3 { grid-template-columns: 1fr; } .ed.rulemode .dayline { display: none; } /* no day line in rule mode */
 .cat-list { display: grid; gap: 4px; margin: 8px 0 12px; }
 .cat-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
