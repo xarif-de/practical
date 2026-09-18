@@ -331,7 +331,7 @@
   const modeIcon = m => m === 'lock' ? 'i-lock' : m === 'default' ? 'i-tag' : 'i-dots';
   const modeText = m => m === 'lock' ? CTT.tLock : m === 'default' ? CTT.tDefault : CTT.tAny;
   // badge "Vorlage · Kat" / "Vorgabe · Kat"; `extra` appended with " · "; `changed` = the event deviates from a template → orange, " (geändert)"
-  const ruleBadgeHtml = (e, extra, changed) => `<span class="rbadge ${e.mode}${changed ? ' changed' : ''}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}${extra ? ' · ' + esc(extra) : ''}${changed ? ' (' + esc(CTT.tChanged) + ')' : ''}</span>`;
+  const ruleBadgeHtml = (e, extra, changed) => `<span class="rb${changed ? ' changed' : ''}"><span class="rbadge ${e.mode}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}</span>${extra ? `<span class="rb-x">${esc(extra)}</span>` : ''}${changed ? `<span class="rb-x">(${esc(CTT.tChanged)})</span>` : ''}</span>`;
   const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); };
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
