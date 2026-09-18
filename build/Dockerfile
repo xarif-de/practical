@@ -3,7 +3,7 @@
 # and the -wal/-shm siblings must be writable by both.
 
 # renovate: datasource=docker packageName=rust
-FROM rust:1.98-alpine@sha256:1716b3aa042d735f4566d14dc54e8037de9d69556e2d5dd58131d93a613d173d AS builder
+FROM rust:1.98-alpine@sha256:622b73220064fc64618062f7d9350a9ec689e6134b288a3023665431dc7dbd83 AS builder
 # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls).
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
