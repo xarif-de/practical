@@ -717,7 +717,7 @@
     const internet = idx.filter(i => LK.links[i].kind !== 'conference').map(lkRow).join('');
     const total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0);
     lkList.innerHTML = (conf.length || form.classList.contains('mode-edit') ? lkSec('i-chat', LKT.tConf, c) : '') + lkSec('i-calendar', LKT.tInternal, internal) + lkSec('i-globe', LKT.tInternet, internet);
-    if (!conf.length) $('.lk-sec', lkList)?.classList.add('edits');
+    if (!conf.length && form.classList.contains('mode-edit')) $('.lk-sec', lkList).classList.add('edits'); /* the empty conference section is edit-only; in view mode it is not rendered, so the first section is a real one */
     $('#ed-lk-drop').title = total ? LKT.tTotal.replace('{n}', lkSize(total)) : '';
     lkDetailRender();
   }
