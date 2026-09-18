@@ -50,6 +50,8 @@ pub struct CalendarPage {
     pub alarm_presets_json: String,
     /// snap points of the reminder strip (`events::AlarmSnaps`)
     pub alarm_snaps_json: String,
+    /// the user's category rules (`domain::catrules`), applied by the editor
+    pub category_rules_json: String,
 }
 
 #[derive(Template)]
@@ -160,6 +162,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         presets_json: p.presets_json.unwrap_or_else(|| "[]".into()),
         alarm_snaps_json: serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap(),
         alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
+        category_rules_json: serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id).await?).unwrap(),
     }
     .into_response())
 }

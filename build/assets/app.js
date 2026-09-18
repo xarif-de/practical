@@ -51,6 +51,15 @@
     addEventListener('hashchange', fromHash); fromHash();
     // a flash after a failed confirmation should keep the details open
     $$('.flash.error').forEach(() => $$('details.danger-zone', settings).forEach(d => d.open = true));
+    // categories tab: the index with counts, a rule per category (edited in the calendar's dialog)
+    const catPanel = $('#categories');
+    if (catPanel) {
+      const t = catPanel.dataset, list = $('#cat-list'), csrfTok = ($('meta[name=csrf]') || {}).content || '', h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const load = async () => { const r = await fetch('/api/categories'); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="/calendar?rule=${encodeURIComponent(c.name)}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
+      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
+      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = '/calendar?rule=' + encodeURIComponent(n); });
+      load();
+    }
   }
 
   // user menu: click toggles (hover works via CSS, touch needs the click)
@@ -239,26 +248,117 @@
   const presets = (() => { try { return JSON.parse($('#presets-data').textContent || '[]'); } catch (_) { return []; } })();
   const presetBox = $('#ed-presets');
   if (presets.length) presetBox.innerHTML = presets.map((p, i) => `<button type="button" class="btn" data-preset="${i}">${p.title}</button>`).join('');
-  $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) { addCard('cats'); addChip(p.category); } if (p.all_day) setAllDay(true); syncDot(); refresh(); });
+  $$('[data-preset]', presetBox).forEach(b => b.onclick = () => { const p = presets[+b.dataset.preset]; if (p.title) f.summary.value = p.title; if (p.calendar) f.calendar.value = p.calendar; if (p.category) catAdd(p.category); if (p.all_day) setAllDay(true); syncDot(); refresh(); });
   function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
   $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); }
   const tl = $('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
-  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; }
+  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; ruleLeave(); }
   const dirty = () => form.classList.contains('mode-edit') && serialize() !== baseline;
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
   const fmtD = s => { const d = parse(s.slice(0, 10)); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
-  // categories as chips (same widget as the contact editor)
-  const chips = () => $$('.tags .chip', form).map(c => c.firstChild.textContent.trim());
-  const addChip = v => { v = v.replace(/,/g, '').trim(); if (!v || chips().includes(v)) return; $('.tags input', form).insertAdjacentHTML('beforebegin', `<span class="chip">${v.replace(/</g, '&lt;')}<b class="edits">×</b></span>`); };
-  const tagIn = $('.tags input', form);
-  tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(tagIn.value); tagIn.value = ''; refresh(); } else if (e.key === 'Backspace' && !tagIn.value) { const c = tagIn.previousElementSibling; if (c && c.classList.contains('chip')) { c.remove(); refresh(); } } });
-  tagIn.addEventListener('blur', () => { if (tagIn.value.trim()) { addChip(tagIn.value); tagIn.value = ''; refresh(); } });
+  // ---- categories and category rules (round 17): `CATS` is the ordered list mirrored into `cats_json`. A rule
+  // (`RULES`, per user, see domain::catrules) puts values on the event as a default (prefilled, editable) or a
+  // lock (fixed here). Order matters: for one field the first category wins, the others are struck through.
+  // `rulesApply` sets and locks the fields; every card asks `ruleBadge(field)` for its badge. ----
+  const CT = $('#ed-cats-card'), CTT = CT.dataset, ctRows = $('#ed-ct-rows'), ctIn = $('#ed-ct-in'), ctCloud = $('#ed-ct-cloud');
+  const RULES = JSON.parse(($('#category-rules-data') || {}).textContent || '{}');
+  let CATS = [], CT_IDX = null, ctPop = null, RFX = {}, RLOCK = new Set(), ruleMode = null;
+  const CTF = CTT.tFields.split('|');
+  const RF = { all_day: ['when', 'all_day', 0], calendar: ['when', 'calendar', 1], color: ['when', 'color', 2], location: ['where', 'location', 3], alarms: ['alarm', 'alarms', 4], rrule: ['repeat', 'rrule', 5], status: ['status', 'status', 6], transp: ['status', 'transp', 7], class: ['status', 'class', 8], priority: ['status', 'priority', 9], links: ['links', 'links', 10] };
+  const ruleHas = (r, fld) => { const [part, key] = RF[fld]; const p = r[part]; if (!p || p.mode === 'off') return false; const v = p[key]; return Array.isArray(v) ? v.length > 0 : !(v == null || v === ''); };
+  const chips = () => CATS.slice();
+  const ctMirror = () => { f.cats_json.value = CATS.length ? JSON.stringify(CATS) : ''; };
+  const optText = (sel, v) => ([...sel.options].find(o => o.value === String(v)) || {}).textContent || String(v);
+  const fxVal = (fld, v) => fld === 'all_day' ? (v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : Array.isArray(v) ? CTT.tN.replace('{n}', v.length) : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : ['status', 'transp', 'class', 'priority'].includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
+  function effective() { const fx = {}, over = {}; CATS.forEach(c => { const r = RULES[c]; if (!r) return; Object.keys(RF).forEach(fld => { if (!ruleHas(r, fld)) return; if (fx[fld]) (over[c] ||= {})[fld] = fx[fld].cat; else fx[fld] = { cat: c, mode: r[RF[fld][0]].mode, value: r[RF[fld][0]][RF[fld][1]] }; }); }); return { fx, over }; }
+  const ctRuleLink = c => `<a href="/calendar?rule=${encodeURIComponent(c)}" target="_blank" rel="noopener">${esc(CTT.tRule)}</a>`;
+  function ctRender() {
+    ctMirror();
+    const { over } = effective();
+    ctRows.innerHTML = CATS.map((c, i) => { const r = RULES[c]; const fx = r ? Object.keys(RF).filter(fld => ruleHas(r, fld)).map(fld => { const [part, key] = RF[fld]; const m = r[part].mode, by = over[c] && over[c][fld]; return `<span class="ct-f ${m === 'lock' ? 'lock' : ''} ${by ? 'over' : ''}" title="${esc(m === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${m === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${esc(CTF[RF[fld][2]])}: ${fxVal(fld, r[part][key])}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}`; }).join('') : '';
+      return `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="chip">${esc(c)}</span><button class="ct-x edits" type="button" data-ct-rm="${i}" title="${esc(D.tRmcard ? '' : '')}">×</button><span class="ct-fx">${fx || (r ? '' : `<span class="ct-f">${esc(CTT.tNorule)}</span>`)}<span class="ct-f edits">${ctRuleLink(c)}</span></span></div>`; }).join('');
+    ctCloudRender();
+  }
+  const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories').then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
+  const ctInvalidate = () => { CT_IDX = null; };
+  async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ' <svg class="ico" style="width:10px;height:10px"><use href="#i-tag"/></svg>' : ''}</button>`).join(''); }
+  function catsInit(list) { CATS = (list || []).map(c => String(c).trim()).filter(Boolean); ctRender(); }
+  function catAdd(v) { v = String(v).replace(/,/g, '').trim(); if (!v || CATS.includes(v)) return; addCard('cats'); CATS.push(v); ctRender(); rulesApply('add'); refresh(); }
+  const addChip = catAdd;
+  const ctClosePop = () => { if (ctPop) { ctPop.remove(); ctPop = null; } };
+  ctIn.addEventListener('input', async () => { const q = ctIn.value.replace(/,/g, '').trim().toLowerCase(); ctClosePop(); if (!q) return; const idx = await ctIndex(); if (ctIn.value.replace(/,/g, '').trim().toLowerCase() !== q) return; const hits = idx.filter(c => c.name.toLowerCase().includes(q) && !CATS.includes(c.name)).slice(0, 5); const exact = idx.some(c => c.name.toLowerCase() === q);
+    ctPop = document.createElement('div'); ctPop.className = 'rrpop'; ctPop.innerHTML = hits.map(c => `<button type="button" class="ct-hit" data-v="${esc(c.name)}">${esc(c.name)}<small>${esc(CTT.tExisting)}${c.count ? ' · ' + c.count : ''}</small></button>`).join('') + (exact ? '' : `<button type="button" class="ct-hit new" data-v="${esc(ctIn.value.replace(/,/g, '').trim())}">${esc(CTT.tNew.replace('{n}', ctIn.value.replace(/,/g, '').trim()))}</button>`);
+    document.body.appendChild(ctPop); const r = ctIn.getBoundingClientRect(), box = ctIn.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; ctPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - ctPop.offsetWidth)) + scrollX}px`; ctPop.style.top = `${r.bottom + scrollY + 4}px`;
+    ctPop.addEventListener('mousedown', e => e.preventDefault()); ctPop.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { catAdd(b.dataset.v); ctIn.value = ''; ctClosePop(); } }); });
+  ctIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const first = ctPop && $('.ct-hit:not(.new)', ctPop); if (first && e.key === 'Enter') catAdd(first.dataset.v); else catAdd(ctIn.value); /* Enter takes the first existing suggestion; a new name is created via the last entry or a comma */ ctIn.value = ''; ctClosePop(); } else if (e.key === 'Escape') ctClosePop(); });
+  ctIn.addEventListener('blur', () => { setTimeout(ctClosePop, 150); if (ctIn.value.trim()) { catAdd(ctIn.value); ctIn.value = ''; } });
+  CT.addEventListener('click', e => { const rm = e.target.closest('[data-ct-rm]'); if (rm) { CATS.splice(+rm.dataset.ctRm, 1); ctRender(); rulesApply('change'); refresh(); return; }
+    const add = e.target.closest('[data-ct-add]'); if (add) { catAdd(add.dataset.ctAdd); return; }
+    const grip = e.target.closest('.ct-grip'); if (grip) { const i = +grip.closest('.ct-row').dataset.i; rrPop(grip, [{ v: 'up', label: CTT.tUp }, { v: 'down', label: CTT.tDown }], null, v => { const j = v === 'up' ? i - 1 : i + 1; if (j < 0 || j >= CATS.length) return; [CATS[i], CATS[j]] = [CATS[j], CATS[i]]; ctRender(); rulesApply('change'); refresh(); }); } });
+  let ctDrag = null;
+  ctRows.addEventListener('dragstart', e => { const row = e.target.closest('.ct-row'); if (!row) return; ctDrag = +row.dataset.i; row.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  ctRows.addEventListener('dragover', e => { const row = e.target.closest('.ct-row'); if (!row || ctDrag == null) return; e.preventDefault(); $$('.ct-row.over', ctRows).forEach(x => x.classList.remove('over')); row.classList.add('over'); });
+  ctRows.addEventListener('drop', e => { const row = e.target.closest('.ct-row'); if (!row || ctDrag == null) return; e.preventDefault(); const to = +row.dataset.i; const [m] = CATS.splice(ctDrag, 1); CATS.splice(to, 0, m); ctDrag = null; ctRender(); rulesApply('change'); refresh(); });
+  ctRows.addEventListener('dragend', () => { ctDrag = null; $$('.ct-row.dragging, .ct-row.over', ctRows).forEach(x => x.classList.remove('dragging', 'over')); });
+  // ---- applying the rules to the fields ----
+  const ruleBadgeHtml = (e, extra) => `<span class="rbadge ${e.mode}"><svg class="ico"><use href="#${e.mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg>${esc(e.mode === 'lock' ? CTT.tLock : CTT.tDefault)} · ${esc(e.cat)}${extra ? ' · ' + esc(extra) : ''}</span>`;
+  const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || String(cur) === String(e.value); return ruleBadgeHtml(e, e.adjusted ? CTT.tAdjusted : (!same && e.mode === 'default') ? CTT.tChanged : fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : ''); };
+  const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');
+  function rulesApply(reason) {
+    const { fx } = ruleMode ? { fx: {} } : effective(); RFX = fx; // in rule mode nothing is locked or badged RLOCK = new Set(Object.keys(fx).filter(k => fx[k].mode === 'lock'));
+    const isNew = form.classList.contains('new'), prefill = reason === 'add' || reason === 'new';
+    let adjusted = false;
+    const set = (fld, differs, apply) => { const e = fx[fld]; if (!e) return; if (e.mode === 'lock' ? differs() : (prefill && differs())) { apply(e.value); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } };
+    // when
+    set('all_day', () => fx.all_day.mode === 'lock' ? f.all_day.checked !== !!fx.all_day.value : !f.all_day.checked && !!fx.all_day.value, v => setAllDay(!!v));
+    f.all_day.disabled = RLOCK.has('all_day');
+    if (isNew) { set('calendar', () => f.calendar.value !== fx.calendar.value && [...f.calendar.options].some(o => o.value === fx.calendar.value), v => { f.calendar.value = v; syncDot(); }); f.calendar.disabled = RLOCK.has('calendar'); } else f.calendar.disabled = false;
+    set('color', () => fx.color.mode === 'lock' ? (colorOf() || '').toLowerCase() !== String(fx.color.value).toLowerCase() : !colorOf(), v => { setColor(v); syncDot(); });
+    f.color.disabled = f.color_cal.disabled = RLOCK.has('color'); $('#ed-color-cal').classList.toggle('locked', RLOCK.has('color'));
+    // where
+    set('location', () => fx.location.mode === 'lock' ? f.location.value.trim() !== String(fx.location.value).trim() : !f.location.value.trim(), v => { f.location.value = v; const g = RULES[fx.location.cat].where.geo; if (g) { f.lat.value = g[0]; f.lon.value = g[1]; } locInit(); });
+    $('.card[data-card="where"]', form).classList.toggle('locked-where', RLOCK.has('location'));
+    // alarms and links: rule entries are matched by their key; locked ones cannot be removed or edited
+    ALARMS.forEach(a => { delete a._rule; delete a._locked; });
+    if (fx.alarms) { const e = fx.alarms; e.value.forEach(ra => { let a = ALARMS.find(x => alarmKey(x) === alarmKey(ra)); if (!a && (e.mode === 'lock' || prefill)) { a = newAlarm({ ...ra, attendees: [...(ra.attendees || [])] }); ALARMS.push(a); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (a) { a._rule = e; a._locked = e.mode === 'lock'; } }); }
+    LK.links.forEach(l => { delete l._rule; });
+    if (fx.links) { const e = fx.links; e.value.forEach(rl => { let l = LK.links.find(x => x.uri === rl.uri); if (!l && (e.mode === 'lock' || prefill)) { l = { ...rl, embedded: false, keep: false, features: rl.features || [], extra: rl.extra || [] }; LK.links.push(l); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (l) l._rule = e; }); }
+    // repeat
+    if (fx.rrule) { const e = fx.rrule; const cur = rrBuild() || ''; if (e.mode === 'lock' ? cur !== e.value : (prefill && !cur)) { rrInit(e.value, null, [], []); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } }
+    rrLocked = RLOCK.has('rrule'); $('#ed-repeat-card').classList.toggle('locked', rrLocked); $('#ed-repeat-card h3 .rbadge')?.remove(); if (fx.rrule) $('#ed-repeat-card h3').insertAdjacentHTML('beforeend', ruleBadge('rrule', rrBuild() || ''));
+    // status
+    ['status', 'transp', 'class', 'priority'].forEach(fld => set(fld, () => fx[fld].mode === 'lock' ? f[fld].value !== String(fx[fld].value) : f[fld].value === '', v => { if (fld === 'priority') setSel(f.priority, v); else f[fld].value = String(v); }));
+    // render the badges
+    $('#ed-when-badges').innerHTML = [['all_day', f.all_day.checked], ['calendar', f.calendar.value], ['color', colorOf()]].filter(([k]) => fx[k]).map(([k, cur]) => `<span>${esc(CTF[RF[k][2]])} ${ruleBadge(k, cur)}</span>`).join('');
+    $('#ed-where-badges').innerHTML = fx.location ? `<span>${esc(CTF[3])} ${ruleBadge('location', f.location.value.trim())}</span>` : '';
+    stRender(); alRender(); lkRender();
+    return adjusted;
+  }
+  // ---- rule editor: the same dialog in rule mode, only the rule cards, a mode segment per card ----
+  const RULE_CARDS = ['when', 'where', 'alarm', 'repeat', 'status', 'links'];
+  async function openRuleEditor(name) {
+    const r = RULES[name] || {}, p = k => r[k] || { mode: 'off' }, today = state.date || new Date().toISOString().slice(0, 10);
+    const cal = (f.calendar.options[0] || { value: '/' }).value.split('/');
+    ruleMode = name; form.classList.add('rulemode'); ed.classList.add('rulemode');
+    fill({ principal: cal[0], cal_id: cal[1], object_id: '', uid: '', summary: name, location: p('where').location || '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: !!p('when').all_day, rrule: p('repeat').rrule || null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: p('alarm').alarms || [], categories: [], status: p('status').status || '', transp: p('status').transp || '', class: p('status').class || '', priority: p('status').priority ?? null, color: p('when').color || '', geo: p('where').geo || null, links: p('links').links || [], related: [], etag: '', has_overrides: false, timezone: root.dataset.tz });
+    if (p('when').calendar && [...f.calendar.options].some(o => o.value === p('when').calendar)) { f.calendar.value = p('when').calendar; syncDot(); }
+    RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); c.dataset.added = '1'; c.hidden = false; });
+    $$('.rule-seg', form).forEach(seg => { const m = p(seg.dataset.rulePart).mode || 'off'; $$('button', seg).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === m))); });
+    mode('edit'); f.summary.value = D.tRuleTitle.replace('{name}', name); f.summary.readOnly = true; $('#ed-sub').textContent = '';
+    ed.hidden = false; baseline = serialize(); updateButtons(); $('#ed-save').disabled = false;
+  }
+  const ruleModes = () => Object.fromEntries($$('.rule-seg', form).map(seg => [seg.dataset.rulePart, ($('button[aria-pressed=true]', seg) || {}).dataset?.v || 'off']));
+  function ruleOf() { const m = ruleModes(); return { when: { mode: m.when, all_day: f.all_day.checked ? true : null, calendar: f.calendar.value || null, color: colorOf() || null }, where: { mode: m.where, location: f.location.value.trim(), geo: geoOf() }, alarm: { mode: m.alarm, alarms: alarmsOf() }, repeat: { mode: m.repeat, rrule: rrBuild() || '' }, status: { mode: m.status, status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value }, links: { mode: m.links, links: linksOf().links.filter(l => !l.embedded) } }; }
+  form.addEventListener('click', e => { const b = e.target.closest('.rule-seg button'); if (!b) return; $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('#ed-save').disabled = false; });
+  const ruleLeave = () => { if (!ruleMode) return; ruleMode = null; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; $$('.rule-seg button', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === 'off'))); };
+  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); ruleLeave(); close(); }
+  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); ruleLeave(); close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
@@ -319,7 +419,7 @@
       for (const a of list) {
         const mk = document.createElement('div'); mk.className = `mk${a._open || a._drag ? ' sel' : ''}${a.acknowledged ? ' ack' : ''}`; mk.title = alarmText(a); mk.innerHTML = `<span class="lab">${esc(whenText(a))}</span>${alIco(AL_ICO[a.action] || AL_ICO.DISPLAY)}`;
         // a click on the marker opens or closes the entry; a drag only moves the alarm and leaves the entries as they are
-        mk.onpointerdown = e => { e.preventDefault(); const rect = tline.getBoundingClientRect(); let moved = false;
+        mk.onpointerdown = e => { e.preventDefault(); if (a._locked) { ALARMS.forEach(x => x._open = x === a ? !x._open : false); alRender(); return; } const rect = tline.getBoundingClientRect(); let moved = false;
           const move = ev => { const fr = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)); const c = snapX(fr); a._dragX = fr; moved = true; if (!(c.related_end === a.related_end && c.minutes === a.minutes && !a.at)) { a.related_end = c.related_end; a.minutes = c.minutes; a.at = null; } a._drag = true; alRender(); refresh(); };
           const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); delete a._drag; delete a._dragX; if (!moved) ALARMS.forEach(x => x._open = x === a ? !x._open : false); alRender(); refresh(); };
           document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); };
@@ -381,7 +481,7 @@
     $$('.row', alBox).forEach(r => r.remove());
     for (const a of ALARMS) {
       const r = addRow('alarms'); r.classList.toggle('open', !!a._open); r._alarm = a;
-      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a);
+      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a); if (a._rule) $('.extra', r).insertAdjacentHTML('beforeend', ' ' + ruleBadgeHtml(a._rule, a._rule.adjusted ? CTT.tAdjusted : '')); r.classList.toggle('locked', !!a._locked); if (a._locked) $$('[data-rm]', r).forEach(x => x.hidden = true);
       $('.pdot', r).classList.toggle('on', matchesPreset(a)); $('.act', r).setAttribute('aria-pressed', a._open ? 'true' : 'false');
       const d = $('.aldet', r); d.hidden = !a._open; if (a._open) alDetails(a, r);
     }
@@ -404,7 +504,7 @@
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, sel.selectedIndex)] || ic[0]; };
   const stText = sel => sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value;
   function stRender() {
-    $('#ed-status-tiles').innerHTML = SSEL.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('');
+    $('#ed-status-tiles').innerHTML = SSEL.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b>${ruleBadge(sel.name, sel.value)}</button>`).join('');
     const t = SC.dataset, parts = [];
     if (f.status.value) parts.push(stText(f.status));
     if (f.transp.value) parts.push(f.transp.value === 'OPAQUE' ? t.tViewOpaque : t.tViewTransparent);
@@ -412,7 +512,7 @@
     if (f.priority.value) parts.push(t.tViewPrio.replace('{n}', stText(f.priority)));
     $('#ed-status-text').textContent = parts.join(' · ');
   }
-  $('#ed-status-tiles').addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b) return; const sel = f[b.dataset.sel];
+  $('#ed-status-tiles').addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b || b.classList.contains('locked')) return; const sel = f[b.dataset.sel];
     rrPop(b, [...sel.options].map(o => ({ v: o.value, label: o.textContent })), sel.value, v => { sel.value = v; stRender(); refresh(); }, `<div class="q">${esc(sel.dataset.label)}</div>`); b.setAttribute('aria-expanded', 'true'); });
   // ---- note (round 17): the textarea stays plain text (DESCRIPTION). Suggestions while typing come from a
   // lazily loaded index (contacts, categories, events, tasks) even without a prefix; picking one inserts
@@ -475,7 +575,6 @@
     else if (c.k === 'cat') { catAdd(c.data); }
     else { location.href = c.data; return; }
     refresh(); ntDetect(); });
-  const catAdd = v => { addCard('cats'); addChip(v); refresh(); };
   // view mode: links, phone numbers, e-mail addresses and @ # ! mentions become clickable; "- " lines are bullets
   function ntRender() {
     const t = f.description.value;
@@ -539,8 +638,8 @@
   const lkSync = () => { lkMirror(); lkRender(); refresh(); };
   const linksOf = () => ({ links: LK.links.map(l => ({ ...l, features: l.features || [], extra: l.extra || [] })), related: LK.related.map(({ target, ...r }) => ({ ...r, extra: r.extra || [] })) });
   const lkMeeting = u => { const p = lkProvider(u); let id = '', pwd = false; try { const x = new URL(u); pwd = x.searchParams.has('pwd') || x.searchParams.has('passcode'); const m = x.pathname.match(/\/j\/(\d{9,11})/) || x.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})$/) || x.pathname.match(/\/([A-Za-z0-9._-]{6,})$/); if (m) id = m[1].replace(/^(\d{3})(\d{4})(\d{4})$/, '$1 $2 $3'); } catch {} return { provider: p || LKT.tConf, id, pwd }; };
-  const lkActs = (i, kind) => { const l = LK.links[i]; const view = l.embedded ? (f.key.value && l.bin_index != null ? [['download', 'i-download', LKT.tDownload]] : []) : [['open', 'i-ext', LKT.tOpen], ['copy', 'i-copy', LKT.tCopy]]; return `<span class="lk-acts">${view.map(([a, ic, t]) => `<button class="act views" type="button" data-lact="${a}" data-i="${i}" title="${esc(t)}"><svg class="ico"><use href="#${ic}"/></svg></button>`).join('')}<button class="act edits${lkSel === i ? ' on' : ''}" type="button" data-lact="edit" data-i="${i}" title="${esc(LKT.tEdit)}"><svg class="ico"><use href="#i-dots"/></svg></button><button class="act edits" type="button" data-lact="rm" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button></span>`; };
-  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}"><svg class="ico"><use href="#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}</span>${lkActs(i)}</div>`; };
+  const lkActs = (i, kind) => { const l = LK.links[i]; const locked = l._rule && l._rule.mode === 'lock'; const view = l.embedded ? (f.key.value && l.bin_index != null ? [['download', 'i-download', LKT.tDownload]] : []) : [['open', 'i-ext', LKT.tOpen], ['copy', 'i-copy', LKT.tCopy]]; return `<span class="lk-acts">${view.map(([a, ic, t]) => `<button class="act views" type="button" data-lact="${a}" data-i="${i}" title="${esc(t)}"><svg class="ico"><use href="#${ic}"/></svg></button>`).join('')}${locked ? '' : `<button class="act edits${lkSel === i ? ' on' : ''}" type="button" data-lact="edit" data-i="${i}" title="${esc(LKT.tEdit)}"><svg class="ico"><use href="#i-dots"/></svg></button><button class="act edits" type="button" data-lact="rm" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button>`}</span>`; };
+  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}"><svg class="ico"><use href="#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}${l._rule ? ' ' + ruleBadgeHtml(l._rule, l._rule.adjusted ? CTT.tAdjusted : '') : ''}</span>${lkActs(i)}</div>`; };
   const lkRelRow = i => { const r = LK.related[i], t = r.target; return `<div class="lk-row"><svg class="ico"><use href="#${t && t.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span class="lk-t">${esc(t ? t.summary || r.uid : r.uid)}</span><span class="lk-s">${esc(t ? [t.kind === 'task' ? LKT.tTask : LKT.tEvent, t.date ? fmtD(t.date) : '', t.done ? LKT.tDone : ''].filter(Boolean).join(' · ') : LKT.tNotfound)}</span><span class="lk-acts">${t ? `<button class="act views" type="button" data-lact="goto" data-i="${i}" title="${esc(LKT.tOpen)}"><svg class="ico"><use href="#i-ext"/></svg></button>` : ''}<button class="act edits" type="button" data-lact="rmrel" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button></span></div>`; };
   const lkSec = (icon, title, body) => body ? `<div class="lk-sec"><h4><svg class="ico"><use href="#${icon}"/></svg> ${esc(title)}</h4>${body}</div>` : '';
   function lkRender() {
@@ -707,7 +806,7 @@
   const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'], RR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
   const DOWL = lang === 'en' ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
   const blankRR = () => ({ freq: '', interval: 1, byday: [], mode: 'date', bymonthday: null, ordinal: 1, ordday: 'TU', bymonth: null, end: { kind: 'never', count: 10, until: '' }, exdates: [], rdates: [], raw: '' });
-  let RR = blankRR(), rrMode = 'pattern', rrPicking = false, rrFocus = null;
+  let RR = blankRR(), rrMode = 'pattern', rrPicking = false, rrFocus = null, rrLocked = false;
   const rrIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const rrWd = d => (d.getDay() + 6) % 7; // 0 = Monday
   const rrStart = () => parse((f.date.value || today).slice(0, 10));
@@ -857,7 +956,7 @@
   addEventListener('keydown', e => { if (e.key === 'Escape' && rrPicking && !ed.hidden) { e.stopImmediatePropagation(); rrPicking = false; rrRender(); } }, true);
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
-  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.tags .chip, .pchips .pchip', card) || $$('.rows .row', card).length > 0;
+  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.pchips .pchip', card) || $$('.rows .row', card).length > 0;
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
@@ -872,12 +971,12 @@
   const nextDay = s => addDays(s, 1);
   function fill(d, date) {
     current = d; openDate = date; form.reset(); $('#ed-error').textContent = '';
-    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); $$('.tags .chip', form).forEach(x => x.remove()); $$('.rows .row', form).forEach(x => x.remove());
+    $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); catsInit([]); $$('.rows .row', form).forEach(x => x.remove());
     f.key.value = d ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = d ? d.etag : '';
     form.classList.toggle('new', !d); f.summary.placeholder = d ? D.tTitle : D.tNewtitle;
     const b = $('#ed-save'); b.title = d ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     if (d) {
-      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; d.categories.forEach(addChip);
+      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       alarmsInit(d.alarms); peopleInit(d.organizer, d.attendees);
@@ -888,7 +987,7 @@
       f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); linksInit([], []); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
-    locInit(); syncDot(); mode(d ? 'view' : 'edit'); baseline = serialize(); updateButtons();
+    locInit(); syncDot(); mode(d ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(d ? 'open' : 'new'); baseline = adjusted ? pre : serialize(); updateButtons();
   }
   async function openEditor(key, date) {
     if (key) {
@@ -903,7 +1002,7 @@
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
@@ -923,6 +1022,7 @@
   }
   form.addEventListener('submit', async e => {
     e.preventDefault();
+    if (ruleMode) { await ruleSave(); return; }
     const [principal, cal_id] = f.calendar.value.split('/');
     const allDay = f.all_day.checked;
     const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00';
@@ -933,13 +1033,14 @@
     try {
       const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
       if (!r.ok) { $('#ed-error').textContent = (r.status === 409 ? T.conflict : T.err + ' ' + r.status) + ': ' + (await r.text()).slice(0, 200); return; }
-      ntInvalidate(); close(); load(false);
+      ntInvalidate(); ctInvalidate(); close(); load(false);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
-  $('#ed-delete').onclick = async () => { if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
+  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.del)) await ruleDelete(); return; } if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
   wire();
   window.rusticalCal = { go, openEditor };
+  window.rusticalCal.openRuleEditor = openRuleEditor; { const rp = new URLSearchParams(location.search).get('rule'); if (rp) openRuleEditor(rp); }
 })();
 
 /* ===== universal search ===== */

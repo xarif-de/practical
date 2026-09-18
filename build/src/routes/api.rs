@@ -91,6 +91,39 @@ async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate
     Ok(Json(d))
 }
 
+// ---- category rules (per user) and the category index ----
+
+#[derive(serde::Serialize)]
+pub struct CategoryInfo { pub name: String, pub count: usize, pub rule: bool }
+
+/// Every category of the visible calendars with its count, plus rule-only categories (count 0).
+async fn categories(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<CategoryInfo>>> {
+    let rules = crate::domain::catrules::all(&state.db, &user.id).await?;
+    let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
+    for name in rules.keys() {
+        if !out.iter().any(|c| &c.name == name) {
+            out.push(CategoryInfo { name: name.clone(), count: 0, rule: true });
+        }
+    }
+    Ok(Json(out))
+}
+
+async fn category_rules_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<std::collections::BTreeMap<String, crate::domain::catrules::Rule>>> {
+    Ok(Json(crate::domain::catrules::all(&state.db, &user.id).await?))
+}
+
+async fn category_rule_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Json(rule): Json<crate::domain::catrules::Rule>) -> AppResult<Json<crate::domain::catrules::Rule>> {
+    check_csrf(&session, &headers).await?;
+    crate::domain::catrules::put(&state.db, &user.id, &name, &rule).await?;
+    Ok(Json(rule))
+}
+
+async fn category_rule_delete(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>) -> AppResult<Json<Created>> {
+    check_csrf(&session, &headers).await?;
+    crate::domain::catrules::delete(&state.db, &user.id, &name).await?;
+    Ok(Json(Created { id: name }))
+}
+
 #[derive(serde::Serialize)]
 pub struct Mentions {
     pub contacts: Vec<MentionContact>,
@@ -367,6 +400,9 @@ pub fn router() -> Router<SharedState> {
         .route("/api/tasks/{p}/{c}/{id}", axum::routing::put(update_task).delete(delete_task))
         .route("/api/search", get(api_search))
         .route("/api/mentions", get(mentions))
+        .route("/api/categories", get(categories))
+        .route("/api/category-rules", get(category_rules_get))
+        .route("/api/category-rules/{name}", axum::routing::put(category_rule_put).delete(category_rule_delete))
         .route("/api/push/key", get(push_key))
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
         .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64

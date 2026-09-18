@@ -512,10 +512,10 @@ fn link_lines(links: &[Link]) -> Vec<String> {
         if l.embedded || uri.is_empty() || uri.contains(['\n', '\r']) {
             continue;
         }
-        let name = match l.kind.as_str() { "url" => "URL", "attach" => "ATTACH", "conference" => "CONFERENCE", _ => continue };
+        let mut name = match l.kind.as_str() { "url" => "URL", "attach" => "ATTACH", "conference" => "CONFERENCE", _ => continue };
         if name == "URL" {
             if url_written {
-                continue; // URL must not occur more than once
+                name = "ATTACH"; // URL must not occur more than once: further websites are kept as ATTACH links
             }
             url_written = true;
         }
@@ -1037,7 +1037,7 @@ fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz: chrono_tz
     l
 }
 
-fn validate_rrule(r: &str) -> AppResult<String> {
+pub fn validate_rrule(r: &str) -> AppResult<String> {
     let r = r.trim().trim_start_matches("RRULE:").to_string();
     if r.is_empty() {
         return Err(AppError::BadRequest("empty RRULE".into()));
@@ -1440,6 +1440,11 @@ mod tests {
         assert!(flat.contains("ATTACH;FMTTYPE=application/pdf;FILENAME=x.pdf;X-NC-FILE-ID=1:https://cloud.example.org/x.pdf"), "{flat}");
         assert!(flat.contains("CONFERENCE;VALUE=URI;FEATURE=AUDIO,PHONE:tel:+49691234"), "{flat}");
         assert!(flat.contains("RELATED-TO:abc") && flat.contains("RELATED-TO;RELTYPE=CHILD;X-FOO=1:def"), "{flat}");
+        input.links.push(Link { kind: "url".into(), uri: "https://a.example.org/".into(), ..Default::default() });
+        input.links.push(Link { kind: "url".into(), uri: "https://b.example.org/".into(), label: "B".into(), ..Default::default() });
+        let flat2 = build_vevent("u", 1, &input, tz, Some(&raw)).unwrap().join("\n");
+        assert!(flat2.contains("URL:https://a.example.org/") && flat2.contains("ATTACH;LABEL=\"B\":https://b.example.org/"), "{flat2}");
+        input.links.truncate(input.links.len() - 2);
         assert_eq!(flat.matches("RELATED-TO").count(), 2);
         // limits
         let big = "A".repeat(4 * (EMBED_FILE_MAX / 3 + 10));

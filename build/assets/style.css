@@ -947,6 +947,59 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .nt-found .pillbtn small { color: var(--fg-3); }
 .ed .cardform .nt-found .pillbtn span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rrpop .nt-pre { color: var(--fg-3); font-family: ui-monospace, monospace; font-size: 11px; margin-right: 4px; }
+/* categories (round 17): rows with a grip, the chip, the rule's effect line (lock/default, struck when a
+   category above overrides it), suggestions while typing, the known categories as a cloud; rule badges
+   and locks in the other cards; the rule editor mode of the dialog */
+.ed .cardform .ct-rows { display: grid; gap: 2px; padding-left: 26px; }
+.ed .cardform .ct-row { display: grid; grid-template-columns: 14px 1fr 20px; gap: 2px 8px; align-items: center; padding: 3px 0; }
+.ed .cardform.mode-view .ct-row { grid-template-columns: 0 1fr 0; gap: 2px 0; }
+.ed .cardform .ct-row .ct-grip { grid-column: 1; grid-row: 1; }
+.ed .cardform .ct-row .chip { grid-column: 2; grid-row: 1; }
+.ed .cardform .ct-row .ct-x { grid-column: 3; grid-row: 1; }
+.ed .cardform .ct-row .ct-fx { grid-row: 2; }
+.ed .cardform .ct-row .ct-grip { color: var(--fg-3); cursor: grab; font-size: 14px; letter-spacing: -2px; user-select: none; }
+.ed .cardform .ct-row.dragging { opacity: .4; }
+.ed .cardform .ct-row.over { box-shadow: 0 -2px 0 var(--accent); }
+.ed .cardform .ct-row .ct-x { all: unset; cursor: pointer; color: var(--fg-3); text-align: center; font-size: 14px; }
+.ed .cardform .ct-row .chip { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: 13px; padding: 3px 10px; background: var(--bg); border-color: transparent; color: var(--fg); }
+.ed .cardform .ct-fx { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 3px 8px; font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .ct-fx .ct-f { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ed .cardform .ct-fx .ct-f .ico { width: 11px; height: 11px; }
+.ed .cardform .ct-fx .ct-f.lock { color: var(--fg-2); }
+.ed .cardform .ct-fx .ct-f.over { text-decoration: line-through; opacity: .7; }
+.ed .cardform .ct-fx .ct-by { font-size: 11px; }
+.ed .cardform .ct-fx a { color: var(--accent); text-decoration: none; }
+.ed .cardform .ct-sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; vertical-align: -1px; }
+.ed .cardform .ct-in { padding-left: 26px; margin-top: 4px; }
+.ed .cardform .ct-in input { width: 100%; }
+.ed .cardform .ct-cloud { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 26px; margin-top: 8px; }
+.ed .cardform .ct-cloud:empty { display: none; }
+.ed .cardform .ct-tag { all: unset; cursor: pointer; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--fg-2); background: var(--tile); display: inline-flex; gap: 5px; align-items: center; }
+.ed .cardform .ct-tag small { color: var(--fg-3); font-size: 10.5px; }
+.ed .cardform .ct-tag:hover { border-color: var(--accent); }
+.rrpop .ct-hit small { color: var(--fg-3); margin-left: 8px; font-size: 11px; }
+.rrpop .ct-hit.new { color: var(--accent); }
+.rbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--fg-3); background: var(--tile); border-radius: 999px; padding: 1px 7px 1px 4px; white-space: nowrap; vertical-align: middle; }
+.rbadge .ico { width: 11px; height: 11px; }
+.rbadge.lock { color: var(--fg-2); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ed .cardform .rbadges { padding-left: 26px; display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .rbadges:empty { display: none; }
+.ed .cardform .stile.locked { cursor: default; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.ed .cardform .stile.locked:hover { border-color: transparent; }
+.ed .cardform .stile .rbadge { grid-column: 1 / 3; justify-self: start; margin-top: 4px; }
+.ed .cardform .row.locked .aldet { pointer-events: none; opacity: .85; }
+.ed .cardform .rr.locked > *:not(h3) { pointer-events: none; }
+.ed .cardform .card.locked-where #ed-locp, .ed .cardform .card.locked-where #ed-loc-sub { pointer-events: none; opacity: .85; }
+.ed .cardform input:disabled, .ed .cardform select:disabled { color: var(--fg); opacity: 1; -webkit-text-fill-color: var(--fg); } /* locked by a rule: readable, the badge says why */
+.ed .cardform .rule-seg { display: none; margin-left: 6px; }
+.ed .cardform .rule-seg button { padding: 3px 8px; font-size: 11.5px; min-height: 0; min-width: 0; }
+.cardform.rulemode .rule-seg { display: inline-flex; }
+.cardform.rulemode .rule-hide, .ed.rulemode .rule-hide { display: none !important; }
+.cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"], .cardform.rulemode .rbadges, .cardform.rulemode .card .rm { display: none !important; }
+.cat-list { display: grid; gap: 4px; margin: 8px 0 12px; }
+.cat-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.cat-row small { color: var(--fg-3); }
+.cat-row .grow { flex: 1; }
 /* status / links cards, colour and coordinates */
 .ev.cancelled { text-decoration: line-through; opacity: .55; }
 .ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }

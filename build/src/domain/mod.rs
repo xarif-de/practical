@@ -1,3 +1,4 @@
+pub mod catrules;
 pub mod collections;
 pub mod contacts;
 pub mod events;

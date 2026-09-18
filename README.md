@@ -105,6 +105,17 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   card; phone numbers and e-mail addresses become call/write chips. The view renders links, numbers,
   mentions (contact, category search, event) and "- " lists. A changed description drops Outlook's
   `X-ALT-DESC` and `STYLED-DESCRIPTION`, which would otherwise keep showing the old text elsewhere.
+- **Categories and rules** (event card, settings tab "Categories"): categories are ordered rows with a
+  grip; typing offers the known categories with counts ("existing") or creates a new one, the rest of
+  the known ones sit in a cloud below. A rule per category (`xui_category_rules`, JSON per user, see
+  `domain::catrules`) puts values on an event: all-day, calendar (new events only), colour, location,
+  reminders, repeat, status/busy/visibility/priority and links, each card either as a *default*
+  (prefilled when the category is added, editable) or a *lock* (set on open, fixed in this UI, shown as
+  "adjusted" when the stored value differed). For one field the first category wins; the rows show
+  what a rule does and strike through what a category above overrides. Locked values carry a lock
+  badge, defaults a tag badge ("changed" once edited). Rules are edited in the same event dialog in a
+  rule mode (`/calendar?rule=<name>`, or the "Rule" link in a row): only the rule cards, a
+  "— / Default / Lock" segment per card. Locks hold in this UI only; other clients change freely.
 - **People** (event card) are shown, not edited: RustiCal does no scheduling (RFC 6638), so nobody
   would send an invitation or carry a reply back — the list is a record. Each ORGANIZER/ATTENDEE is a
   chip whose ring colour is the PARTSTAT; a click opens a detail card (role, reply, delegation, RSVP,

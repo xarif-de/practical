@@ -3,7 +3,7 @@
 {% block content %}
 <div class="toolbar"><h1>{{ ctx.t("nav-settings") }}</h1><span class="grow"></span>
 <span class="seg tabs" role="tablist">
-<a href="#profile" role="tab">{{ ctx.t("tab-profile") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#tokens" role="tab">{{ ctx.t("tab-tokens") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a><a href="#prefs" role="tab">{{ ctx.t("tab-prefs") }}</a>
+<a href="#profile" role="tab">{{ ctx.t("tab-profile") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#tokens" role="tab">{{ ctx.t("tab-tokens") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a><a href="#categories" role="tab">{{ ctx.t("tab-categories") }}</a><a href="#prefs" role="tab">{{ ctx.t("tab-prefs") }}</a>
 </span></div>
 <div class="settings">
 
@@ -194,6 +194,13 @@
     <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", a.displayname) }}">{{ ctx.t("purge") }}</button></form></div>
   {% endfor %}
   {% if deleted_addressbooks.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
+</section>
+
+<section class="panel" id="categories" data-t-edit="{{ ctx.t("cat-rule-edit") }}" data-t-new="{{ ctx.t("cat-rule-new") }}" data-t-delete="{{ ctx.t("cat-rule-delete") }}" data-t-confirm="{{ ctx.t1("cat-rule-delete-confirm", "name", "{name}") }}" data-t-rule="{{ ctx.t("cat-rule-yes") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
+  <h2>{{ ctx.t("tab-categories") }}</h2>
+  <p class="muted small">{{ ctx.t("cat-hint") }}</p>
+  <div id="cat-list" class="cat-list"></div>
+  <form class="inline-form" id="cat-new"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></form>
 </section>
 
 <section class="panel" id="prefs">

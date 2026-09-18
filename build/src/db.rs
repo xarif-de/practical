@@ -89,6 +89,11 @@ CREATE TABLE xui_holidays (
         // snap points of the reminder strip, per user (NULL = the built-in list)
         "ALTER TABLE xui_user_settings ADD COLUMN alarm_snaps_json TEXT;",
     ),
+    (
+        6,
+        // per-user category rules: defaults and fixed values a category applies to an event (JSON, see domain::catrules)
+        "CREATE TABLE xui_category_rules (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, category));",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
