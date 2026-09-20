@@ -446,9 +446,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "caldata"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11a28b0ca2db7bbfb64daf1572874dae12f40428f539e13cf719a8c87909bb3f"
+checksum = "04bd6c933bae818a8bd2e007003d256c4d0c624273707120e71f92070071f19d"
 dependencies = [
  "chrono",
  "chrono-tz",
