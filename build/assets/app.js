@@ -142,16 +142,16 @@
   }
   function go(view, date) { if (view) state.view = view; if (date) state.date = date; load(); }
   // the month grid owns the wheel: one gesture turns exactly one page, however far it goes; the next
-  // page needs the wheel to rest for GESTURE_PAUSE (shared with the repeat strip). The pause must be
-  // short: a trackpad's momentum tail keeps the events coming for a second, and a fresh swipe ends
-  // that tail and follows it within a few tens of ms — a longer pause glued the swipes into one
-  // gesture until the pointer was moved. State lives outside the fragment so the events that arrive
-  // after the swap still count as the same gesture.
-  const MONTH_FLIP = 60; // px of wheel distance that turn the page
+  // page needs the wheel to rest for MONTH_PAUSE. The pause must be very short: a trackpad's momentum
+  // tail keeps the events coming for a second, and a fresh swipe ends that tail and follows it within
+  // a few tens of ms — 150 ms glued the swipes into one gesture until the pointer was moved, 40 ms
+  // (the repeat strip's value) still did at times. State lives outside the fragment so the events
+  // that arrive after the swap still count as the same gesture.
+  const MONTH_FLIP = 60, MONTH_PAUSE = 20; // px of wheel distance that turn the page; ms of rest that end a gesture
   let mwLast = 0, mwAcc = 0, mwDone = false;
   function monthWheel(e) {
     e.preventDefault(); const now = e.timeStamp; // the input's own time: a busy main thread must not split a gesture
-    if (now - mwLast > GESTURE_PAUSE) { mwAcc = 0; mwDone = false; } mwLast = now;
+    if (now - mwLast > MONTH_PAUSE) { mwAcc = 0; mwDone = false; } mwLast = now;
     if (mwDone) return;
     mwAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
     if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; root.dataset.slide = mwAcc > 0 ? 'up' : 'down'; shift(mwAcc > 0 ? 1 : -1); }
