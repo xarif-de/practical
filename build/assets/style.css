@@ -509,7 +509,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 
 /* ---- Tag (Ledger + Dokument), from the prototype's css05 ---- */
 .cal.v-day { grid-template-columns: minmax(280px,420px) 1fr; gap: 0; padding: 0; }
-.ledger { border-right: 1px solid var(--line); overflow: auto; max-height: calc(100dvh - 120px); }
+.ledger { border-right: 1px solid var(--line); overflow: auto; overflow-anchor: none; max-height: calc(100dvh - 120px); } /* app.js `mountLedger` restores the position itself when it prepends */
+.lhd { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--fg-2); } /* the month of the topmost row */
 .lrow { display: grid; grid-template-columns: 34px 26px 40px 1fr; gap: 8px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .lrow b { font-size: 15px; font-weight: 600; } .lrow span { font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
 .lrow i { height: 6px; border-radius: 3px; background: var(--accent); width: calc(var(--n) * 10px); opacity: .7; }

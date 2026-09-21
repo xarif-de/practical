@@ -317,16 +317,34 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
 }
 
 /// Day view ("Ledger"): dense day column of the month + the selected day as a document.
-pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str) -> String {
-    let (year, month) = (view_date.year(), view_date.month());
+/// Days the day view's ledger holds before and after the selected day; the client extends it from
+/// there (app.js `mountLedger`), so the window only has to fill the column.
+pub const DAY_BACK: i64 = 30;
+pub const DAY_AHEAD: i64 = 30;
+
+/// [start, end) of the ledger's initial days.
+pub fn day_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
+    (view_date - Duration::days(DAY_BACK), view_date + Duration::days(DAY_AHEAD + 1))
+}
+
+/// `count` ledger rows from `start`. The selection is the client's business once the ledger runs
+/// endlessly, so it is only marked on the rows the page itself brings.
+pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<NaiveDate>, instances: &[Instance], l: &L) -> String {
     let idx = by_day(instances);
-    let mut led = String::new();
-    let days = month_weeks(year, month).into_iter().flatten().filter(|d| d.month() == month);
-    for d in days {
+    let mut out = String::new();
+    for i in 0..count {
+        let d = start + Duration::days(i as i64);
         let evs = idx.get(&d).cloned().unwrap_or_default();
         let names: Vec<String> = evs.iter().map(|i| e(&i.summary)).collect();
-        let _ = write!(led, "<a class=\"lrow{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if d == view_date { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, d.day(), l.dow(d), evs.len().min(6), names.join(", "));
+        let _ = write!(out, "<a class=\"lrow{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, d.day(), l.dow(d), evs.len().min(6), names.join(", "));
     }
+    out
+}
+
+pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str) -> String {
+    let idx = by_day(instances);
+    let (ds, de) = day_window(view_date);
+    let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
     let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>", e(&l.long_date(view_date)), evs.len(), l.t("Termine", "events"), e(cal_names));
     if evs.is_empty() {
@@ -350,7 +368,8 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
         let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}<div class=\"meta\">{meta}</div></div></article>", e(&i.key()), i.start_date(), e(&i.summary), if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description).replace('\n', "<br>")) });
     }
     doc.push_str("</section>");
-    format!("<div class=\"cal v-day on\"><div class=\"ledger\">{led}</div>{doc}{}</div>", tl_weeks(view_date, today))
+    // the ledger's head names the month of its topmost row — an endless day list needs it (app.js `mountLedger`)
+    format!("<div class=\"cal v-day on\"><div class=\"ledger\"><div class=\"lhd\">{} {}</div><div class=\"lrows\">{led}</div></div>{doc}{}</div>", l.mon(view_date.month()), view_date.year(), tl_weeks(view_date, today))
 }
 
 pub fn alarm_label(m: i64, l: &L) -> String {

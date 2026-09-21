@@ -126,6 +126,7 @@
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
       const html = await r.text(), mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
       if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
       const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, state.date); // another load swapped meanwhile: the prefetched months no longer fit
       root.innerHTML = html;
@@ -351,9 +352,57 @@
     if (first) { const r = first.getBoundingClientRect(); box.scrollTop += r.top - (centreY() - r.height / 2); } // land with the week in focus centred
     setFocus(pick());
   }
+  // ---- day ledger: endless in both directions. Picking a day in it must not move it — only a day
+  // that arrives some other way (the today button, the orbit picker, the rail) is scrolled to the
+  // middle. The node itself is carried across fragment swaps, so the loaded days survive a pick. ----
+  const LED_CHUNK = 30, LED_MAX = 400, LED_SLACK = 600; // days per fetch, days kept, px of slack before the next fetch
+  let ledNode = null, ledScroll = null, ledPin = false, ledOff = null;
+  function mountLedger(box) {
+    if (ledOff) { ledOff(); ledOff = null; }
+    if (!box || state.view !== 'day') { ledNode = null; ledPin = false; return; }
+    const keep = ledNode && ledNode !== box && $(`.lrow[data-date="${state.date}"]`, ledNode); // a day outside the loaded days starts from the page's own ledger
+    if (keep) { box.replaceWith(ledNode); if (ledScroll != null) ledNode.scrollTop = ledScroll; } else ledNode = box;
+    const led = ledNode, list = $('.lrows', led), head = $('.lhd', led), rows = () => $$('.lrow', led);
+    $$('.lrow.sel', led).forEach(r => r.classList.remove('sel'));
+    const sel = $(`.lrow[data-date="${state.date}"]`, led); if (sel) sel.classList.add('sel');
+    if (sel && !(keep && ledPin)) led.scrollTop += sel.getBoundingClientRect().top - led.getBoundingClientRect().top - (led.clientHeight - sel.offsetHeight) / 2;
+    ledPin = false;
+    wireItems(led);
+    const headSync = () => { if (!head) return; const y = led.getBoundingClientRect().top + head.offsetHeight + 1;
+      const r = rows().find(x => x.getBoundingClientRect().bottom > y); if (!r) return;
+      const d = parse(r.dataset.date); head.textContent = `${MON[d.getMonth()]} ${d.getFullYear()}`; };
+    headSync();
+    if (led.scrollHeight <= led.clientHeight + 1) return; // narrow layout: the page scrolls, not the ledger, and an endless list would never stop growing
+    let busy = false, tick = 0;
+    async function extend(dir) {
+      if (busy) return; const rs = rows(); if (!rs.length) return;
+      const d0 = parse((dir > 0 ? rs[rs.length - 1] : rs[0]).dataset.date); d0.setDate(d0.getDate() + (dir > 0 ? 1 : -LED_CHUNK));
+      busy = true;
+      try {
+        const u = new URL('/api/days', location.origin); u.searchParams.set('start', localIso(d0)); u.searchParams.set('count', LED_CHUNK); if (state.cals) u.searchParams.set('cals', state.cals);
+        const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (!r.ok) return;
+        const tmp = document.createElement('div'); tmp.innerHTML = await r.text();
+        const fresh = [...tmp.children].filter(x => !$(`.lrow[data-date="${x.dataset.date}"]`, led));
+        if (!fresh.length) return;
+        const top = led.getBoundingClientRect().top, anchor = rows().find(x => x.getBoundingClientRect().bottom > top) || rs[0], y0 = anchor.getBoundingClientRect().top; // a visible row is never the one that gets trimmed
+        if (dir > 0) list.append(...fresh); else list.prepend(...fresh);
+        wireItems(list); // the fetched nodes ARE the rows: wiring each one would search inside it and find nothing, and the untouched <a href> would reload the page
+        const over = rows().length - LED_MAX;
+        if (over > 0) (dir > 0 ? rows().slice(0, over) : rows().slice(-over)).forEach(x => x.remove());
+        led.scrollTop += anchor.getBoundingClientRect().top - y0;
+      } catch (e) { console.error(e); } finally { busy = false; }
+    }
+    const onScroll = () => { if (tick) return; tick = requestAnimationFrame(() => { tick = 0; headSync();
+      const rs = rows(); if (!rs.length) return; const r = led.getBoundingClientRect();
+      if (rs[0].getBoundingClientRect().bottom > r.top - LED_SLACK) extend(-1);
+      if (rs[rs.length - 1].getBoundingClientRect().top < r.bottom + LED_SLACK) extend(1); }); };
+    led.addEventListener('scroll', onScroll, { passive: true });
+    ledOff = () => led.removeEventListener('scroll', onScroll);
+    onScroll();
+  }
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
     $$('.heat i[data-date], .c[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
-    $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); go('day', el.dataset.date); });
+    $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }); // picking in the ledger leaves it exactly where it is
     $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); openEditor(el.dataset.key, el.dataset.date); });
@@ -365,7 +414,7 @@
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
     if (state.view === 'month') { const m = $('.month', root); if (m) m.addEventListener('wheel', monthWheel, { passive: false }); }
-    wireItems(root); mountWeeks($('.stream', root));
+    wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root));
     const title = $('#title', root); if (title) title.onclick = openPicker;
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });

@@ -106,7 +106,8 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
     let grid_end = grid_start + Duration::days(42);
     Ok(match view {
         "day" => {
-            let inst = events::instances(state, cals, grid_start, grid_end, vc.tz).await?;
+            let (ds, de) = render::day_window(date);
+            let inst = events::instances(state, cals, ds.min(grid_start), de.max(grid_end), vc.tz).await?;
             let names: Vec<String> = cals.iter().map(|c| c.displayname.clone()).collect();
             (if l.de { format!("{}. {} {}", date.day(), l.mon(m), y) } else { format!("{} {}, {}", l.mon(m), date.day(), y) }, render::day_view(date, vc.today, &inst, l, &names.join(", ")))
         }
@@ -189,6 +190,25 @@ pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: 
     Ok(axum::Json(events::instances(&state, &cals, q.start, q.end, vc.tz).await?))
 }
 
+/// Ledger rows for the endless day list (app.js `mountLedger`).
+#[derive(Deserialize)]
+pub struct DaysQuery {
+    pub start: NaiveDate,
+    #[serde(default)]
+    pub count: Option<u32>,
+    #[serde(default)]
+    pub cals: Option<String>,
+}
+
+pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<DaysQuery>) -> AppResult<Response> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let count = q.count.unwrap_or(30).clamp(1, 120);
+    let end = q.start + Duration::days(i64::from(count));
+    let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
+    let inst = events::instances(&state, &cals, q.start, end, vc.tz).await?;
+    Ok(Html(render::day_rows(q.start, count as usize, vc.today, None, &inst, &vc.l)).into_response())
+}
+
 /// Week blocks for the endless week stream (app.js `mountWeeks`).
 #[derive(Deserialize)]
 pub struct WeeksQuery {
@@ -223,5 +243,5 @@ pub async fn api_density(State(state): State<SharedState>, user: Principal, ctx:
 }
 
 pub fn router() -> Router<SharedState> {
-    Router::new().route("/calendar", get(page)).route("/api/events", get(api_events).post(crate::routes::api::create_event)).route("/api/density", get(api_density)).route("/api/weeks", get(api_weeks))
+    Router::new().route("/calendar", get(page)).route("/api/events", get(api_events).post(crate::routes::api::create_event)).route("/api/density", get(api_density)).route("/api/weeks", get(api_weeks)).route("/api/days", get(api_days))
 }
