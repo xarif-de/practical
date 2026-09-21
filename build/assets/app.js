@@ -198,7 +198,14 @@
   // ---- timeline (right rail): client-rendered, endless in both directions; the SVG node and the
   // scroll position survive fragment swaps of the same kind, so selecting never re-centres ----
   const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; document.body.appendChild(tip);
-  const TLK = { weeks: { step: 30, y0: 16, r: 3.5, chunk: 26 }, months: { step: 24, y0: 14, r: 3.5, chunk: 24 } };
+  // `per` = items a year takes (weeks: 52-53 dots + 12 month lines; months: 12 dots + 1 year line).
+  // The step is squeezed until a year fits the rail, so a year marker is always in sight; `step` is
+  // the loosest it may get. The chunk follows the density, or a short rail would never fill up.
+  const TLK = { weeks: { step: 30, y0: 16, r: 3.5, chunk: 26, per: 65 }, months: { step: 24, y0: 14, r: 3.5, chunk: 24, per: 13 } };
+  let tlStep = 0, tlR = 0, tlRing = 0, tlChunk = 0;
+  function tlMetrics(box, kind) { const k = TLK[kind], h = Math.max(200, box.clientHeight);
+    const step = Math.max(6, Math.min(k.step, Math.floor(h / k.per)));
+    return { step, r: Math.min(k.r, step * 0.3), ring: Math.max(4.5, Math.min(7.5, step * 0.62)), chunk: Math.max(k.chunk, Math.ceil(h / step)) }; }
   const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const dm = d => lang === 'en' ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getDate()}.${d.getMonth() + 1}.`;
   const isoWeek = d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); };
@@ -208,7 +215,7 @@
   let tlSvg = null, tlKind = null, tlFirst = null, tlLast = null, tlItems = [], tlScroll = null;
   // items: one per period, optional line before it (month start in weeks, January in months)
   function tlBuild(kind) {
-    const k = TLK[kind], todayD = parse(today), nowP = fmt(periodOf(kind, todayD));
+    const k = { ...TLK[kind], step: tlStep, r: tlR }, todayD = parse(today), nowP = fmt(periodOf(kind, todayD));
     let y = k.y0, out = '', items = [];
     for (let d = new Date(tlFirst); d <= tlLast; d = stepDate(kind, d, 1)) {
       if (kind === 'weeks') {
@@ -226,7 +233,7 @@
       }
     }
     tlSvg.setAttribute('height', y); tlSvg.setAttribute('viewBox', `0 0 88 ${y}`);
-    tlSvg.innerHTML = out + '<circle class="sel" cx="32" r="7.5" hidden/><circle class="pre" cx="32" r="7.5" hidden/>';
+    tlSvg.innerHTML = out + `<circle class="sel" cx="32" r="${tlRing}" hidden/><circle class="pre" cx="32" r="${tlRing}" hidden/>`;
     tlItems = items; tlMark();
     return y;
   }
@@ -247,20 +254,21 @@
   let tlHome = false; // the today button is the one jump that centres the rail instead of letting the ring hang at an edge
   const tlCentre = box => { tlMark(); const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0; };
   function tlExtend(box) { // keep two chunks of slack above and below the viewport
-    const k = TLK[tlKind]; let changed = false;
-    if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -k.chunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
-    if (box.scrollTop + box.clientHeight > box.scrollHeight - 300) { tlLast = stepDate(tlKind, tlLast, k.chunk); tlBuild(tlKind); changed = true; }
+    let changed = false;
+    if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -tlChunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
+    if (box.scrollTop + box.clientHeight > box.scrollHeight - 300) { tlLast = stepDate(tlKind, tlLast, tlChunk); tlBuild(tlKind); changed = true; }
     return changed;
   }
   function mountTimeline(box) {
     if (!box) return;
-    const kind = box.dataset.kind, center = periodOf(kind, parse(box.dataset.center));
+    const kind = box.dataset.kind, center = periodOf(kind, parse(box.dataset.center)), m = tlMetrics(box, kind);
     // a rail of the same kind is carried over with its scroll position — but only while it reaches
     // the period we are moving to; a jump past its ends (today from another year, the orbit picker)
     // gets a fresh rail around the target instead of one whose ring is nowhere
-    if (tlSvg && tlKind === kind && tlItems.some(i => i.period === fmt(center))) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; if (tlHome) tlCentre(box); else tlSelect(); }
-    else {
-      tlKind = kind; tlFirst = stepDate(kind, center, -TLK[kind].chunk); tlLast = stepDate(kind, center, TLK[kind].chunk);
+    if (tlSvg && tlKind === kind && tlStep === m.step && tlItems.some(i => i.period === fmt(center))) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; if (tlHome) tlCentre(box); else tlSelect(); }
+    else { // a resized window changes the step, and a rail built at the old one has to go
+      tlKind = kind; tlStep = m.step; tlR = m.r; tlRing = m.ring; tlChunk = m.chunk;
+      tlFirst = stepDate(kind, center, -tlChunk); tlLast = stepDate(kind, center, tlChunk);
       tlSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); tlSvg.setAttribute('width', 88); box.appendChild(tlSvg); tlBuild(kind);
       const it = tlItems.find(i => i.period === fmt(center)); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0;
     }
