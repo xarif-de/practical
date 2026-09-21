@@ -204,7 +204,7 @@
   // screen regardless, because the top one sticks (`tlYearSync`). The chunk follows the density, or
   // a short rail would never fill its own height.
   const TLK = { weeks: { step: 30, y0: 16, r: 3.5, chunk: 26, per: 65 }, months: { step: 24, y0: 14, r: 3.5, chunk: 24, per: 13 } };
-  const TL_LABEL = 16; // height of the sticky year label
+  const TL_LABEL = 16, TL_MID = 8; // height of the sticky year label and the height its line sits at
   let tlStep = 0, tlR = 0, tlRing = 0, tlChunk = 0;
   function tlMetrics(box, kind) { const k = TLK[kind], h = Math.max(200, box.clientHeight);
     const step = Math.max(6, Math.min(k.step, Math.round((k.step + h / k.per) / 2)));
@@ -223,13 +223,13 @@
     for (let d = new Date(tlFirst); d <= tlLast; d = stepDate(kind, d, 1)) {
       if (kind === 'weeks') {
         const first = [0, 1, 2, 3, 4, 5, 6].map(i => { const x = new Date(d); x.setDate(x.getDate() + i); return x; }).find(x => x.getDate() === 1);
-        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`, isY = first.getMonth() === 0; out += `<g class="mline${isY ? ' y' : ''}" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${isY ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl, year: isY }); y += k.step; }
+        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`, isY = first.getMonth() === 0; out += `<g class="mline${isY ? ' y' : ''}" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${isY ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl, year: isY ? first.getFullYear() : 0 }); y += k.step; }
         const e = new Date(d); e.setDate(e.getDate() + 6);
         const lbl = `KW ${isoWeek(d)} · ${dm(d)} – ${dm(e)}`, ds = fmt(d);
         out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
         items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
       } else {
-        if (d.getMonth() === 0) { out += `<g class="mline y" data-y="${y}" data-date="${fmt(d)}" data-label="${d.getFullYear()}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${d.getFullYear()}</text></g>`; items.push({ y, date: fmt(d), label: String(d.getFullYear()), year: true }); y += k.step; }
+        if (d.getMonth() === 0) { out += `<g class="mline y" data-y="${y}" data-date="${fmt(d)}" data-label="${d.getFullYear()}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${d.getFullYear()}</text></g>`; items.push({ y, date: fmt(d), label: String(d.getFullYear()), year: d.getFullYear() }); y += k.step; }
         const lbl = `${MON[d.getMonth()]} ${d.getFullYear()}`, ds = fmt(d);
         out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
         items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
@@ -242,10 +242,16 @@
   }
   function tlYearSync(box) { // the top year marker stays put until the next one pushes it out
     const el = $('.tly', box); if (!el || !tlItems.length) return;
-    const top = box.scrollTop;
-    let cur = tlItems[0]; for (let i = tlItems.length - 1; i >= 0; i--) if (tlItems[i].y <= top) { cur = tlItems[i]; break; }
-    el.firstElementChild.textContent = parse(cur.date).getFullYear();
+    // The label draws its line at its own middle, so it stands for a marker at TL_MID. Handover
+    // happens exactly when the arriving marker reaches that height: the old label is pushed out by
+    // then and the new one takes its place with both lines at the same height. The year comes from
+    // the last marker crossed, never from the item at the top — in the week rail the dot after the
+    // January line carries its Monday, which usually still lies in December.
+    const top = box.scrollTop + TL_MID;
+    let cur = 0; for (let i = tlItems.length - 1; i >= 0; i--) if (tlItems[i].year && tlItems[i].y <= top) { cur = tlItems[i].year; break; }
     const next = tlItems.find(i => i.year && i.y > top);
+    if (!cur) cur = next ? next.year - 1 : parse(tlItems[0].date).getFullYear();
+    el.firstElementChild.textContent = cur;
     el.style.transform = next && next.y - top < TL_LABEL ? `translateY(${next.y - top - TL_LABEL}px)` : '';
   }
   const svgShow = (el, on) => on ? el.removeAttribute('hidden') : el.setAttribute('hidden', ''); // SVG elements have no .hidden property
