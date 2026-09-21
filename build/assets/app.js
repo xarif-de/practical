@@ -243,6 +243,8 @@
     else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE);
   }
   const tlSelect = () => { tlMark(); tlFollow(); }; // the viewed period changed: mark it and keep it in sight
+  let tlHome = false; // the today button is the one jump that centres the rail instead of letting the ring hang at an edge
+  const tlCentre = box => { tlMark(); const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0; };
   function tlExtend(box) { // keep two chunks of slack above and below the viewport
     const k = TLK[tlKind]; let changed = false;
     if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -k.chunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
@@ -252,12 +254,16 @@
   function mountTimeline(box) {
     if (!box) return;
     const kind = box.dataset.kind, center = periodOf(kind, parse(box.dataset.center));
-    if (tlSvg && tlKind === kind) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; tlSelect(); }
+    // a rail of the same kind is carried over with its scroll position — but only while it reaches
+    // the period we are moving to; a jump past its ends (today from another year, the orbit picker)
+    // gets a fresh rail around the target instead of one whose ring is nowhere
+    if (tlSvg && tlKind === kind && tlItems.some(i => i.period === fmt(center))) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; if (tlHome) tlCentre(box); else tlSelect(); }
     else {
       tlKind = kind; tlFirst = stepDate(kind, center, -TLK[kind].chunk); tlLast = stepDate(kind, center, TLK[kind].chunk);
       tlSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); tlSvg.setAttribute('width', 88); box.appendChild(tlSvg); tlBuild(kind);
       const it = tlItems.find(i => i.period === fmt(center)); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0;
     }
+    tlHome = false;
     const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
     box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
     box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
@@ -350,7 +356,7 @@
     $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); openEditor(null, d ? d.dataset.date : state.date); });
   }
   function wire() {
-    $$('[data-nav]', root).forEach(b => b.onclick = () => b.dataset.nav === 'today' ? go(null, today) : shift(b.dataset.nav === 'next' ? 1 : -1));
+    $$('[data-nav]', root).forEach(b => b.onclick = () => { if (b.dataset.nav === 'today') { tlHome = true; go(null, today); } else shift(b.dataset.nav === 'next' ? 1 : -1); });
     $$('.toolbar [data-view]', root).forEach(b => b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); });
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
