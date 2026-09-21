@@ -266,6 +266,10 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
   .tl .sel[hidden], .tl .pre[hidden] { display: none; }
   .tl svg { cursor: pointer; }
   .tl .mline line { stroke: var(--fg-3); stroke-width: 1.5; } .tl .mline text { font: 11px var(--font); fill: var(--fg-2); }
+  .tl .mline.y text { font-weight: 700; fill: var(--fg); } /* year markers carry the weight */
+  .tl .tly { position: sticky; top: 0; height: 0; z-index: 2; pointer-events: none; } /* app.js `tlYearSync`: the top year marker stays until the next pushes it out */
+  .tl .tly b { position: absolute; top: 0; left: 0; width: 88px; height: 16px; display: flex; align-items: center; gap: 4px; padding-left: 18px; background: var(--bg); font: 700 11px var(--font); color: var(--fg); }
+  .tl .tly b::before { content: ''; width: 28px; border-top: 1.5px solid var(--fg-3); }
   .tl[data-kind=months] .mline line { stroke-width: 2; stroke: var(--fg-2); } .tl[data-kind=months] .mline text { font-weight: 600; }
   .cal.v-day .ledger { grid-column: 1; } .cal.v-day .doc { grid-column: 2; } .cal.v-day .tl { grid-column: 3; }
   .cal.v-day { grid-template-columns: minmax(280px, 380px) 1fr 88px !important; }

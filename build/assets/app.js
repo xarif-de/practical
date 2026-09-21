@@ -199,12 +199,15 @@
   // scroll position survive fragment swaps of the same kind, so selecting never re-centres ----
   const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; document.body.appendChild(tip);
   // `per` = items a year takes (weeks: 52-53 dots + 12 month lines; months: 12 dots + 1 year line).
-  // The step is squeezed until a year fits the rail, so a year marker is always in sight; `step` is
-  // the loosest it may get. The chunk follows the density, or a short rail would never fill up.
+  // The step sits halfway between the loose `step` and the one at which a whole year would fit the
+  // rail — dense enough to show a good stretch, loose enough to read. A year marker is always on
+  // screen regardless, because the top one sticks (`tlYearSync`). The chunk follows the density, or
+  // a short rail would never fill its own height.
   const TLK = { weeks: { step: 30, y0: 16, r: 3.5, chunk: 26, per: 65 }, months: { step: 24, y0: 14, r: 3.5, chunk: 24, per: 13 } };
+  const TL_LABEL = 16; // height of the sticky year label
   let tlStep = 0, tlR = 0, tlRing = 0, tlChunk = 0;
   function tlMetrics(box, kind) { const k = TLK[kind], h = Math.max(200, box.clientHeight);
-    const step = Math.max(6, Math.min(k.step, Math.floor(h / k.per)));
+    const step = Math.max(6, Math.min(k.step, Math.round((k.step + h / k.per) / 2)));
     return { step, r: Math.min(k.r, step * 0.3), ring: Math.max(4.5, Math.min(7.5, step * 0.62)), chunk: Math.max(k.chunk, Math.ceil(h / step)) }; }
   const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const dm = d => lang === 'en' ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getDate()}.${d.getMonth() + 1}.`;
@@ -220,13 +223,13 @@
     for (let d = new Date(tlFirst); d <= tlLast; d = stepDate(kind, d, 1)) {
       if (kind === 'weeks') {
         const first = [0, 1, 2, 3, 4, 5, 6].map(i => { const x = new Date(d); x.setDate(x.getDate() + i); return x; }).find(x => x.getDate() === 1);
-        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`; out += `<g class="mline" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${first.getMonth() === 0 ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl }); y += k.step; }
+        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`, isY = first.getMonth() === 0; out += `<g class="mline${isY ? ' y' : ''}" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${isY ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl, year: isY }); y += k.step; }
         const e = new Date(d); e.setDate(e.getDate() + 6);
         const lbl = `KW ${isoWeek(d)} · ${dm(d)} – ${dm(e)}`, ds = fmt(d);
         out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
         items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
       } else {
-        if (d.getMonth() === 0) { out += `<g class="mline" data-y="${y}" data-date="${fmt(d)}" data-label="${d.getFullYear()}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${d.getFullYear()}</text></g>`; items.push({ y, date: fmt(d), label: String(d.getFullYear()) }); y += k.step; }
+        if (d.getMonth() === 0) { out += `<g class="mline y" data-y="${y}" data-date="${fmt(d)}" data-label="${d.getFullYear()}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${d.getFullYear()}</text></g>`; items.push({ y, date: fmt(d), label: String(d.getFullYear()), year: true }); y += k.step; }
         const lbl = `${MON[d.getMonth()]} ${d.getFullYear()}`, ds = fmt(d);
         out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
         items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
@@ -237,6 +240,14 @@
     tlItems = items; tlMark();
     return y;
   }
+  function tlYearSync(box) { // the top year marker stays put until the next one pushes it out
+    const el = $('.tly', box); if (!el || !tlItems.length) return;
+    const top = box.scrollTop;
+    let cur = tlItems[0]; for (let i = tlItems.length - 1; i >= 0; i--) if (tlItems[i].y <= top) { cur = tlItems[i]; break; }
+    el.firstElementChild.textContent = parse(cur.date).getFullYear();
+    const next = tlItems.find(i => i.year && i.y > top);
+    el.style.transform = next && next.y - top < TL_LABEL ? `translateY(${next.y - top - TL_LABEL}px)` : '';
+  }
   const svgShow = (el, on) => on ? el.removeAttribute('hidden') : el.setAttribute('hidden', ''); // SVG elements have no .hidden property
   function tlMark() { // selection ring on the viewed period
     if (!tlSvg) return; const sel = tlSvg.querySelector('.sel'); const p = fmt(periodOf(tlKind, parse(state.date)));
@@ -246,8 +257,8 @@
   function tlFollow() { // one rule for every rail (weeks in day/week, months elsewhere): it only moves when the
     const rail = $('.tl', root); if (!rail || !tlSvg) return; // ring would leave it, and then just far enough to let the ring hang at that edge
     const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
-    const y = it.y - rail.scrollTop, h = rail.clientHeight;
-    if (y < TL_EDGE) rail.scrollTop = Math.max(0, it.y - TL_EDGE);
+    const y = it.y - rail.scrollTop, h = rail.clientHeight, edge = TL_EDGE + TL_LABEL; // the sticky year label sits on the top edge
+    if (y < edge) rail.scrollTop = Math.max(0, it.y - edge);
     else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE);
   }
   const tlSelect = () => { tlMark(); tlFollow(); }; // the viewed period changed: mark it and keep it in sight
@@ -272,12 +283,14 @@
       tlSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); tlSvg.setAttribute('width', 88); box.appendChild(tlSvg); tlBuild(kind);
       const it = tlItems.find(i => i.period === fmt(center)); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0;
     }
+    if (!$('.tly', box)) { const y = document.createElement('div'); y.className = 'tly'; y.innerHTML = '<b></b>'; box.insertBefore(y, box.firstChild); }
+    tlYearSync(box);
     tlHome = false;
     const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
     box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
     box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
     box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; if (state.view === 'week') goWeek(it.date); else go(null, it.date); } };
-    box.onscroll = () => { if (!box._busy) { box._busy = true; requestAnimationFrame(() => { tlExtend(box); box._busy = false; }); } };
+    box.onscroll = () => { tlYearSync(box); if (!box._busy) { box._busy = true; requestAnimationFrame(() => { tlExtend(box); tlYearSync(box); box._busy = false; }); } };
     tlExtend(box);
   }
   // ---- week stream: endless in both directions, the week in focus drives outline, title and rail ----
