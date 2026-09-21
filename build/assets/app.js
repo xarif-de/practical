@@ -290,10 +290,12 @@
       history.replaceState(state, '', url(false).pathname + url(false).search);
       tlMark(); tlFollow(); heatSync(d);
     }
-    function tlFollow() { const rail = $('.tl', root); if (!rail || !tlSvg) return; // keep the ring in sight without fighting the rail's own scrolling
+    const TL_EDGE = 14; // px the ring keeps from the rail's edge — its own radius plus a little air
+    function tlFollow() { const rail = $('.tl', root); if (!rail || !tlSvg) return; // the ring only moves when it would leave the rail, and then just far enough to hang at that edge
       const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
       const y = it.y - rail.scrollTop, h = rail.clientHeight;
-      if (y < h * 0.2 || y > h * 0.8) rail.scrollTop = Math.max(0, it.y - h / 2); }
+      if (y < TL_EDGE) rail.scrollTop = Math.max(0, it.y - TL_EDGE);
+      else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE); }
     function heatSync(d) { // the panel names its month, so it must not keep showing the one we scrolled away from
       const heat = $('.heat', root); if (!heat) return;
       const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${pad(m + 1)}`; if (heat.dataset.month === key) return;
@@ -316,13 +318,14 @@
         const tmp = document.createElement('div'); tmp.innerHTML = await r.text();
         const fresh = [...tmp.children].filter(w => !$(`.week[data-week="${w.dataset.week}"]`, stream));
         if (!fresh.length) return;
-        const before = box.scrollHeight;
+        // put a block that stays back where it was: measuring the displacement afterwards also absorbs
+        // the browser's own scroll anchoring, which a scrollHeight delta would have added a second time
+        const anchor = focus && focus.isConnected ? focus : bs[0], y0 = anchor.getBoundingClientRect().top;
         if (dir > 0) stream.append(...fresh); else stream.prepend(...fresh);
         fresh.forEach(wireItems);
-        if (dir < 0) box.scrollTop += box.scrollHeight - before; // the ground moved under the viewport
         const over = blocks().length - WK_MAX;
-        if (over > 0) { const drop = dir > 0 ? blocks().slice(0, over) : blocks().slice(-over), h = box.scrollHeight;
-          drop.forEach(b => b.remove()); if (dir > 0) box.scrollTop -= h - box.scrollHeight; }
+        if (over > 0) (dir > 0 ? blocks().slice(0, over) : blocks().slice(-over)).forEach(b => b.remove());
+        box.scrollTop += anchor.getBoundingClientRect().top - y0;
       } catch (e) { console.error(e); } finally { busy = false; }
     }
     const onScroll = () => { if (tick) return; tick = requestAnimationFrame(() => { tick = 0;
