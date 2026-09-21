@@ -124,6 +124,7 @@
       const html = await r.text(); tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       root.innerHTML = html;
       root.dataset.view = state.view; root.dataset.date = state.date;
+      if (root.dataset.slide) { const m = $('.month', root); if (m) m.classList.add('slide-' + root.dataset.slide); delete root.dataset.slide; } // the new page glides in from the wheel's direction
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
       wire();
@@ -140,6 +141,18 @@
     load();
   }
   function go(view, date) { if (view) state.view = view; if (date) state.date = date; load(); }
+  // the month grid owns the wheel: one gesture turns exactly one page, however far it goes; the next
+  // page needs the wheel to rest first (momentum events keep a gesture alive). State lives outside
+  // the fragment so the events that arrive after the swap still count as the same gesture.
+  const MONTH_FLIP = 60, MONTH_PAUSE = 150; // px of wheel distance that turn the page; ms of rest that end a gesture
+  let mwLast = 0, mwAcc = 0, mwDone = false;
+  function monthWheel(e) {
+    e.preventDefault(); const now = e.timeStamp; // the input's own time: a busy main thread must not split a gesture
+    if (now - mwLast > MONTH_PAUSE) { mwAcc = 0; mwDone = false; } mwLast = now;
+    if (mwDone) return;
+    mwAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
+    if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; root.dataset.slide = mwAcc > 0 ? 'up' : 'down'; shift(mwAcc > 0 ? 1 : -1); }
+  }
 
   // ---- timeline (right rail): client-rendered, endless in both directions; the SVG node and the
   // scroll position survive fragment swaps of the same kind, so selecting never re-centres ----
@@ -208,6 +221,7 @@
     $$('.toolbar [data-view]', root).forEach(b => b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); });
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
+    if (state.view === 'month') { const m = $('.month', root); if (m) m.addEventListener('wheel', monthWheel, { passive: false }); }
     $$('.heat i[data-date], .c[data-date], .we[data-date]', root).forEach(el => el.onclick = () => go(state.view === 'week' ? 'week' : 'day', el.dataset.date));
     $$('.lrow[data-date]', root).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); go('day', el.dataset.date); });
     $$('.day[data-date] .n, .more[data-date]', root).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
