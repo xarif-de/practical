@@ -296,20 +296,24 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
 }
 
 pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L) -> String {
-    let (year, month) = (view_date.year(), view_date.month());
     let (start, end) = week_window(view_date);
     let count = ((end - start).num_days() / 7) as usize;
     let stream = week_blocks(start, count, today, instances, l);
     let idx = by_day(instances);
+    // the panel follows the focus week's month, the same rule the client applies while scrolling
+    let focus = monday_of(view_date);
+    let (hy, hm) = (focus.year(), focus.month());
     let mut heat = String::new();
-    for w in &month_weeks(year, month) {
+    for w in &month_weeks(hy, hm) {
+        let _ = write!(heat, "<div class=\"hw{}\" data-week=\"{}\"><b>{}</b>", if w[0] == focus { " focus" } else { "" }, w[0], w[0].iso_week().week());
         for d in w {
             let n = idx.get(d).map(|v| v.len()).unwrap_or(0);
-            let _ = write!(heat, "<i class=\"{}{}\" style=\"--n:{}\" data-date=\"{d}\" title=\"{}\"></i>", if d.month() != month { "o" } else { "" }, if *d == today { " t" } else { "" }, n.min(4), l.dm(*d));
+            let _ = write!(heat, "<i class=\"{}{}\" style=\"--n:{}\" data-date=\"{d}\" title=\"{}\"></i>", if d.month() != hm { "o" } else { "" }, if *d == today { " t" } else { "" }, n.min(4), l.dm(*d));
         }
+        heat.push_str("</div>");
     }
     // the heat panel names its month: the title carries the week now, so nothing else would
-    format!("<div class=\"cal v-week on\" data-focus=\"{}\"><div class=\"heat\" data-month=\"{year}-{month:02}\"><h4>{} <span class=\"hm\">{} {year}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", monday_of(view_date), l.t("Dichte", "Density"), l.mon(month), tl_weeks(view_date, today))
+    format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h4>{} <span class=\"hm\">{} {hy}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), l.mon(hm), tl_weeks(view_date, today))
 }
 
 /// Day view ("Ledger"): dense day column of the month + the selected day as a document.

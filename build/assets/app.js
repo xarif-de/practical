@@ -307,15 +307,19 @@
     }
     function heatSync(d) { // the panel names its month, so it must not keep showing the one we scrolled away from
       const heat = $('.heat', root); if (!heat) return;
-      const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${pad(m + 1)}`; if (heat.dataset.month === key) return;
-      const cells = []; const c = weekStart(new Date(y, m, 1));
-      for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== m || c.getFullYear() !== y)) break; cells.push(new Date(c)); } // same week rule as render.rs month_weeks
-      const dayOf = x => $(`.dayblock[data-date="${x}"]`, stream);
-      if (cells.some(x => !dayOf(fmt(x)))) return; // a day of that month is not loaded: leave the panel alone rather than show a wrong count
-      heat.dataset.month = key; const hm = $('.hm', heat); if (hm) hm.textContent = `${MON[m]} ${y}`;
-      $('.grid', heat).innerHTML = cells.map(x => { const n = Math.min(4, $$('li', dayOf(fmt(x))).filter(li => !li.classList.contains('none')).length);
-        return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('');
-      wireItems(heat); }
+      const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${pad(m + 1)}`;
+      if (heat.dataset.month !== key) {
+        const cells = []; const c = weekStart(new Date(y, m, 1));
+        for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== m || c.getFullYear() !== y)) break; cells.push(new Date(c)); } // same week rule as render.rs month_weeks
+        const dayOf = x => $(`.dayblock[data-date="${x}"]`, stream);
+        if (cells.some(x => !dayOf(fmt(x)))) return; // a day of that month is not loaded: leave the panel alone rather than show a wrong count
+        heat.dataset.month = key; const hm = $('.hm', heat); if (hm) hm.textContent = `${MON[m]} ${y}`;
+        $('.grid', heat).innerHTML = Array.from({ length: cells.length / 7 }, (_, r) => { const w = cells.slice(r * 7, r * 7 + 7);
+          return `<div class="hw" data-week="${fmt(w[0])}"><b>${isoWeek(w[0])}</b>` + w.map(x => { const n = Math.min(4, $$('li', dayOf(fmt(x))).filter(li => !li.classList.contains('none')).length);
+            return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('') + '</div>'; }).join('');
+        wireItems(heat);
+      }
+      $$('.hw', heat).forEach(r => r.classList.toggle('focus', r.dataset.week === state.date)); }
     async function extend(dir) {
       if (busy) return; const bs = blocks(); if (!bs.length) return;
       const edge = dir > 0 ? bs[bs.length - 1] : bs[0];

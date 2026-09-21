@@ -112,8 +112,12 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
         }
         "week" => {
             let (ws, we) = render::week_window(date);
-            // the union covers both the week stream and the heat panel's month grid
-            let inst = events::instances(state, cals, ws.min(grid_start), we.max(grid_end), vc.tz).await?;
+            // the union covers the week stream and the density panel's month grid, whose month is
+            // the focus week's — not necessarily the one `date` falls in
+            let hm = render::monday_of(date);
+            let hf = NaiveDate::from_ymd_opt(hm.year(), hm.month(), 1).unwrap();
+            let hs = hf - Duration::days(i64::from(hf.weekday().num_days_from_monday()));
+            let inst = events::instances(state, cals, ws.min(hs), we.max(hs + Duration::days(42)), vc.tz).await?;
             (format!("KW {} {}", date.iso_week().week(), date.iso_week().year()), render::week_view(date, vc.today, &inst, l))
         }
         "planner" | "weekends" | "vacation" | "countdown" | "numbers" => {
