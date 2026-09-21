@@ -252,16 +252,34 @@ pub fn picker(year: i32, month: u32, density: &[usize; 12], l: &L) -> String {
 }
 
 /// Week view ("Stream"): every week of the month, active week tinted, left heat map.
-pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L) -> String {
-    let (year, month) = (view_date.year(), view_date.month());
-    let weeks = month_weeks(year, month);
+/// Weeks the week view renders before its focus week and after it; the instance window must cover
+/// `week_window`, the client extends the stream from there (app.js `mountWeeks`).
+pub const WEEK_BACK: i64 = 4;
+pub const WEEK_AHEAD: i64 = 5;
+
+pub fn monday_of(d: NaiveDate) -> NaiveDate {
+    d - Duration::days(i64::from(d.weekday().num_days_from_monday()))
+}
+
+/// [start, end) of the weeks `week_view` renders initially.
+pub fn week_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
+    let mon = monday_of(view_date);
+    (mon - Duration::days(7 * WEEK_BACK), mon + Duration::days(7 * (WEEK_AHEAD + 1)))
+}
+
+/// `count` week blocks from the Monday of `start`. Each block stands on its own — no month
+/// context — so the stream can run on endlessly in both directions.
+pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: &[Instance], l: &L) -> String {
     let idx = by_day(instances);
-    let mut stream = String::new();
-    for w in &weeks {
-        let active = w.contains(&view_date);
-        let _ = write!(stream, "<div class=\"week{}\"><h2 class=\"wk\">KW {} <span>{} – {}</span></h2>", if active { " active" } else { "" }, w[0].iso_week().week(), l.dm(w[0]), l.dm(w[6]));
-        for d in w {
-            let evs = idx.get(d).cloned().unwrap_or_default();
+    let (mon, today_mon) = (monday_of(start), monday_of(today));
+    let mut out = String::new();
+    for wi in 0..count {
+        let w0 = mon + Duration::days(7 * wi as i64);
+        let w6 = w0 + Duration::days(6);
+        let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">KW {} <span>{} – {}</span></h2>", if w0 == today_mon { " now" } else { "" }, w0.iso_week().week(), l.dm(w0), l.dm(w6));
+        for i in 0..7 {
+            let d = w0 + Duration::days(i);
+            let evs = idx.get(&d).cloned().unwrap_or_default();
             let mut items = String::new();
             for i in &evs {
                 let tl = if i.all_day { l.t("ganztags", "all day").to_string() } else { i.time_label() };
@@ -270,18 +288,28 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
             if items.is_empty() {
                 items = "<li class=\"none\"><time></time><span>–</span></li>".into();
             }
-            let _ = write!(stream, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if *d == today { " today" } else { "" }, if evs.is_empty() { " empty" } else { "" }, if d.month() != month { " o" } else { "" }, d.day(), l.dow(*d));
+            let _ = write!(out, "<section class=\"dayblock{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() { " empty" } else { "" }, d.day(), l.dow(d));
         }
-        stream.push_str("</div>");
+        out.push_str("</div>");
     }
+    out
+}
+
+pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L) -> String {
+    let (year, month) = (view_date.year(), view_date.month());
+    let (start, end) = week_window(view_date);
+    let count = ((end - start).num_days() / 7) as usize;
+    let stream = week_blocks(start, count, today, instances, l);
+    let idx = by_day(instances);
     let mut heat = String::new();
-    for w in &weeks {
+    for w in &month_weeks(year, month) {
         for d in w {
             let n = idx.get(d).map(|v| v.len()).unwrap_or(0);
             let _ = write!(heat, "<i class=\"{}{}\" style=\"--n:{}\" data-date=\"{d}\" title=\"{}\"></i>", if d.month() != month { "o" } else { "" }, if *d == today { " t" } else { "" }, n.min(4), l.dm(*d));
         }
     }
-    format!("<div class=\"cal v-week on\"><div class=\"heat\"><h4>{}</h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), tl_weeks(view_date, today))
+    // the heat panel names its month: the title carries the week now, so nothing else would
+    format!("<div class=\"cal v-week on\" data-focus=\"{}\"><div class=\"heat\" data-month=\"{year}-{month:02}\"><h4>{} <span class=\"hm\">{} {year}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", monday_of(view_date), l.t("Dichte", "Density"), l.mon(month), tl_weeks(view_date, today))
 }
 
 /// Day view ("Ledger"): dense day column of the month + the selected day as a document.

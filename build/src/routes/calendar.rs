@@ -111,8 +111,10 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             (if l.de { format!("{}. {} {}", date.day(), l.mon(m), y) } else { format!("{} {}, {}", l.mon(m), date.day(), y) }, render::day_view(date, vc.today, &inst, l, &names.join(", ")))
         }
         "week" => {
-            let inst = events::instances(state, cals, grid_start, grid_end, vc.tz).await?;
-            (format!("{} {y}", l.mon(m)), render::week_view(date, vc.today, &inst, l))
+            let (ws, we) = render::week_window(date);
+            // the union covers both the week stream and the heat panel's month grid
+            let inst = events::instances(state, cals, ws.min(grid_start), we.max(grid_end), vc.tz).await?;
+            (format!("KW {} {}", date.iso_week().week(), date.iso_week().year()), render::week_view(date, vc.today, &inst, l))
         }
         "planner" | "weekends" | "vacation" | "countdown" | "numbers" => {
             crate::routes::more::render(state, user, ctx, view, date, cals, vc).await?
@@ -183,6 +185,26 @@ pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: 
     Ok(axum::Json(events::instances(&state, &cals, q.start, q.end, vc.tz).await?))
 }
 
+/// Week blocks for the endless week stream (app.js `mountWeeks`).
+#[derive(Deserialize)]
+pub struct WeeksQuery {
+    pub start: NaiveDate,
+    #[serde(default)]
+    pub count: Option<usize>,
+    #[serde(default)]
+    pub cals: Option<String>,
+}
+
+pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<WeeksQuery>) -> AppResult<Response> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let count = q.count.unwrap_or(8).clamp(1, 16);
+    let start = render::monday_of(q.start);
+    let end = start + Duration::days(7 * count as i64);
+    let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
+    let inst = events::instances(&state, &cals, start, end, vc.tz).await?;
+    Ok(Html(render::week_blocks(start, count, vc.today, &inst, &vc.l)).into_response())
+}
+
 #[derive(Deserialize)]
 pub struct DensityQuery {
     pub year: i32,
@@ -197,5 +219,5 @@ pub async fn api_density(State(state): State<SharedState>, user: Principal, ctx:
 }
 
 pub fn router() -> Router<SharedState> {
-    Router::new().route("/calendar", get(page)).route("/api/events", get(api_events).post(crate::routes::api::create_event)).route("/api/density", get(api_density))
+    Router::new().route("/calendar", get(page)).route("/api/events", get(api_events).post(crate::routes::api::create_event)).route("/api/density", get(api_density)).route("/api/weeks", get(api_weeks))
 }

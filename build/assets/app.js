@@ -252,9 +252,96 @@
     const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
     box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
     box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
-    box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; go(null, it.date); } };
+    box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; if (state.view === 'week') goWeek(it.date); else go(null, it.date); } };
     box.onscroll = () => { if (!box._busy) { box._busy = true; requestAnimationFrame(() => { tlExtend(box); box._busy = false; }); } };
     tlExtend(box);
+  }
+  // ---- week stream: endless in both directions, the week in focus drives outline, title and rail ----
+  // No prev/next buttons: the week changes by scrolling alone. Focus = the week covering the middle
+  // of the free viewport, which is also the one taking up most of it. It is tracked per frame, so
+  // the title, the rail's ring, the heat panel and the URL follow the scroll without reloading.
+  const WK_CHUNK = 8, WK_MAX = 80, WK_SLACK = 1200; // weeks per fetch, weeks kept in the DOM, px of slack before the next fetch
+  let wkOff = null;
+  const isoYear = d => { const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7)); return t.getFullYear(); }; // the Thursday's year
+  const scrollerOf = el => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p; } return document.scrollingElement; };
+  const centreY = () => { const t = $('.toolbar', root); return ((t ? t.getBoundingClientRect().bottom : 0) + innerHeight) / 2; };
+  function goWeek(date) { // a rail or heat click scrolls there when the week is loaded, and reloads around it when it is not
+    const stream = $('.stream', root), mon = localIso(weekStart(parse(date))), b = stream && $(`.week[data-week="${mon}"]`, stream);
+    if (!b) return go(null, date);
+    const box = scrollerOf(stream), r = b.getBoundingClientRect();
+    box.scrollTo({ top: box.scrollTop + r.top - (centreY() - r.height / 2), behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }
+  function mountWeeks(stream) {
+    if (wkOff) { wkOff(); wkOff = null; } // the listeners sit on .main, which survives the fragment swap
+    if (!stream || state.view !== 'week') return;
+    const box = scrollerOf(stream), target = box === document.scrollingElement ? window : box;
+    let focus = null, tick = 0, busy = false;
+    const blocks = () => $$('.week', stream);
+    const pick = () => { const y = centreY(); let best = null, bestD = Infinity;
+      for (const w of blocks()) { const r = w.getBoundingClientRect(); if (r.top <= y && r.bottom >= y) return w; const d = Math.min(Math.abs(r.top - y), Math.abs(r.bottom - y)); if (d < bestD) { bestD = d; best = w; } }
+      return best; };
+    function setFocus(w) {
+      if (!w || w === focus) return;
+      if (focus) focus.classList.remove('focus');
+      focus = w; w.classList.add('focus');
+      const d = parse(w.dataset.week);
+      state.date = w.dataset.week;
+      const h1 = $('#title', root); if (h1) { h1.textContent = `KW ${isoWeek(d)} ${isoYear(d)}`; document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
+      history.replaceState(state, '', url(false).pathname + url(false).search);
+      tlMark(); tlFollow(); heatSync(d);
+    }
+    function tlFollow() { const rail = $('.tl', root); if (!rail || !tlSvg) return; // keep the ring in sight without fighting the rail's own scrolling
+      const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
+      const y = it.y - rail.scrollTop, h = rail.clientHeight;
+      if (y < h * 0.2 || y > h * 0.8) rail.scrollTop = Math.max(0, it.y - h / 2); }
+    function heatSync(d) { // the panel names its month, so it must not keep showing the one we scrolled away from
+      const heat = $('.heat', root); if (!heat) return;
+      const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${pad(m + 1)}`; if (heat.dataset.month === key) return;
+      const cells = []; const c = weekStart(new Date(y, m, 1));
+      for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== m || c.getFullYear() !== y)) break; cells.push(new Date(c)); } // same week rule as render.rs month_weeks
+      const dayOf = x => $(`.dayblock[data-date="${x}"]`, stream);
+      if (cells.some(x => !dayOf(fmt(x)))) return; // a day of that month is not loaded: leave the panel alone rather than show a wrong count
+      heat.dataset.month = key; const hm = $('.hm', heat); if (hm) hm.textContent = `${MON[m]} ${y}`;
+      $('.grid', heat).innerHTML = cells.map(x => { const n = Math.min(4, $$('li', dayOf(fmt(x))).filter(li => !li.classList.contains('none')).length);
+        return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('');
+      wireItems(heat); }
+    async function extend(dir) {
+      if (busy) return; const bs = blocks(); if (!bs.length) return;
+      const edge = dir > 0 ? bs[bs.length - 1] : bs[0];
+      const from = localIso(stepDate('weeks', parse(edge.dataset.week), dir > 0 ? 1 : -WK_CHUNK));
+      busy = true;
+      try {
+        const u = new URL('/api/weeks', location.origin); u.searchParams.set('start', from); u.searchParams.set('count', WK_CHUNK); if (state.cals) u.searchParams.set('cals', state.cals);
+        const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (!r.ok) return;
+        const tmp = document.createElement('div'); tmp.innerHTML = await r.text();
+        const fresh = [...tmp.children].filter(w => !$(`.week[data-week="${w.dataset.week}"]`, stream));
+        if (!fresh.length) return;
+        const before = box.scrollHeight;
+        if (dir > 0) stream.append(...fresh); else stream.prepend(...fresh);
+        fresh.forEach(wireItems);
+        if (dir < 0) box.scrollTop += box.scrollHeight - before; // the ground moved under the viewport
+        const over = blocks().length - WK_MAX;
+        if (over > 0) { const drop = dir > 0 ? blocks().slice(0, over) : blocks().slice(-over), h = box.scrollHeight;
+          drop.forEach(b => b.remove()); if (dir > 0) box.scrollTop -= h - box.scrollHeight; }
+      } catch (e) { console.error(e); } finally { busy = false; }
+    }
+    const onScroll = () => { if (tick) return; tick = requestAnimationFrame(() => { tick = 0;
+      setFocus(pick()); const bs = blocks(); if (!bs.length) return;
+      if (bs[0].getBoundingClientRect().top > -WK_SLACK) extend(-1);
+      if (bs[bs.length - 1].getBoundingClientRect().bottom < innerHeight + WK_SLACK) extend(1); }); };
+    target.addEventListener('scroll', onScroll, { passive: true }); addEventListener('resize', onScroll);
+    wkOff = () => { target.removeEventListener('scroll', onScroll); removeEventListener('resize', onScroll); };
+    const cal = $('.cal', root), first = (cal && $(`.week[data-week="${cal.dataset.focus}"]`, stream)) || blocks()[0];
+    if (first) { const r = first.getBoundingClientRect(); box.scrollTop += r.top - (centreY() - r.height / 2); } // land with the week in focus centred
+    setFocus(pick());
+  }
+  function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
+    $$('.heat i[data-date], .c[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
+    $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); go('day', el.dataset.date); });
+    $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
+    $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
+    $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); openEditor(el.dataset.key, el.dataset.date); });
+    $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); openEditor(null, d ? d.dataset.date : state.date); });
   }
   function wire() {
     $$('[data-nav]', root).forEach(b => b.onclick = () => b.dataset.nav === 'today' ? go(null, today) : shift(b.dataset.nav === 'next' ? 1 : -1));
@@ -262,12 +349,7 @@
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
     if (state.view === 'month') { const m = $('.month', root); if (m) m.addEventListener('wheel', monthWheel, { passive: false }); }
-    $$('.heat i[data-date], .c[data-date], .we[data-date]', root).forEach(el => el.onclick = () => go(state.view === 'week' ? 'week' : 'day', el.dataset.date));
-    $$('.lrow[data-date]', root).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); go('day', el.dataset.date); });
-    $$('.day[data-date] .n, .more[data-date]', root).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
-    $$('.dayblock .dl', root).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
-    $$('[data-key]', root).forEach(el => el.addEventListener('click', e => { e.stopPropagation(); openEditor(el.dataset.key, el.dataset.date); }));
-    $$('.add', root).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); openEditor(null, d ? d.dataset.date : state.date); });
+    wireItems(root); mountWeeks($('.stream', root));
     const title = $('#title', root); if (title) title.onclick = openPicker;
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });

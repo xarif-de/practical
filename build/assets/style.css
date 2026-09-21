@@ -303,10 +303,13 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .cal.v-week { align-items: start; } .cal.v-week .heat { position: sticky; top: 64px; display: grid; gap: 8px; align-self: start; align-content: start; } .heat i { min-width: 0; }
 .heat .grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; } .heat i { aspect-ratio: 1; border-radius: 4px; background: color-mix(in srgb, var(--accent) calc(var(--n) * 22%), var(--tile)); } .heat i.o { opacity: .35; } .heat i.t { outline: 2px solid var(--today); outline-offset: -2px; }
 .heat h4 { margin: 0; font-size: 12px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
-.stream { max-width: 820px; } .week { border-radius: 14px; padding: 4px 12px 8px; margin-bottom: 10px; } .week.active { background: var(--tile); }
+.stream { max-width: 820px; } .week { border-radius: 14px; padding: 4px 12px 8px; margin-bottom: 10px; }
+.week.now { background: var(--tile); } /* the real current week */
+.week.focus { box-shadow: inset 0 0 0 1.5px var(--accent); } /* the week in focus, like .day.sel in the month view (app.js `mountWeeks`) */
+.heat .hm { text-transform: none; letter-spacing: 0; color: var(--fg-2); }
 .wk { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); margin: 10px 0 4px; } .wk span { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8px; }
 .dayblock { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 8px 28px 8px 0; border-top: 1px solid var(--line); }
-.dayblock.empty { padding-top: 4px; padding-bottom: 4px; } .dayblock.empty .dl b { font-size: 16px; color: var(--fg-3); } .dayblock.o { opacity: .45; }
+.dayblock.empty { padding-top: 4px; padding-bottom: 4px; } .dayblock.empty .dl b { font-size: 16px; color: var(--fg-3); }
 .dayblock .dl { display: grid; justify-items: center; align-content: start; } .dayblock .dl b { font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; } .dayblock .dl span { font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
 .dayblock.today .dl b { color: var(--today); }
 .dayblock ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; } .dayblock li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; } .dayblock li.none span { color: var(--fg-3); }
