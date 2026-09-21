@@ -234,6 +234,15 @@
     if (!tlSvg) return; const sel = tlSvg.querySelector('.sel'); const p = fmt(periodOf(tlKind, parse(state.date)));
     const it = tlItems.find(i => i.period === p); if (it) sel.setAttribute('cy', it.y); svgShow(sel, !!it);
   }
+  const TL_EDGE = 14; // px the ring keeps from the rail's edge — its own radius plus a little air
+  function tlFollow() { // one rule for every rail (weeks in day/week, months elsewhere): it only moves when the
+    const rail = $('.tl', root); if (!rail || !tlSvg) return; // ring would leave it, and then just far enough to let the ring hang at that edge
+    const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
+    const y = it.y - rail.scrollTop, h = rail.clientHeight;
+    if (y < TL_EDGE) rail.scrollTop = Math.max(0, it.y - TL_EDGE);
+    else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE);
+  }
+  const tlSelect = () => { tlMark(); tlFollow(); }; // the viewed period changed: mark it and keep it in sight
   function tlExtend(box) { // keep two chunks of slack above and below the viewport
     const k = TLK[tlKind]; let changed = false;
     if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -k.chunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
@@ -243,7 +252,7 @@
   function mountTimeline(box) {
     if (!box) return;
     const kind = box.dataset.kind, center = periodOf(kind, parse(box.dataset.center));
-    if (tlSvg && tlKind === kind) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; tlMark(); }
+    if (tlSvg && tlKind === kind) { box.appendChild(tlSvg); if (tlScroll != null) box.scrollTop = tlScroll; tlSelect(); }
     else {
       tlKind = kind; tlFirst = stepDate(kind, center, -TLK[kind].chunk); tlLast = stepDate(kind, center, TLK[kind].chunk);
       tlSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); tlSvg.setAttribute('width', 88); box.appendChild(tlSvg); tlBuild(kind);
@@ -288,14 +297,8 @@
       state.date = w.dataset.week;
       const h1 = $('#title', root); if (h1) { h1.textContent = `KW ${isoWeek(d)} ${isoYear(d)}`; document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
       history.replaceState(state, '', url(false).pathname + url(false).search);
-      tlMark(); tlFollow(); heatSync(d);
+      tlSelect(); heatSync(d);
     }
-    const TL_EDGE = 14; // px the ring keeps from the rail's edge — its own radius plus a little air
-    function tlFollow() { const rail = $('.tl', root); if (!rail || !tlSvg) return; // the ring only moves when it would leave the rail, and then just far enough to hang at that edge
-      const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
-      const y = it.y - rail.scrollTop, h = rail.clientHeight;
-      if (y < TL_EDGE) rail.scrollTop = Math.max(0, it.y - TL_EDGE);
-      else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE); }
     function heatSync(d) { // the panel names its month, so it must not keep showing the one we scrolled away from
       const heat = $('.heat', root); if (!heat) return;
       const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${pad(m + 1)}`; if (heat.dataset.month === key) return;
