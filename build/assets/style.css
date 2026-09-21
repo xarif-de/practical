@@ -150,9 +150,8 @@ table.ct td[contenteditable]:hover { outline-color: var(--accent); }
    mid/end begin exactly at their tile's edge (-6px), so segments never overlap. At every tile
    transition the mask dips symmetrically: 10px ramp → --dip across the gap → 10px ramp back. --- */
 .month { overflow: visible; }
-.month.slide-up { animation: month-in-up .22s ease-out; } .month.slide-down { animation: month-in-down .22s ease-out; } /* wheel page turn (app.js `monthWheel`) */
-@keyframes month-in-up { from { opacity: 0; transform: translateY(18px); } } @keyframes month-in-down { from { opacity: 0; transform: translateY(-18px); } }
-@media (prefers-reduced-motion: reduce) { .month.slide-up, .month.slide-down { animation: none; } }
+.mflip { position: relative; overflow: hidden; display: grid; min-width: 0; min-height: 0; } /* page turn (app.js `monthFlip`): the leaving grid lies on top of the arriving one */
+.mflip .month.old { position: absolute; inset: 0; pointer-events: none; }
 .day { overflow: visible; }
 .ev.span { position: relative; border-radius: 0; max-width: none; --dip: rgba(0,0,0,.5); } /* max-width: the .ev cap below would freeze the width and shift the fades off the edges */
 .ev.span.start { border-radius: 6px 0 0 6px; margin-right: -10px; padding-right: 10px; }

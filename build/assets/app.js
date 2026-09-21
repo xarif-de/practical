@@ -122,12 +122,13 @@
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
       const html = await r.text(); tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      if (flip) flip.end(); const was = { view: root.dataset.view, date: root.dataset.date }, oldMonth = $('.month', root);
       root.innerHTML = html;
       root.dataset.view = state.view; root.dataset.date = state.date;
-      if (root.dataset.slide) { const m = $('.month', root); if (m) m.classList.add('slide-' + root.dataset.slide); delete root.dataset.slide; } // the new page glides in from the wheel's direction
+      const turn = was.view === 'month' && state.view === 'month' && was.date.slice(0, 7) !== state.date.slice(0, 7) ? (state.date > was.date ? 1 : -1) : 0; // any way of reaching another month glides: wheel, rail, orbit picker, today
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
-      wire();
+      wire(); if (turn) monthFlip(oldMonth, turn);
     } catch (e) { console.error(e); }
   }
   addEventListener('popstate', e => { if (e.state) { state = e.state; load(false); } });
@@ -154,7 +155,20 @@
     if (now - mwLast > MONTH_PAUSE) { mwAcc = 0; mwDone = false; } mwLast = now;
     if (mwDone) return;
     mwAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
-    if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; root.dataset.slide = mwAcc > 0 ? 'up' : 'down'; shift(mwAcc > 0 ? 1 : -1); }
+    if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; shift(mwAcc > 0 ? 1 : -1); }
+  }
+  // page turn: the old grid slides out and the new one follows it, eased in and out; the same glide
+  // whatever changed the month. A turn that starts mid-glide ends the running one first (load()).
+  const FLIP_MS = 480, FLIP_EASE = 'cubic-bezier(.65,0,.35,1)', FLIP_GAP = 24; // px between the two pages while they move
+  let flip = null;
+  function monthFlip(old, dir) {
+    const cur = $('.month', root); if (!old || !cur || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const wrap = document.createElement('div'); wrap.className = 'mflip'; cur.replaceWith(wrap); wrap.append(cur, old); old.classList.add('old');
+    const opts = { duration: FLIP_MS, easing: FLIP_EASE, fill: 'forwards' };
+    const a1 = old.animate([{ transform: 'translateY(0)' }, { transform: `translateY(calc(${-dir * 100}% ${dir > 0 ? '-' : '+'} ${FLIP_GAP}px))` }], opts);
+    const a2 = cur.animate([{ transform: `translateY(calc(${dir * 100}% ${dir > 0 ? '+' : '-'} ${FLIP_GAP}px))` }, { transform: 'translateY(0)' }], opts);
+    const end = () => { if (!flip) return; flip = null; a1.cancel(); a2.cancel(); old.remove(); if (wrap.parentNode) wrap.replaceWith(cur); };
+    flip = { end }; a2.onfinish = end;
   }
 
   // ---- timeline (right rail): client-rendered, endless in both directions; the SVG node and the
