@@ -117,18 +117,22 @@
   async function load(push = true) {
     const u = url(true);
     loading = u;
+    // a month-to-month change glides (wheel, rail, orbit picker, today alike); the months in between are fetched alongside the target
+    const turnOf = from => root.dataset.view === 'month' && state.view === 'month' && from.slice(0, 7) !== state.date.slice(0, 7) ? (state.date > from ? 1 : -1) : 0;
+    const from0 = root.dataset.date, between0 = turnOf(from0) ? monthsBetween(from0, state.date) : [];
+    const midsP = between0.length && between0.length <= FLIP_FETCH && !reducedMotion() ? fetchMonths(between0) : Promise.resolve(null);
     try {
       const r = await fetch(u, { headers: { Accept: 'text/html' } });
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
-      const html = await r.text(); tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
-      if (flip) flip.end(); const was = { view: root.dataset.view, date: root.dataset.date }, oldMonth = $('.month', root);
+      const html = await r.text(), mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
+      const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, state.date); // another load swapped meanwhile: the prefetched months no longer fit
       root.innerHTML = html;
       root.dataset.view = state.view; root.dataset.date = state.date;
-      const turn = was.view === 'month' && state.view === 'month' && was.date.slice(0, 7) !== state.date.slice(0, 7) ? (state.date > was.date ? 1 : -1) : 0; // any way of reaching another month glides: wheel, rail, orbit picker, today
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
-      wire(); if (turn) monthFlip(oldMonth, turn);
+      wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
     } catch (e) { console.error(e); }
   }
   addEventListener('popstate', e => { if (e.state) { state = e.state; load(false); } });
@@ -142,33 +146,52 @@
     load();
   }
   function go(view, date) { if (view) state.view = view; if (date) state.date = date; load(); }
-  // the month grid owns the wheel: one gesture turns exactly one page, however far it goes; the next
-  // page needs the wheel to rest for MONTH_PAUSE. The pause must be very short: a trackpad's momentum
-  // tail keeps the events coming for a second, and a fresh swipe ends that tail and follows it within
-  // a few tens of ms — 150 ms glued the swipes into one gesture until the pointer was moved, 40 ms
-  // (the repeat strip's value) still did at times. State lives outside the fragment so the events
-  // that arrive after the swap still count as the same gesture.
-  const MONTH_FLIP = 60, MONTH_PAUSE = 20; // px of wheel distance that turn the page; ms of rest that end a gesture
-  let mwLast = 0, mwAcc = 0, mwDone = false;
+  // the month grid owns the wheel: one gesture turns exactly one page, however far it goes. A new
+  // gesture is told by speed, not by a pause: a trackpad's momentum tail only ever slows down, while
+  // a fresh swipe arrives faster than the tail it interrupts — the speed must have fallen below half
+  // the gesture's peak and then jump above twice the recent mean (a finger still accelerating after
+  // the page turned is neither). Time gaps proved unusable: the lift-off before the tail and Chrome
+  // coalescing events while the page swaps both open gaps that look like rests (two pages per swipe),
+  // and the rest between two swipes can be shorter than either (no page at all). Speed is taken over
+  // the event's own time, so a coalesced event (one big delta over a long gap) keeps its true speed.
+  // State lives outside the fragment so the events that arrive after the swap still count as the
+  // same gesture.
+  const MONTH_FLIP = 60, MONTH_REST = 150, MONTH_JUMP = 2, MONTH_MINV = 0.25; // px that turn the page; ms of rest that end a gesture for sure; speed ratio and floor (px/ms) of a fresh swipe
+  let mwLast = 0, mwAcc = 0, mwDone = false, mwVs = [], mwPeak = 0;
   function monthWheel(e) {
-    e.preventDefault(); const now = e.timeStamp; // the input's own time: a busy main thread must not split a gesture
-    if (now - mwLast > MONTH_PAUSE) { mwAcc = 0; mwDone = false; } mwLast = now;
+    e.preventDefault(); const now = e.timeStamp, dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
+    const gap = now - mwLast, v = Math.abs(dy) / Math.max(1, gap), ref = mwVs.reduce((a, b) => a + b, 0) / (mwVs.length || 1);
+    const fresh = gap > MONTH_REST || (mwDone && v >= MONTH_MINV && ref < mwPeak / 2 && v > MONTH_JUMP * ref);
+    if (fresh) { mwAcc = 0; mwDone = false; mwVs = []; mwPeak = 0; } mwLast = now; mwVs = mwVs.concat(v).slice(-3); mwPeak = Math.max(mwPeak, v);
     if (mwDone) return;
-    mwAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
+    mwAcc += dy;
     if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; shift(mwAcc > 0 ? 1 : -1); }
   }
-  // page turn: the old grid slides out and the new one follows it, eased in and out; the same glide
-  // whatever changed the month. A turn that starts mid-glide ends the running one first (load()).
-  const FLIP_MS = 480, FLIP_EASE = 'cubic-bezier(.65,0,.35,1)', FLIP_GAP = 24; // px between the two pages while they move
+  // page turn: the leaving grid, every month in between and the arriving grid form one column that
+  // glides past, eased in and out — the same glide whatever changed the month, and a far jump passes
+  // every month on the way. The months in between are fetched with the target (up to FLIP_FETCH of
+  // them); beyond that they are drawn as bare day grids, at that speed only the shape is visible.
+  // A turn that starts mid-glide ends the running one first (load()).
+  const FLIP_MS = 480, FLIP_STEP = 90, FLIP_MAX = 1500, FLIP_EASE = 'cubic-bezier(.65,0,.35,1)', FLIP_GAP = 24, FLIP_FETCH = 12; // ms for one page, ms per further page, cap; px between pages
   let flip = null;
-  function monthFlip(old, dir) {
-    const cur = $('.month', root); if (!old || !cur || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const wrap = document.createElement('div'); wrap.className = 'mflip'; cur.replaceWith(wrap); wrap.append(cur, old); old.classList.add('old');
-    const opts = { duration: FLIP_MS, easing: FLIP_EASE, fill: 'forwards' };
-    const a1 = old.animate([{ transform: 'translateY(0)' }, { transform: `translateY(calc(${-dir * 100}% ${dir > 0 ? '-' : '+'} ${FLIP_GAP}px))` }], opts);
-    const a2 = cur.animate([{ transform: `translateY(calc(${dir * 100}% ${dir > 0 ? '+' : '-'} ${FLIP_GAP}px))` }, { transform: 'translateY(0)' }], opts);
-    const end = () => { if (!flip) return; flip = null; a1.cancel(); a2.cancel(); old.remove(); if (wrap.parentNode) wrap.replaceWith(cur); };
-    flip = { end }; a2.onfinish = end;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const localIso = d => iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
+  function monthsBetween(a, b) { const out = [], d = parse(a.slice(0, 7) + '-01'), dir = b > a ? 1 : -1; for (;;) { d.setMonth(d.getMonth() + dir); const m = localIso(d); if (m.slice(0, 7) === b.slice(0, 7)) return out; out.push(m); } } // first days of the months strictly between, in travel order
+  const fetchMonths = list => Promise.all(list.map(async m => { try { const u = url(true); u.searchParams.set('date', m); const r = await fetch(u, { headers: { Accept: 'text/html' } }); return r.ok ? new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('.month') : null; } catch { return null; } }));
+  function skeleton(m, dows) { const d = parse(m), y = d.getFullYear(), mo = d.getMonth(), first = new Date(y, mo, 1), c = new Date(y, mo, 1 - ((first.getDay() + 6) % 7)); let h = dows.map(x => `<div class="dow">${esc(x)}</div>`).join('');
+    for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== mo || c.getFullYear() !== y)) break; h += `<div class="day${c.getMonth() !== mo ? ' other' : ''}"><span class="n">${c.getDate()}</span></div>`; }
+    const el = document.createElement('div'); el.className = 'month'; el.innerHTML = h; return el; } // same week rule as render.rs month_weeks
+  function monthFlip(old, dir, between, mids) {
+    const cur = $('.month', root); if (!old || !cur || reducedMotion()) return;
+    const dows = $$('.dow', cur).map(x => x.textContent), pages = between.map((m, i) => (mids && mids[i]) || skeleton(m, dows));
+    const H = cur.getBoundingClientRect().height, step = H + FLIP_GAP, n = pages.length + 1;
+    const wrap = document.createElement('div'); wrap.className = 'mflip'; wrap.style.height = `${H}px`; cur.replaceWith(wrap);
+    const col = document.createElement('div'); col.className = 'mcol'; col.style.gridAutoRows = `${H}px`; col.style.gap = `${FLIP_GAP}px`;
+    col.append(...(dir > 0 ? [old, ...pages, cur] : [cur, ...pages.reverse(), old])); wrap.append(col); // top to bottom = earlier to later
+    wrap.addEventListener('wheel', monthWheel, { passive: false }); // the wheel keeps working over the moving column
+    const a = col.animate([{ transform: `translateY(${dir > 0 ? 0 : -n * step}px)` }, { transform: `translateY(${dir > 0 ? -n * step : 0}px)` }], { duration: Math.min(FLIP_MAX, FLIP_MS + FLIP_STEP * (n - 1)), easing: FLIP_EASE, fill: 'forwards' });
+    const end = () => { if (!flip) return; flip = null; a.cancel(); if (wrap.parentNode) wrap.replaceWith(cur); };
+    flip = { end }; a.onfinish = end;
   }
 
   // ---- timeline (right rail): client-rendered, endless in both directions; the SVG node and the
