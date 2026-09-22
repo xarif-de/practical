@@ -529,8 +529,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .doc .meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--fg-3); flex-wrap: wrap; }
 .doc .meta span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; display: inline-flex; align-items: center; gap: 4px; }
 /* the entry's details: one row per kind, icon in a column of its own (render.rs `day_facts`) */
-.doc .cal { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-3); font-size: 12px; }
-.doc .cal .sw { width: 9px; height: 9px; }
 .doc .facts { display: grid; grid-template-columns: 18px 1fr; gap: 6px 9px; margin-top: 10px; align-items: start; }
 .doc .facts > .ico { color: var(--fg-3); margin-top: 2px; }
 .doc .fv { font-size: 13px; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }

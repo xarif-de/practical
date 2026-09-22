@@ -324,6 +324,11 @@ fn ico(name: &str) -> String {
     format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-{name}\"/></svg>")
 }
 
+/// Same icon, painted in a colour of its own — the calendar's, in the day document.
+fn ico_c(name: &str, color: &str) -> String {
+    format!("<svg class=\"ico\" aria-hidden=\"true\" style=\"color:{}\"><use href=\"#i-{name}\"/></svg>", e(color))
+}
+
 /// An RRULE in words. Parts the sentence cannot carry (BYSETPOS, several ordinals, …) are left out
 /// rather than guessed — the base sentence stays true, the editor shows the whole rule.
 pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
@@ -390,9 +395,12 @@ pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
 /// Values that carry no information are left out — a default visibility on every entry is noise.
 fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
     let mut rows = String::new();
-    let mut row = |icon: &str, inner: String, cls: &str| {
-        let _ = write!(rows, "{}<div class=\"fv{cls}\">{inner}</div>", ico(icon));
+    // the icon comes in ready-made: the calendar's carries the event's colour
+    let mut row = |icon: String, inner: String, cls: &str| {
+        let _ = write!(rows, "{icon}<div class=\"fv{cls}\">{inner}</div>");
     };
+    // the calendar leads the list
+    row(ico_c("calendar", &i.color), format!("<span>{}</span>", e(&i.cal_name)), "");
     let geo = d.and_then(|x| x.geo);
     if !i.location.is_empty() || geo.is_some() {
         let mut v = String::new();
@@ -406,18 +414,18 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
         // the map query: coordinates when we have them, the address otherwise
         let q = geo.map(|(a, b)| format!("{a:.6},{b:.6}")).unwrap_or_else(|| i.location.clone());
         let _ = write!(v, "<div class=\"maps\"><button type=\"button\" class=\"mb\" data-map=\"osm\" data-q=\"{0}\">{1}OpenStreetMap</button><button type=\"button\" class=\"mb\" data-map=\"gmaps\" data-q=\"{0}\">{1}Google Maps</button></div>", e(&q), ico("map"));
-        row("pin", v, " loc");
+        row(ico("pin"), v, " loc");
     }
     if !i.alarms.is_empty() {
-        row("bell", i.alarms.iter().map(|m| format!("<span>{}</span>", e(&alarm_label(*m, l)))).collect::<String>(), "");
+        row(ico("bell"), i.alarms.iter().map(|m| format!("<span>{}</span>", e(&alarm_label(*m, l)))).collect::<String>(), "");
     }
     if let Some(r) = d.and_then(|x| x.rrule.as_deref()) {
-        row("repeat", format!("<span>{}</span>", e(&rrule_text(r, i.start_date(), l))), "");
+        row(ico("repeat"), format!("<span>{}</span>", e(&rrule_text(r, i.start_date(), l))), "");
     } else if i.recurring {
-        row("repeat", format!("<span>{}</span>", l.t("Serie", "Recurring")), "");
+        row(ico("repeat"), format!("<span>{}</span>", l.t("Serie", "Recurring")), "");
     }
     if !i.categories.is_empty() {
-        row("tag", i.categories.iter().map(|c| format!("<span>{}</span>", e(c))).collect::<String>(), "");
+        row(ico("tag"), i.categories.iter().map(|c| format!("<span>{}</span>", e(c))).collect::<String>(), "");
     }
     let mut marks = String::new();
     let mut mark = |icon: &str, text: &str| {
@@ -445,7 +453,7 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
         mark(icon, text);
     }
     if !marks.is_empty() {
-        row("flag", marks, "");
+        row(ico("flag"), marks, "");
     }
     if let Some(links) = d.map(|x| x.links.as_slice()).filter(|x| !x.is_empty()) {
         let mut v = String::new();
@@ -456,7 +464,7 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
             let href = if k.embedded { format!("/api/events/{}/{}/{}/attach/{}", i.principal, i.cal_id, i.object_id, k.bin_index.unwrap_or(n)) } else { k.uri.clone() };
             let _ = write!(v, "<a class=\"lk\" href=\"{}\" target=\"_blank\" rel=\"noopener\" title=\"{}\">{}{}</a>", e(&href), e(&href), ico(icon), e(&label));
         }
-        row("ext", v, "");
+        row(ico("ext"), v, "");
     }
     if rows.is_empty() { String::new() } else { format!("<div class=\"facts\">{rows}</div>") }
 }
@@ -504,8 +512,8 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     }
     for i in &evs {
         let time = if i.all_day { l.t("ganztags", "all day").to_string() } else if i.end > i.start { format!("{}–{}", i.time_label(), i.end_label()) } else { i.time_label() };
-        let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3><div class=\"cal\"><i class=\"sw\" style=\"--c:{}\"></i>{}</div>{}{}</div></article>",
-            e(&i.key()), i.start_date(), e(&i.summary), e(&i.color), e(&i.cal_name),
+        let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}{}</div></article>",
+            e(&i.key()), i.start_date(), e(&i.summary),
             if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description)) },
             day_facts(i, details.get(&i.key()), l));
     }
