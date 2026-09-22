@@ -5,6 +5,7 @@
 use crate::domain::collections;
 use crate::domain::events;
 use crate::domain::prefs;
+use crate::domain::tasks;
 use crate::state::{AppState, SharedState};
 use chrono::{Duration, NaiveDate, Utc};
 use rustical_store::auth::AuthenticationProvider;
@@ -42,6 +43,17 @@ pub async fn send(state: &AppState, sub: &Sub, payload: &str) -> Result<(), Stri
     web_push::WebPushClient::send(&client, msg).await.map_err(|e| e.to_string())
 }
 
+/// One reminder ready to go out — an event's or a task's; from here on they are the same thing.
+struct Fire {
+    cal_id: String,
+    object_id: String,
+    trigger: chrono::DateTime<Utc>,
+    title: String,
+    body: String,
+    url: String,
+    tag: String,
+}
+
 async fn tick(state: &SharedState) -> Result<usize, String> {
     let subs = subscriptions(state).await.map_err(|e| e.to_string())?;
     let now = Utc::now();
@@ -52,25 +64,55 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
         let tz: chrono_tz::Tz = p.timezone.as_deref().and_then(|t| t.parse().ok()).unwrap_or_else(|| state.config.default_timezone.parse().unwrap_or(chrono_tz::Europe::Berlin));
         let today: NaiveDate = now.with_timezone(&tz).date_naive();
         let cals = collections::calendars_for(state, &user, false).await.map_err(|e| e.to_string())?;
-        // alarms up to 2 days ahead can only fire within the next hour if the event is within ~3 days
-        let inst = events::instances(state, &cals, today - Duration::days(1), today + Duration::days(4), tz).await.map_err(|e| e.to_string())?;
-        for i in inst {
-            for m in i.alarms.iter().copied() {
+        // a reminder can only fire in the next minutes if its anchor is within a few days
+        let from = today - Duration::days(1);
+        let to = today + Duration::days(4);
+        let mut fires: Vec<Fire> = vec![];
+        for i in events::instances(state, &cals, from, to, tz).await.map_err(|e| e.to_string())? {
             let start_utc = crate::domain::ical::to_utc(i.start, tz);
-            let trigger = start_utc - Duration::minutes(m);
+            let when = if i.all_day { i.start.format("%d.%m.").to_string() } else { i.start.format("%H:%M").to_string() };
+            for m in i.alarms.iter().copied() {
+                fires.push(Fire {
+                    cal_id: i.cal_id.clone(),
+                    object_id: i.object_id.clone(),
+                    trigger: start_utc - Duration::minutes(m),
+                    title: i.summary.clone(),
+                    body: format!("{when} · {}", i.cal_name),
+                    url: format!("/calendar?view=day&date={}", i.start_date()),
+                    tag: i.key(),
+                });
+            }
+        }
+        // the same for tasks: their reminders used to be stored and shown but never fired
+        for r in tasks::reminders(state, &cals, tz, from, to).await.map_err(|e| e.to_string())? {
+            let when = match r.due {
+                Some(d) if r.due_all_day => d.format("%d.%m.").to_string(),
+                Some(d) => d.format("%d.%m. %H:%M").to_string(),
+                None => String::new(),
+            };
+            fires.push(Fire {
+                cal_id: r.cal_id.clone(),
+                object_id: r.object_id.clone(),
+                trigger: crate::domain::ical::to_utc(r.at, tz),
+                title: r.summary.clone(),
+                body: if when.is_empty() { r.cal_name.clone() } else { format!("{when} · {}", r.cal_name) },
+                url: "/tasks".to_string(),
+                tag: r.key(),
+            });
+        }
+        for fire in fires {
             // fire window: trigger within [now-2min, now+1min] (the poll runs every minute)
-            if trigger < now - Duration::minutes(2) || trigger > now + Duration::minutes(1) {
+            if fire.trigger < now - Duration::minutes(2) || fire.trigger > now + Duration::minutes(1) {
                 continue;
             }
-            let key_trigger = trigger.to_rfc3339();
+            let key_trigger = fire.trigger.to_rfc3339();
             let already: i64 = sqlx::query("SELECT count(*) AS n FROM xui_alarms_sent WHERE principal = ? AND cal_id = ? AND object_id = ? AND trigger_at = ?")
-                .bind(&principal).bind(&i.cal_id).bind(&i.object_id).bind(&key_trigger)
+                .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .fetch_one(&state.db).await.map_err(|e| e.to_string())?.get("n");
             if already > 0 {
                 continue;
             }
-            let when = if i.all_day { i.start.format("%d.%m.").to_string() } else { i.start.format("%H:%M").to_string() };
-            let payload = serde_json::json!({ "title": i.summary, "body": format!("{when} · {}", i.cal_name), "url": format!("/calendar?view=day&date={}", i.start_date()), "tag": i.key() }).to_string();
+            let payload = serde_json::json!({ "title": fire.title, "body": fire.body, "url": fire.url, "tag": fire.tag }).to_string();
             for s in &subs {
                 match send(state, s, &payload).await {
                     Ok(()) => sent += 1,
@@ -83,9 +125,8 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
                 }
             }
             sqlx::query("INSERT OR IGNORE INTO xui_alarms_sent (principal, cal_id, object_id, trigger_at) VALUES (?, ?, ?, ?)")
-                .bind(&principal).bind(&i.cal_id).bind(&i.object_id).bind(&key_trigger)
+                .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .execute(&state.db).await.map_err(|e| e.to_string())?;
-            }
         }
     }
     // housekeeping: sent-log older than 30 days

@@ -664,6 +664,69 @@ mod tests {
         assert_eq!(local.format("%Y-%m-%d %H:%M").to_string(), "2026-09-20 16:32"); // CEST = UTC+2
     }
 
+    fn cal() -> CalInfo {
+        CalInfo {
+            principal: "p".into(),
+            owner_label: String::new(),
+            is_group: false,
+            id: "c".into(),
+            displayname: "Persönlicher Kalender".into(),
+            color: "#3478f6".into(),
+            description: String::new(),
+            components: vec!["VTODO".into()],
+            timezone_id: String::new(),
+            subscription_url: None,
+            deleted_at: None,
+            synctoken: 0,
+        }
+    }
+    fn with(extra: &str) -> String {
+        format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:u1\r\nDTSTAMP:20260901T100000Z\r\nSUMMARY:Zahnarzt anrufen\r\nDUE;TZID=Europe/Berlin:20260924T170000\r\n{extra}BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER;RELATED=END:-PT2H\r\nDESCRIPTION:x\r\nEND:VALARM\r\nEND:VTODO\r\nEND:VCALENDAR\r\n")
+    }
+
+    /// Reminders on tasks were stored and shown but never fired; this is the path that fires them.
+    #[test]
+    fn only_an_open_task_in_the_window_reminds() {
+        let win = (NaiveDate::from_ymd_opt(2026, 9, 21).unwrap(), NaiveDate::from_ymd_opt(2026, 9, 26).unwrap());
+        let r = reminders_of(&with(""), &cal(), "o1", tz(), win.0, win.1);
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].at.format("%Y-%m-%d %H:%M").to_string(), "2026-09-24 15:00");
+        assert_eq!((r[0].summary.as_str(), r[0].object_id.as_str(), r[0].cal_name.as_str()), ("Zahnarzt anrufen", "o1", "Persönlicher Kalender"));
+
+        // finished or cancelled: nothing to remind about
+        assert!(reminders_of(&with("STATUS:COMPLETED\r\n"), &cal(), "o1", tz(), win.0, win.1).is_empty());
+        assert!(reminders_of(&with("COMPLETED:20260923T080000Z\r\n"), &cal(), "o1", tz(), win.0, win.1).is_empty());
+        assert!(reminders_of(&with("STATUS:CANCELLED\r\n"), &cal(), "o1", tz(), win.0, win.1).is_empty());
+        // outside the window
+        assert!(reminders_of(&with(""), &cal(), "o1", tz(), NaiveDate::from_ymd_opt(2026, 9, 25).unwrap(), win.1).is_empty());
+        // a task without any alarm contributes nothing at all
+        let bare = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:u2\r\nSUMMARY:x\r\nDUE;VALUE=DATE:20260924\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        assert!(reminders_of(bare, &cal(), "o2", tz(), win.0, win.1).is_empty());
+    }
+
+    /// The anchor rule for a component that has no duration.
+    #[test]
+    fn a_reminder_anchors_on_what_the_task_has() {
+        let d = |h: u32| NaiveDate::from_ymd_opt(2026, 9, 24).unwrap().and_hms_opt(h, 0, 0).unwrap();
+        let al = |minutes: i64, related_end: bool| Alarm { minutes, related_end, ..Default::default() };
+
+        // both dates: each side counts from its own anchor
+        assert_eq!(reminder_at(&al(120, false), Some(d(9)), Some(d(17))), Some(d(7)));
+        assert_eq!(reminder_at(&al(120, true), Some(d(9)), Some(d(17))), Some(d(15)));
+        // only a due date: both sides fall back to it
+        assert_eq!(reminder_at(&al(60, false), None, Some(d(17))), Some(d(16)));
+        assert_eq!(reminder_at(&al(60, true), None, Some(d(17))), Some(d(16)));
+        // only a start: likewise
+        assert_eq!(reminder_at(&al(60, true), Some(d(9)), None), Some(d(8)));
+        // a negative offset is "after"
+        assert_eq!(reminder_at(&al(-60, true), None, Some(d(17))), Some(d(18)));
+        // no date at all: nothing to count from
+        assert_eq!(reminder_at(&al(60, false), None, None), None);
+        // an absolute trigger wins over every anchor
+        let abs = Alarm { at: Some(d(6)), minutes: 999, ..Default::default() };
+        assert_eq!(reminder_at(&abs, Some(d(9)), Some(d(17))), Some(d(6)));
+    }
+
     /// A DUE with a foreign TZID must arrive as the right wall-clock in the user's zone.
     #[test]
     fn due_with_a_foreign_tzid_is_converted() {
@@ -672,4 +735,84 @@ mod tests {
         assert!(!all_day);
         assert_eq!(dt.unwrap().format("%Y-%m-%d %H:%M").to_string(), "2026-09-24 15:00");
     }
+}
+
+/// When a task's reminder fires. A task has no duration, so the two anchors RFC 5545 offers
+/// collapse: RELATED=END counts from DUE, RELATED=START from DTSTART, and each falls back to
+/// the other when only one of the two is set. Without any date the reminder can never fire —
+/// there is nothing to count from — unless it carries an absolute TRIGGER.
+pub fn reminder_at(a: &Alarm, start: Option<NaiveDateTime>, due: Option<NaiveDateTime>) -> Option<NaiveDateTime> {
+    if let Some(abs) = a.at {
+        return Some(abs);
+    }
+    let anchor = if a.related_end { due.or(start) } else { start.or(due) }?;
+    Some(anchor - chrono::Duration::minutes(a.minutes))
+}
+
+/// A reminder a task carries, resolved to the moment it fires (wall clock in the user's zone).
+#[derive(Debug, Clone)]
+pub struct TaskReminder {
+    pub principal: String,
+    pub cal_id: String,
+    pub cal_name: String,
+    pub object_id: String,
+    pub summary: String,
+    pub at: NaiveDateTime,
+    pub due: Option<NaiveDateTime>,
+    pub due_all_day: bool,
+}
+
+impl TaskReminder {
+    pub fn key(&self) -> String {
+        format!("{}/{}/{}", self.principal, self.cal_id, self.object_id)
+    }
+}
+
+/// The reminders one stored task contributes. Finished and cancelled tasks contribute none —
+/// a reminder for something already done is noise, and every client stops showing it too.
+fn reminders_of(ics: &str, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, from: NaiveDate, to: NaiveDate) -> Vec<TaskReminder> {
+    let (raw, _) = events::split_component(ics, "VTODO");
+    if raw.alarms.is_empty() {
+        return vec![];
+    }
+    let p = &raw.props;
+    let status = status_of(p);
+    let done = status == "COMPLETED" || (status.is_empty() && completed_of(p, tz).is_some());
+    if done || status == "CANCELLED" {
+        return vec![];
+    }
+    let (start, _) = stamp_of(p, "DTSTART", tz);
+    let (due, due_all_day) = stamp_of(p, "DUE", tz);
+    raw.alarms
+        .iter()
+        .enumerate()
+        .filter_map(|(n, lines)| {
+            let at = reminder_at(&events::parse_alarm(n, lines, tz), start, due)?;
+            (at.date() >= from && at.date() <= to).then(|| TaskReminder {
+                principal: cal.principal.clone(),
+                cal_id: cal.id.clone(),
+                cal_name: cal.displayname.clone(),
+                object_id: object_id.to_string(),
+                summary: text_of(p, "SUMMARY"),
+                at,
+                due,
+                due_all_day,
+            })
+        })
+        .collect()
+}
+
+/// Reminders of the *open* tasks that fire between `from` and `to`; see `reminder_at`.
+pub async fn reminders(state: &AppState, cals: &[CalInfo], tz: chrono_tz::Tz, from: NaiveDate, to: NaiveDate) -> AppResult<Vec<TaskReminder>> {
+    let mut out = vec![];
+    for cal in cals {
+        if !cal.components.iter().any(|c| c == "VTODO") {
+            continue;
+        }
+        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+            let CalendarInnerData::Todo(_, _) = obj.get_inner().get_inner() else { continue };
+            out.extend(reminders_of(&obj.get_ics(), cal, &id, tz, from, to));
+        }
+    }
+    Ok(out)
 }
