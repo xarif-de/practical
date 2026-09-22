@@ -155,8 +155,13 @@ pub fn validate(r: &Rule) -> AppResult<()> {
     Ok(())
 }
 
-pub async fn all(db: &SqlitePool, principal: &str) -> AppResult<BTreeMap<String, Rule>> {
-    let rows = sqlx::query("SELECT category, rule_json FROM xui_category_rules WHERE principal = ? ORDER BY category").bind(principal).fetch_all(db).await?;
+/// Rules apply to events or to tasks; a category can carry a different rule in each scope.
+pub fn valid_scope(s: &str) -> bool {
+    matches!(s, "event" | "task")
+}
+
+pub async fn all(db: &SqlitePool, principal: &str, scope: &str) -> AppResult<BTreeMap<String, Rule>> {
+    let rows = sqlx::query("SELECT category, rule_json FROM xui_category_rules WHERE principal = ? AND scope = ? ORDER BY category").bind(principal).bind(scope).fetch_all(db).await?;
     let mut out = BTreeMap::new();
     for r in rows {
         let name: String = r.get("category");
@@ -167,19 +172,22 @@ pub async fn all(db: &SqlitePool, principal: &str) -> AppResult<BTreeMap<String,
     Ok(out)
 }
 
-pub async fn put(db: &SqlitePool, principal: &str, category: &str, rule: &Rule) -> AppResult<()> {
+pub async fn put(db: &SqlitePool, principal: &str, scope: &str, category: &str, rule: &Rule) -> AppResult<()> {
     let name = category.trim();
     if name.is_empty() || name.len() > 80 || name.contains([',', '\n', '\r']) {
         return Err(AppError::BadRequest("invalid category name".into()));
     }
     validate(rule)?;
-    sqlx::query("INSERT INTO xui_category_rules (principal, category, rule_json, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(principal, category) DO UPDATE SET rule_json = excluded.rule_json, updated_at = CURRENT_TIMESTAMP")
-        .bind(principal).bind(name).bind(serde_json::to_string(rule).unwrap()).execute(db).await?;
+    if !valid_scope(scope) {
+        return Err(AppError::BadRequest("unknown rule scope".into()));
+    }
+    sqlx::query("INSERT INTO xui_category_rules (principal, scope, category, rule_json, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(principal, scope, category) DO UPDATE SET rule_json = excluded.rule_json, updated_at = CURRENT_TIMESTAMP")
+        .bind(principal).bind(scope).bind(name).bind(serde_json::to_string(rule).unwrap()).execute(db).await?;
     Ok(())
 }
 
-pub async fn delete(db: &SqlitePool, principal: &str, category: &str) -> AppResult<()> {
-    sqlx::query("DELETE FROM xui_category_rules WHERE principal = ? AND category = ?").bind(principal).bind(category.trim()).execute(db).await?;
+pub async fn delete(db: &SqlitePool, principal: &str, scope: &str, category: &str) -> AppResult<()> {
+    sqlx::query("DELETE FROM xui_category_rules WHERE principal = ? AND scope = ? AND category = ?").bind(principal).bind(scope).bind(category.trim()).execute(db).await?;
     Ok(())
 }
 

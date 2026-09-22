@@ -96,10 +96,23 @@ async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate
 #[derive(serde::Serialize)]
 pub struct CategoryInfo { pub name: String, pub count: usize, pub rule: bool }
 
+#[derive(serde::Deserialize, Default)]
+pub struct ScopeQ {
+    /// "event" (the default) or "task" — category rules are kept apart per component
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+fn scope_of(q: &ScopeQ) -> &str {
+    match q.scope.as_deref() {
+        Some("task") => "task",
+        _ => "event",
+    }
+}
+
 /// Every category of the visible calendars with its count, plus rule-only categories (count 0).
-async fn categories(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<CategoryInfo>>> {
-    let rules = crate::domain::catrules::all(&state.db, &user.id).await?;
-    let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
+async fn categories(State(state): State<SharedState>, user: Principal, Query(q): Query<ScopeQ>) -> AppResult<Json<Vec<CategoryInfo>>> {
+    let rules = crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?;
+    let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user, scope_of(&q)).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
     for name in rules.keys() {
         if !out.iter().any(|c| &c.name == name) {
             out.push(CategoryInfo { name: name.clone(), count: 0, rule: true });
@@ -108,19 +121,19 @@ async fn categories(State(state): State<SharedState>, user: Principal) -> AppRes
     Ok(Json(out))
 }
 
-async fn category_rules_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<std::collections::BTreeMap<String, crate::domain::catrules::Rule>>> {
-    Ok(Json(crate::domain::catrules::all(&state.db, &user.id).await?))
+async fn category_rules_get(State(state): State<SharedState>, user: Principal, Query(q): Query<ScopeQ>) -> AppResult<Json<std::collections::BTreeMap<String, crate::domain::catrules::Rule>>> {
+    Ok(Json(crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?))
 }
 
-async fn category_rule_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Json(rule): Json<crate::domain::catrules::Rule>) -> AppResult<Json<crate::domain::catrules::Rule>> {
+async fn category_rule_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Query(q): Query<ScopeQ>, Json(rule): Json<crate::domain::catrules::Rule>) -> AppResult<Json<crate::domain::catrules::Rule>> {
     check_csrf(&session, &headers).await?;
-    crate::domain::catrules::put(&state.db, &user.id, &name, &rule).await?;
+    crate::domain::catrules::put(&state.db, &user.id, scope_of(&q), &name, &rule).await?;
     Ok(Json(rule))
 }
 
-async fn category_rule_delete(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>) -> AppResult<Json<Created>> {
+async fn category_rule_delete(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Query(q): Query<ScopeQ>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
-    crate::domain::catrules::delete(&state.db, &user.id, &name).await?;
+    crate::domain::catrules::delete(&state.db, &user.id, scope_of(&q), &name).await?;
     Ok(Json(Created { id: name }))
 }
 
@@ -141,11 +154,11 @@ pub struct MentionEvent { pub summary: String, pub key: String, pub uid: String,
 /// Index for the note editor's suggestions and detection: contacts, categories with counts,
 /// events (90 days back, a year ahead, one per UID, at most 500) and open tasks. Loaded on the
 /// first keystroke in a note and cached in the page.
-async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx) -> AppResult<Json<Mentions>> {
+async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<ScopeQ>) -> AppResult<Json<Mentions>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
     let contacts = contacts::contacts_for(&state, &abs).await?.into_iter().map(|c| MentionContact { name: c.full_name.clone(), email: c.primary_email(), key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id) }).filter(|c| !c.name.trim().is_empty()).collect();
-    let categories = events::category_counts(&state, &user).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
+    let categories = events::category_counts(&state, &user, scope_of(&q)).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
     let cals = events::visible_calendars(&state, &user, None).await?;
     let mut seen = std::collections::HashSet::new();
     let events = events::instances(&state, &cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();

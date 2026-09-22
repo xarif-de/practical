@@ -94,6 +94,16 @@ CREATE TABLE xui_holidays (
         // per-user category rules: defaults and fixed values a category applies to an event (JSON, see domain::catrules)
         "CREATE TABLE xui_category_rules (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, category));",
     ),
+    (
+        7,
+        // a rule belongs to events or to tasks; everything stored so far was written by the event editor
+        // the primary key has to grow, and SQLite cannot alter one — rebuild and copy;
+        // everything stored so far was written by the event editor
+        "CREATE TABLE xui_category_rules_new (principal TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'event', category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, scope, category));\n\
+         INSERT INTO xui_category_rules_new (principal, scope, category, rule_json, updated_at) SELECT principal, 'event', category, rule_json, updated_at FROM xui_category_rules;\n\
+         DROP TABLE xui_category_rules;\n\
+         ALTER TABLE xui_category_rules_new RENAME TO xui_category_rules;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

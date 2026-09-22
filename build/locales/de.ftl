@@ -549,3 +549,5 @@ ed-tst-done = Erledigt
 ed-tst-cancelled = Abgebrochen
 ed-view-pct = { $n } % erledigt
 ed-view-done = erledigt am { $at }
+cat-scope-events = Termine
+cat-scope-tasks = Aufgaben

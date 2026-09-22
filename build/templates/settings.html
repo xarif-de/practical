@@ -199,6 +199,8 @@
 <section class="panel" id="categories" data-t-edit="{{ ctx.t("cat-rule-edit") }}" data-t-new="{{ ctx.t("cat-rule-new") }}" data-t-delete="{{ ctx.t("cat-rule-delete") }}" data-t-confirm="{{ ctx.t1("cat-rule-delete-confirm", "name", "{name}") }}" data-t-rule="{{ ctx.t("cat-rule-yes") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
   <h2>{{ ctx.t("tab-categories") }}</h2>
   <p class="muted small">{{ ctx.t("cat-hint") }}</p>
+  {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
+  <span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task">{{ ctx.t("cat-scope-tasks") }}</button></span>
   <div id="cat-list" class="cat-list"></div>
   <form class="inline-form" id="cat-new"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></form>
 </section>

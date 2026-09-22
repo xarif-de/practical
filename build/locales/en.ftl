@@ -549,3 +549,5 @@ ed-tst-done = Completed
 ed-tst-cancelled = Cancelled
 ed-view-pct = { $n } % done
 ed-view-done = completed on { $at }
+cat-scope-events = Events
+cat-scope-tasks = Tasks

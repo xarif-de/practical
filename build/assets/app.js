@@ -55,9 +55,11 @@
     const catPanel = $('#categories');
     if (catPanel) {
       const t = catPanel.dataset, list = $('#cat-list'), csrfTok = ($('meta[name=csrf]') || {}).content || '', h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      const load = async () => { const r = await fetch('/api/categories'); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="/calendar?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
-      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
-      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = '/calendar?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
+      let scope = 'event';
+      const load = async () => { const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="${scope === 'task' ? '/tasks' : '/calendar'}?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
+      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del) + '?scope=' + scope, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
+      $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; $$('#cat-scope button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); load(); });
+      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
       load();
     }
   }
@@ -507,6 +509,8 @@
   const state = { get date() { const h = HOST(); return (h.date && h.date()) || today; }, get cals() { const h = HOST(); return (h.cals && h.cals()) || ''; } };
   const load = (push) => { const h = HOST(); if (h.reload) h.reload(push); };
   const pk = document.getElementById('picker') || {};
+  // which component this dialog edits: an event or a task (templates/editor.html, `editor_kind`)
+  const ED_SCOPE = document.getElementById('ed').classList.contains('taskmode') ? 'task' : 'event';
 
   // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
@@ -571,7 +575,7 @@
     ctRows.innerHTML = CATS.map((c, i) => `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="ct-head"><span class="chip">${esc(c)}</span><button class="add edits ct-rule" type="button" data-ct-rule="${esc(c)}"><svg class="ico"><use href="#i-settings"/></svg> ${esc(CTT.tRule)}</button></span><button class="ct-x edits" type="button" data-ct-rm="${i}">×</button><span class="ct-fx">${ctFx(c, over)}</span></div>`).join('');
     ctCloudRender();
   }
-  const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories').then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
+  const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories?scope=' + ED_SCOPE).then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
   const ctInvalidate = () => { CT_IDX = null; };
   async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ' <svg class="ico" style="width:10px;height:10px"><use href="#i-tag"/></svg>' : ''}</button>`).join(''); }
   function catsInit(list) { CATS = (list || []).map(c => String(c).trim()).filter(Boolean); ctRender(); }
@@ -691,8 +695,8 @@
     if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
     if (ruleBack) { const to = ruleBack; ruleBack = null; location.href = to; return true; }
     return false; }
-  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
-  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name), { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
+  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
+  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
