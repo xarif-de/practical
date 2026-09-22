@@ -528,6 +528,22 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .doc h3 { margin: 0 0 4px; font-size: 17px; font-weight: 600; } .doc p { margin: 0; color: var(--fg-2); font-size: 14px; }
 .doc .meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--fg-3); flex-wrap: wrap; }
 .doc .meta span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; display: inline-flex; align-items: center; gap: 4px; }
+/* the entry's details: one row per kind, icon in a column of its own (render.rs `day_facts`) */
+.doc .cal { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-3); font-size: 12px; }
+.doc .cal .sw { width: 9px; height: 9px; }
+.doc .facts { display: grid; grid-template-columns: 18px 1fr; gap: 6px 9px; margin-top: 10px; align-items: start; }
+.doc .facts > .ico { color: var(--fg-3); margin-top: 2px; }
+.doc .fv { font-size: 13px; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.doc .fv.loc { display: grid; gap: 3px; justify-items: start; }
+.doc .cp { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--fg-2); text-align: left; cursor: pointer; }
+.doc .cp .ico, .doc .st .ico, .doc .lk .ico { width: 15px; height: 15px; color: var(--fg-3); }
+.doc .cp:hover, .doc .cp.ok { color: var(--accent); } .doc .cp:hover .ico, .doc .cp.ok .ico { color: var(--accent); }
+.doc .maps { display: flex; gap: 6px; margin-top: 2px; }
+.doc .mb { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--accent); cursor: pointer; }
+.doc .mb .ico { width: 13px; height: 13px; }
+.doc .st { display: inline-flex; gap: 5px; align-items: center; }
+.doc .lk { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); }
+.doc .lk .ico { color: var(--accent); }
 @media (max-width: 899px) { .cal.v-day { grid-template-columns: 1fr !important; } .ledger { max-height: none; border: 0; } .doc { padding: 16px; } }
 
 /* ---- Kontakte: Sheet (css10) + panels ---- */

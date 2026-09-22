@@ -109,7 +109,19 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             let (ds, de) = render::day_window(date);
             let inst = events::instances(state, cals, ds.min(grid_start), de.max(grid_end), vc.tz).await?;
             let names: Vec<String> = cals.iter().map(|c| c.displayname.clone()).collect();
-            (if l.de { format!("{}. {} {}", date.day(), l.mon(m), y) } else { format!("{} {}, {}", l.mon(m), date.day(), y) }, render::day_view(date, vc.today, &inst, l, &names.join(", ")))
+            // the document in the middle shows links, coordinates, the rule and the marking, none of
+            // which an Instance carries — they are read for the handful of events of THIS day only,
+            // never for the whole window. A calendar the user may see but not own is skipped.
+            let mut details = std::collections::HashMap::new();
+            for i in inst.iter().filter(|i| i.start_date() <= date && i.last_date() >= date) {
+                if details.contains_key(&i.key()) {
+                    continue;
+                }
+                if let Ok(d) = events::get_event(state, user, &i.principal, &i.cal_id, &i.object_id, vc.tz).await {
+                    details.insert(i.key(), d);
+                }
+            }
+            (if l.de { format!("{}. {} {}", date.day(), l.mon(m), y) } else { format!("{} {}, {}", l.mon(m), date.day(), y) }, render::day_view(date, vc.today, &inst, l, &names.join(", "), &details))
         }
         "week" => {
             let (ws, we) = render::week_window(date);

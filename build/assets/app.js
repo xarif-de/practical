@@ -92,7 +92,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.'};
+  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert'};
   const iso = d => d.toISOString().slice(0, 10);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
@@ -433,6 +433,12 @@
     $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); openEditor(el.dataset.key, el.dataset.date); });
+    // the day document's details sit inside the clickable entry, so each of them stops the click
+    $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
+      navigator.clipboard.writeText(b.dataset.copytext).then(() => { b.classList.add('ok'); b.title = T.copied; setTimeout(() => b.classList.remove('ok'), 1200); }); });
+    $$('.doc [data-map]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const q = encodeURIComponent(b.dataset.q);
+      window.open(b.dataset.map === 'osm' ? 'https://www.openstreetmap.org/search?query=' + q : 'https://www.google.com/maps/search/?api=1&query=' + q, '_blank', 'noopener'); });
+    $$('.doc a.lk', scope).forEach(a => a.onclick = e => e.stopPropagation());
     $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); openEditor(null, d ? d.dataset.date : state.date); });
   }
   function wire() {

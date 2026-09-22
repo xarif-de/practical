@@ -2,7 +2,7 @@
 //! prototype generators (gen.py / gen6.py), so markup and class names match
 //! the design-system CSS one to one.
 
-use crate::domain::events::Instance;
+use crate::domain::events::{EventDetail, Instance};
 use chrono::{Datelike, Duration, NaiveDate};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -316,6 +316,158 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
     format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h4>{} <span class=\"hm\">{} {hy}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), l.mon(hm), tl_weeks(view_date, today))
 }
 
+const DOW_LONG_DE: [&str; 7] = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+const DOW_LONG_EN: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const BYDAY: [&str; 7] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+
+fn ico(name: &str) -> String {
+    format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-{name}\"/></svg>")
+}
+
+/// An RRULE in words. Parts the sentence cannot carry (BYSETPOS, several ordinals, …) are left out
+/// rather than guessed — the base sentence stays true, the editor shows the whole rule.
+pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
+    let mut m = std::collections::HashMap::new();
+    for part in rule.split(';') {
+        if let Some((k, v)) = part.split_once('=') {
+            m.insert(k.trim().to_ascii_uppercase(), v.trim().to_string());
+        }
+    }
+    let get = |k: &str| m.get(k).map(|s| s.as_str()).unwrap_or("");
+    let n: i64 = get("INTERVAL").parse().unwrap_or(1);
+    let freq = get("FREQ");
+    let mut out = match (freq, n) {
+        ("DAILY", 1) => l.t("Täglich", "Daily").to_string(),
+        ("WEEKLY", 1) => l.t("Wöchentlich", "Weekly").to_string(),
+        ("MONTHLY", 1) => l.t("Monatlich", "Monthly").to_string(),
+        ("YEARLY", 1) => l.t("Jährlich", "Yearly").to_string(),
+        ("DAILY", n) => if l.de { format!("Alle {n} Tage") } else { format!("Every {n} days") },
+        ("WEEKLY", n) => if l.de { format!("Alle {n} Wochen") } else { format!("Every {n} weeks") },
+        ("MONTHLY", n) => if l.de { format!("Alle {n} Monate") } else { format!("Every {n} months") },
+        ("YEARLY", n) => if l.de { format!("Alle {n} Jahre") } else { format!("Every {n} years") },
+        _ => return l.t("Serie", "Recurring").into(),
+    };
+    let byday = get("BYDAY");
+    let names: Vec<&str> = byday
+        .split(',')
+        .filter(|x| !x.is_empty())
+        .filter_map(|x| {
+            let code = x.trim_start_matches(|c: char| c.is_ascii_digit() || c == '-' || c == '+');
+            BYDAY.iter().position(|b| *b == code).map(|p| if l.de { DOW_LONG_DE[p] } else { DOW_LONG_EN[p] })
+        })
+        .collect();
+    let ord = byday.split(',').next().unwrap_or("").trim_end_matches(char::is_alphabetic).parse::<i32>().ok();
+    if freq == "WEEKLY" && !names.is_empty() {
+        let joined = names.join(", ");
+        let _ = write!(out, "{}", if l.de { format!(" am {joined}") } else { format!(" on {joined}") });
+    } else if matches!(freq, "MONTHLY" | "YEARLY") {
+        if let (Some(o), Some(day)) = (ord, names.first()) {
+            let which = if o == -1 { l.t("letzten", "last").to_string() } else if l.de { format!("{o}.") } else { format!("{o}.") };
+            let _ = write!(out, "{}", if l.de { format!(" am {which} {day}") } else { format!(" on the {which} {day}") });
+        } else if let Ok(d) = get("BYMONTHDAY").parse::<u32>() {
+            let _ = write!(out, "{}", if l.de { format!(" am {d}.") } else { format!(" on the {d}.") });
+        } else if freq == "YEARLY" {
+            let _ = write!(out, "{}", if l.de { format!(" am {}. {}", start.day(), l.mon(start.month())) } else { format!(" on {} {}", l.mon(start.month()), start.day()) });
+        }
+        if freq == "YEARLY" && ord.is_some() {
+            if let Ok(mo) = get("BYMONTH").parse::<u32>() {
+                let _ = write!(out, "{}", if l.de { format!(" im {}", l.mon(mo)) } else { format!(" in {}", l.mon(mo)) });
+            }
+        }
+    }
+    if let Ok(c) = get("COUNT").parse::<u32>() {
+        let _ = write!(out, "{}", if l.de { format!(", {c} Termine") } else { format!(", {c} times") });
+    } else if get("UNTIL").len() >= 8 {
+        let u = get("UNTIL");
+        if let Ok(d) = NaiveDate::parse_from_str(&u[..8], "%Y%m%d") {
+            let _ = write!(out, "{}", if l.de { format!(", bis {}", d.format("%d.%m.%Y")) } else { format!(", until {}", d.format("%Y-%m-%d")) });
+        }
+    }
+    out
+}
+
+/// The rows under an entry of the day document: one per kind of detail, icon in the left column.
+/// Values that carry no information are left out — a default visibility on every entry is noise.
+fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
+    let mut rows = String::new();
+    let mut row = |icon: &str, inner: String, cls: &str| {
+        let _ = write!(rows, "{}<div class=\"fv{cls}\">{inner}</div>", ico(icon));
+    };
+    let geo = d.and_then(|x| x.geo);
+    if !i.location.is_empty() || geo.is_some() {
+        let mut v = String::new();
+        if !i.location.is_empty() {
+            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{0}\" title=\"{1}\">{2}{0}</button>", e(&i.location), l.t("Adresse kopieren", "Copy address"), ico("copy"));
+        }
+        if let Some((lat, lon)) = geo {
+            let c = format!("{lat:.5}, {lon:.5}");
+            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{c}\" title=\"{}\">{}{c}</button>", l.t("Koordinaten kopieren", "Copy coordinates"), ico("copy"));
+        }
+        // the map query: coordinates when we have them, the address otherwise
+        let q = geo.map(|(a, b)| format!("{a:.6},{b:.6}")).unwrap_or_else(|| i.location.clone());
+        let _ = write!(v, "<div class=\"maps\"><button type=\"button\" class=\"mb\" data-map=\"osm\" data-q=\"{0}\">{1}OpenStreetMap</button><button type=\"button\" class=\"mb\" data-map=\"gmaps\" data-q=\"{0}\">{1}Google Maps</button></div>", e(&q), ico("map"));
+        row("pin", v, " loc");
+    }
+    if !i.alarms.is_empty() {
+        row("bell", i.alarms.iter().map(|m| format!("<span>{}</span>", e(&alarm_label(*m, l)))).collect::<String>(), "");
+    }
+    if let Some(r) = d.and_then(|x| x.rrule.as_deref()) {
+        row("repeat", format!("<span>{}</span>", e(&rrule_text(r, i.start_date(), l))), "");
+    } else if i.recurring {
+        row("repeat", format!("<span>{}</span>", l.t("Serie", "Recurring")), "");
+    }
+    if !i.categories.is_empty() {
+        row("tag", i.categories.iter().map(|c| format!("<span>{}</span>", e(c))).collect::<String>(), "");
+    }
+    let mut marks = String::new();
+    let mut mark = |icon: &str, text: &str| {
+        let _ = write!(marks, "<span class=\"st\">{}{}</span>", ico(icon), e(text));
+    };
+    match d.map(|x| x.status.as_str()).unwrap_or(if i.cancelled { "CANCELLED" } else { "" }) {
+        "CANCELLED" => mark("x", l.t("Abgesagt", "Cancelled")),
+        "TENTATIVE" => mark("help", l.t("Vorläufig", "Tentative")),
+        _ => {}
+    }
+    if d.map(|x| x.transp.as_str()) == Some("TRANSPARENT") {
+        mark("free", l.t("Blockiert keine Zeit", "Does not block time"));
+    }
+    match d.map(|x| x.class.as_str()).unwrap_or("") {
+        "PRIVATE" => mark("lock", l.t("Privat", "Private")),
+        "CONFIDENTIAL" => mark("lock", l.t("Vertraulich", "Confidential")),
+        _ => {}
+    }
+    if let Some(p) = d.and_then(|x| x.priority).filter(|p| (1..=9).contains(p)) {
+        let (icon, text) = match p {
+            1..=4 => ("prio-high", l.t("Hohe Priorität", "High priority")),
+            5 => ("prio-mid", l.t("Mittlere Priorität", "Medium priority")),
+            _ => ("prio-low", l.t("Niedrige Priorität", "Low priority")),
+        };
+        mark(icon, text);
+    }
+    if !marks.is_empty() {
+        row("flag", marks, "");
+    }
+    if let Some(links) = d.map(|x| x.links.as_slice()).filter(|x| !x.is_empty()) {
+        let mut v = String::new();
+        for (n, k) in links.iter().enumerate() {
+            let icon = match k.kind.as_str() { "conference" => "users", "attach" => "download", _ => "globe" };
+            let label = if !k.label.is_empty() { k.label.clone() } else if !k.filename.is_empty() { k.filename.clone() } else if !k.uri.is_empty() { short_uri(&k.uri) } else { l.t("Anhang", "Attachment").to_string() };
+            // an embedded file has no URI of its own — it is served from the event
+            let href = if k.embedded { format!("/api/events/{}/{}/{}/attach/{}", i.principal, i.cal_id, i.object_id, k.bin_index.unwrap_or(n)) } else { k.uri.clone() };
+            let _ = write!(v, "<a class=\"lk\" href=\"{}\" target=\"_blank\" rel=\"noopener\" title=\"{}\">{}{}</a>", e(&href), e(&href), ico(icon), e(&label));
+        }
+        row("ext", v, "");
+    }
+    if rows.is_empty() { String::new() } else { format!("<div class=\"facts\">{rows}</div>") }
+}
+
+/// A URI as a label: host plus a hint of the path, without scheme noise.
+fn short_uri(u: &str) -> String {
+    let rest = u.split_once("//").map(|(_, r)| r).unwrap_or(u);
+    let rest = rest.trim_end_matches('/');
+    if rest.chars().count() <= 42 { rest.to_string() } else { rest.chars().take(41).collect::<String>() + "…" }
+}
+
 /// Day view ("Ledger"): dense day column of the month + the selected day as a document.
 /// Days the day view's ledger holds before and after the selected day; the client extends it from
 /// there (app.js `mountLedger`), so the window only has to fill the column.
@@ -341,7 +493,7 @@ pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<Na
     out
 }
 
-pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str) -> String {
+pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str, details: &HashMap<String, EventDetail>) -> String {
     let idx = by_day(instances);
     let (ds, de) = day_window(view_date);
     let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l);
@@ -352,20 +504,10 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     }
     for i in &evs {
         let time = if i.all_day { l.t("ganztags", "all day").to_string() } else if i.end > i.start { format!("{}–{}", i.time_label(), i.end_label()) } else { i.time_label() };
-        let mut meta = format!("<span><i class=\"sw\" style=\"--c:{}\"></i> {}</span>", e(&i.color), e(&i.cal_name));
-        if let Some(m) = i.alarm_minutes {
-            let _ = write!(meta, "<span>⏰ {}</span>", alarm_label(m, l));
-        }
-        if i.recurring {
-            let _ = write!(meta, "<span>{}</span>", l.t("Serie", "recurring"));
-        }
-        if !i.location.is_empty() {
-            let _ = write!(meta, "<span>📍 {}</span>", e(&i.location));
-        }
-        for c in &i.categories {
-            let _ = write!(meta, "<span>{}</span>", e(c));
-        }
-        let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}<div class=\"meta\">{meta}</div></div></article>", e(&i.key()), i.start_date(), e(&i.summary), if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description).replace('\n', "<br>")) });
+        let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3><div class=\"cal\"><i class=\"sw\" style=\"--c:{}\"></i>{}</div>{}{}</div></article>",
+            e(&i.key()), i.start_date(), e(&i.summary), e(&i.color), e(&i.cal_name),
+            if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description)) },
+            day_facts(i, details.get(&i.key()), l));
     }
     doc.push_str("</section>");
     // the ledger's head names the month of its topmost row — an endless day list needs it (app.js `mountLedger`)
@@ -374,18 +516,20 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
 
 pub fn alarm_label(m: i64, l: &L) -> String {
     if m == 0 {
-        l.t("zum Termin", "at start").to_string()
-    } else if m % 1440 == 0 {
-        let d = m / 1440;
-        if l.de { format!("{d} Tag{} vorher", if d == 1 { "" } else { "e" }) } else { format!("{d} day{} before", if d == 1 { "" } else { "s" }) }
-    } else if m % 60 == 0 {
-        let h = m / 60;
-        if l.de { format!("{h} Stunde{} vorher", if h == 1 { "" } else { "n" }) } else { format!("{h} hour{} before", if h == 1 { "" } else { "s" }) }
-    } else if l.de {
-        format!("{m} Minuten vorher")
-    } else {
-        format!("{m} minutes before")
+        return l.t("zum Termin", "at start").to_string();
     }
+    // the offset counts backwards from the start, so a negative one fires after it
+    let (n, after) = (m.abs(), m < 0);
+    let (v, unit) = if n % 1440 == 0 {
+        let d = n / 1440;
+        (d, if l.de { if d == 1 { "Tag" } else { "Tage" } } else if d == 1 { "day" } else { "days" })
+    } else if n % 60 == 0 {
+        let h = n / 60;
+        (h, if l.de { if h == 1 { "Stunde" } else { "Stunden" } } else if h == 1 { "hour" } else { "hours" })
+    } else {
+        (n, if l.de { if n == 1 { "Minute" } else { "Minuten" } } else if n == 1 { "minute" } else { "minutes" })
+    };
+    format!("{v} {unit} {}", if after { l.t("danach", "after") } else { l.t("vorher", "before") })
 }
 
 pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate) -> String {
