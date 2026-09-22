@@ -1,25 +1,46 @@
 {% extends "layout.html" %}
 {% block title %}{{ ctx.t("nav-tasks") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block filter %}
+<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}"><svg class="ico" aria-hidden="true"><use href="#i-filter"/></svg></button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
+{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
+<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a><a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a></div></div></div>
+{% endblock %}
 {% block content %}
-<div class="toolbar"><h1>{{ ctx.t("nav-tasks") }}</h1><span class="muted small">{{ open.len() }} {{ ctx.t("tasks-open") }}</span><span class="grow"></span></div>
-<div class="tasks" id="tasks">
-<form class="taskform" id="taskform">
-  <input type="text" name="summary" placeholder="{{ ctx.t("task-new-placeholder") }}" required autocomplete="off">
-  <input type="date" name="due" title="{{ ctx.t("task-due") }}">
-  <select name="calendar">{% for c in calendars %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}</option>{% endfor %}</select>
-  <button class="btn btn-primary icon-btn" type="submit" title="{{ ctx.t("task-add") }}" aria-label="{{ ctx.t("task-add") }}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
-</form>
-{% if calendars.is_empty() %}<p class="muted">{{ ctx.t("tasks-no-calendar") }}</p>{% endif %}
-<ul class="tasklist">
-{% for t in open %}<li class="task{% if t.overdue(*today) %} overdue{% endif %}" data-key="{{ t.key() }}"><input type="checkbox" data-toggle="{{ t.key() }}" aria-label="{{ ctx.t("task-done") }}"><span class="sw" style="--c:{{ t.color }}"></span><span class="ts">{{ t.summary }}</span>{% if t.priority > 0 && t.priority <= 4 %}<span class="prio">!</span>{% endif %}<small class="muted">{{ t.due_label() }}{% if !t.due_label().is_empty() %} · {% endif %}{{ t.cal_name }}</small><button class="link danger" data-del="{{ t.key() }}">{{ ctx.t("delete") }}</button></li>
-{% endfor %}
-</ul>
-{% if open.is_empty() && !calendars.is_empty() %}<p class="muted">{{ ctx.t("tasks-none-open") }}</p>{% endif %}
-<details class="done"><summary>{{ ctx.t("tasks-done") }} ({{ done.len() }})</summary>
-<ul class="tasklist">
-{% for t in done %}<li class="task completed" data-key="{{ t.key() }}"><input type="checkbox" checked data-toggle="{{ t.key() }}" aria-label="{{ ctx.t("task-reopen") }}"><span class="sw" style="--c:{{ t.color }}"></span><span class="ts">{{ t.summary }}</span><small class="muted">{{ t.due_label() }}{% if !t.due_label().is_empty() %} · {% endif %}{{ t.cal_name }}</small><button class="link danger" data-del="{{ t.key() }}">{{ ctx.t("delete") }}</button></li>
-{% endfor %}
-</ul></details>
+<div class="tkpage" id="tkpage">
+<div class="toolbar">
+  <h1>{{ ctx.t("nav-tasks") }}</h1>
+  <span class="muted small" id="task-count">{{ open_count }} {{ ctx.t("tasks-open") }}</span>
+  <span class="grow"></span>
+  {# one lookback for every view: without it a year of ticked-off work drowns the screen #}
+  <span class="sel" title="{{ ctx.t("tk-back-hint") }}"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg>
+  <select id="tk-back" aria-label="{{ ctx.t("tk-back") }}">
+    <option value="day"{% if back == "day" %} selected{% endif %}>{{ ctx.t("tk-back-day") }}</option>
+    <option value="week"{% if back == "week" %} selected{% endif %}>{{ ctx.t("tk-back-week") }}</option>
+    <option value="month"{% if back == "month" %} selected{% endif %}>{{ ctx.t("tk-back-month") }}</option>
+    <option value="quarter"{% if back == "quarter" %} selected{% endif %}>{{ ctx.t("tk-back-quarter") }}</option>
+    <option value="year"{% if back == "year" %} selected{% endif %}>{{ ctx.t("tk-back-year") }}</option>
+    <option value="all"{% if back == "all" %} selected{% endif %}>{{ ctx.t("tk-back-all") }}</option>
+  </select></span>
+  <span class="seg" role="group" id="tk-views">
+    <button data-tkview="groups"{% if view == "groups" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-groups") }}" aria-label="{{ ctx.t("tk-v-groups") }}"><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg></button>
+    <button data-tkview="table"{% if view == "table" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-table") }}" aria-label="{{ ctx.t("tk-v-table") }}"><svg class="ico" aria-hidden="true"><use href="#i-table"/></svg></button>
+    <button data-tkview="board"{% if view == "board" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-board") }}" aria-label="{{ ctx.t("tk-v-board") }}"><svg class="ico" aria-hidden="true"><use href="#i-target"/></svg></button>
+    <button data-tkview="timeline"{% if view == "timeline" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-timeline") }}" aria-label="{{ ctx.t("tk-v-timeline") }}"><svg class="ico" aria-hidden="true"><use href="#i-dayline"/></svg></button>
+    <button data-tkview="deck"{% if view == "deck" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-deck") }}" aria-label="{{ ctx.t("tk-v-deck") }}"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></button>
+    <button data-tkview="history"{% if view == "history" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-history") }}" aria-label="{{ ctx.t("tk-v-history") }}"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button>
+  </span>
 </div>
+{# the side editor lives next to the views when the window is wide enough (`.tk-wide`), else the dialog opens #}
+<div class="tkwrap" id="taskroot" data-view="{{ view }}" data-back="{{ back }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}"
+     data-t-hidden="{{ ctx.t1("tk-hidden", "n", "{n}") }}" data-hidden-done="{{ hidden_done }}">
+  <div class="tkmain" id="tkmain"></div>
+  <aside class="tkside" id="tkside" hidden></aside>
+</div>
+</div>
+{% include "editor.html" %}
+<button class="fab" id="fab" type="button" aria-label="+">+</button>
 <script type="application/json" id="tasks-data">{{ tasks_json|safe }}</script>
+<script type="application/json" id="alarm-presets-data">{{ alarm_presets_json|safe }}</script>
+<script type="application/json" id="category-rules-data">{{ category_rules_json|safe }}</script>
+<script type="application/json" id="alarm-snaps-data">{{ alarm_snaps_json|safe }}</script>
 {% endblock %}

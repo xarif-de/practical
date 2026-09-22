@@ -1146,3 +1146,124 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .ed .cardform .addr-lines .ln { display: block; white-space: nowrap; overflow: hidden; }
 .ed .cardform .addr-lines .ln.wrap { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
 .geomap footer .col .val { max-width: 320px; }
+
+/* ===== tasks page: six views over one list =====
+   The atoms (.chip, .sw, .pb, .seg, .sel) are the app's; only the view shells live here. */
+.tkwrap { display: block; }
+.tkpage.wide { padding-right: 442px; }
+/* the task views bring their own chip: the app's `.chip` is the category tag and stacks its icon */
+.tchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--tile); border-radius: 999px;
+  padding: 2px 8px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap; line-height: 1.5; }
+.tchip .ico { width: 13px; height: 13px; color: var(--fg-3); flex: none; }
+.tchip.warn { color: var(--today); border-color: color-mix(in srgb, var(--today) 40%, var(--line)); }
+.tchip.warn .ico { color: var(--today); }
+.tchip.good { color: var(--ok, #30b46c); border-color: color-mix(in srgb, var(--ok, #30b46c) 40%, var(--line)); }
+.tchip.good .ico { color: var(--ok, #30b46c); }
+.tkbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.tkbar .grow { flex: 1; }
+.tkbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; }
+.tkbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }
+.tknum, .tnum { font-variant-numeric: tabular-nums; }
+.tkwrap .mut { color: var(--fg-3); }
+.tkwrap .pr { font-weight: 700; font-size: 12px; }
+.tkwrap .pr.p1 { color: var(--today); } .tkwrap .pr.p2 { color: var(--warn, #ff9f0a); } .tkwrap .pr.p3 { color: var(--fg-3); }
+.tkwrap .pb { height: 4px; border-radius: 2px; background: var(--bg-3); overflow: hidden; margin: 5px 0; }
+.tkwrap .pb i { display: block; height: 100%; background: var(--accent); }
+
+/* the tick circle */
+.tcb { width: 19px; height: 19px; border-radius: 50%; border: 1.7px solid var(--fg-3); background: transparent; cursor: pointer; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; color: transparent; }
+.tcb:hover { border-color: var(--accent); }
+.tcb[aria-checked="true"] { background: var(--ok, #30b46c); border-color: var(--ok, #30b46c); color: #fff; }
+.tcb.pp { border-style: dashed; border-color: var(--warn, #ff9f0a); color: var(--warn, #ff9f0a); }
+
+/* groups */
+.tkg { margin-bottom: 16px; }
+.tkgh { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg-2); padding: 6px 2px; }
+.tkgh.due { color: var(--today); }
+.tkgh .n { color: var(--fg-3); font-weight: 400; }
+.tkcard { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--tile); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 11px; margin-bottom: 6px; cursor: pointer; }
+.tkcard:hover { border-color: var(--accent); }
+.tkcard.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tkcard.off .ti { text-decoration: line-through; color: var(--fg-3); }
+.tkcard .meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+
+/* table */
+.tktable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tktable th { text-align: left; font-weight: 600; color: var(--fg-2); font-size: 12px; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tktable th[data-sk] { cursor: pointer; user-select: none; }
+.tktable th[data-sk]:hover { color: var(--accent); }
+.tktable th .a { color: var(--accent); font-size: 10px; }
+.tktable td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tktable tr { cursor: pointer; }
+.tktable tr:hover td { background: var(--tile); }
+.tktable tr.sel td { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.tktable tr.off td .ti { text-decoration: line-through; color: var(--fg-3); }
+.tktable td.c { text-align: center; }
+
+/* board */
+.tkboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
+.tkcol { background: var(--tile); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-height: 160px; }
+.tkcol .chd { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--fg-2); margin-bottom: 9px; padding: 0 2px; }
+.tkcol .chd .n { margin-left: auto; color: var(--fg-3); font-weight: 400; }
+.tkkc { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 9px; padding: 9px 10px; margin-bottom: 7px; cursor: pointer; }
+.tkkc:hover { border-color: var(--accent); }
+.tkkc.sel { box-shadow: 0 0 0 1px var(--accent); }
+.tkkc .ti { font-size: 13.5px; }
+.tkkc .ft { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.tkcol.done .tkkc .ti { color: var(--fg-3); text-decoration: line-through; }
+
+/* timeline */
+.tktl { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--tile); padding: 34px 14px 10px; }
+.tktl .axis { position: relative; height: 22px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.tktl .axis span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--fg-3); top: 0; }
+.tktl .axis i { position: absolute; bottom: 0; width: 1px; height: 6px; background: var(--line); }
+.tktl .now { position: absolute; top: 28px; bottom: 6px; width: 2px; background: var(--today); z-index: 3; }
+.tktl .now b { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--today); background: var(--bg); padding: 0 4px; border-radius: 4px; }
+.tktl .lane { position: relative; height: 30px; border-bottom: 1px dotted var(--line); }
+.tktl .bar2 { position: absolute; top: 6px; height: 17px; border-radius: 9px; background: color-mix(in srgb, var(--c) 22%, var(--bg)); border: 1px solid var(--c);
+  display: flex; align-items: center; padding: 0 8px; font-size: 11.5px; white-space: nowrap; cursor: pointer; gap: 5px; overflow: hidden; }
+.tktl .bar2.dot { padding: 0; width: 17px; justify-content: center; }
+.tktl .bar2.off { opacity: .55; background: var(--bg-3); border-style: dashed; }
+.tktl .lbl { position: absolute; top: 8px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap; pointer-events: none; }
+.tknd { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tknd .chip { cursor: pointer; }
+
+/* deck */
+.tkdeck { position: relative; height: 420px; display: flex; align-items: flex-start; justify-content: center; outline: none; }
+.tkdeck .cd { position: absolute; top: 34px; width: min(460px, 92%); background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .14); transform-origin: top center; }
+.tkdeck .cd h3 { margin: 0 0 6px; font-size: 18px; }
+.tkdeck .cd h3.off { text-decoration: line-through; color: var(--fg-3); }
+.tkdeck .cd .dsc { color: var(--fg-2); font-size: 13px; margin: 0 0 14px; }
+.tkdeck .cd .fx { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tkdeck .cd .act { display: flex; gap: 8px; }
+.tkcnt, .tkkeys { text-align: center; font-size: 12px; color: var(--fg-3); margin-top: 6px; }
+
+/* history */
+.tkhm { display: flex; gap: 3px; overflow-x: auto; padding: 4px 0 6px; }
+.tkhm .wk { display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; }
+.tkhm .dy { width: 13px; height: 13px; border-radius: 3px; background: var(--bg-3); cursor: pointer; }
+.tkhm .dy[data-n="1"] { background: color-mix(in srgb, var(--ok, #30b46c) 32%, var(--bg-3)); }
+.tkhm .dy[data-n="2"] { background: color-mix(in srgb, var(--ok, #30b46c) 58%, var(--bg-3)); }
+.tkhm .dy[data-n="3"] { background: color-mix(in srgb, var(--ok, #30b46c) 82%, var(--bg-3)); }
+.tkhm .dy.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tkdl { border-left: 2px solid var(--line); padding-left: 12px; margin: 14px 0 0 4px; }
+.tkdl .dd { font-size: 12px; color: var(--fg-3); margin: 10px 0 4px; position: relative; }
+.tkdl .dd::before { content: ""; position: absolute; left: -17px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #30b46c); }
+.tkdl .ri { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 13.5px; cursor: pointer; }
+.tkdl .ri:hover { color: var(--accent); }
+
+/* the docked editor: the same dialog, pinned to the right instead of floating over the page */
+.ed.docked { position: fixed; inset: 56px 0 0 auto; width: 430px; background: var(--bg); border-left: 1px solid var(--line); z-index: 20; display: block; padding: 0; }
+.ed.docked .box { width: 100%; height: 100%; max-height: none; border-radius: 0; box-shadow: none; border: 0; }
+.ed.docked .cols3 { grid-template-columns: 1fr; }
+.ed.docked .dayline { display: none; }
+@media (max-width: 1179px) { .ed.docked { position: fixed; inset: 0; width: auto; } }
+.ed.docked.blank .box { display: none; }
+.ed.docked.blank::after { content: attr(data-empty); display: block; padding: 60px 26px; color: var(--fg-3); font-size: 13.5px; text-align: center; }
+/* the lookback picker sits in the page toolbar, where `.sel` is not otherwise used */
+.toolbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; color: var(--fg-2); }
+.toolbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }
+.toolbar .sel .ico { color: var(--fg-3); }

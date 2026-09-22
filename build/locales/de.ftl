@@ -551,3 +551,20 @@ ed-view-pct = { $n } % erledigt
 ed-view-done = erledigt am { $at }
 cat-scope-events = Termine
 cat-scope-tasks = Aufgaben
+
+## Aufgaben-Ansichten
+tk-back = Erledigte zeigen
+tk-back-hint = Wie weit zurück erledigte Aufgaben angezeigt werden
+tk-back-day = Heute
+tk-back-week = Diese Woche
+tk-back-month = Diesen Monat
+tk-back-quarter = Dieses Quartal
+tk-back-year = Dieses Jahr
+tk-back-all = Unbegrenzt
+tk-hidden = { $n } erledigte ausgeblendet
+tk-v-groups = Gruppen
+tk-v-table = Tabelle
+tk-v-board = Board
+tk-v-timeline = Zeitstrahl
+tk-v-deck = Karten
+tk-v-history = Chronik

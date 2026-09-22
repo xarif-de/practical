@@ -94,7 +94,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert'};
+  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied', delTask:'Delete this task?'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert', delTask:'Diese Aufgabe löschen?'};
   const iso = d => d.toISOString().slice(0, 10);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
@@ -497,7 +497,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert'};
+  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied', delTask:'Delete this task?'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert', delTask:'Diese Aufgabe löschen?'};
   const iso = d => d.toISOString().slice(0, 10);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
@@ -511,15 +511,20 @@
   const pk = document.getElementById('picker') || {};
   // which component this dialog edits: an event or a task (templates/editor.html, `editor_kind`)
   const ED_SCOPE = document.getElementById('ed').classList.contains('taskmode') ? 'task' : 'event';
+  const TASK = ED_SCOPE === 'task';
+  const API = TASK ? '/api/tasks' : '/api/events';
+  // a card this consumer does not render: the stand-in swallows the wiring instead of throwing
+  const NIL = document.createElement('div');
+  const $x = (sel, r = document) => r.querySelector(sel) || NIL;
 
   // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
   const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;
   let current = null, openDate = null, baseline = '';
-  function setAllDay(on) { f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
-  $('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
+  function setAllDay(on) { if (!f.all_day) return; f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
+  $x('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); }
-  const tl = $('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
+  const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); }
@@ -606,10 +611,11 @@
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
     f.summary.readOnly = !ruleMode && RLOCK.has('summary'); f.summary.disabled = !!ruleMode && RLOCK.has('summary'); /* event: a locked title; rule editor: "beliebig" */
-    f.all_day.disabled = RLOCK.has('all_day'); f.calendar.disabled = RLOCK.has('calendar');
+    if (f.all_day) f.all_day.disabled = RLOCK.has('all_day');
+    f.calendar.disabled = RLOCK.has('calendar');
     f.color.disabled = f.color_cal.disabled = RLOCK.has('color'); $('#ed-color-cal').classList.toggle('locked', RLOCK.has('color'));
     $('.card[data-card="where"]', form).classList.toggle('locked-where', RLOCK.has('location'));
-    rrLocked = RLOCK.has('rrule'); $('#ed-repeat-card').classList.toggle('locked', rrLocked);
+    rrLocked = RLOCK.has('rrule'); $x('#ed-repeat-card').classList.toggle('locked', rrLocked);
   }
   function rulesApply(reason) {
     if (ruleMode) { RFX = {}; RFXL = { alarms: [], links: [] }; RLOCK = new Set(SCALARS.filter(k => (RM[k] || 'off') === 'off')); ALARMS.forEach(a => { a._mode ||= 'default'; a._locked = a._mode === 'off'; }); LK.links.forEach(l => { l._mode ||= 'default'; l._locked = l._mode === 'off'; }); applyLocks(); rulesMark(); stRender(); alRender(); lkRender(); cards(); return false; }
@@ -627,7 +633,7 @@
     LK.links.forEach(l => { delete l._rule; delete l._locked; delete l._mode; });
     links.forEach(e => { let l = LK.links.find(x => x.uri === e.entry.uri); if (!l && (e.mode === 'lock' || prefill)) { const { mode, ...rl } = e.entry; l = { ...rl, embedded: false, keep: false, features: rl.features || [], extra: rl.extra || [] }; LK.links.push(l); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } if (l) { l._rule = e; l._locked = e.mode === 'lock'; } });
     if (fx.rrule) { const e = fx.rrule; const cur = rrBuild() || ''; if (e.mode === 'lock' ? cur !== e.value : (prefill && !cur)) { rrInit(e.value, null, [], []); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } }
-    STATUS_KEYS.forEach(fld => set(fld, () => fx[fld].mode === 'lock' ? f[fld].value !== String(fx[fld].value) : f[fld].value === '', v => { if (fld === 'priority') setSel(f.priority, v); else f[fld].value = String(v); }));
+    STATUS_KEYS.filter(fld => f[fld]).forEach(fld => set(fld, () => fx[fld].mode === 'lock' ? f[fld].value !== String(fx[fld].value) : f[fld].value === '', v => { if (fld === 'priority') setSel(f.priority, v); else f[fld].value = String(v); }));
     applyLocks(); rulesMark(); stRender(); alRender(); lkRender(); cards(); /* cards that got rule entries must show */
     return adjusted;
   }
@@ -638,7 +644,7 @@
     if (ruleMode) {
       const chip = (key, mode) => `<button type="button" class="rbadge ${mode}" data-rmode="${esc(key)}" title="${esc(CTT.tRulemode)}"><svg class="ico"><use href="#${modeIcon(mode)}"/></svg>${esc(modeText(mode))}</button>`;
       add('title', CTF[11], chip('summary', RM.summary || 'off'));
-      WHEN_KEYS.forEach(k => add('when', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
+      WHEN_KEYS.filter(k => k === 'color' || f[k]).forEach(k => add('when', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       add('where', CTF[3], chip('location', RM.location || 'off'));
       ALARMS.forEach(a => add('alarm', alarmText(a), chip('alarm:' + a._id, a._mode || 'off')));
       add('repeat', CTF[5], chip('rrule', RM.rrule || 'off'));
@@ -654,7 +660,7 @@
       STATUS_KEYS.forEach(k => { if (fx[k]) add('status', CTF[FLD[k][1]], ruleBadge(k, f[k].value)); });
       RFXL.links.forEach(e => add('links', e.entry.label || lkHost(e.entry.uri) || e.entry.uri, entry(e, LK.links.some(x => x.uri === e.entry.uri))));
     }
-    ['title', ...RULE_CARDS].forEach(c => { $(`.rfoot[data-rfoot="${c}"]`, form).innerHTML = (foot[c] || []).join(''); });
+    ['title', ...RULE_CARDS].forEach(c => { $x(`.rfoot[data-rfoot="${c}"]`, form).innerHTML = (foot[c] || []).join(''); });
     if (!ruleMode) ctRender();
   }
   // ---- rule editor: the dialog in rule mode. The cards are the event cards; the footer chips carry the mode per
@@ -838,11 +844,12 @@
   // ---- status card (design K): the four hidden selects stay the model (dirty tracking, reset, submit work as
   // before); the tiles are their face. Each select carries its label and one icon per option (`data-icons`),
   // so the tile's icon follows the value; a priority outside 1/5/9 (Outlook writes 2) maps by the RFC bands. ----
-  const SC = $('#ed-status-card'), SSEL = ['status', 'transp', 'class', 'priority'].map(n => f[n]);
+  const SC = $x('#ed-status-card'), SSEL = ['status', 'transp', 'class', 'priority'].map(n => f[n]).filter(Boolean);
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, sel.selectedIndex)] || ic[0]; };
   const stText = sel => sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value;
   function stRender() {
-    $('#ed-status-tiles').innerHTML = SSEL.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('');
+    $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); box.innerHTML = sels.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
+    if (TASK) return;
     const t = SC.dataset, parts = [];
     if (f.status.value) parts.push(stText(f.status));
     if (f.transp.value) parts.push(f.transp.value === 'OPAQUE' ? t.tViewOpaque : t.tViewTransparent);
@@ -850,7 +857,7 @@
     if (f.priority.value) parts.push(t.tViewPrio.replace('{n}', stText(f.priority)));
     $('#ed-status-text').textContent = parts.join(' · ');
   }
-  $('#ed-status-tiles').addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b || b.classList.contains('locked')) return; const sel = f[b.dataset.sel];
+  form.addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b || !form.contains(b)) return; if (!b || b.classList.contains('locked')) return; const sel = f[b.dataset.sel];
     rrPop(b, [...sel.options].map(o => ({ v: o.value, label: o.textContent })), sel.value, v => { sel.value = v; stRender(); refresh(); }, `<div class="q">${esc(sel.dataset.label)}</div>`); b.setAttribute('aria-expanded', 'true'); });
   // ---- note (round 17): the textarea stays plain text (DESCRIPTION). Suggestions while typing come from a
   // lazily loaded index (contacts, categories, events, tasks) even without a prefix; picking one inserts
@@ -931,7 +938,7 @@
   // editable: RustiCal does no scheduling, so the list is a record, not an invitation tool; the persons are
   // sent back unchanged on save (with every preserved parameter). `contacts` per person come from the
   // server (exact e-mail, else similar name); one hit jumps to the address book, several open a chooser. ----
-  const PC = $('#ed-people-card'), PT = PC.dataset; let PEOPLE = { organizer: null, attendees: [] };
+  const PC = $x('#ed-people-card'), PT = PC.dataset; let PEOPLE = { organizer: null, attendees: [] };
   const statusText = p => { const s = D.tStatus.split('|'); return { 'NEEDS-ACTION': s[0], ACCEPTED: s[1], DECLINED: s[2], TENTATIVE: s[3], DELEGATED: s[4] }[p.status] || ''; };
   const peStatus = p => ({ ACCEPTED: 'acc', DECLINED: 'dec', TENTATIVE: 'ten', DELEGATED: 'del' })[p.status] || 'nee';
   const peRole = p => { const r = PT.tRoles.split('|'); return p.role === 'ORGANIZER' ? r[0] : { CHAIR: r[1], 'REQ-PARTICIPANT': r[2], 'OPT-PARTICIPANT': r[3], 'NON-PARTICIPANT': r[4] }[p.role] || r[2]; };
@@ -943,13 +950,13 @@
   const peAv = p => { const ic = p.cutype === 'GROUP' ? 'i-users' : p.cutype === 'ROOM' ? 'i-room' : p.cutype === 'RESOURCE' ? 'i-res' : null; const ini = peName(p).split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'; const c = p.contacts && p.contacts.length === 1 ? p.contacts[0] : null;
     return ic ? `<span class="pav none" title="${esc(peType(p))}"><svg class="ico"><use href="#${ic}"/></svg></span>` : c ? `<span class="pav" style="background:var(--c${c.color_index})" title="${esc(PT.tKnown)}">${esc(ini)}</span>` : `<span class="pav none" title="${esc(PT.tUnknown)}">${esc(ini)}</span>`; };
   function peopleInit(organizer, attendees) { PEOPLE = { organizer: organizer || null, attendees: attendees || [] }; peopleRender(); }
-  function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $('#ed-people-detail').innerHTML = ''; f.people_json.value = all.length ? JSON.stringify(all.map(p => [p.role, p.email])) : '';
-    $('#ed-people').innerHTML = all.map((p, i) => `<button class="pchip ${p.role === 'ORGANIZER' ? '' : peStatus(p)}" type="button" data-i="${i}" title="${esc(p.email)}">${peAv(p)}<span>${esc(peName(p))}</span>${p.role === 'ORGANIZER' ? `<small>${esc(PT.tOrgShort)}</small>` : p.role === 'OPT-PARTICIPANT' ? `<small>${esc(PT.tOptShort)}</small>` : ''}</button>`).join(''); }
+  function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $x('#ed-people-detail').innerHTML = ''; f.people_json.value = all.length ? JSON.stringify(all.map(p => [p.role, p.email])) : '';
+    $x('#ed-people').innerHTML = all.map((p, i) => `<button class="pchip ${p.role === 'ORGANIZER' ? '' : peStatus(p)}" type="button" data-i="${i}" title="${esc(p.email)}">${peAv(p)}<span>${esc(peName(p))}</span>${p.role === 'ORGANIZER' ? `<small>${esc(PT.tOrgShort)}</small>` : p.role === 'OPT-PARTICIPANT' ? `<small>${esc(PT.tOptShort)}</small>` : ''}</button>`).join(''); }
   function peopleDetail(i) { const p = peAll()[i]; const n = (p.contacts || []).length; const status = p.role === 'ORGANIZER' ? '' : `<span class="pst ${peStatus(p)}">${esc(statusText(p) || D.tStatus.split('|')[0])}</span>`;
-    $('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
+    $x('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
     $$('.pchip', PC).forEach(b => b.setAttribute('aria-expanded', b.dataset.i === String(i))); }
   PC.addEventListener('click', e => { const chip = e.target.closest('.pchip'); const act = e.target.closest('[data-pact]');
-    if (chip) { const i = +chip.dataset.i; const open = chip.getAttribute('aria-expanded') === 'true'; if (open) { $('#ed-people-detail').innerHTML = ''; chip.setAttribute('aria-expanded', 'false'); } else peopleDetail(i); return; }
+    if (chip) { const i = +chip.dataset.i; const open = chip.getAttribute('aria-expanded') === 'true'; if (open) { $x('#ed-people-detail').innerHTML = ''; chip.setAttribute('aria-expanded', 'false'); } else peopleDetail(i); return; }
     if (!act) return; const p = peAll()[+$('.pchip[aria-expanded=true]', PC).dataset.i];
     if (act.dataset.pact === 'mail') location.href = 'mailto:' + p.email;
     else if (act.dataset.pact === 'copy') navigator.clipboard.writeText(p.email).then(() => { act.title = D.tCopied; act.style.color = 'var(--accent)'; setTimeout(() => act.style.color = '', 800); });
@@ -1141,7 +1148,7 @@
   // and end are two pills with popovers; the end date is picked on the strip. Rules the strip cannot paint
   // (BYSETPOS, several ordinals, BYHOUR …) stay a raw text that is saved as typed. The strip owns the wheel:
   // one gesture moves at most to the neighbouring month, the next needs a short pause. ----
-  const RC = $('#ed-repeat-card'), RT = RC.dataset, rrBox = $('#ed-rr');
+  const RC = $x('#ed-repeat-card'), RT = RC.dataset, rrBox = $x('#ed-rr');
   const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'], RR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
   const DOWL = lang === 'en' ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
   const blankRR = () => ({ freq: '', interval: 1, byday: [], mode: 'date', bymonthday: null, ordinal: 1, ordday: 'TU', bymonth: null, end: { kind: 'never', count: 10, until: '' }, exdates: [], rdates: [], raw: '' });
@@ -1194,7 +1201,7 @@
       if (ok) { out.add(iso); n++; } }
     return out; }
   const rrMirror = () => { f.rrule_json.value = RR.freq ? JSON.stringify(RR) : (RR.exdates.length || RR.rdates.length ? JSON.stringify(RR) : ''); };
-  function rrSync() { rrMirror(); $('#ed-rrule-text').textContent = rrSentence(); $('#ed-exdates').classList.toggle('empty', !RR.exdates.length); $('#ed-rdates').classList.toggle('empty', !RR.rdates.length); } // the view lists show only when set
+  function rrSync() { if (TASK) return; rrMirror(); $('#ed-rrule-text').textContent = rrSentence(); $('#ed-exdates').classList.toggle('empty', !RR.exdates.length); $('#ed-rdates').classList.toggle('empty', !RR.rdates.length); } // the view lists show only when set
   // popovers for the pills: a list of choices or a number entry
   let rrOpenPop = null; const rrClosePop = () => { if (rrOpenPop) { rrOpenPop.remove(); rrOpenPop = null; document.removeEventListener('click', rrOutside, true); } };
   function rrOutside(e) { if (rrOpenPop && !rrOpenPop.contains(e.target)) rrClosePop(); }
@@ -1214,6 +1221,7 @@
   const WHEEL_DRAG = 0.8;   // share of the wheel distance the strip follows
   const rrW0 = () => { const d = rrStart(); d.setDate(d.getDate() - rrWd(d) - 364); return d; };
   function rrRender() {
+    if (TASK) return; // a task has no recurrence card in this editor
     rrBox.innerHTML = ''; ed.classList.toggle('picking', rrPicking);
     const s0 = rrStart(), freqs = RT.tFreqs.split('|'), longs = RT.tFreqsLong.split('|');
     const isRaw = RR.freq === 'RAW';
@@ -1300,7 +1308,23 @@
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
   function updateButtons() { const changed = sig() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
-  function whenLine() { const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
+  function taskLine() {
+    const [start] = getStamp('start'), [due] = getStamp('due');
+    const box = $('#ed-whenline');
+    const one = v => v ? (v.slice(11, 16) === '00:00' ? fmtD(v) : fmtDT(v)) : '';
+    box.textContent = due ? (start ? one(start) + ' – ' + one(due) : one(due)) : start ? one(start) : '';
+    const pt = $('#ed-progress-text');
+    if (pt) {
+      const P = $('#ed-progress-card').dataset, parts = [];
+      if (f.status.value) parts.push(f.status.selectedOptions[0].textContent);
+      if (+f.percent.value > 0 && +f.percent.value < 100) parts.push(P.tViewPct.replace('{n}', f.percent.value));
+      const [done] = getStamp('completed');
+      if (done) parts.push(P.tViewDone.replace('{at}', fmtDT(done)));
+      pt.textContent = parts.join(' · ');
+    }
+    pctOut();
+  }
+  function whenLine() { if (TASK) return taskLine(); const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
   function refresh() { whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
@@ -1308,13 +1332,45 @@
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
   const nextDay = s => addDays(s, 1);
+  // a task carries an optional start and an optional due, each with an optional time
+  function setStamp(name, v, allDay) {
+    const dEl = f[name + '_date'], tEl = f[name + '_time'];
+    if (!dEl) return;
+    dEl.value = v ? String(v).slice(0, 10) : '';
+    tEl.value = v && !allDay ? String(v).slice(11, 16) : '';
+  }
+  function getStamp(name) {
+    const dEl = f[name + '_date'], tEl = f[name + '_time'];
+    if (!dEl || !dEl.value) return [null, true];
+    return [dEl.value + (tEl.value ? 'T' + tEl.value + ':00' : 'T00:00:00'), !tEl.value];
+  }
+  const pctOut = () => { const o = $('#ed-pct-out'); if (o && f.percent) o.textContent = f.percent.value + ' %'; };
+  function taskBody() {
+    const [principal, cal_id] = f.calendar.value.split('/');
+    const [start, startAll] = getStamp('start'), [due, dueAll] = getStamp('due'), [done] = getStamp('completed');
+    return {
+      principal, cal_id, summary: f.summary.value, description: f.description.value, location: f.location.value,
+      start, start_all_day: startAll, due, due_all_day: dueAll,
+      status: f.status ? f.status.value : '', percent: f.percent ? +f.percent.value : null, completed_at: done,
+      priority: f.priority && f.priority.value ? +f.priority.value : null, class: f.class ? f.class.value : '',
+      categories: chips(), color: colorOf(), geo: geoOf(),
+      alarms: alarmsOf(), ...linksOf(), etag: f.etag.value,
+    };
+  }
   function fill(d, date) {
     current = d; openDate = date; form.reset(); $('#ed-error').textContent = '';
     $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); catsInit([]); $$('.rows .row', form).forEach(x => x.remove());
     f.key.value = d ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = d ? d.etag : '';
     form.classList.toggle('new', !d); f.summary.placeholder = d ? D.tTitle : D.tNewtitle;
     const b = $('#ed-save'); b.title = d ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
-    if (d) {
+    if (d && TASK) {
+      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
+      f.calendar.value = `${d.principal}/${d.cal_id}`;
+      setStamp('start', d.start, d.start_all_day); setStamp('due', d.due, d.due_all_day); setStamp('completed', d.completed_at, false);
+      f.status.value = d.status; f.percent.value = d.percent == null ? 0 : d.percent; pctOut();
+      if (d.priority != null) setSel(f.priority, d.priority); f.class.value = d.class;
+      alarmsInit(d.alarms); linksInit(d.links, d.related); setColor(d.color); stRender();
+    } else if (d) {
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
@@ -1322,6 +1378,10 @@
       rrInit(d.rrule, d.rrule_until, d.exdates, d.rdates);
       f.status.value = d.status; f.transp.value = d.transp; f.class.value = d.class; if (d.priority != null) setSel(f.priority, d.priority); stRender(); linksInit(d.links, d.related); setColor(d.color); if (d.geo) { f.lat.value = d.geo[0]; f.lon.value = d.geo[1]; }
       $('#ed-hint').textContent = d.rrule ? D.tSeries : '';
+    } else if (TASK) {
+      f.status.value = 'NEEDS-ACTION'; f.percent.value = 0; pctOut(); setColor('');
+      if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
+      stRender();
     } else {
       f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); linksInit([], []); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
@@ -1330,7 +1390,7 @@
   }
   async function openEditor(key, date) {
     if (key) {
-      try { const r = await fetch('/api/events/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
+      try { const r = await fetch(API + '/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
     } else fill(null, date);
     ed.hidden = false; if (!key) f.summary.focus(); dayline();
   }
@@ -1350,7 +1410,7 @@
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
   $('#ed-reset').onclick = () => { if (ruleMode) openRuleEditor(ruleMode); else fill(current, openDate); };
   async function dayline() {
-    const box = $('#ed-dayline'); const day = f.date.value; if (!day) return;
+    const box = $('#ed-dayline'); const day = f.date ? f.date.value : ''; if (!box || !day) return;
     let h = ''; for (let i = 0; i < 7; i++) h += `<span class="h" style="top:${(i * 14.3).toFixed(1)}%">${7 + i * 2}:00</span>`;
     try {
       const nd = parse(day); nd.setDate(nd.getDate() + 1); const end = `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}`;
@@ -1362,15 +1422,15 @@
   form.addEventListener('submit', async e => {
     e.preventDefault();
     if (ruleMode) { await ruleSave(); return; }
-    const body = eventBody();
+    const body = TASK ? taskBody() : eventBody();
     const key = f.key.value;
     try {
-      const r = await fetch(key ? '/api/events/' + key : '/api/events', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+      const r = await fetch(key ? API + '/' + key : API, { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
       if (!r.ok) { $('#ed-error').textContent = (r.status === 409 ? T.conflict : T.err + ' ' + r.status) + ': ' + (await r.text()).slice(0, 200); return; }
       ntInvalidate(); ctInvalidate(); close(); load(false);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
-  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
+  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
   window.rusticalEd = { open: openEditor, openRule: openRuleEditor };
   { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
@@ -1581,28 +1641,334 @@
   const newRow = $('.sheet tr.new [data-new]'); if (newRow) { newRow.addEventListener('focus', () => { if (newRow.textContent.endsWith('…')) newRow.textContent = ''; }); newRow.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const v = newRow.textContent.trim(); if (!v) return; show(null); const parts = v.split(/\s+/); f.given.value = parts.slice(0, -1).join(' '); f.family.value = parts.slice(-1)[0]; wrap.classList.remove('view-table'); } }); }
 })();
 
-/* ===== tasks page ===== */
+/* ===== tasks page: six views over one list, the shared card editor beside them =====
+   The server puts the tasks it wants shown into `#tasks-data` (the lookback decides how far
+   back finished ones reach); everything here is drawing and picking. The editor is the same
+   dialog the calendar uses (templates/editor.html) — on a wide window it is docked to the
+   right instead of opening over the page. */
 (function () {
-  const wrap = document.getElementById('tasks');
-  if (!wrap) return;
+  const root = document.getElementById('taskroot');
+  if (!root) return;
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
-  const data = (() => { try { return JSON.parse(document.getElementById('tasks-data').textContent); } catch (_) { return []; } })();
-  const byKey = Object.fromEntries(data.map(t => [`${t.principal}/${t.cal_id}/${t.object_id}`, t]));
-  const form = document.getElementById('taskform');
-  form.addEventListener('submit', async e => {
-    e.preventDefault(); const f = form.elements; const [principal, cal_id] = f.calendar.value.split('/');
-    const r = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ principal, cal_id, summary: f.summary.value, due: f.due.value || null, priority: 0 }) });
-    if (r.ok) location.reload(); else alert('Error ' + r.status + ': ' + await r.text());
+  const lang = document.body.dataset.lang || 'de';
+  const T = lang === 'en'
+    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', pickone: 'Pick a task — or create one with +' }
+    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten', pickone: 'Aufgabe auswählen — oder mit + eine neue anlegen' };
+  const SORTL = lang === 'en'
+    ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
+    : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
+
+  let TASKS = (() => { try { return JSON.parse($('#tasks-data').textContent); } catch (_) { return []; } })();
+  const main = $('#tkmain'), ed = $('#ed');
+  const TODAY = parse(root.dataset.today);
+  let view = root.dataset.view, sort = localStorage.tkSort || 'due', desc = localStorage.tkDesc === '1', cur = null;
+
+  function parse(s) { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); }
+  const dt = s => s ? new Date(String(s).replace(' ', 'T')) : null;
+  const day = d => Math.round((d - TODAY) / 864e5);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ic = (n, cl) => `<svg class="ico ${cl || 's'}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const L = lang === 'en' ? 'en-GB' : 'de-DE';
+  const de = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const deS = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit' }) : '';
+  const deT = d => d ? d.toLocaleString(L, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const key = t => `${t.principal}/${t.cal_id}/${t.object_id}`;
+
+  const isDone = t => t.status === 'COMPLETED' || (!t.status && t.completed_at);
+  const isOpen = t => !isDone(t) && t.status !== 'CANCELLED';
+  const overdue = t => isOpen(t) && t.due && day(parse(t.due)) < 0;
+  const pctOf = t => t.percent == null ? (isDone(t) ? 100 : 0) : t.percent;
+  const dueTxt = t => t.due ? (t.due_all_day ? de(parse(t.due)) : deT(dt(t.due))) : '';
+
+  // ---- sorting: the completed ones drop to the end, unless that is what we sort by ----
+  function skey(t, k) {
+    switch (k) {
+      case 'due': return t.due ? parse(t.due).getTime() : 9e15;
+      case 'done': return t.completed_at ? -dt(t.completed_at).getTime() : 9e15;
+      case 'prio': return t.priority ? t.priority : 99;
+      case 'pct': return -pctOf(t);
+      case 'title': return t.summary.toLowerCase();
+      case 'cal': return t.cal_name;
+      case 'created': return t.created ? -dt(t.created).getTime() : 9e15;
+    }
+  }
+  function sortList(list, k, d) {
+    const s = list.slice().sort((a, b) => { const x = skey(a, k), y = skey(b, k); return x < y ? -1 : x > y ? 1 : a.summary.localeCompare(b.summary); });
+    return d ? s.reverse() : s;
+  }
+  function sortView(list) {
+    if (sort === 'done') return sortList(list.filter(t => t.completed_at), sort, desc).concat(sortList(list.filter(t => !t.completed_at), 'due', false));
+    return sortList(list.filter(isOpen), sort, desc).concat(sortList(list.filter(t => !isOpen(t)), 'done', false));
+  }
+
+  // ---- shared atoms ----
+  function chips(t, short) {
+    const out = [];
+    if (t.due) out.push(`<span class="tchip${overdue(t) ? ' warn' : ''}">${ic('clock', 'xs')}${t.start && !short ? deS(parse(t.start)) + '–' : ''}${dueTxt(t)}</span>`);
+    if (t.completed_at) out.push(`<span class="tchip good">${ic('check', 'xs')}${T.done_at} ${deT(dt(t.completed_at))}</span>`);
+    if (t.priority) out.push(`<span class="tchip">${ic(t.priority <= 4 ? 'prio-high' : t.priority === 5 ? 'prio-mid' : 'prio-low', 'xs')}${T.prio} ${t.priority}</span>`);
+    const p = pctOf(t);
+    if (p > 0 && p < 100) out.push(`<span class="tchip">${ic('target', 'xs')}${p} %</span>`);
+    (t.categories || []).forEach(c => out.push(`<span class="tchip">${ic('tag', 'xs')}${esc(c)}</span>`));
+    if (t.location) out.push(`<span class="tchip">${ic('pin', 'xs')}${esc(t.location.split(',')[0])}</span>`);
+    if (t.alarms) out.push(`<span class="tchip">${ic('bell', 'xs')}${t.alarms}</span>`);
+    if (t.links) out.push(`<span class="tchip">${ic('ext', 'xs')}${t.links}</span>`);
+    if (t.class === 'PRIVATE' || t.class === 'CONFIDENTIAL') out.push(`<span class="tchip">${ic('lock', 'xs')}</span>`);
+    if (t.status === 'CANCELLED') out.push(`<span class="tchip warn">${ic('x', 'xs')}${T.cancelled}</span>`);
+    if (t.status === 'IN-PROCESS') out.push(`<span class="tchip">${ic('dots', 'xs')}${T.doing}</span>`);
+    return out.join('');
+  }
+  const cbox = t => `<button class="tcb${t.status === 'IN-PROCESS' ? ' pp' : ''}" role="checkbox" aria-checked="${isDone(t)}" data-tog="${esc(key(t))}" title="${T.done}">${ic(t.status === 'IN-PROCESS' ? 'dots' : 'check', 'xs')}</button>`;
+
+  function bar(extra) {
+    const opts = Object.entries(SORTL).map(([v, l]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${esc(l)}</option>`).join('');
+    const hid = +root.dataset.hiddenDone;
+    return `<div class="tkbar">${extra || ''}<span class="grow"></span>${hid ? `<span class="muted small">${esc(root.dataset.tHidden.replace('{n}', hid))}</span>` : ''}
+      <span class="sel">${ic('swap')}<span class="muted">${T.sort}</span><select id="tk-sort">${opts}</select></span>
+      <button class="icon-btn" id="tk-dir" title="${T.sort}">${ic('reset')}</button></div>`;
+  }
+  function wireBar() {
+    const s = $('#tk-sort'); if (s) s.onchange = () => { sort = s.value; localStorage.tkSort = sort; render(); };
+    const d = $('#tk-dir'); if (d) d.onclick = () => { desc = !desc; localStorage.tkDesc = desc ? '1' : '0'; render(); };
+  }
+
+  // ---- A: groups ----
+  function bucket(t) {
+    if (isDone(t)) return T.done;
+    if (t.status === 'CANCELLED') return T.cancelled;
+    if (!t.due) return T.nodate;
+    const n = day(parse(t.due));
+    return n < 0 ? T.overdue : n === 0 ? T.today : n <= 7 ? T.week : T.later;
+  }
+  const GICON = { [T.overdue]: 'prio-high', [T.today]: 'today', [T.week]: 'dayline', [T.later]: 'calendar', [T.nodate]: 'note', [T.done]: 'check', [T.cancelled]: 'x' };
+  function vGroups() {
+    let h = bar(`<b>${T.vGroups}</b>`);
+    const order = [T.overdue, T.today, T.week, T.later, T.nodate, T.done, T.cancelled];
+    order.forEach(g => {
+      const items = sortList(TASKS.filter(t => bucket(t) === g), g === T.done && sort === 'due' ? 'done' : sort, desc);
+      if (!items.length) return;
+      h += `<div class="tkg"><div class="tkgh${g === T.overdue ? ' due' : ''}">${ic(GICON[g] || 'list')}${esc(g)}<span class="n">${items.length}</span></div>`;
+      items.forEach(t => {
+        h += `<div class="tkcard${isDone(t) ? ' off' : ''}" data-key="${esc(key(t))}">${cbox(t)}
+          <div><div class="ti">${esc(t.summary)}</div><div class="meta">${chips(t, true)}</div></div>
+          <span class="sw" style="--c:${esc(t.color)}"></span></div>`;
+      });
+      h += '</div>';
+    });
+    return h;
+  }
+
+  // ---- B: table ----
+  const COLS = [['summary', SORTL.title, 'title'], ['cal_name', SORTL.cal, 'cal'], ['start', T.start, null], ['due', SORTL.due, 'due'],
+                ['status', 'Status', null], ['percent', '%', 'pct'], ['priority', T.prio, 'prio'], ['completed_at', SORTL.done, 'done'], ['categories', T.cats, null]];
+  const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled, '': '—' };
+  function vTable() {
+    let h = bar(`<b>${T.vTable}</b>`) + '<table class="tktable"><thead><tr><th></th>' +
+      COLS.map(([, l, k]) => `<th${k ? ` data-sk="${k}"` : ''}>${esc(l)}${k && sort === k ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`).join('') + '<th></th></tr></thead><tbody>';
+    sortView(TASKS).forEach(t => {
+      const p = t.percent;
+      h += `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="c">${cbox(t)}</td>
+        <td><span class="ti">${esc(t.summary)}</span></td>
+        <td><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>
+        <td class="tnum">${t.start ? de(parse(t.start)) : '<span class="mut">—</span>'}</td>
+        <td class="tnum"${overdue(t) ? ' style="color:var(--today)"' : ''}>${t.due ? dueTxt(t) : '<span class="mut">—</span>'}</td>
+        <td>${esc(STL[t.status] || t.status)}</td>
+        <td class="c tnum">${p == null ? '<span class="mut">—</span>' : p}</td>
+        <td class="c">${t.priority ? `<span class="pr p${t.priority <= 4 ? 1 : t.priority === 5 ? 2 : 3}">${t.priority}</span>` : '<span class="mut">—</span>'}</td>
+        <td class="tnum">${t.completed_at ? deT(dt(t.completed_at)) : '<span class="mut">—</span>'}</td>
+        <td>${(t.categories || []).map(c => `<span class="tchip">${esc(c)}</span>`).join(' ') || '<span class="mut">—</span>'}</td>
+        <td class="c"><button class="icon-btn" data-open>${ic('dots', 'xs')}</button></td></tr>`;
+    });
+    return h + '</tbody></table>';
+  }
+
+  // ---- C: board ----
+  const BCOLS = [['NEEDS-ACTION', T.open, 'list'], ['IN-PROCESS', T.doing, 'dots'], ['COMPLETED', T.done, 'check'], ['CANCELLED', T.cancelled, 'x']];
+  function vBoard() {
+    let h = bar(`<b>${T.vBoard}</b>`) + '<div class="tkboard">';
+    BCOLS.forEach(([st, label, icon]) => {
+      const items = sortList(TASKS.filter(t => (st === 'COMPLETED' ? isDone(t) : t.status === st && !isDone(t))), st === 'COMPLETED' && sort === 'due' ? 'done' : sort, desc);
+      h += `<div class="tkcol${st === 'COMPLETED' ? ' done' : ''}" data-st="${st}"><div class="chd">${ic(icon, 'xs')}${esc(label)}<span class="n">${items.length}</span></div>`;
+      items.forEach(t => {
+        const p = pctOf(t);
+        h += `<div class="tkkc" draggable="true" data-key="${esc(key(t))}" style="--c:${esc(t.color)}"><div class="ti">${esc(t.summary)}</div>
+          ${p > 0 && p < 100 ? `<div class="pb"><i style="width:${p}%"></i></div>` : ''}<div class="ft">${chips(t, true)}</div></div>`;
+      });
+      h += '</div>';
+    });
+    return h + '</div>';
+  }
+
+  // ---- D: timeline ----
+  function vTimeline() {
+    const LO = -25, HI = 75, span = HI - LO;
+    const x = n => (Math.max(LO, Math.min(HI, n)) - LO) / span * 100;
+    let ax = '';
+    for (let m = -1; m <= 2; m++) {
+      const d = new Date(TODAY.getFullYear(), TODAY.getMonth() + m, 1), n = day(d);
+      if (n < LO || n > HI) continue;
+      ax += `<span style="left:${x(n)}%">${d.toLocaleDateString(L, { month: 'short', year: '2-digit' })}</span><i style="left:${x(n)}%"></i>`;
+    }
+    let h = bar(`<b>${T.vTimeline}</b>`) + `<div class="tktl"><div class="axis">${ax}</div><div class="now" style="left:${x(0)}%"><b>${T.today}</b></div>`;
+    sortList(TASKS.filter(t => t.due || t.completed_at), sort, desc).forEach(t => {
+      const anchor = t.completed_at ? day(dt(t.completed_at)) : day(parse(t.due));
+      const from = (!t.completed_at && t.start) ? day(parse(t.start)) : anchor;
+      const l = x(from), r = x(anchor), w = Math.max(r - l, 0), wide = w > 3.5;
+      h += `<div class="lane"><div class="bar2${wide ? '' : ' dot'}${isDone(t) || t.status === 'CANCELLED' ? ' off' : ''}" data-key="${esc(key(t))}"
+        style="--c:${esc(t.color)};left:calc(${l}% - ${wide ? 0 : 8}px)${wide ? `;width:${w}%` : ''}" title="${esc(t.summary)}">${isDone(t) ? ic('check', 'xs') : ''}${wide ? esc(t.summary) : ''}</div>
+        ${wide ? '' : `<div class="lbl" style="left:calc(${l}% + 14px)">${esc(t.summary)}</div>`}</div>`;
+    });
+    h += '</div>';
+    const nd = TASKS.filter(t => !t.due && !t.completed_at);
+    if (nd.length) h += `<div class="muted small" style="margin-top:14px">${T.nodateBox}</div><div class="tknd">${nd.map(t => `<span class="tchip" data-key="${esc(key(t))}">${ic('note', 'xs')}${esc(t.summary)}</span>`).join('')}</div>`;
+    return h;
+  }
+
+  // ---- E: deck ----
+  let deckI = 0;
+  function vDeck() {
+    const list = sortView(TASKS);
+    if (deckI >= list.length) deckI = 0;
+    let h = bar(`<b>${T.vDeck}</b>`) + '<div class="tkdeck" tabindex="0">';
+    for (let k = Math.min(list.length - 1, deckI + 2); k >= deckI; k--) {
+      const t = list[k], o = k - deckI;
+      const p = pctOf(t);
+      h += `<div class="cd" data-key="${esc(key(t))}" style="transform:translateY(${-o * 14}px) scale(${1 - o * 0.05});opacity:${o === 0 ? 1 : 0.85 - o * 0.25};z-index:${10 - o}${o ? ';height:120px;overflow:hidden' : ''}">
+        <h3${isDone(t) ? ' class="off"' : ''}>${esc(t.summary)}</h3>${o ? '' :
+        `${t.description ? `<p class="dsc">${esc(t.description)}</p>` : ''}<div class="fx">${chips(t)}<span class="tchip">${ic('calendar', 'xs')}${esc(t.cal_name)}</span></div>
+         ${p > 0 && p < 100 ? `<div class="pb"><i style="width:${p}%"></i></div>` : ''}
+         <div class="act"><button class="btn" data-tog="${esc(key(t))}">${isDone(t) ? '↺' : '✓'}</button><button class="btn" data-open>${T.edit}</button><button class="btn" data-next>→</button></div>`}</div>`;
+    }
+    return h + `</div><div class="tkcnt">${list.length ? deckI + 1 : 0} ${T.count} ${list.length}</div><div class="tkkeys">${esc(T.keys)}</div>`;
+  }
+
+  // ---- F: history ----
+  let pick = null;
+  function vHistory() {
+    const done = TASKS.filter(t => t.completed_at);
+    const per = {};
+    done.forEach(t => { const k = String(t.completed_at).slice(0, 10); per[k] = (per[k] || 0) + 1; });
+    const start = new Date(TODAY); start.setDate(start.getDate() - 364 - ((start.getDay() + 6) % 7));
+    let cols = '';
+    for (let w = 0; w < 53; w++) {
+      let cells = '';
+      for (let d = 0; d < 7; d++) {
+        const c = new Date(start); c.setDate(c.getDate() + w * 7 + d);
+        if (c > TODAY) { cells += '<div class="dy" style="visibility:hidden"></div>'; continue; }
+        const k = iso(c), n = Math.min(3, per[k] || 0);
+        cells += `<div class="dy${pick === k ? ' on' : ''}" data-n="${n}" data-d="${k}" title="${de(c)}: ${per[k] || 0}"></div>`;
+      }
+      cols += `<div class="wk">${cells}</div>`;
+    }
+    let h = bar(`<b>${T.vHistory}</b>`) + `<div class="tkhm">${cols}</div><div class="muted small">${T.hist}</div>`;
+    const shown = sortList(pick ? done.filter(t => String(t.completed_at).slice(0, 10) === pick) : done, 'done', desc);
+    h += '<div class="tkdl">';
+    if (!shown.length) h += `<p class="muted">${T.histNone}</p>`;
+    let last = null;
+    shown.forEach(t => {
+      const k = String(t.completed_at).slice(0, 10);
+      if (k !== last) { last = k; h += `<div class="dd">${de(parse(k))}</div>`; }
+      h += `<div class="ri" data-key="${esc(key(t))}"><span class="muted tnum">${String(t.completed_at).slice(11, 16)}</span><span class="sw" style="--c:${esc(t.color)}"></span>${esc(t.summary)}
+        ${t.due ? `<span class="tchip">${ic('clock', 'xs')}${T.wasdue} ${deS(parse(t.due))}</span>` : ''}</div>`;
+    });
+    return h + '</div>';
+  }
+
+  const VIEWS = { groups: vGroups, table: vTable, board: vBoard, timeline: vTimeline, deck: vDeck, history: vHistory };
+
+  function render() {
+    main.innerHTML = (VIEWS[view] || vGroups)();
+    wireBar();
+    $$('[data-sk]', main).forEach(th => th.onclick = () => { if (sort === th.dataset.sk) desc = !desc; else { sort = th.dataset.sk; desc = false; } localStorage.tkSort = sort; localStorage.tkDesc = desc ? '1' : '0'; render(); });
+    $$('[data-d]', main).forEach(el => el.onclick = () => { pick = pick === el.dataset.d ? null : el.dataset.d; render(); });
+    $$('.tkkc[draggable]', main).forEach(c => c.ondragstart = e => e.dataTransfer.setData('text/plain', c.dataset.key));
+    $$('.tkcol', main).forEach(col => {
+      col.ondragover = e => e.preventDefault();
+      col.ondrop = async e => { e.preventDefault(); await setStatus(e.dataTransfer.getData('text/plain'), col.dataset.st); };
+    });
+    const deck = $('.tkdeck', main);
+    if (deck) deck.onkeydown = e => {
+      const list = sortView(TASKS);
+      if (e.key === 'j' || e.key === 'ArrowDown') { deckI = Math.min(list.length - 1, deckI + 1); render(); $('.tkdeck', main).focus(); }
+      if (e.key === 'k' || e.key === 'ArrowUp') { deckI = Math.max(0, deckI - 1); render(); $('.tkdeck', main).focus(); }
+      if (e.key === ' ') { e.preventDefault(); const t = list[deckI]; if (t) toggle(key(t)); }
+      if (e.key === 'e') { e.preventDefault(); const t = list[deckI]; if (t) open(key(t)); }
+    };
+    if (cur) $$(`[data-key="${cur}"]`, main).forEach(el => el.classList.add('sel'));
+  }
+
+  main.addEventListener('click', e => {
+    const tog = e.target.closest('[data-tog]');
+    if (tog) { e.stopPropagation(); toggle(tog.dataset.tog); return; }
+    if (e.target.closest('[data-next]')) { deckI++; render(); return; }
+    const holder = e.target.closest('[data-key]');
+    if (holder) open(holder.dataset.key);
   });
-  wrap.querySelectorAll('[data-toggle]').forEach(cb => cb.addEventListener('change', async () => {
-    const t = byKey[cb.dataset.toggle]; if (!t) return;
-    const r = await fetch('/api/tasks/' + cb.dataset.toggle, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ principal: t.principal, cal_id: t.cal_id, summary: t.summary, description: t.description, due: t.due ? t.due.slice(0, 10) : null, priority: t.priority, completed: cb.checked }) });
-    if (r.ok) location.reload(); else { cb.checked = !cb.checked; alert('Error ' + r.status); }
-  }));
-  wrap.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm(document.body.dataset.lang === 'en' ? 'Delete this task?' : 'Diese Aufgabe löschen?')) return;
-    const r = await fetch('/api/tasks/' + b.dataset.del, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) location.reload();
-  }));
+
+  // ---- writing ----
+  async function put(k, body) {
+    const r = await fetch('/api/tasks/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    if (!r.ok) { alert(T.err + ' ' + r.status); return false; }
+    return true;
+  }
+  async function toggle(k) {
+    const t = TASKS.find(x => key(x) === k); if (!t) return;
+    if (await put(k, { principal: t.principal, cal_id: t.cal_id, summary: t.summary, completed: !isDone(t) })) reload();
+  }
+  async function setStatus(k, st) {
+    const t = TASKS.find(x => key(x) === k); if (!t || t.status === st) return;
+    const d = await (await fetch('/api/tasks/' + k)).json();
+    d.status = st;
+    if (st !== 'COMPLETED') { d.completed_at = null; if (d.percent === 100) d.percent = 0; } else d.percent = 100;
+    if (await put(k, d)) reload();
+  }
+  function reload() { location.href = url(); }
+  function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
+
+  // ---- the editor: docked beside the views when there is room, a dialog when there is not ----
+  const MIN_WIDE = 1180;
+  function fit() {
+    const wide = innerWidth >= MIN_WIDE;
+    root.classList.toggle('wide', wide);
+    document.getElementById('tkpage').classList.toggle('wide', wide);
+    ed.classList.toggle('docked', wide);
+    // docked and nothing picked: the column shows a hint instead of an empty form
+    ed.classList.toggle('blank', wide && !cur);
+    ed.dataset.empty = T.pickone;
+    ed.hidden = wide ? false : !cur;
+  }
+  addEventListener('resize', fit);
+  function open(k) {
+    cur = k;
+    render();
+    fit();
+    window.rusticalEd.open(k);
+  }
+  $('#fab').onclick = () => { cur = null; ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null); };
+
+  // what the editor module asks of the page it runs on
+  window.rusticalHost = {
+    kind: 'task',
+    date: () => iso(TODAY),
+    cals: () => root.dataset.cals || '',
+    reload: () => reload(),
+    // a docked editor never closes: it falls back to the empty state
+    closed: () => { cur = null; render(); fit(); },
+  };
+
+  $('#tk-back').onchange = e => { const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); };
+  $$('#tk-views button').forEach(b => b.onclick = () => {
+    view = b.dataset.tkview;
+    $$('#tk-views button').forEach(x => x.toggleAttribute('aria-pressed', x === b));
+    history.replaceState(null, '', url());
+    render();
+  });
+  addEventListener('popstate', () => location.reload());
+
+  fit();
+  render();
 })();
 
 /* ===== settings: import files, browser push ===== */
