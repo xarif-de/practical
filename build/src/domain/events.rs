@@ -879,20 +879,55 @@ fn is_managed(line: &str) -> bool {
 }
 const ALARM_MANAGED: &[&str] = &["ACTION", "TRIGGER", "DESCRIPTION", "SUMMARY", "DURATION", "REPEAT", "PROXIMITY", "ACKNOWLEDGED"];
 
-fn prop_name(line: &str) -> String {
+pub fn prop_name(line: &str) -> String {
     line.split([';', ':']).next().unwrap_or("").to_ascii_uppercase()
 }
 
 /// Splits a stored object into its master VEVENT and the RECURRENCE-ID override blocks
 /// (verbatim, folded again) — those come from other clients and are never rewritten here.
 pub fn split_ics(ics: &str) -> (RawMaster, Vec<String>) {
+    split_component(ics, "VEVENT")
+}
+
+/// The VTIMEZONE blocks of a stored object, verbatim — a carried-over property may still
+/// reference one by TZID, and a dangling TZID is an invalid object.
+pub fn vtimezone_blocks(ics: &str) -> Vec<String> {
+    let mut out = vec![];
+    let mut block: Vec<String> = vec![];
+    let mut depth = 0;
+    for line in unfold(&ics.replace("\r\n", "\n")) {
+        if line.starts_with("BEGIN:VTIMEZONE") {
+            depth = 1;
+            block = vec![line];
+            continue;
+        }
+        if depth == 0 {
+            continue;
+        }
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+        } else if line.starts_with("END:") {
+            depth -= 1;
+        }
+        block.push(line);
+        if depth == 0 {
+            out.push(block.iter().map(|l| ical::fold(l)).collect::<Vec<_>>().join("\r\n"));
+        }
+    }
+    out
+}
+
+/// Same for any calendar component — `VTODO` uses it to keep whatever the task editor does not model.
+pub fn split_component(ics: &str, comp: &str) -> (RawMaster, Vec<String>) {
+    let begin = format!("BEGIN:{comp}");
+    let end = format!("END:{comp}");
     let unfolded = unfold(&ics.replace("\r\n", "\n"));
     let mut master = RawMaster::default();
     let mut overrides = vec![];
     let mut block: Vec<String> = vec![];
     let mut depth = 0;
     for line in &unfolded {
-        if line.starts_with("BEGIN:VEVENT") && depth == 0 {
+        if line.starts_with(&begin) && depth == 0 {
             depth = 1;
             block.clear();
             continue;
@@ -906,7 +941,7 @@ pub fn split_ics(ics: &str) -> (RawMaster, Vec<String>) {
             depth -= 1;
             if depth == 0 {
                 if block.iter().any(|l| l.starts_with("RECURRENCE-ID")) {
-                    let folded: Vec<String> = std::iter::once("BEGIN:VEVENT".to_string()).chain(block.iter().cloned()).chain(std::iter::once("END:VEVENT".to_string())).map(|l| ical::fold(&l)).collect();
+                    let folded: Vec<String> = std::iter::once(begin.clone()).chain(block.iter().cloned()).chain(std::iter::once(end.clone())).map(|l| ical::fold(&l)).collect();
                     overrides.push(folded.join("\r\n"));
                 } else if master.props.is_empty() && master.alarms.is_empty() {
                     let mut alarm: Option<Vec<String>> = None;

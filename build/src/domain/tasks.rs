@@ -2,6 +2,7 @@
 //! title · due · priority, create, toggle, delete.
 
 use crate::domain::collections::{self, CalInfo};
+use crate::domain::events;
 use crate::domain::ical;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -91,7 +92,12 @@ pub struct TaskInput {
     pub priority: u8,
 }
 
-fn build_vtodo(uid: &str, i: &TaskInput, completed: bool, existing_desc: Option<&str>) -> AppResult<String> {
+/// Properties `build_vtodo` writes itself; every other stored line is carried over verbatim,
+/// so a save from this UI never drops what another client wrote (CATEGORIES, LOCATION, URL,
+/// RELATED-TO, X-*, RRULE, …). Mirrors `events::MANAGED`.
+const MANAGED: &[&str] = &["UID", "DTSTAMP", "SUMMARY", "DESCRIPTION", "DUE", "PRIORITY", "STATUS", "COMPLETED", "PERCENT-COMPLETE", "LAST-MODIFIED"];
+
+fn build_vtodo(uid: &str, i: &TaskInput, completed: bool, existing_desc: Option<&str>, raw: Option<&events::RawMaster>) -> AppResult<String> {
     if i.summary.trim().is_empty() {
         return Err(AppError::BadRequest("summary required".into()));
     }
@@ -103,6 +109,7 @@ fn build_vtodo(uid: &str, i: &TaskInput, completed: bool, existing_desc: Option<
         format!("UID:{uid}"),
         format!("DTSTAMP:{}", ical::fmt_utc_now()),
         format!("SUMMARY:{}", ical::escape(i.summary.trim())),
+        format!("LAST-MODIFIED:{}", ical::fmt_utc_now()),
     ];
     let desc = if i.description.trim().is_empty() { existing_desc.unwrap_or("") } else { i.description.trim() };
     if !desc.is_empty() {
@@ -121,6 +128,15 @@ fn build_vtodo(uid: &str, i: &TaskInput, completed: bool, existing_desc: Option<
     } else {
         l.push("STATUS:NEEDS-ACTION".into());
     }
+    if let Some(r) = raw {
+        // unmanaged lines keep their original order and parameters
+        l.extend(r.props.iter().filter(|line| !MANAGED.contains(&events::prop_name(line).as_str())).cloned());
+        for a in &r.alarms {
+            l.push("BEGIN:VALARM".into());
+            l.extend(a.iter().cloned());
+            l.push("END:VALARM".into());
+        }
+    }
     l.push("END:VTODO".into());
     l.push("END:VCALENDAR".into());
     Ok(l.iter().map(|x| ical::fold(x)).collect::<Vec<_>>().join("\r\n") + "\r\n")
@@ -129,7 +145,7 @@ fn build_vtodo(uid: &str, i: &TaskInput, completed: bool, existing_desc: Option<
 pub async fn create_task(state: &AppState, user: &Principal, i: TaskInput) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
     let uid = uuid::Uuid::new_v4().to_string();
-    let obj = CalendarObject::import(&build_vtodo(&uid, &i, false, None)?, None)?;
+    let obj = CalendarObject::import(&build_vtodo(&uid, &i, false, None, None)?, None)?;
     state.calendars.put_object(&i.principal, &i.cal_id, &uid, obj, false).await?;
     Ok(uid)
 }
@@ -141,7 +157,19 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, i:
     let CalendarInnerData::Todo(t, _) = existing.get_inner().get_inner() else { return Err(AppError::NotFound) };
     let uid = t.get_uid().to_string();
     let desc = ical::text(t, "DESCRIPTION");
-    let obj = CalendarObject::import(&build_vtodo(&uid, &i, completed, desc.as_deref())?, None)?;
+    // whatever this editor does not model survives the save, RECURRENCE-ID overrides included
+    let stored = existing.get_ics();
+    let (raw, extra) = events::split_component(&stored, "VTODO");
+    let mut ics = build_vtodo(&uid, &i, completed, desc.as_deref(), Some(&raw))?;
+    let mut tail = extra;
+    if ics.contains("TZID=") {
+        tail.extend(events::vtimezone_blocks(&stored)); // a carried-over TZID must keep its definition
+    }
+    if !tail.is_empty() {
+        let body = ics.trim_end().trim_end_matches("END:VCALENDAR").trim_end().to_string();
+        ics = format!("{body}\r\n{}\r\nEND:VCALENDAR\r\n", tail.join("\r\n"));
+    }
+    let obj = CalendarObject::import(&ics, None)?;
     state.calendars.put_object(&i.principal, &i.cal_id, object_id, obj, true).await?;
     Ok(())
 }
@@ -150,4 +178,40 @@ pub async fn delete_task(state: &AppState, user: &Principal, principal: &str, ca
     collections::ensure_owner(user, principal)?;
     state.calendars.delete_object(principal, cal_id, object_id, true).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STORED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:u1\r\nDTSTAMP:20260901T100000Z\r\nCREATED:20260801T080000Z\r\nSEQUENCE:4\r\nSUMMARY:Alt\r\nDESCRIPTION:Beschreibung\r\nDUE;VALUE=DATE:20260918\r\nCATEGORIES:Arbeit,Familie\r\nLOCATION:Stadtbücherei\r\nURL:https://example.org/t\r\nCLASS:PRIVATE\r\nRELATED-TO;RELTYPE=PARENT:parent-uid\r\nX-APPLE-SORT-ORDER:12\r\nSTATUS:NEEDS-ACTION\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT2H\r\nDESCRIPTION:Erinnerung\r\nEND:VALARM\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+    fn input() -> TaskInput {
+        TaskInput { principal: "p".into(), cal_id: "c".into(), summary: "Neu".into(), description: String::new(), due: None, priority: 0 }
+    }
+
+    /// The regression this guards: a save used to rebuild the VTODO from six fields,
+    /// so every property another client had written was gone after one click.
+    #[test]
+    fn save_keeps_every_unmanaged_property() {
+        let (raw, extra) = crate::domain::events::split_component(STORED, "VTODO");
+        assert!(extra.is_empty());
+        let out = build_vtodo("u1", &input(), false, Some("Beschreibung"), Some(&raw)).unwrap();
+        for line in ["CREATED:20260801T080000Z", "SEQUENCE:4", "CATEGORIES:Arbeit,Familie", "LOCATION:Stadtbücherei", "URL:https://example.org/t", "CLASS:PRIVATE", "RELATED-TO;RELTYPE=PARENT:parent-uid", "X-APPLE-SORT-ORDER:12"] {
+            assert!(out.contains(line), "lost: {line}\n{out}");
+        }
+        assert!(out.contains("BEGIN:VALARM") && out.contains("TRIGGER:-PT2H") && out.contains("END:VALARM"));
+        // managed properties come from the input, not from the stored copy
+        assert!(out.contains("SUMMARY:Neu") && !out.contains("SUMMARY:Alt"));
+        assert_eq!(out.matches("LAST-MODIFIED:").count(), 1);
+        assert_eq!(out.matches("STATUS:").count(), 1);
+        assert_eq!(out.matches("DUE").count(), 0);
+    }
+
+    #[test]
+    fn without_raw_nothing_extra_is_written() {
+        let out = build_vtodo("u1", &input(), false, None, None).unwrap();
+        assert!(!out.contains("CATEGORIES") && !out.contains("VALARM"));
+        assert!(out.contains("SUMMARY:Neu") && out.contains("STATUS:NEEDS-ACTION"));
+    }
 }
