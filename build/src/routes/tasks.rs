@@ -30,7 +30,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx) -
     let calendars: Vec<CalInfo> = events::visible_calendars(&state, &user, None).await?.into_iter().filter(|c| c.components.iter().any(|x| x == "VTODO")).collect();
     let all = tasks::tasks_for(&state, &calendars, vc.tz).await?;
     let tasks_json = serde_json::to_string(&all).unwrap_or_else(|_| "[]".into());
-    let (done, open): (Vec<Task>, Vec<Task>) = all.into_iter().partition(|t| t.completed);
+    let (done, open): (Vec<Task>, Vec<Task>) = all.into_iter().partition(|t| t.completed());
     Ok(TasksPage { ctx, calendars, open, done, today: vc.today, tasks_json })
 }
 

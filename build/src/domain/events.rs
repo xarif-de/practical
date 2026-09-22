@@ -365,7 +365,7 @@ pub struct RelatedTarget {
     pub done: bool,
 }
 
-fn related_of(props: &[String]) -> Vec<Related> {
+pub(crate) fn related_of(props: &[String]) -> Vec<Related> {
     props.iter().filter(|l| prop_name(l) == "RELATED-TO").map(|l| {
         let (_, params, value) = ical::split_line(l);
         let mut r = Related { uid: value.trim().to_string(), ..Default::default() };
@@ -376,7 +376,7 @@ fn related_of(props: &[String]) -> Vec<Related> {
     }).collect()
 }
 
-fn related_lines(list: &[Related]) -> Vec<String> {
+pub(crate) fn related_lines(list: &[Related]) -> Vec<String> {
     list.iter().filter(|r| !r.uid.trim().is_empty() && !r.uid.contains(['\n', '\r', ';', ':'])).map(|r| {
         let mut line = "RELATED-TO".to_string();
         if let Some(t) = one_of(&r.reltype, &["PARENT", "CHILD", "SIBLING"]) {
@@ -457,11 +457,11 @@ fn base64_len(b64: &str) -> usize {
     n / 4 * 3 - pad
 }
 
-fn is_binary_attach(params: &[(String, String)]) -> bool {
+pub(crate) fn is_binary_attach(params: &[(String, String)]) -> bool {
     params.iter().any(|(k, v)| (k == "VALUE" && v.eq_ignore_ascii_case("BINARY")) || k == "ENCODING")
 }
 
-fn links_of(props: &[String]) -> Vec<Link> {
+pub(crate) fn links_of(props: &[String]) -> Vec<Link> {
     let mut bin = 0usize;
     props.iter().filter_map(|l| {
         let (name, params, value) = ical::split_line(l);
@@ -504,7 +504,7 @@ pub fn embedded_attachment(props: &[String], n: usize) -> Option<(String, String
     Some((fmt, name, bytes))
 }
 
-fn link_lines(links: &[Link]) -> Vec<String> {
+pub(crate) fn link_lines(links: &[Link]) -> Vec<String> {
     let mut out = vec![];
     let mut url_written = false;
     for l in links {
@@ -557,7 +557,7 @@ fn link_params(l: &Link, conference: bool) -> String {
 }
 
 /// New embedded files as `ATTACH;…;ENCODING=BASE64;VALUE=BINARY:` lines, size-checked.
-fn embedded_lines(links: &[Link]) -> AppResult<Vec<String>> {
+pub(crate) fn embedded_lines(links: &[Link]) -> AppResult<Vec<String>> {
     let mut out = vec![];
     let mut total = 0usize;
     for l in links.iter().filter(|l| l.embedded) {
@@ -584,7 +584,7 @@ pub fn valid_color(c: &str) -> bool {
     !c.is_empty() && c.len() <= 32 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '#')
 }
 
-fn one_of<'a>(v: &str, allowed: &[&'a str]) -> Option<&'a str> {
+pub(crate) fn one_of<'a>(v: &str, allowed: &[&'a str]) -> Option<&'a str> {
     let u = v.trim().to_ascii_uppercase();
     allowed.iter().copied().find(|a| *a == u)
 }
@@ -965,7 +965,7 @@ pub fn split_component(ics: &str, comp: &str) -> (RawMaster, Vec<String>) {
     (master, overrides)
 }
 
-fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Alarm {
+pub(crate) fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Alarm {
     let mut a = Alarm { idx: Some(idx), action: "DISPLAY".into(), ..Default::default() };
     let mut attach = String::new(); // the first non-binary ATTACH; it is the sound only for AUDIO (ACTION may follow it)
     for l in lines {
@@ -1028,7 +1028,7 @@ fn fmt_trigger_offset(minutes: i64) -> String {
 }
 
 /// VALARM lines for one alarm: the modelled properties from `a`, the rest from the stored alarm.
-fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz: chrono_tz::Tz) -> Vec<String> {
+pub(crate) fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz: chrono_tz::Tz) -> Vec<String> {
     let action = match a.action.to_ascii_uppercase().as_str() { "AUDIO" => "AUDIO", "EMAIL" => "EMAIL", _ => "DISPLAY" };
     let mut l = vec!["BEGIN:VALARM".to_string(), format!("ACTION:{action}")];
     l.push(match a.at {

@@ -8,7 +8,7 @@ use crate::domain::events::{self, EventDetail, EventInput};
 use crate::domain::geo;
 use crate::domain::prefs;
 use crate::domain::search;
-use crate::domain::tasks::{self, TaskInput};
+use crate::domain::tasks::{self, TaskDetail, TaskInput};
 use crate::error::{AppError, AppResult};
 use crate::routes::calendar::view_ctx;
 use crate::state::SharedState;
@@ -149,7 +149,7 @@ async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate:
     let cals = events::visible_calendars(&state, &user, None).await?;
     let mut seen = std::collections::HashSet::new();
     let events = events::instances(&state, &cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
-    let tasks = tasks::tasks_for(&state, &cals, vc.tz).await?.into_iter().filter(|t| !t.completed).map(|t| MentionEvent { summary: t.summary.clone(), key: t.key(), uid: t.uid.clone(), date: t.due.map(|d| d.date()) }).collect();
+    let tasks = tasks::tasks_for(&state, &cals, vc.tz).await?.into_iter().filter(|t| t.open()).map(|t| MentionEvent { summary: t.summary.clone(), key: t.key(), uid: t.uid.clone(), date: t.due.map(|d| d.date()) }).collect();
     Ok(Json(Mentions { contacts, categories, events, tasks }))
 }
 
@@ -236,25 +236,42 @@ async fn delete_contact(State(state): State<SharedState>, user: Principal, sessi
 
 // ---- tasks ----
 
-async fn create_task(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(input): Json<TaskInput>) -> AppResult<Json<Created>> {
+async fn create_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Json(input): Json<TaskInput>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
-    Ok(Json(Created { id: tasks::create_task(&state, &user, input).await? }))
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    Ok(Json(Created { id: tasks::create_task(&state, &user, input, vc.tz).await? }))
+}
+
+async fn get_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<TaskDetail>> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let mut d = tasks::get_task(&state, &user, &p, &c, &id, vc.tz).await?;
+    events::resolve_related(&state, &user, &mut d.related, vc.tz).await?;
+    Ok(Json(d))
 }
 
 #[derive(Deserialize)]
 struct TaskUpdate {
     #[serde(flatten)]
     input: TaskInput,
+    /// Sent by the tick boxes instead of a full input; `None` means "take the input as it is"
     #[serde(default)]
-    completed: bool,
+    completed: Option<bool>,
+    #[serde(default)]
+    etag: Option<String>,
 }
 
-async fn update_task(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<TaskUpdate>) -> AppResult<Json<Created>> {
+async fn update_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<TaskUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
-    if u.input.principal != p || u.input.cal_id != c {
-        return Err(AppError::BadRequest("task cannot change calendar".into()));
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    match u.completed {
+        Some(done) => tasks::set_completed(&state, &user, &p, &c, &id, done, vc.tz).await?,
+        None => {
+            if u.input.principal != p || u.input.cal_id != c {
+                return Err(AppError::BadRequest("task cannot change calendar".into()));
+            }
+            tasks::update_task(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?
+        }
     }
-    tasks::update_task(&state, &user, &id, u.input, u.completed).await?;
     Ok(Json(Created { id }))
 }
 
@@ -397,7 +414,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/contacts/{p}/{a}/{id}", get(get_contact).put(update_contact).delete(delete_contact))
         .route("/api/contacts/{p}/{a}/{id}/vcf", get(contact_vcf))
         .route("/api/tasks", post(create_task))
-        .route("/api/tasks/{p}/{c}/{id}", axum::routing::put(update_task).delete(delete_task))
+        .route("/api/tasks/{p}/{c}/{id}", get(get_task).put(update_task).delete(delete_task))
         .route("/api/search", get(api_search))
         .route("/api/mentions", get(mentions))
         .route("/api/categories", get(categories))
