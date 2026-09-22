@@ -554,8 +554,8 @@
   const ctMirror = () => { f.cats_json.value = CATS.length ? JSON.stringify(CATS) : ''; };
   const optText = (sel, v) => ([...sel.options].find(o => o.value === String(v)) || {}).textContent || String(v);
   const fxVal = (fld, v) => fld === 'all_day' ? esc(v ? CTT.tYes : CTT.tNo) : fld === 'calendar' ? esc(optText(f.calendar, v)) : fld === 'color' ? `<i class="ct-sw" style="background:${esc(v)}"></i>` : fld === 'rrule' ? esc(String(v).replace(/^FREQ=/, '').toLowerCase().slice(0, 20)) : STATUS_KEYS.includes(fld) ? esc(optText(f[fld], v)) : esc(String(v).slice(0, 24));
-  const curVal = fld => fld === 'summary' ? f.summary.value.trim() : fld === 'all_day' ? f.all_day.checked : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
-  const sameVal = (fld, v) => fld === 'all_day' ? f.all_day.checked === !!v : fld === 'color' ? (colorOf() || '').toLowerCase() === String(v).toLowerCase() : String(curVal(fld)) === String(v);
+  const curVal = fld => fld === 'summary' ? f.summary.value.trim() : fld === 'all_day' ? !!(f.all_day && f.all_day.checked) : fld === 'calendar' ? f.calendar.value : fld === 'color' ? (colorOf() || '').toLowerCase() : fld === 'location' ? f.location.value.trim() : fld === 'rrule' ? (rrBuild() || '') : f[fld].value;
+  const sameVal = (fld, v) => fld === 'all_day' ? !!(f.all_day && f.all_day.checked) === !!v : fld === 'color' ? (colorOf() || '').toLowerCase() === String(v).toLowerCase() : String(curVal(fld)) === String(v);
   // effective rules of the event's categories: per setting (scalars by field, reminders and links by key) a lock
   // beats a template, among equals the upper category wins; every loser is recorded as overridden by the winner
   function effective() { const fx = {}, over = {}, alarms = [], links = [], cand = {};
@@ -624,7 +624,7 @@
     let adjusted = false;
     const set = (fld, differs, apply) => { const e = fx[fld]; if (!e) return; if (e.mode === 'lock' ? differs() : (prefill && differs())) { apply(e.value); if (e.mode === 'lock' && reason === 'open') { adjusted = true; e.adjusted = true; } } };
     set('summary', () => fx.summary.mode === 'lock' ? f.summary.value.trim() !== String(fx.summary.value).trim() : !f.summary.value.trim(), v => { f.summary.value = v; });
-    set('all_day', () => fx.all_day.mode === 'lock' ? f.all_day.checked !== !!fx.all_day.value : !f.all_day.checked && !!fx.all_day.value, v => setAllDay(!!v));
+    if (f.all_day) set('all_day', () => fx.all_day.mode === 'lock' ? f.all_day.checked !== !!fx.all_day.value : !f.all_day.checked && !!fx.all_day.value, v => setAllDay(!!v));
     if (isNew) set('calendar', () => f.calendar.value !== fx.calendar.value && [...f.calendar.options].some(o => o.value === fx.calendar.value), v => { f.calendar.value = v; syncDot(); }); else RLOCK.delete('calendar'); /* an existing event cannot move */
     set('color', () => fx.color.mode === 'lock' ? (colorOf() || '').toLowerCase() !== String(fx.color.value).toLowerCase() : !colorOf(), v => { setColor(v); syncDot(); });
     set('location', () => fx.location.mode === 'lock' ? f.location.value.trim() !== String(fx.location.value).trim() : !f.location.value.trim(), v => { f.location.value = v; const g = fx.location.geo; if (g) { f.lat.value = g[0]; f.lon.value = g[1]; } locInit(); });
@@ -684,17 +684,26 @@
     const calv = st('calendar') && [...f.calendar.options].some(o => o.value === st('calendar').value) ? st('calendar').value.split('/') : cal;
     ruleMode = name; form.classList.add('rulemode'); ed.classList.add('rulemode');
     RM = {}; WHEN_KEYS.concat(STATUS_KEYS).forEach(k => { RM[k] = st(k) ? st(k).mode : 'off'; }); RM.summary = r.title ? r.title.mode : 'off'; RM.location = where.mode || 'off'; RM.rrule = repeat.mode || 'off';
+    // a rule is edited through the same cards, so it needs a detail of the shape this consumer fills
+    if (TASK) {
+      fill({ principal: calv[0], cal_id: calv[1], object_id: '', uid: '', summary: r.title ? r.title.value : '', description: '',
+        location: where.mode !== 'off' ? where.location || '' : '', start: null, start_all_day: true, due: null, due_all_day: true,
+        status: st('status') ? st('status').value : '', percent: null, completed_at: null,
+        class: st('class') ? st('class').value : '', priority: st('priority') ? st('priority').value : null, categories: [],
+        color: st('color') ? st('color').value : '', geo: where.mode !== 'off' ? where.geo || null : null,
+        alarms: ralarms.map(({ mode, ...a }) => a), links: rlinks.map(({ mode, ...l }) => l), related: [], etag: '', has_rrule: false });
+    } else
     fill({ principal: calv[0], cal_id: calv[1], object_id: '', uid: '', summary: r.title ? r.title.value : '', location: where.mode !== 'off' ? where.location || '' : '', description: '', start: today + 'T09:00:00', end: today + 'T10:00:00', all_day: st('all_day') ? !!st('all_day').value : false, rrule: repeat.mode !== 'off' ? repeat.rrule || null : null, rrule_until: null, exdates: [], rdates: [], organizer: null, attendees: [], alarms: ralarms.map(({ mode, ...a }) => a), categories: [], status: st('status') ? st('status').value : '', transp: st('transp') ? st('transp').value : '', class: st('class') ? st('class').value : '', priority: st('priority') ? st('priority').value : null, color: st('color') ? st('color').value : '', geo: where.mode !== 'off' ? where.geo || null : null, links: rlinks.map(({ mode, ...l }) => l), related: [], etag: '', has_overrides: false });
     ralarms.forEach((a, i) => { if (ALARMS[i]) ALARMS[i]._mode = a.mode; }); rlinks.forEach((l, i) => { if (LK.links[i]) LK.links[i]._mode = l.mode; });
     const has = { when: true, where: RM.location !== 'off', alarm: ALARMS.length > 0, repeat: RM.rrule !== 'off', status: STATUS_KEYS.some(k => RM[k] !== 'off'), links: LK.links.length > 0 };
-    RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); if (has[n]) c.dataset.added = '1'; else delete c.dataset.added; });
-    mode('edit'); rulesApply('open'); f.summary.placeholder = D.tTitle; f.summary.required = false; $('#ed-sub').textContent = D.tRuleTitle.replace('{name}', name); $('#ed-hint').textContent = ''; /* the title field holds the title template; the rule name goes to the subtitle; no series hint */
+    RULE_CARDS.forEach(n => { const c = $(`.card[data-card="${n}"]`, form); if (!c) return; if (has[n]) c.dataset.added = '1'; else delete c.dataset.added; });
+    mode('edit'); rulesApply('open'); f.summary.placeholder = D.tTitle; f.summary.required = false; $('#ed-sub').textContent = D.tRuleTitle.replace('{name}', name); $x('#ed-hint').textContent = ''; /* the title field holds the title template; the rule name goes to the subtitle; no series hint */
     ed.hidden = false; baseline = sig(); updateButtons(); $('#ed-delete').disabled = !RULES[name];
   }
   function ruleOf() {
     const setting = (k, v) => (RM[k] || 'off') !== 'off' && v !== '' && v != null ? { mode: RM[k], value: v } : null;
     const alarms = alarmsOf().map((a, i) => ({ mode: ALARMS[i]._mode || 'default', ...a })).filter(a => a.mode !== 'off'), plain = LK.links.filter(l => !l.embedded), links = linksOf().links.filter(l => !l.embedded).map((l, i) => ({ mode: (plain[i] || {})._mode || 'default', ...l })).filter(l => l.mode !== 'off');
-    return { title: setting('summary', f.summary.value.trim()), when: { all_day: setting('all_day', f.all_day.checked), calendar: setting('calendar', f.calendar.value), color: setting('color', colorOf()) }, where: { mode: RM.location || 'off', location: f.location.value.trim(), geo: geoOf() }, alarm: { alarms }, repeat: { mode: RM.rrule || 'off', rrule: rrBuild() || '' }, status: Object.fromEntries(STATUS_KEYS.map(k => [k, setting(k, k === 'priority' ? (f.priority.value === '' ? null : +f.priority.value) : f[k].value)])), links: { links } }; }
+    return { title: setting('summary', f.summary.value.trim()), when: { all_day: f.all_day ? setting('all_day', f.all_day.checked) : null, calendar: setting('calendar', f.calendar.value), color: setting('color', colorOf()) }, where: { mode: RM.location || 'off', location: f.location.value.trim(), geo: geoOf() }, alarm: { alarms }, repeat: { mode: TASK ? 'off' : (RM.rrule || 'off'), rrule: TASK ? '' : (rrBuild() || '') }, status: Object.fromEntries(STATUS_KEYS.filter(k => f[k]).map(k => [k, setting(k, k === 'priority' ? (f.priority.value === '' ? null : +f.priority.value) : f[k].value)])), links: { links } }; }
   // leaving rule mode: back to the event it was opened from (rules re-applied by `fill`), or to the page it
   // was called from (`?back=`), or simply closed
   function ruleLeave() { if (!ruleMode) return false; ruleMode = null; RM = {}; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; f.summary.disabled = false; f.summary.required = true; $$('.rfoot', form).forEach(el => { el.innerHTML = ''; });
@@ -735,8 +744,13 @@
   const unitOf = m => { m = Math.abs(m); for (const u of [...AL_UNITS].reverse()) if (m && m % u === 0) return u; return 1; };
   const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
   // the event on the strip: start and length in minutes from the "when" card
-  const evStart = () => new Date((f.date.value || today) + 'T' + (f.all_day.checked ? '00:00' : (f.from.value || '00:00')) + ':00');
-  const evLen = () => { const s = evStart(); const e = f.all_day.checked ? new Date(nextDay(f.end_date.value || f.date.value || today) + 'T00:00:00') : new Date((f.end_date.value || f.date.value || today) + 'T' + (f.to.value || f.from.value || '00:00') + ':00'); return Math.max(1, Math.round((e - s) / 60000)); };
+  const evStart = () => {
+    if (TASK) { const [due] = getStamp('due'), [st] = getStamp('start'); return new Date(due || st || (today + 'T00:00:00')); }
+    return new Date((f.date.value || today) + 'T' + (f.all_day.checked ? '00:00' : (f.from.value || '00:00')) + ':00');
+  };
+  const evLen = () => {
+    if (TASK) { const [due] = getStamp('due'), [st] = getStamp('start'); return due && st ? Math.max(1, Math.round((new Date(due) - new Date(st)) / 60000)) : 1; }
+    const s = evStart(); const e = f.all_day.checked ? new Date(nextDay(f.end_date.value || f.date.value || today) + 'T00:00:00') : new Date((f.end_date.value || f.date.value || today) + 'T' + (f.to.value || f.from.value || '00:00') + ':00'); return Math.max(1, Math.round((e - s) / 60000)); };
   const minutesBefore = a => a.at ? Math.round((evStart() - new Date(a.at)) / 60000) : a.related_end ? a.minutes - evLen() : a.minutes;
   // axis: every snap point owns a zone of the same width (the strip is ordinal, not to scale) — the
   // marker follows the pointer and the value changes at regular intervals; an alarm off the grid sits
@@ -800,7 +814,7 @@
       ${a.action === 'EMAIL' ? field(AT.tSubject, `<input type="text" data-w="subject" value="${esc(a.summary)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tBody, `<input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tTo, `<input type="text" data-w="to" value="${esc(a.attendees.join(', '))}" placeholder="${esc(AT.tToHint)}">`) : ''}
       <div class="foot"><button class="btn icon-btn pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}" aria-label="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
     const w = k => $(`[data-w=${k}]`, d);
-    w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'; } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
+    w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (TASK ? (getStamp('due')[0] || today + 'T09:00:00') : (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'); } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
     if (w('n')) { const apply = () => { const n = parseFloat(w('n').value.replace(',', '.')); if (isNaN(n) || n < 0) { w('n').classList.add('err'); return; } a.minutes = Math.sign(a.minutes || 1) * Math.round(n * +w('unit').value); alRender(); refresh(); }; w('n').onchange = apply; w('unit').onchange = apply; w('n').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }; }
     if (w('at')) w('at').onchange = () => { if (w('at').value) { a.at = w('at').value + ':00'; alRender(); refresh(); } };
     w('act').onclick = e => { const b = e.target.closest('button'); if (b) { a.action = b.dataset.v; alRender(); refresh(); } };
@@ -1897,6 +1911,7 @@
       if (e.key === 'e') { e.preventDefault(); const t = list[deckI]; if (t) open(key(t)); }
     };
     if (cur) $$(`[data-key="${cur}"]`, main).forEach(el => el.classList.add('sel'));
+    if (deck && view === 'deck' && !document.activeElement.closest('input, select, textarea')) deck.focus();
   }
 
   main.addEventListener('click', e => {
@@ -1946,7 +1961,9 @@
     fit();
     window.rusticalEd.open(k);
   }
-  $('#fab').onclick = () => { cur = null; ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null); };
+  const newTask = () => { cur = null; render(); ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null); };
+  $('#tk-new').onclick = newTask;
+  const fab = $('#fab'); if (fab) fab.onclick = newTask;
 
   // what the editor module asks of the page it runs on
   window.rusticalHost = {

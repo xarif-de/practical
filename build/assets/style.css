@@ -579,15 +579,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 @media (max-width: 1099px) { .contacts { grid-template-areas: "cols" "list"; grid-template-columns: 1fr; } .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; } }
 
 /* ---- Aufgaben ---- */
-.tasks { padding: 0 var(--pad) var(--pad); max-width: 820px; display: grid; gap: 12px; }
-.taskform { display: flex; gap: 8px; flex-wrap: wrap; }
-.taskform input[type=text] { flex: 1; min-width: 200px; }
-.taskform input, .taskform select { font: inherit; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; }
-.tasklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.task { display: flex; align-items: center; gap: 10px; background: var(--tile); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
-.task .ts { flex: 1; } .task.completed .ts { text-decoration: line-through; color: var(--fg-3); }
-.task.overdue small { color: var(--today); } .task .prio { color: var(--today); font-weight: 700; }
-.task input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .done summary { cursor: pointer; color: var(--fg-2); font-size: 13px; margin: 6px 0; }
 
 /* ---- Mehr-Ansichten (views_more.py) ---- */
@@ -634,7 +625,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .day { min-width: 0; } .ev { max-width: 100%; }
 .cal { min-width: 0; } .main { min-width: 0; overflow-x: hidden; }
 .nowrap { white-space: nowrap; } label.link.file { cursor: pointer; color: var(--accent); font-size: 13px; padding: 2px 6px; }
-.tasks, .settings, .contacts, .placeholder { align-content: start; }
+.tkpage, .settings, .contacts, .placeholder { align-content: start; }
 .taskform { align-items: center; }
 
 /* ---- fixed page header: topbar and toolbar stay put, only the content below scrolls.

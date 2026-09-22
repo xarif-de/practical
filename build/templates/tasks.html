@@ -21,6 +21,7 @@
     <option value="year"{% if back == "year" %} selected{% endif %}>{{ ctx.t("tk-back-year") }}</option>
     <option value="all"{% if back == "all" %} selected{% endif %}>{{ ctx.t("tk-back-all") }}</option>
   </select></span>
+  <button class="btn btn-primary icon-btn" id="tk-new" type="button" title="{{ ctx.t("task-add") }}" aria-label="{{ ctx.t("task-add") }}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
   <span class="seg" role="group" id="tk-views">
     <button data-tkview="groups"{% if view == "groups" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-groups") }}" aria-label="{{ ctx.t("tk-v-groups") }}"><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg></button>
     <button data-tkview="table"{% if view == "table" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-table") }}" aria-label="{{ ctx.t("tk-v-table") }}"><svg class="ico" aria-hidden="true"><use href="#i-table"/></svg></button>
