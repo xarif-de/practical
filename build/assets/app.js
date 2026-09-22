@@ -1318,7 +1318,10 @@
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
   const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.pchips .pchip', card) || $$('.rows .row', card).length > 0;
-  function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || (edit && c.hasAttribute('data-always-edit')) || hasData(c) || (edit && c.dataset.added)); }); /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
+  function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || (edit && c.hasAttribute('data-always-edit')) || hasData(c) || (edit && c.dataset.added)); });
+    // a task that is simply open has no progress to show: STATUS:NEEDS-ACTION is the absence of one
+    const pc = TASK && $('.card[data-card="progress"]', form);
+    if (pc && !pc.dataset.added) pc.hidden = !(f.status.value && f.status.value !== 'NEEDS-ACTION') && !(+f.percent.value > 0) && !f.completed_date.value; /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
   function updateButtons() { const changed = sig() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
