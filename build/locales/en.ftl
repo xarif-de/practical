@@ -535,3 +535,17 @@ rel-sibling = Sibling
 rel-friend = Friend
 rel-colleague = Colleague
 rel-contact = Other
+
+## Task editor (shares its cards with the event editor, see templates/editor.html)
+ed-card-general = General
+ed-card-progress = Progress
+ed-start = Start
+ed-due = Due
+ed-percent = Progress
+ed-completed-at = Completed on
+ed-tst-open = Open
+ed-tst-doing = In process
+ed-tst-done = Completed
+ed-tst-cancelled = Cancelled
+ed-view-pct = { $n } % done
+ed-view-done = completed on { $at }

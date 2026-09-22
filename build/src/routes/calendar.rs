@@ -35,6 +35,8 @@ pub struct CalQuery {
 pub struct CalendarPage {
     pub ctx: PageCtx,
     pub calendars: Vec<CalInfo>,
+    /// which consumer of `editor.html` this page is: "event" or "task"
+    pub editor_kind: &'static str,
     pub view: String,
     pub date: NaiveDate,
     pub title: String,
@@ -165,6 +167,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
     let p = prefs::get(&state.db, &user.id).await?;
     Ok(CalendarPage {
+        editor_kind: "event",
         ctx,
         calendars: all_cals,
         view,

@@ -535,3 +535,17 @@ rel-sibling = Geschwister
 rel-friend = Freund:in
 rel-colleague = Kolleg:in
 rel-contact = Sonstige
+
+## Aufgaben-Editor (teilt sich die Kärtchen mit dem Termin-Editor, siehe templates/editor.html)
+ed-card-general = Allgemein
+ed-card-progress = Bearbeitungsstand
+ed-start = Beginn
+ed-due = Fällig
+ed-percent = Fortschritt
+ed-completed-at = Erledigt am
+ed-tst-open = Offen
+ed-tst-doing = In Arbeit
+ed-tst-done = Erledigt
+ed-tst-cancelled = Abgebrochen
+ed-view-pct = { $n } % erledigt
+ed-view-done = erledigt am { $at }

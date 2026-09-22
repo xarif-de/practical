@@ -94,6 +94,8 @@
   const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
   const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert'};
   const iso = d => d.toISOString().slice(0, 10);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
   let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '' };
@@ -432,14 +434,14 @@
     $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }); // picking in the ledger leaves it exactly where it is
     $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
-    $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); openEditor(el.dataset.key, el.dataset.date); });
+    $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
     // the day document's details sit inside the clickable entry, so each of them stops the click
     $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
       navigator.clipboard.writeText(b.dataset.copytext).then(() => { b.classList.add('ok'); b.title = T.copied; setTimeout(() => b.classList.remove('ok'), 1200); }); });
     $$('.doc [data-map]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const q = encodeURIComponent(b.dataset.q);
       window.open(b.dataset.map === 'osm' ? 'https://www.openstreetmap.org/search?query=' + q : 'https://www.google.com/maps/search/?api=1&query=' + q, '_blank', 'noopener'); });
     $$('.doc a.lk', scope).forEach(a => a.onclick = e => e.stopPropagation());
-    $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); openEditor(null, d ? d.dataset.date : state.date); });
+    $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); edOpen(null, d ? d.dataset.date : state.date); });
   }
   function wire() {
     $$('[data-nav]', root).forEach(b => b.onclick = () => { if (b.dataset.nav === 'today') { tlHome = true; go(null, today); } else shift(b.dataset.nav === 'next' ? 1 : -1); });
@@ -452,7 +454,7 @@
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });
-  $('#fab').onclick = () => openEditor(null, state.date);
+  $('#fab').onclick = () => edOpen(null, state.date);
 
   // ---- orbit picker ----
   const pk = $('#picker');
@@ -474,6 +476,37 @@
   $('.ybtn.prev', pk).onclick = () => { pkBase -= 7; py(); }; $('.ybtn.next', pk).onclick = () => { pkBase += 7; py(); };
   $('.ybtn.reset', pk).onclick = () => { const d = parse(today); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; py(); pm(); density(); };
   $('#pk-close').onclick = () => pk.hidden = true; pk.addEventListener('click', e => { if (e.target === pk) pk.hidden = true; });
+
+
+  wire();
+  window.rusticalCal = { go, openEditor: edOpen };
+  // the editor module asks the page where "now" is and how to redraw after a save
+  window.rusticalHost = { kind: root.dataset.kind || 'calendar', date: () => state.date, cals: () => state.cals, reload: (push) => load(push) };
+})();
+
+// ---- editor: the card dialog. One implementation for THREE consumers — the calendar's events,
+// the category rules and the tasks page; the markup comes from templates/editor.html, which the
+// calendar and the tasks page both include. The page it runs on publishes `window.rusticalHost`
+// (where "now" is and how to reload); everything else lives here. ----
+(function () {
+  if (!document.getElementById('edform')) return;
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const csrf = document.querySelector('meta[name=csrf]').content;
+  const lang = document.body.dataset.lang || 'de';
+  const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert'};
+  const iso = d => d.toISOString().slice(0, 10);
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const HOST = () => window.rusticalHost || {};
+  const root = document.getElementById('viewroot') || document.body;
+  const today = root.dataset.today || fmt(new Date());
+  // the host owns the current date and the calendar filter; without one the editor still works
+  const state = { get date() { const h = HOST(); return (h.date && h.date()) || today; }, get cals() { const h = HOST(); return (h.cals && h.cals()) || ''; } };
+  const load = (push) => { const h = HOST(); if (h.reload) h.reload(push); };
+  const pk = document.getElementById('picker') || {};
 
   // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
@@ -1335,10 +1368,10 @@
   });
   $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(T.del)) return; const r = await fetch('/api/events/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
-  wire();
-  window.rusticalCal = { go, openEditor };
-  window.rusticalCal.openRuleEditor = openRuleEditor; { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
+  window.rusticalEd = { open: openEditor, openRule: openRuleEditor };
+  { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
 })();
+
 
 /* ===== universal search ===== */
 (function () {
