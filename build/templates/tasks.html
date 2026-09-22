@@ -33,7 +33,7 @@
 </div>
 {# the side editor lives next to the views when the window is wide enough (`.tk-wide`), else the dialog opens #}
 <div class="tkwrap" id="taskroot" data-view="{{ view }}" data-back="{{ back }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}"
-     data-t-hidden="{{ ctx.t1("tk-hidden", "n", "{n}") }}" data-hidden-done="{{ hidden_done }}">
+     data-t-more="{{ ctx.t1("tk-more", "n", "{n}") }}" data-done-total="{{ done_total }}" data-chunk="120">
   <div class="tkmain" id="tkmain"></div>
   <aside class="tkside" id="tkside" hidden></aside>
 </div>

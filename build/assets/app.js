@@ -1670,13 +1670,45 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en'
-    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', pickone: 'Pick a task — or create one with +' }
-    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten', pickone: 'Aufgabe auswählen — oder mit + eine neue anlegen' };
+    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', pickone: 'Pick a task — or create one with +' }
+    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten', pickone: 'Aufgabe auswählen — oder mit + eine neue anlegen' };
   const SORTL = lang === 'en'
     ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
     : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
 
-  let TASKS = (() => { try { return JSON.parse($('#tasks-data').textContent); } catch (_) { return []; } })();
+  // the page ships every open task (the working set, bounded) and the first page of the finished
+  // ones (unbounded by the lookback); the rest arrives as a view scrolls towards it
+  const DATA = (() => { try { return JSON.parse($('#tasks-data').textContent); } catch (_) { return { open: [], done: [], done_total: 0, per_day: {} }; } })();
+  const OPEN = DATA.open || [], PER_DAY = DATA.per_day || {};
+  const COMPLETED_TOTAL = DATA.completed_total || 0, CANCELLED_TOTAL = DATA.cancelled_total || 0;
+  let DONE = DATA.done || [], DONE_TOTAL = DATA.done_total || 0;
+  let TASKS = OPEN.concat(DONE);
+  const rebuild = () => { TASKS = OPEN.concat(DONE); };
+  /* a page of the finished list is a valid prefix of these two sorts only; every other one
+     needs the whole list, so it is fetched before the view draws */
+  const PREFIX_SAFE = ['due', 'done'];
+  let loading = null;
+  async function loadMore(all) {
+    if (loading) return loading;
+    if (DONE.length >= DONE_TOTAL) return null;
+    const limit = all ? Math.min(500, DONE_TOTAL - DONE.length) : +root.dataset.chunk || 120;
+    const u = `/api/tasks/done?back=${encodeURIComponent(root.dataset.back)}&offset=${DONE.length}&limit=${limit}` + (root.dataset.cals ? '&cals=' + encodeURIComponent(root.dataset.cals) : '');
+    loading = fetch(u).then(r => r.ok ? r.json() : null).then(d => {
+      loading = null;
+      if (!d) return null;
+      DONE = DONE.concat(d.items);
+      DONE_TOTAL = d.total;
+      rebuild();
+      return d;
+    }).catch(() => { loading = null; return null; });
+    return loading;
+  }
+  async function ensureAll() { while (DONE.length < DONE_TOTAL) { if (!await loadMore(true)) break; } }
+  /* the finished list runs newest first, so a day is fully loaded once the tail reaches past it */
+  async function ensureUntil(day) {
+    const oldest = () => { const l = DONE[DONE.length - 1]; return l && l.completed_at ? String(l.completed_at).slice(0, 10) : '9999-99-99'; };
+    while (DONE.length < DONE_TOTAL && oldest() > day) { if (!await loadMore()) break; }
+  }
   const main = $('#tkmain'), ed = $('#ed');
   const TODAY = parse(root.dataset.today);
   let view = root.dataset.view, sort = localStorage.tkSort || 'due', desc = localStorage.tkDesc === '1', cur = null;
@@ -1741,8 +1773,8 @@
 
   function bar(extra) {
     const opts = Object.entries(SORTL).map(([v, l]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${esc(l)}</option>`).join('');
-    const hid = +root.dataset.hiddenDone;
-    return `<div class="tkbar">${extra || ''}<span class="grow"></span>${hid ? `<span class="muted small">${esc(root.dataset.tHidden.replace('{n}', hid))}</span>` : ''}
+    const rest = DONE_TOTAL - DONE.length;
+    return `<div class="tkbar">${extra || ''}<span class="grow"></span>${rest > 0 ? `<span class="muted small" id="tk-rest">${esc(root.dataset.tMore.replace('{n}', rest))}</span>` : ''}
       <span class="sel">${ic('swap')}<span class="muted">${T.sort}</span><select id="tk-sort">${opts}</select></span>
       <button class="icon-btn" id="tk-dir" title="${T.sort}">${ic('reset')}</button></div>`;
   }
@@ -1766,7 +1798,8 @@
     order.forEach(g => {
       const items = sortList(TASKS.filter(t => bucket(t) === g), g === T.done && sort === 'due' ? 'done' : sort, desc);
       if (!items.length) return;
-      h += `<div class="tkg"><div class="tkgh${g === T.overdue ? ' due' : ''}">${ic(GICON[g] || 'list')}${esc(g)}<span class="n">${items.length}</span></div>`;
+      const n = g === T.done ? COMPLETED_TOTAL : g === T.cancelled ? CANCELLED_TOTAL : items.length;
+      h += `<div class="tkg"><div class="tkgh${g === T.overdue ? ' due' : ''}">${ic(GICON[g] || 'list')}${esc(g)}<span class="n">${n}</span></div>`;
       items.forEach(t => {
         h += `<div class="tkcard${isDone(t) ? ' off' : ''}" data-key="${esc(key(t))}">${cbox(t)}
           <div><div class="ti">${esc(t.summary)}</div><div class="meta">${chips(t, true)}</div></div>
@@ -1807,7 +1840,8 @@
     let h = bar(`<b>${T.vBoard}</b>`) + '<div class="tkboard">';
     BCOLS.forEach(([st, label, icon]) => {
       const items = sortList(TASKS.filter(t => (st === 'COMPLETED' ? isDone(t) : t.status === st && !isDone(t))), st === 'COMPLETED' && sort === 'due' ? 'done' : sort, desc);
-      h += `<div class="tkcol${st === 'COMPLETED' ? ' done' : ''}" data-st="${st}"><div class="chd">${ic(icon, 'xs')}${esc(label)}<span class="n">${items.length}</span></div>`;
+      const n = st === 'COMPLETED' ? COMPLETED_TOTAL : st === 'CANCELLED' ? CANCELLED_TOTAL : items.length;
+      h += `<div class="tkcol${st === 'COMPLETED' ? ' done' : ''}" data-st="${st}"><div class="chd">${ic(icon, 'xs')}${esc(label)}<span class="n">${n}</span></div>`;
       items.forEach(t => {
         const p = pctOf(t);
         h += `<div class="tkkc" draggable="true" data-key="${esc(key(t))}" style="--c:${esc(t.color)}"><div class="ti">${esc(t.summary)}</div>
@@ -1865,8 +1899,7 @@
   let pick = null;
   function vHistory() {
     const done = TASKS.filter(t => t.completed_at);
-    const per = {};
-    done.forEach(t => { const k = String(t.completed_at).slice(0, 10); per[k] = (per[k] || 0) + 1; });
+    const per = PER_DAY; // the server counted the whole window; the list below is what is loaded
     const start = new Date(TODAY); start.setDate(start.getDate() - 364 - ((start.getDay() + 6) % 7));
     let cols = '';
     for (let w = 0; w < 53; w++) {
@@ -1894,12 +1927,39 @@
   }
 
   const VIEWS = { groups: vGroups, table: vTable, board: vBoard, timeline: vTimeline, deck: vDeck, history: vHistory };
+  /* the sentinel sits at the end of the finished tasks; the observer reaches far enough ahead
+     (a screenful and a half) that the next page is there before the sentinel is on screen */
+  const SENTINEL = () => DONE.length < DONE_TOTAL && view !== 'deck' ? `<div class="tksent" id="tk-sent">${esc(T.loading)}</div>` : '';
+  let obs = null;
+  /* the page scrolls inside <main>, not the window: an observer left on the viewport sees the
+     sentinel only once it is clipped in, which is too late to be a prefetch */
+  function scrollParent(el) {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+    }
+    return null;
+  }
+  function watchSentinel() {
+    if (obs) obs.disconnect();
+    const el = $('#tk-sent');
+    if (!el) return;
+    obs = new IntersectionObserver(async es => { if (es.some(e => e.isIntersecting) && !loading) { if (await loadMore()) render(); } },
+      { root: scrollParent(el), rootMargin: '1200px 0px' });
+    obs.observe(el);
+  }
 
   function render() {
-    main.innerHTML = (VIEWS[view] || vGroups)();
+    if (!PREFIX_SAFE.includes(sort) && DONE.length < DONE_TOTAL) {
+      main.innerHTML = `<div class="tksent">${esc(T.loading)}</div>`;
+      ensureAll().then(render);
+      return;
+    }
+    main.innerHTML = (VIEWS[view] || vGroups)() + SENTINEL();
+    watchSentinel();
     wireBar();
     $$('[data-sk]', main).forEach(th => th.onclick = () => { if (sort === th.dataset.sk) desc = !desc; else { sort = th.dataset.sk; desc = false; } localStorage.tkSort = sort; localStorage.tkDesc = desc ? '1' : '0'; render(); });
-    $$('[data-d]', main).forEach(el => el.onclick = () => { pick = pick === el.dataset.d ? null : el.dataset.d; render(); });
+    $$('[data-d]', main).forEach(el => el.onclick = async () => { pick = pick === el.dataset.d ? null : el.dataset.d; if (pick) await ensureUntil(pick); render(); });
     $$('.tkkc[draggable]', main).forEach(c => c.ondragstart = e => e.dataTransfer.setData('text/plain', c.dataset.key));
     $$('.tkcol', main).forEach(col => {
       col.ondragover = e => e.preventDefault();
@@ -1908,7 +1968,7 @@
     const deck = $('.tkdeck', main);
     if (deck) deck.onkeydown = e => {
       const list = sortView(TASKS);
-      if (e.key === 'j' || e.key === 'ArrowDown') { deckI = Math.min(list.length - 1, deckI + 1); render(); $('.tkdeck', main).focus(); }
+      if (e.key === 'j' || e.key === 'ArrowDown') { deckI = Math.min(list.length - 1, deckI + 1); if (deckI > list.length - 6) loadMore().then(d => d && render()); render(); $('.tkdeck', main).focus(); }
       if (e.key === 'k' || e.key === 'ArrowUp') { deckI = Math.max(0, deckI - 1); render(); $('.tkdeck', main).focus(); }
       if (e.key === ' ') { e.preventDefault(); const t = list[deckI]; if (t) toggle(key(t)); }
       if (e.key === 'e') { e.preventDefault(); const t = list[deckI]; if (t) open(key(t)); }

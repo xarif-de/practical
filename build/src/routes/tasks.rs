@@ -23,6 +23,9 @@ const VIEWS: &[&str] = &["groups", "table", "board", "timeline", "deck", "histor
 /// How far back a view shows finished tasks. Without a limit a year of ticked-off work
 /// drowns every view, so this is one setting shared by all of them.
 const LOOKBACKS: &[&str] = &["day", "week", "month", "quarter", "year", "all"];
+/// Finished tasks reach back as far as the lookback allows, which is unbounded by design — they
+/// arrive in pages as the views scroll. Open tasks are the working set and always travel whole.
+pub const DONE_CHUNK: usize = 120;
 
 fn lookback_days(v: &str) -> Option<i64> {
     match v {
@@ -46,6 +49,18 @@ pub struct TaskQuery {
     pub cals: Option<String>,
 }
 
+/// The VTODO calendars the user left switched on; an empty filter means all of them.
+fn pick_calendars(all: &[CalInfo], cals: Option<&str>) -> Vec<CalInfo> {
+    let todo: Vec<CalInfo> = all.iter().filter(|c| c.components.iter().any(|x| x == "VTODO")).cloned().collect();
+    match cals.filter(|s| !s.is_empty()) {
+        Some(list) => {
+            let keep: Vec<&str> = list.split(',').collect();
+            todo.into_iter().filter(|c| keep.contains(&format!("{}/{}", c.principal, c.id).as_str())).collect()
+        }
+        None => todo,
+    }
+}
+
 fn one_of(v: Option<&String>, allowed: &[&'static str], default: &'static str) -> &'static str {
     v.and_then(|s| allowed.iter().find(|a| **a == s.as_str()).copied()).unwrap_or(default)
 }
@@ -63,11 +78,19 @@ pub struct TasksPage {
     pub timezone: String,
     pub cals_param: String,
     pub open_count: usize,
-    pub hidden_done: usize,
+    pub done_total: usize,
     pub tasks_json: String,
     pub alarm_presets_json: String,
     pub alarm_snaps_json: String,
     pub category_rules_json: String,
+}
+
+/// The order every view starts from: the newest completion first. A page of this list is a
+/// valid prefix of what the "due date" and "completion date" sorts show, so paging is safe there;
+/// any other sort needs the whole list and the views ask for it.
+fn by_completion(a: &Task, b: &Task) -> std::cmp::Ordering {
+    let key = |t: &Task| t.completed_at.or(t.due);
+    key(b).cmp(&key(a)).then(a.summary.cmp(&b.summary))
 }
 
 /// A finished task is in range when it was finished (or, lacking a stamp, was due) inside the window.
@@ -85,19 +108,29 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let back = one_of(q.back.as_ref(), LOOKBACKS, "month");
     let all_cals = events::visible_calendars(&state, &user, None).await?;
     let calendars: Vec<CalInfo> = all_cals.iter().filter(|c| c.components.iter().any(|x| x == "VTODO")).cloned().collect();
-    let picked: Vec<CalInfo> = match q.cals.as_deref().filter(|s| !s.is_empty()) {
-        Some(list) => {
-            let keep: Vec<&str> = list.split(',').collect();
-            calendars.iter().filter(|c| keep.contains(&format!("{}/{}", c.principal, c.id).as_str())).cloned().collect()
-        }
-        None => calendars.clone(),
-    };
+    let picked = pick_calendars(&all_cals, q.cals.as_deref());
     let all = tasks::tasks_for(&state, &picked, vc.tz).await?;
-    let open_count = all.iter().filter(|t| t.open()).count();
     let days = lookback_days(back);
-    let shown: Vec<&Task> = all.iter().filter(|t| t.open() || in_lookback(t, vc.today, days)).collect();
-    let hidden_done = all.len() - shown.len();
-    let tasks_json = serde_json::to_string(&shown).unwrap_or_else(|_| "[]".into());
+    let (open, rest): (Vec<Task>, Vec<Task>) = all.into_iter().partition(|t| t.open());
+    let mut done: Vec<Task> = rest.into_iter().filter(|t| in_lookback(t, vc.today, days)).collect();
+    done.sort_by(by_completion);
+    let open_count = open.len();
+    let done_total = done.len();
+    // the history view's heat map needs a count per day for the whole window, not just the page
+    let mut per_day: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for t in &done {
+        if let Some(c) = t.completed_at {
+            *per_day.entry(c.date().to_string()).or_default() += 1;
+        }
+    }
+    // the views name what there is, not what is loaded, so the two tails are counted apart
+    let cancelled_total = done.iter().filter(|t| t.status == "CANCELLED").count();
+    let first: Vec<&Task> = done.iter().take(DONE_CHUNK).collect();
+    let tasks_json = serde_json::to_string(&serde_json::json!({
+        "open": open, "done": first, "done_total": done_total,
+        "completed_total": done_total - cancelled_total, "cancelled_total": cancelled_total, "per_day": per_day
+    }))
+    .unwrap_or_else(|_| "{}".into());
     let p = prefs::get(&state.db, &user.id).await?;
     Ok(TasksPage {
         ctx,
@@ -109,7 +142,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         timezone: vc.tz.name().to_string(),
         cals_param: q.cals.unwrap_or_default(),
         open_count,
-        hidden_done,
+        done_total,
         tasks_json,
         alarm_snaps_json: serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap(),
         alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
@@ -117,6 +150,42 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     })
 }
 
+/// One page of the finished tasks, in the same order the page's first chunk uses.
+/// The views ask for the next one as it scrolls into reach.
+async fn done_page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<PageQuery>) -> AppResult<axum::Json<DonePage>> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let back = one_of(q.back.as_ref(), LOOKBACKS, "month");
+    let all_cals = events::visible_calendars(&state, &user, None).await?;
+    let picked = pick_calendars(&all_cals, q.cals.as_deref());
+    let days = lookback_days(back);
+    let mut done: Vec<Task> = tasks::tasks_for(&state, &picked, vc.tz).await?.into_iter().filter(|t| !t.open() && in_lookback(t, vc.today, days)).collect();
+    done.sort_by(by_completion);
+    let total = done.len();
+    let offset = q.offset.unwrap_or(0).min(total);
+    let limit = q.limit.unwrap_or(DONE_CHUNK).clamp(1, 500);
+    let items: Vec<Task> = done.into_iter().skip(offset).take(limit).collect();
+    Ok(axum::Json(DonePage { total, offset, items }))
+}
+
+#[derive(serde::Deserialize, Default)]
+pub struct PageQuery {
+    #[serde(default)]
+    pub back: Option<String>,
+    #[serde(default)]
+    pub cals: Option<String>,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(serde::Serialize)]
+pub struct DonePage {
+    pub total: usize,
+    pub offset: usize,
+    pub items: Vec<Task>,
+}
+
 pub fn router() -> Router<SharedState> {
-    Router::new().route("/tasks", get(page))
+    Router::new().route("/tasks", get(page)).route("/api/tasks/done", get(done_page))
 }
