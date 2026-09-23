@@ -10,6 +10,11 @@
 //! days; OpenHolidays' subdivision lists the same way (year 0). Country and region *names* and
 //! the region hierarchy of countries OpenHolidays does not cover come from Unicode CLDR,
 //! built into the binary (`src/data/regions.json`, `tools/gen_regions.py`) — no request needed.
+//! Upkeep is lazy (`maintain`, hourly from tasks.rs; at start it only reads what is saved):
+//! which source covers which country is asked at most daily (`refresh_coverage`), CLDR is asked
+//! at most weekly whether a newer release exists (`check_cldr`: one small request, usually a
+//! 304) and only then are its files fetched — about once a year. Saved answers live in
+//! `xui_holidays` (year 0) and win over the built-in snapshot when newer.
 //!
 //! A region is stored as its ISO 3166-2 code where it has one (DE-SN, AT-1), else as
 //! OpenHolidays' own code (CH-AG-ZZ, a district); both APIs accept ISO codes.
@@ -72,35 +77,305 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 
 // ---- built-in region data (CLDR) ----
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct DataCountry {
+    #[serde(default)]
     oh: u8,
+    #[serde(default)]
     ng: u8,
     n: HashMap<String, String>,
 }
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct DataSub {
     p: String,
     n: HashMap<String, String>,
 }
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct Data {
+    /// CLDR release the names come from ("release-48-2")
+    #[serde(default)]
+    cldr: String,
     countries: HashMap<String, DataCountry>,
     subs: HashMap<String, DataSub>,
 }
 
-static DATA: LazyLock<Data> = LazyLock::new(|| serde_json::from_str(include_str!("../data/regions.json")).expect("src/data/regions.json"));
+static BUILT_IN: LazyLock<Data> = LazyLock::new(|| serde_json::from_str(include_str!("../data/regions.json")).expect("src/data/regions.json"));
+/// the names in use: the built-in ones, replaced by a newer CLDR release once `check_cldr` got one
+static NEWER: std::sync::RwLock<Option<std::sync::Arc<Data>>> = std::sync::RwLock::new(None);
+
+fn with_data<T>(f: impl FnOnce(&Data) -> T) -> T {
+    let newer = NEWER.read().unwrap().clone();
+    match newer {
+        Some(d) => f(&d),
+        None => f(&BUILT_IN),
+    }
+}
 
 /// a name in `lang`, else English, else any
 fn name_in(n: &HashMap<String, String>, lang: &str) -> Option<String> {
     n.get(lang).or_else(|| n.get("en")).or_else(|| n.values().next()).cloned()
 }
 
+/// Which countries each source covers: the built-in snapshot until `refresh_coverage` knows better.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Coverage {
+    oh: std::collections::BTreeSet<String>,
+    ng: std::collections::BTreeSet<String>,
+}
+
+static COVERAGE: LazyLock<std::sync::RwLock<Coverage>> = LazyLock::new(|| {
+    let pick = |f: fn(&DataCountry) -> bool| BUILT_IN.countries.iter().filter(|(_, c)| f(c)).map(|(k, _)| k.clone()).collect();
+    std::sync::RwLock::new(Coverage { oh: pick(|c| c.oh == 1), ng: pick(|c| c.ng == 1) })
+});
+
 fn covered_by_openholidays(country: &str) -> bool {
-    DATA.countries.get(country).is_some_and(|c| c.oh == 1)
+    COVERAGE.read().unwrap().oh.contains(country)
 }
 fn covered_by_nager(country: &str) -> bool {
-    DATA.countries.get(country).is_some_and(|c| c.ng == 1)
+    COVERAGE.read().unwrap().ng.contains(country)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OhCountry {
+    iso_code: String,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NagerCountry {
+    country_code: String,
+}
+
+/// A fresh list replaces the known one unless it looks broken: empty, or less than half as
+/// long (an outage answering `[]` must not wipe a source's countries).
+fn accept(known: &std::collections::BTreeSet<String>, fresh: Result<Vec<String>, String>, what: &str) -> std::collections::BTreeSet<String> {
+    match fresh {
+        Ok(list) if !list.is_empty() && list.len() * 2 >= known.len() => {
+            let fresh: std::collections::BTreeSet<String> = list.into_iter().filter(|c| c.len() == 2 && c.chars().all(|x| x.is_ascii_uppercase())).collect();
+            let added: Vec<_> = fresh.difference(known).collect();
+            let gone: Vec<_> = known.difference(&fresh).collect();
+            if !added.is_empty() || !gone.is_empty() {
+                tracing::info!("holiday coverage {what}: added {added:?}, gone {gone:?}");
+            }
+            fresh
+        }
+        Ok(list) => {
+            tracing::warn!("holiday coverage {what}: ignoring a list of {} (had {})", list.len(), known.len());
+            known.clone()
+        }
+        Err(e) => {
+            tracing::warn!("holiday coverage {what}: {e}");
+            known.clone()
+        }
+    }
+}
+
+/// Refresh which countries OpenHolidays and Nager.Date cover; the answer is saved, so a
+/// restart (even during an outage) starts from it.
+async fn refresh_coverage(state: &AppState) -> AppResult<()> {
+    tracing::info!("holiday coverage: asking OpenHolidays and Nager.Date");
+    let oh = get_json::<Vec<OhCountry>>(state, &format!("{OPENHOLIDAYS}/Countries")).await.map(|v| v.into_iter().map(|c| c.iso_code).collect());
+    let ng = get_json::<Vec<NagerCountry>>(state, &format!("{NAGER}/AvailableCountries")).await.map(|v| v.into_iter().map(|c| c.country_code).collect());
+    let known = COVERAGE.read().unwrap().clone();
+    let next = Coverage { oh: accept(&known.oh, oh, "OpenHolidays"), ng: accept(&known.ng, ng, "Nager.Date") };
+    if next != known {
+        *COVERAGE.write().unwrap() = next.clone();
+    }
+    cache_put(state, "", "", 0, "coverage", &serde_json::to_string(&next).unwrap()).await
+}
+
+const COVERAGE_EVERY_H: i64 = 24;
+const CLDR_CHECK_EVERY_H: i64 = 7 * 24;
+const CLDR: &str = "https://raw.githubusercontent.com/unicode-org/cldr";
+const CLDR_LATEST: &str = "https://api.github.com/repos/unicode-org/cldr/releases/latest";
+
+/// Upkeep of the region data, called hourly by tasks.rs. The first call only reads what was
+/// saved; a request goes out when a check is due, a download only when there is something new.
+pub async fn maintain(state: &AppState, first: bool) -> AppResult<()> {
+    if first {
+        if let Some((j, _)) = cache_aged(state, "", "", 0, "coverage").await?
+            && let Ok(saved) = serde_json::from_str::<Coverage>(&j)
+            && !saved.oh.is_empty()
+        {
+            *COVERAGE.write().unwrap() = saved;
+        }
+        if let Some((j, _)) = cache_aged(state, "", "", 0, "cldr-data").await?
+            && let Ok(saved) = serde_json::from_str::<Data>(&j)
+            && newer(&saved.cldr, &BUILT_IN.cldr)
+        {
+            tracing::info!("region names: {} (saved) over {} (built in)", saved.cldr, BUILT_IN.cldr);
+            *NEWER.write().unwrap() = Some(std::sync::Arc::new(saved));
+        }
+    }
+    if !state.config.holidays_enabled {
+        return Ok(());
+    }
+    if cache_aged(state, "", "", 0, "coverage").await?.is_none_or(|(_, h)| h >= COVERAGE_EVERY_H) {
+        refresh_coverage(state).await?;
+    }
+    if cache_aged(state, "", "", 0, "cldr-check").await?.is_none_or(|(_, h)| h >= CLDR_CHECK_EVERY_H) {
+        check_cldr(state).await?;
+    }
+    Ok(())
+}
+
+/// "release-48-2" → [48, 2], so releases compare as numbers
+fn cldr_version(tag: &str) -> Vec<u32> {
+    tag.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).filter_map(|p| p.parse().ok()).collect()
+}
+fn newer(tag: &str, than: &str) -> bool {
+    !cldr_version(tag).is_empty() && cldr_version(tag) > cldr_version(than)
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default)]
+struct CldrCheck {
+    etag: String,
+    tag: String,
+}
+
+/// Ask GitHub for CLDR's latest release (with the last ETag, so an unchanged answer is a
+/// bodiless 304); fetch and apply its names only when it is newer than the ones in use.
+async fn check_cldr(state: &AppState) -> AppResult<()> {
+    let last: CldrCheck = cache_aged(state, "", "", 0, "cldr-check").await?.and_then(|(j, _)| serde_json::from_str(&j).ok()).unwrap_or_default();
+    let mut req = state.http.get(CLDR_LATEST).header("Accept", "application/vnd.github+json").header("User-Agent", "rustical-ui").timeout(TIMEOUT);
+    if !last.etag.is_empty() {
+        req = req.header("If-None-Match", &last.etag);
+    }
+    let check = match req.send().await {
+        Ok(r) if r.status() == reqwest::StatusCode::NOT_MODIFIED => last,
+        Ok(r) if r.status().is_success() => {
+            let etag = r.headers().get("etag").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            #[derive(serde::Deserialize)]
+            struct Release {
+                tag_name: String,
+            }
+            match r.json::<Release>().await {
+                Ok(rel) => CldrCheck { etag, tag: rel.tag_name },
+                Err(e) => {
+                    tracing::warn!("cldr check: {e}");
+                    return Ok(()); // no timestamp: try again next hour
+                }
+            }
+        }
+        Ok(r) => {
+            tracing::warn!("cldr check: HTTP {}", r.status());
+            return Ok(());
+        }
+        Err(e) => {
+            tracing::warn!("cldr check: {e}");
+            return Ok(());
+        }
+    };
+    let current = with_data(|d| d.cldr.clone());
+    tracing::info!("cldr check: latest {}, in use {current}", check.tag);
+    if newer(&check.tag, &current) {
+        match fetch_cldr(state, &check.tag).await {
+            Ok(d) => {
+                tracing::info!("region names: CLDR {} replaces {current}", check.tag);
+                cache_put(state, "", "", 0, "cldr-data", &serde_json::to_string(&d).unwrap()).await?;
+                *NEWER.write().unwrap() = Some(std::sync::Arc::new(d));
+            }
+            Err(e) => {
+                tracing::warn!("cldr {}: {e}", check.tag);
+                return Ok(()); // the check stays due, the download is retried next hour
+            }
+        }
+    }
+    cache_put(state, "", "", 0, "cldr-check", &serde_json::to_string(&check).unwrap()).await
+}
+
+async fn get_text(state: &AppState, url: &str) -> Result<String, String> {
+    let r = state.http.get(url).header("User-Agent", "rustical-ui").timeout(Duration::from_secs(60)).send().await.map_err(|e| format!("{url}: {e}"))?;
+    if !r.status().is_success() {
+        return Err(format!("{url}: HTTP {}", r.status()));
+    }
+    r.text().await.map_err(|e| format!("{url}: {e}"))
+}
+
+/// CLDR's files for `tag`, read the way tools/gen_regions.py reads them.
+async fn fetch_cldr(state: &AppState, tag: &str) -> Result<Data, String> {
+    let base = format!("{CLDR}/{tag}/common");
+    let mut countries: HashMap<String, DataCountry> = HashMap::new();
+    let en = get_text(state, &format!("{base}/main/en.xml")).await?;
+    for (code, _) in xml_items(&en, "territory") {
+        if code.len() == 2 && code.chars().all(|c| c.is_ascii_uppercase()) && !["ZZ", "EU", "EZ", "UN", "QO", "XA", "XB"].contains(&code.as_str()) {
+            countries.insert(code, DataCountry { oh: 0, ng: 0, n: HashMap::new() });
+        }
+    }
+    if countries.len() < 200 {
+        return Err(format!("only {} countries in main/en.xml", countries.len()));
+    }
+    let mut subs: HashMap<String, DataSub> = HashMap::new();
+    let sup = get_text(state, &format!("{base}/supplemental/subdivisions.xml")).await?;
+    for (parent, contains) in xml_subgroups(&sup) {
+        let parent = if parent.len() == 2 { parent } else { iso(&parent) };
+        if countries.contains_key(&parent[..2.min(parent.len())]) {
+            for c in contains.split_whitespace() {
+                subs.insert(iso(c), DataSub { p: parent.clone(), n: HashMap::new() });
+            }
+        }
+    }
+    for lang in crate::i18n::LANGS {
+        let main = if *lang == "en" { en.clone() } else { get_text(state, &format!("{base}/main/{lang}.xml")).await? };
+        for (code, name) in xml_items(&main, "territory") {
+            if let Some(c) = countries.get_mut(&code) {
+                c.n.insert(lang.to_string(), name);
+            }
+        }
+        let sd = get_text(state, &format!("{base}/subdivisions/{lang}.xml")).await?;
+        for (code, name) in xml_items(&sd, "subdivision") {
+            if let Some(s) = subs.get_mut(&iso(&code)) {
+                s.n.insert(lang.to_string(), name);
+            }
+        }
+    }
+    Ok(Data { cldr: tag.to_string(), countries, subs })
+}
+
+/// "desn" → "DE-SN", "fr69m" → "FR-69M"
+fn iso(cldr: &str) -> String {
+    if cldr.len() <= 2 { cldr.to_uppercase() } else { format!("{}-{}", cldr[..2].to_uppercase(), cldr[2..].to_uppercase()) }
+}
+
+fn attr(tag: &str, name: &str) -> Option<String> {
+    let k = format!(" {name}=\"");
+    let i = tag.find(&k)? + k.len();
+    Some(tag[i..].split('"').next()?.to_string())
+}
+
+fn unescape(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+}
+
+/// `<tag type="X">Text</tag>` entries without an `alt` variant, as (type, text). CLDR's files
+/// are regular enough for this; a parser crate would be a dependency for one yearly download.
+fn xml_items(xml: &str, tag: &str) -> Vec<(String, String)> {
+    let open = format!("<{tag} ");
+    let close = format!("</{tag}>");
+    let mut out = vec![];
+    let mut rest = xml;
+    while let Some(i) = rest.find(&open) {
+        rest = &rest[i..];
+        let Some(gt) = rest.find('>') else { break };
+        let head = &rest[..gt];
+        let body = &rest[gt + 1..];
+        let Some(end) = body.find(&close) else { break };
+        if !head.contains(" alt=\"") && !head.ends_with('/')
+            && let Some(t) = attr(head, "type")
+        {
+            out.push((t, unescape(&body[..end])));
+        }
+        rest = &body[end..];
+    }
+    out
+}
+
+/// `<subgroup type="DE" contains="debb debe …"/>` as (type, contains)
+fn xml_subgroups(xml: &str) -> Vec<(String, String)> {
+    xml.split("<subgroup ").skip(1).filter_map(|p| {
+        let head = &p[..p.find('>')?];
+        Some((attr(&format!(" {head}"), "type")?, attr(&format!(" {head}"), "contains")?))
+    }).collect()
 }
 /// Is there a source for school holidays of `country`?
 pub fn has_school(country: &str) -> bool {
@@ -121,17 +396,18 @@ pub fn sources(country: &str) -> (Vec<&'static str>, Vec<&'static str>) {
 
 /// The CLDR name of a country or subdivision code in `lang` (None for unknown codes).
 pub fn region_name(code: &str, lang: &str) -> Option<String> {
-    if code.len() == 2 {
-        DATA.countries.get(code).and_then(|c| name_in(&c.n, lang))
-    } else {
-        DATA.subs.get(code).and_then(|s| name_in(&s.n, lang))
-    }
+    with_data(|d| if code.len() == 2 { d.countries.get(code).and_then(|c| name_in(&c.n, lang)) } else { d.subs.get(code).and_then(|s| name_in(&s.n, lang)) })
 }
 
 // ---- cache ----
 
 /// The cached JSON for a key and whether it is younger than CACHE_DAYS.
 async fn cache_get(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str) -> AppResult<Option<(String, bool)>> {
+    Ok(cache_aged(state, country, subdivision, year, kind).await?.map(|(j, hours)| (j, hours < CACHE_DAYS * 24)))
+}
+
+/// The cached JSON for a key and its age in hours.
+async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str) -> AppResult<Option<(String, i64)>> {
     let row = sqlx::query("SELECT json, fetched_at FROM xui_holidays WHERE country = ? AND subdivision = ? AND year = ? AND kind = ?")
         .bind(country)
         .bind(subdivision)
@@ -141,8 +417,8 @@ async fn cache_get(state: &AppState, country: &str, subdivision: &str, year: i32
         .await?;
     Ok(row.map(|r| {
         let fetched: String = r.get("fetched_at");
-        let fresh = chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").map(|f| (Utc::now().naive_utc() - f).num_days() < CACHE_DAYS).unwrap_or(false);
-        (r.get("json"), fresh)
+        let hours = chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").map(|f| (Utc::now().naive_utc() - f).num_hours()).unwrap_or(i64::MAX);
+        (r.get("json"), hours)
     }))
 }
 
@@ -307,10 +583,11 @@ fn sort(v: &mut [Region]) {
 
 /// The countries a holiday source covers, named in `lang` (built in, no request).
 pub fn countries(lang: &str) -> Vec<Region> {
-    let mut v: Vec<Region> = DATA
-        .countries
-        .iter()
-        .map(|(code, c)| Region { code: code.clone(), name: name_in(&c.n, lang).unwrap_or_else(|| code.clone()), parent: String::new(), depth: 0, category: String::new(), school: c.oh == 1 })
+    let cov = COVERAGE.read().unwrap().clone();
+    let mut v: Vec<Region> = cov
+        .oh
+        .union(&cov.ng)
+        .map(|code| Region { code: code.clone(), name: region_name(code, lang).unwrap_or_else(|| code.clone()), parent: String::new(), depth: 0, category: String::new(), school: cov.oh.contains(code) })
         .collect();
     sort(&mut v);
     v
@@ -339,12 +616,13 @@ fn flatten(items: Vec<ApiRegion>, lang: &str, parent: &str, depth: u8, out: &mut
 
 /// CLDR's hierarchy below `parent`, flattened the same way (countries OpenHolidays lacks).
 fn cldr_tree(parent: &str, lang: &str, depth: u8, out: &mut Vec<Region>) {
-    let mut level: Vec<Region> = DATA
-        .subs
-        .iter()
-        .filter(|(_, s)| s.p == parent)
-        .map(|(code, s)| Region { code: code.clone(), name: name_in(&s.n, lang).unwrap_or_else(|| code.clone()), parent: parent.to_string(), depth, category: String::new(), school: false })
-        .collect();
+    let mut level: Vec<Region> = with_data(|d| {
+        d.subs
+            .iter()
+            .filter(|(_, s)| s.p == parent)
+            .map(|(code, s)| Region { code: code.clone(), name: name_in(&s.n, lang).unwrap_or_else(|| code.clone()), parent: parent.to_string(), depth, category: String::new(), school: false })
+            .collect()
+    });
     sort(&mut level);
     for r in level {
         let code = r.code.clone();
@@ -355,7 +633,7 @@ fn cldr_tree(parent: &str, lang: &str, depth: u8, out: &mut Vec<Region>) {
 
 /// The subdivisions of `country`, all levels, parents first.
 pub async fn subdivisions(state: &AppState, country: &str, lang: &str) -> AppResult<Vec<Region>> {
-    if !DATA.countries.contains_key(country) {
+    if !covered_by_openholidays(country) && !covered_by_nager(country) {
         return Ok(vec![]);
     }
     if covered_by_openholidays(country) {
@@ -424,6 +702,33 @@ mod tests {
         let mut us = vec![];
         cldr_tree("US", "en", 0, &mut us);
         assert!(us.iter().any(|r| r.code == "US-TX" && r.name == "Texas"));
+    }
+
+    #[test]
+    fn cldr_versions_and_xml() {
+        assert!(newer("release-49", "release-48-2"));
+        assert!(newer("release-48-2", "release-48"));
+        assert!(!newer("release-48", "release-48-2"));
+        assert!(!newer("", "release-48"));
+        assert_eq!(BUILT_IN.cldr, "release-48-2");
+        let xml = r#"<territories><territory type="DE">Deutschland</territory><territory type="US" alt="short">USA</territory><territory type="US">Vereinigte Staaten</territory><territory type="BA">Bosnien &amp; Herzegowina</territory></territories>
+<subdivision type="desn" draft="contributed">Sachsen</subdivision>
+<subgroup type="DE" contains="debb desn"/><subgroup type="frara" contains="fr01 fr69m"/>"#;
+        assert_eq!(xml_items(xml, "territory"), [("DE".into(), "Deutschland".into()), ("US".into(), "Vereinigte Staaten".into()), ("BA".into(), "Bosnien & Herzegowina".into())]);
+        assert_eq!(xml_items(xml, "subdivision"), [("desn".into(), "Sachsen".into())]);
+        assert_eq!(xml_subgroups(xml), [("DE".into(), "debb desn".into()), ("frara".into(), "fr01 fr69m".into())]);
+        assert_eq!(iso("fr69m"), "FR-69M");
+    }
+
+    #[test]
+    fn a_broken_coverage_list_keeps_the_known_one() {
+        let known: std::collections::BTreeSet<String> = ["AT", "CH", "DE", "FR"].map(String::from).into();
+        assert_eq!(accept(&known, Ok(vec![]), "t"), known);
+        assert_eq!(accept(&known, Ok(vec!["DE".into()]), "t"), known);
+        assert_eq!(accept(&known, Err("down".into()), "t"), known);
+        let grown = accept(&known, Ok(["AT", "CH", "DE", "FR", "IT"].map(String::from).to_vec()), "t");
+        assert!(grown.contains("IT") && grown.len() == 5);
+        assert!(region_name("KR", "de").is_some(), "names for countries no source covers yet are built in");
     }
 
     #[test]

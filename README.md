@@ -168,10 +168,13 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   to municipalities) → `date.nager.at` (204 countries, ISO 3166-2 regions) → stale cache; school:
   OpenHolidays → stale cache. 8 s timeout per link, answers cached 30 days in `xui_holidays`.
   Each user picks country and region (default `HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`); regions
-  are stored as ISO 3166-2 codes where one exists. Country/region names in every UI language and the
-  region tree of countries OpenHolidays lacks come from Unicode CLDR 48, built in
-  (`build/src/data/regions.json`, regenerate with `python3 tools/gen_regions.py` in `build/`; the
-  file also snapshots which source covers which country). Unicode License v3.
+  are stored as ISO 3166-2 codes where one exists. Country/region names in every UI language (all ISO
+  countries) and the region tree of countries OpenHolidays lacks come from Unicode CLDR, built in
+  (`build/src/data/regions.json` from `tools/gen_regions.py`; Unicode License v3). Upkeep is lazy
+  (hourly task; at start it only reads saved state): which source covers which country is asked at
+  most daily, CLDR's latest release at most weekly (one request with ETag, usually a 304); only a
+  newer release is downloaded (~3.5 MB, about yearly) and saved in `xui_holidays`, where it wins over
+  the built-in file. A broken answer (error, empty or halved list) never replaces a known one.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
   a one-minute loop expands the subscribers' events a few days ahead, sends each VALARM once
   (`xui_alarms_sent`) and drops subscriptions the push service reports gone (404/410).

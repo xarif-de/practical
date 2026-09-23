@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Generate src/data/regions.json: country and subdivision names (Unicode CLDR) for every
-language of the app, the subdivision hierarchy (CLDR supplemental), and which holiday source
-covers which country (OpenHolidays, Nager.Date — a snapshot; the app does not ask at runtime).
+language of the app — all ISO countries, not only the covered ones, so a country a holiday
+source adds later has its names already — the subdivision hierarchy (CLDR supplemental), and
+which holiday source covers which country (OpenHolidays, Nager.Date). That coverage is only the
+starting point: the app refreshes it itself (domain/holidays.rs `refresh_coverage`).
 
 Run from build/: `python3 tools/gen_regions.py`. Re-run after a CLDR release or when a
 language is added to LANGS. Data: Unicode CLDR, Unicode License v3 (attribution kept in the file).
 """
 import json, re, sys, urllib.request, datetime, xml.etree.ElementTree as ET
 
-CLDR = "release-48"  # pinned: a moving branch would change names under the app's feet
+CLDR = "release-48-2"  # pinned: a moving branch would change names under the app's feet
 LANGS = ["de", "en", "fr", "es"]
 RAW = f"https://raw.githubusercontent.com/unicode-org/cldr/{CLDR}/common"
 
@@ -23,10 +25,16 @@ def iso(cldr_code):  # "desn" → "DE-SN", "fr69m" → "FR-69M"
 
 oh = {c["isoCode"] for c in get("https://openholidaysapi.org/Countries", True)}
 ng = {c["countryCode"] for c in get("https://date.nager.at/api/v3/AvailableCountries", True)}
-covered = sorted(oh | ng)
-print(f"OpenHolidays {len(oh)}, Nager.Date {len(ng)}, together {len(covered)}", file=sys.stderr)
+print(f"OpenHolidays {len(oh)}, Nager.Date {len(ng)}, together {len(oh | ng)}", file=sys.stderr)
 
-countries = {c: {"oh": int(c in oh), "ng": int(c in ng), "n": {}} for c in covered}
+# every ISO 3166-1 country CLDR names (two letters; ZZ, EU, UN … are groupings or placeholders)
+NOT_COUNTRIES = {"ZZ", "EU", "EZ", "UN", "QO", "XA", "XB"}
+en = ET.fromstring(get(f"{RAW}/main/en.xml"))
+codes = {t.get("type") for t in en.iter("territory") if re.fullmatch(r"[A-Z]{2}", t.get("type") or "") and t.get("type") not in NOT_COUNTRIES}
+missing = (oh | ng) - codes
+if missing:
+    sys.exit(f"covered but unknown to CLDR: {sorted(missing)}")
+countries = {c: {"oh": int(c in oh), "ng": int(c in ng), "n": {}} for c in sorted(codes)}
 subs = {}
 root = ET.fromstring(get(f"{RAW}/supplemental/subdivisions.xml"))
 for g in root.iter("subgroup"):
@@ -51,6 +59,7 @@ for lang in LANGS:
 # names every language lacks are dropped from the name map; the app falls back to en, then the code
 out = {
     "source": f"Unicode CLDR {CLDR} (Unicode License v3, https://www.unicode.org/license.txt); coverage: openholidaysapi.org, date.nager.at",
+    "cldr": CLDR,  # the app compares this with CLDR's latest release (holidays.rs `check_cldr`)
     "generated": datetime.date.today().isoformat(),
     "langs": LANGS,
     "countries": countries,
@@ -60,4 +69,4 @@ path = "src/data/regions.json"
 with open(path, "w") as f:
     json.dump(out, f, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 missing = [c for c, v in countries.items() if "en" not in v["n"]]
-print(f"{len(countries)} countries, {len(subs)} subdivisions → {path}; no English name: {missing}", file=sys.stderr)
+print(f"{len(countries)} countries ({len(oh | ng)} covered), {len(subs)} subdivisions → {path}; no English name: {missing}", file=sys.stderr)

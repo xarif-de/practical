@@ -85,3 +85,19 @@ pub fn spawn_dev_asset_watcher(state: SharedState) {
         }
     });
 }
+
+/// Region data upkeep (domain::holidays::maintain): hourly; the first round only reads what is
+/// saved, requests go out when a check is due (coverage daily, CLDR weekly).
+pub fn spawn_holiday_coverage(state: SharedState) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        let mut first = true;
+        loop {
+            tick.tick().await;
+            if let Err(e) = crate::domain::holidays::maintain(&state, first).await {
+                tracing::warn!("region data upkeep: {e}");
+            }
+            first = false;
+        }
+    });
+}

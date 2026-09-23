@@ -152,6 +152,7 @@ async fn serve() -> Result<(), String> {
     let app = build_router(&state)?;
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());
+    tasks::spawn_holiday_coverage(state.clone());
     tasks::spawn_dev_asset_watcher(state.clone());
     domain::push::spawn_reminder_loop(state.clone());
 
