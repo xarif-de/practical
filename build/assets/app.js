@@ -1,4 +1,19 @@
 /* rustical-ui — shared behaviour (vanilla ES2020, no framework). */
+/* i18n: the page ships its js-* strings (layout.html, from locales/*.ftl; placeholders %name);
+   month and weekday names and date formats come from Intl in the page's locale */
+(function () {
+  let S = {};
+  try { S = JSON.parse(document.getElementById('i18n').textContent); } catch (_) {}
+  const LOC = window.LOC = document.body.dataset.locale || 'de-DE';
+  window.tr = (k, v) => { let s = S[k] ?? k; if (v) for (const [n, x] of Object.entries(v)) s = s.split('%' + n).join(x); return s; };
+  window.trs = (prefix, names) => Object.fromEntries(names.map(n => [n, tr(prefix + n)]));
+  const f = o => new Intl.DateTimeFormat(LOC, o);
+  window.dfmt = (d, o) => f(o).format(d);
+  const days = style => Array.from({ length: 7 }, (_, i) => f({ weekday: style }).format(new Date(2024, 0, 1 + i)).replace(/\.$/, '')); // 2024-01-01 was a Monday
+  window.MONTHS = Array.from({ length: 12 }, (_, i) => f({ month: 'long' }).format(new Date(2024, i, 1)));
+  window.WEEKDAYS = days('short'); window.WEEKDAYS_LONG = days('long');
+})();
+
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -45,7 +60,7 @@
 
   // the app's own question instead of confirm(): same look everywhere, and a browser that
   // suppresses native dialogs (automation, some embedded views) cannot swallow a delete
-  window.ask = text => askYesNo(text, ...(document.body.dataset.lang === 'en' ? ['Yes', 'No'] : ['Ja', 'Nein']));
+  window.ask = text => askYesNo(text, tr('js-yes'), tr('js-no'));
 
   // the bottom toast (layout.html renders the server's one the same way): a success fades, an error stays until closed
   window.toast = (text, err) => {
@@ -69,7 +84,7 @@
   // copy-to-clipboard
   $$('[data-copy]').forEach(b => b.addEventListener('click', async () => {
     const el = $(b.dataset.copy); if (!el) return;
-    try { await navigator.clipboard.writeText(el.textContent.trim()); toast(document.body.dataset.lang === 'en' ? 'Copied.' : 'Kopiert.'); } catch (_) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    try { await navigator.clipboard.writeText(el.textContent.trim()); toast(tr('js-copied')); } catch (_) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); }
   }));
 
   // toast: a success fades by itself, an error stays until closed
@@ -81,7 +96,7 @@
     const csrfTok = ($('meta[name=csrf]') || {}).content || '';
     // old hashes: the tabs of the previous layout and the server's redirect anchors
     const OLD = { profile: 'account', tokens: 'account', prefs: 'home', '': 'home' };
-    const show = () => {
+    let show = () => {
       let id = decodeURIComponent(location.hash.slice(1)); id = OLD[id] ?? id;
       const pg = $('#' + CSS.escape(id), settings);
       if (!pg || !pg.matches('.page')) id = 'home'; // empty or unknown hash; '#' alone is not a selector
@@ -108,15 +123,76 @@
         if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
       });
     });
-    // holiday region: another country brings its own subdivisions (and their name: Bundesland, Kanton …);
-    // the save of the country change already dropped the old subdivision on the server
-    const ctry = $('#set-country'), sub = $('#set-sub');
-    if (ctry && sub) ctry.addEventListener('change', async () => {
-      const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(ctry.value)); const d = r.ok ? await r.json() : [];
-      sub.replaceChildren(new Option(sub.dataset.tWhole, ''), ...d.map(x => new Option('\u00a0\u00a0\u00a0'.repeat(x.depth) + x.name, x.code)));
-      sub.value = '';
-      $('#set-sub-label').textContent = (d[0] && d[0].category) || sub.dataset.tLabel;
-    });
+    // pickers (#pick-country, #pick-region[-CODE], #pick-tz): one page with a filter field over a list;
+    // a region with subregions opens them as a second step, whose first row picks the region itself
+    const prefsForm = $('#prefs-form'), pickData = (() => { try { return JSON.parse($('#pick-data').textContent); } catch (_) { return { countries: [], zones: [] }; } })();
+    const hid = n => $(`input[type=hidden][name="${n}"]`, prefsForm);
+    let subs = null, subsFor = '';
+    const loadSubs = async c => { if (subsFor !== c) { const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(c)); subs = r.ok ? await r.json() : []; subsFor = c; } return subs; };
+    const esc2 = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const commit = (name, value) => { const i = hid(name); i.value = value; i.dispatchEvent(new Event('change', { bubbles: true })); };
+    const pathOf = (list, r) => { const out = []; let x = r; while (x && out.length < 5) { out.unshift(x.name); x = list.find(y => y.code === x.parent); } return out; };
+    const showRegion = (list, code) => {
+      const r = list.find(x => x.code === code);
+      $('#v-sub').textContent = r ? pathOf(list, r).join(' › ') : code ? code : tr('js-pick-whole');
+      $('#v-sub-label').textContent = (list[0] && list[0].category) || tr('js-pick-region');
+    };
+    async function pick(route) {
+      const title = $('#pick-title'), q = $('#pick-q'), box = $('#pick-list'), back = $('#pick .back');
+      back.setAttribute('href', '#'); back.textContent = '‹ ' + $('#home h2').textContent;
+      let rows = [], cur = '', search = null;
+      if (route === 'country') {
+        title.textContent = tr('js-pick-country'); cur = hid('holiday_country').value;
+        rows = pickData.countries.map(c => ({ v: c.code, name: c.name }));
+      } else if (route === 'tz') {
+        title.textContent = tr('js-pick-tz'); cur = hid('timezone').value;
+        rows = [{ v: '', name: tr('js-pick-default', { tz: prefsForm.dataset.defaultTz }) }];
+        pickData.zones.forEach(([area, zs]) => { rows.push({ head: area }); zs.forEach(([id, name]) => rows.push({ v: id, name, sub: id })); });
+      } else {
+        const country = hid('holiday_country').value, list = await loadSubs(country), parent = route.startsWith('region-') ? route.slice(7) : '';
+        const p = list.find(x => x.code === parent); cur = hid('holiday_subdivision').value;
+        title.textContent = p ? p.name : ((list[0] && list[0].category) || tr('js-pick-region'));
+        if (p) { back.setAttribute('href', p.parent.length > 2 ? '#pick-region-' + p.parent : '#pick-region'); back.textContent = '‹ ' + (list.find(x => x.code === p.parent) || { name: (list[0] && list[0].category) || tr('js-pick-region') }).name; }
+        const kids = code => list.filter(x => x.parent === (code || country));
+        rows = [p ? { v: p.code, name: tr('js-pick-all', { name: p.name }) } : { v: '', name: tr('js-pick-whole') }]
+          .concat(kids(parent).map(x => ({ v: x.code, name: x.name, more: list.some(y => y.parent === x.code) })));
+        search = list.map(x => ({ v: x.code, name: x.name, sub: pathOf(list, x).slice(0, -1).join(' › '), more: false }));
+      }
+      const draw = () => {
+        const f = q.value.trim().toLowerCase(), norm = x => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const src = f && search ? search : rows, nf = norm(f);
+        const hit = r => r.head || !f || norm(r.name).includes(nf) || (r.sub && norm(r.sub).includes(nf));
+        const shown = src.filter(hit).filter((r, i, a) => !r.head || (a[i + 1] && !a[i + 1].head));
+        box.innerHTML = shown.length ? shown.map(r => r.head ? `<div class="cell noic head"><span class="label">${esc2(r.head)}</span></div>`
+          : `<button type="button" class="cell noic link${r.v === cur ? ' on' : ''}" data-v="${esc2(r.v)}"${r.more ? ' data-more="1"' : ''} role="option" aria-selected="${r.v === cur}"><span>${esc2(r.name)}${r.sub && (f || route !== 'tz') ? `<span class="sub">${esc2(r.sub)}</span>` : ''}</span><span class="val">${r.v === cur ? '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>' : ''}${r.more ? '<span class="chev">›</span>' : ''}</span></button>`).join('')
+          : `<div class="cell noic"><span class="muted">${esc2(tr('js-pick-none'))}</span></div>`;
+      };
+      q.value = ''; q.oninput = draw; draw();
+      if (matchMedia('(pointer: fine)').matches) q.focus();
+      box.onclick = async e => {
+        const b = e.target.closest('button[data-v]'); if (!b) return;
+        if (b.dataset.more) { location.hash = '#pick-region-' + b.dataset.v; return; }
+        const v = b.dataset.v;
+        if (route === 'country') {
+          if (v !== hid('holiday_country').value) {
+            hid('holiday_subdivision').value = ''; commit('holiday_country', v);
+            $('#v-country').textContent = b.querySelector('span').textContent;
+            const c = pickData.countries.find(x => x.code === v);
+            $('#v-school').classList.toggle('na', !(c && c.school)); $('#v-school-na').hidden = !!(c && c.school);
+            showRegion(await loadSubs(v), '');
+            $('#v-sources').hidden = true; // the sources line is the server's; it returns with the next visit
+          }
+        } else if (route === 'tz') {
+          commit('timezone', v); $('#v-tz').textContent = v ? v.replace(/_/g, ' ') : b.textContent;
+        } else {
+          commit('holiday_subdivision', v); showRegion(subs || [], v);
+        }
+        location.hash = '';
+      };
+    }
+    const baseShow = show;
+    show = () => { const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('pick-') && $('#pick')) { settings.classList.add('paged'); $$('.page', settings).forEach(p => p.classList.toggle('on', p.id === 'pick')); pick(id.slice(5)); settings.closest('.main').scrollTop = 0; } else baseShow(); };
+    removeEventListener('hashchange', baseShow); addEventListener('hashchange', show); show();
     // a segment stands for one hidden field: pressing sets it and saves like any other change
     $$('.seg[data-field]', settings).forEach(sg => sg.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
@@ -187,9 +263,9 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-  const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied', delTask:'Delete this task?'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert', delTask:'Diese Aufgabe löschen?'};
+  const MON = MONTHS;
+  const DOW = WEEKDAYS;
+  const T = trs('js-ed-', ['suggNone', 'saved', 'err', 'del', 'delRule', 'series', 'newEv', 'editEv', 'conflict', 'copied', 'delTask']);
   const iso = d => d.toISOString().slice(0, 10);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
@@ -309,7 +385,7 @@
     const step = Math.max(6, Math.min(k.step, Math.round((k.step + h / k.per) / 2)));
     return { step, r: Math.min(k.r, step * 0.3), ring: Math.max(4.5, Math.min(7.5, step * 0.62)), chunk: Math.max(k.chunk, Math.ceil(h / step)) }; }
   const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const dm = d => lang === 'en' ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getDate()}.${d.getMonth() + 1}.`;
+  const dm = d => dfmt(d, { day: 'numeric', month: 'numeric' });
   const isoWeek = d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); };
   const weekStart = d => { const w = new Date(d); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); return w; };
   const stepDate = (kind, d, n) => { const x = new Date(d); if (kind === 'weeks') x.setDate(x.getDate() + 7 * n); else x.setMonth(x.getMonth() + n); return x; };
@@ -322,9 +398,9 @@
     for (let d = new Date(tlFirst); d <= tlLast; d = stepDate(kind, d, 1)) {
       if (kind === 'weeks') {
         const first = [0, 1, 2, 3, 4, 5, 6].map(i => { const x = new Date(d); x.setDate(x.getDate() + i); return x; }).find(x => x.getDate() === 1);
-        if (first) { const lbl = lang === 'en' ? `${MON[first.getMonth()]} 1, ${first.getFullYear()}` : `1. ${MON[first.getMonth()]} ${first.getFullYear()}`, isY = first.getMonth() === 0; out += `<g class="mline${isY ? ' y' : ''}" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${isY ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl, year: isY ? first.getFullYear() : 0 }); y += k.step; }
+        if (first) { const lbl = dfmt(first, { day: 'numeric', month: 'long', year: 'numeric' }), isY = first.getMonth() === 0; out += `<g class="mline${isY ? ' y' : ''}" data-y="${y}" data-date="${fmt(first)}" data-label="${lbl}"><line x1="18" x2="46" y1="${y}" y2="${y}"/><text x="50" y="${y + 4}">${isY ? first.getFullYear() : MON[first.getMonth()].slice(0, 3)}</text></g>`; items.push({ y, date: fmt(first), label: lbl, year: isY ? first.getFullYear() : 0 }); y += k.step; }
         const e = new Date(d); e.setDate(e.getDate() + 6);
-        const lbl = `KW ${isoWeek(d)} · ${dm(d)} – ${dm(e)}`, ds = fmt(d);
+        const lbl = `${tr('js-week-short', { w: isoWeek(d) })} · ${dm(d)} – ${dm(e)}`, ds = fmt(d);
         out += `<g class="wdot${ds === nowP ? ' now' : ''}" data-y="${y}" data-date="${ds}" data-label="${lbl}"><circle cx="32" cy="${y}" r="${k.r}"/></g>`;
         items.push({ y, date: ds, label: lbl, period: ds }); y += k.step;
       } else {
@@ -428,7 +504,7 @@
       focus = w; w.classList.add('focus');
       const d = parse(w.dataset.week);
       state.date = w.dataset.week;
-      const h1 = $('#title', root); if (h1) { h1.textContent = `KW ${isoWeek(d)} ${isoYear(d)}`; document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
+      const h1 = $('#title', root); if (h1) { h1.textContent = tr('js-week', { w: isoWeek(d), y: isoYear(d) }); document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
       history.replaceState(state, '', url(false).pathname + url(false).search);
       tlSelect(); heatSync(d);
     }
@@ -590,9 +666,9 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const MON = lang === 'en' ? ['January','February','March','April','May','June','July','August','September','October','November','December'] : ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-  const DOW = lang === 'en' ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] : ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  const T = lang === 'en' ? {suggNone:'No suggestions', saved:'saved', err:'Error', del:'Delete this event?', delRule:'Delete this rule? Events keep their values.', series:'This is a recurring event; the whole series is changed.', newEv:'New event', editEv:'Edit event', conflict:'Changed elsewhere — reload.', copied:'Copied', delTask:'Delete this task?'} : {suggNone:'Keine Vorschläge', saved:'gespeichert', err:'Fehler', del:'Diesen Termin löschen?', delRule:'Diese Regel löschen? Termine behalten ihre Werte.', series:'Serientermin — Änderungen gelten für die ganze Serie.', newEv:'Neuer Termin', editEv:'Termin bearbeiten', conflict:'Anderswo geändert — bitte neu laden.', copied:'Kopiert', delTask:'Diese Aufgabe löschen?'};
+  const MON = MONTHS;
+  const DOW = WEEKDAYS;
+  const T = trs('js-ed-', ['suggNone', 'saved', 'err', 'del', 'delRule', 'series', 'newEv', 'editEv', 'conflict', 'copied', 'delTask']);
   const iso = d => d.toISOString().slice(0, 10);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
@@ -629,7 +705,7 @@
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
-  const fmtD = s => { const d = parse(s.slice(0, 10)); return `${DOW[(d.getDay() + 6) % 7]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const fmtD = s => dfmt(parse(s.slice(0, 10)), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
   // ---- categories and category rules (round 17): `CATS` is the ordered list mirrored into `cats_json`. A rule
   // (`RULES`, per user, see domain::catrules) puts values on the event as a template ("Vorlage": prefilled,
@@ -1261,7 +1337,7 @@
   // one gesture moves at most to the neighbouring month, the next needs a short pause. ----
   const RC = $x('#ed-repeat-card'), RT = RC.dataset, rrBox = $x('#ed-rr');
   const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'], RR_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
-  const DOWL = lang === 'en' ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+  const DOWL = WEEKDAYS_LONG;
   const blankRR = () => ({ freq: '', interval: 1, byday: [], mode: 'date', bymonthday: null, ordinal: 1, ordday: 'TU', bymonth: null, end: { kind: 'never', count: 10, until: '' }, exdates: [], rdates: [], raw: '' });
   let RR = blankRR(), rrMode = 'pattern', rrPicking = false, rrFocus = null, rrLocked = false;
   const rrIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -1582,7 +1658,7 @@
   const q = document.getElementById('q'), box = document.getElementById('sres');
   if (!q) return;
   const lang = document.body.dataset.lang || 'de';
-  const T = lang === 'en' ? { jump: 'Jump to', ev: 'Events', ct: 'Contacts', none: 'Nothing found' } : { jump: 'Springe zu', ev: 'Termine', ct: 'Kontakte', none: 'Nichts gefunden' };
+  const T = trs('js-search-', ['jump', 'ev', 'ct', 'none']);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let t, last = '';
   async function render() {
@@ -1610,7 +1686,7 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'], create: 'Create contact', save: 'Save', reset: 'Reset', cancel: 'Cancel', delete: 'Delete' } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'], create: 'Kontakt anlegen', save: 'Speichern', reset: 'Zurücksetzen', cancel: 'Abbrechen', delete: 'Löschen' };
+  const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
   // view switch
   $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
@@ -1806,12 +1882,8 @@
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const T = lang === 'en'
-    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', askDone: 'Mark “{t}” as completed?', yes: 'Yes', no: 'No', asc: 'Ascending', desc: 'Descending', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', start: 'Start', cats: 'Categories', edit: 'Edit', }
-    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', askDone: 'Aufgabe „{t}“ als erledigt markieren?', yes: 'Ja', no: 'Nein', asc: 'Aufsteigend', desc: 'Absteigend', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
-  const SORTL = lang === 'en'
-    ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
-    : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
+  const T = trs('js-tk-', ['open', 'doing', 'done', 'cancelled', 'nodate', 'overdue', 'today', 'week', 'later', 'del', 'err', 'sort', 'askDone', 'yes', 'no', 'asc', 'desc', 'done_at', 'due', 'wasdue', 'empty', 'prio', 'pct', 'count', 'keys', 'hist', 'histNone', 'nodateBox', 'loading', 'start', 'cats', 'edit']);
+  const SORTL = trs('js-sort-', ['due', 'done', 'prio', 'pct', 'title', 'cal', 'created']);
 
   // the page ships every open task (the working set, bounded) and the first page of the finished
   // ones (unbounded by the lookback); the rest arrives as a view scrolls towards it
@@ -1855,7 +1927,7 @@
   const day = d => Math.round((d - TODAY) / 864e5);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const ic = (n, cl) => `<svg class="ico ${cl || 's'}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
-  const L = lang === 'en' ? 'en-GB' : 'de-DE';
+  const L = LOC;
   const de = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const deS = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit' }) : '';
   const deT = d => d ? d.toLocaleString(L, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
@@ -2234,7 +2306,7 @@
   // one click or key press is easily an accident: finishing a task asks first (reopening does not)
   async function toggle(k) {
     const t = TASKS.find(x => key(x) === k); if (!t) return;
-    if (!isDone(t) && !await askYesNo(T.askDone.replace('{t}', t.summary), T.yes, T.no)) return;
+    if (!isDone(t) && !await askYesNo(T.askDone.replace('%t', t.summary), T.yes, T.no)) return;
     if (await put(k, { principal: t.principal, cal_id: t.cal_id, summary: t.summary, completed: !isDone(t) })) { if (view === 'table') refresh(k); else reload(); }
   }
   async function setStatus(k, st) {
@@ -2325,7 +2397,7 @@
   if (!settings) return;
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
-  const T = lang === 'en' ? { done: n => n + ' objects imported.', err: 'Error', active: 'Active on this device.', denied: 'Notifications were denied in the browser.', unsupported: 'This browser does not support push notifications.' } : { done: n => n + ' Objekte importiert.', err: 'Fehler', active: 'Aktiv auf diesem Gerät.', denied: 'Benachrichtigungen wurden im Browser abgelehnt.', unsupported: 'Dieser Browser unterstützt keine Push-Nachrichten.' };
+  const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
   // import: read the chosen file, POST its bytes (no multipart)
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;

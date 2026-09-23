@@ -120,13 +120,13 @@ pub fn planner(y: &YearData, l: &L) -> String {
     }
     format!(
         "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--c4) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--c3) 22%,var(--bg))\"></i>{}</span><span><i style=\"background:color-mix(in srgb,var(--c6) 35%,var(--bg))\"></i>{}</span><span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· KW {} · {}</span></div>",
-        l.t("Schulferien", "School holidays"),
+        l.t("v-school-holidays"),
         e(&y.subdivision),
-        l.t("Feiertag", "Public holiday"),
-        l.t("Urlaub", "Vacation"),
-        l.t("Wochenende", "Weekend"),
-        l.t("oben rechts am Montag", "top right on Mondays"),
-        l.t("Druck: Strg+P", "Print: Ctrl+P")
+        l.t("v-public-holiday"),
+        l.t("v-vacation"),
+        l.t("v-weekend"),
+        l.t("v-top-right-on-mondays"),
+        l.t("v-print-ctrl-p")
     )
 }
 
@@ -162,11 +162,11 @@ pub fn weekends(y: &YearData, l: &L) -> String {
         if is_next {
             nextfree = Some(sa);
         }
-        let label = if !busy.is_empty() { busy.iter().take(2).cloned().collect::<Vec<_>>().join(", ") } else if longw { l.t("verlängert", "long weekend").to_string() } else { l.t("frei", "free").to_string() };
-        let _ = write!(cells, "<div class=\"we {}{}{}{}\" data-date=\"{sa}\"><b>{}</b><small>KW {}</small><span>{}</span></div>", if is_free { "free" } else { "busy" }, if longw { " long" } else { "" }, if so < y.today { " past" } else { "" }, if is_next { " next" } else { "" }, l.dm(sa), sa.iso_week().week(), e(&label));
+        let label = if !busy.is_empty() { busy.iter().take(2).cloned().collect::<Vec<_>>().join(", ") } else if longw { l.t("v-long-weekend").to_string() } else { l.t("v-free").to_string() };
+        let _ = write!(cells, "<div class=\"we {}{}{}{}\" data-date=\"{sa}\"><b>{}</b><small>{}</small><span>{}</span></div>", if is_free { "free" } else { "busy" }, if longw { " long" } else { "" }, if so < y.today { " past" } else { "" }, if is_next { " next" } else { "" }, l.dm(sa), l.week_short(sa.iso_week().week()), e(&label));
         d += Duration::days(7);
     }
-    format!("<div class=\"kpi\"><div><b>{free}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{long_n}</b><span>{}</span></div></div><div class=\"wes\">{cells}</div>", l.t("freie Wochenenden", "free weekends"), total - free, l.t("verplant", "planned"), l.t("verlängert durch Feiertag", "extended by a holiday"))
+    format!("<div class=\"kpi\"><div><b>{free}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{long_n}</b><span>{}</span></div></div><div class=\"wes\">{cells}</div>", l.t("v-free-weekends"), total - free, l.t("v-planned"), l.t("v-extended-by-a-holiday"))
 }
 
 pub fn vacation(y: &YearData, l: &L) -> String {
@@ -225,31 +225,31 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         if off < y.today && d.year() == y.year && y.today.year() == y.year {
             continue;
         }
-        let _ = write!(bridge, "<li><b>{} {}</b> — {} <small>1 {} → {} {}</small></li>", l.dow(off), l.dm(off), e(&h.name), l.t("Tag frei", "day off"), span, l.t("Tage am Stück", "days in a row"));
+        let _ = write!(bridge, "<li><b>{} {}</b> — {} <small>1 {} → {} {}</small></li>", l.dow(off), l.dm(off), e(&h.name), l.t("v-day-off"), span, l.t("v-days-in-a-row"));
     }
     if bridge.is_empty() {
-        bridge = format!("<li class=\"muted\">{}</li>", l.t("Keine Brückentage in diesem Jahr.", "No bridge days this year."));
+        bridge = format!("<li class=\"muted\">{}</li>", l.t("v-no-bridge-days-this-year"));
     }
     format!(
         "<div class=\"gantt\"><div class=\"g\">{months}</div><div class=\"lane\" data-l=\"{}\">{we}{tod}</div><div class=\"lane\" data-l=\"{}\">{hol}</div><div class=\"lane\" data-l=\"{} {}\">{}</div><div class=\"lane\" data-l=\"{}\">{}</div></div>\
 <div class=\"grid2\"><div class=\"kpi\"><div><b>{used}</b><span>{}</span></div><div><b>{remaining}</b><span>{} {}</span></div><div><b>{}</b><span>{}</span></div></div>\
 <div class=\"ybox brg\"><h2 class=\"yh\">{}</h2><ul>{bridge}</ul></div></div><p class=\"sub\">{} <code>{}</code> · {}</p>",
-        l.t("Wochenenden", "Weekends"),
-        l.t("Feiertage", "Holidays"),
-        l.t("Schulferien", "School holidays"),
+        l.t("v-weekends"),
+        l.t("v-holidays"),
+        l.t("v-school-holidays"),
         e(&y.subdivision),
         bars(&school, "f"),
-        l.t("Urlaub", "Vacation"),
+        l.t("v-vacation"),
         bars(&vacs, "u"),
-        l.t("Urlaubstage geplant", "vacation days planned"),
-        l.t("Resturlaub von", "remaining of"),
+        l.t("v-vacation-days-planned"),
+        l.t("v-remaining-of"),
         y.vacation_days.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
         vacs.len(),
-        l.t("Reisen", "trips"),
-        l.t("Brückentage", "Bridge days"),
-        l.t("Zählregel:", "Counting rule:"),
+        l.t("v-trips"),
+        l.t("v-bridge-days"),
+        l.t("v-counting-rule"),
         e(&y.vacation_rule),
-        l.t("Anspruch und Regel in den Einstellungen.", "Entitlement and rule in the settings.")
+        l.t("v-entitlement-and-rule-in-the-settings")
     )
 }
 
@@ -278,11 +278,11 @@ pub fn countdown(y: &YearData, l: &L) -> String {
     }
     for v in &y.vacations {
         if v.start_date() >= y.today {
-            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("Urlaub", "Vacation"), v.summary), icon: "🧳", over: false, color: 6 });
+            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "🧳", over: false, color: 6 });
         } else {
             let ago = (y.today - v.last_date()).num_days();
             if ago > 0 && ago <= 30 {
-                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("Urlaub", "Vacation"), v.summary, l.t("vorbei", "over")), icon: "🧳", over: true, color: 6 });
+                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "🧳", over: true, color: 6 });
             }
         }
     }
@@ -291,26 +291,26 @@ pub fn countdown(y: &YearData, l: &L) -> String {
             items.push(Item { date: h.start, label: h.name.clone(), icon: "🎌", over: false, color: 3 });
         }
     }
-    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("Neues Jahr", "New year").into(), icon: "🎆", over: false, color: 5 });
+    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "🎆", over: false, color: 5 });
     items.sort_by_key(|i| i.date);
     let tile = |i: &Item| {
         if i.over {
             let ago = (y.today - i.date).num_days();
             let pct = 100 - ago * 100 / 30;
-            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.t("Tage", "days"), i.icon, e(&i.label), l.t("war", "was"), l.long_date(i.date), l.t("noch nicht gratuliert?", "not congratulated yet?"))
+            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.t("v-days"), i.icon, e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
         } else {
             let left = (i.date - y.today).num_days();
             let pct = (100 - left * 100 / 365).clamp(0, 100);
-            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.t("Tage", "days"), i.icon, e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
+            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.t("v-days"), i.icon, e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
         }
     };
     let over: Vec<&Item> = items.iter().filter(|i| i.over).collect();
     let up: Vec<&Item> = items.iter().filter(|i| !i.over).take(12).collect();
     let mut body = String::new();
     if !over.is_empty() {
-        let _ = write!(body, "<h2 class=\"yh\">{} <span class=\"sub\">({})</span></h2><div class=\"wall\">{}</div>", l.t("Gerade vorbei", "Just passed"), l.t("bis 30 Tage", "up to 30 days"), over.iter().map(|i| tile(i)).collect::<String>());
+        let _ = write!(body, "<h2 class=\"yh\">{} <span class=\"sub\">({})</span></h2><div class=\"wall\">{}</div>", l.t("v-just-passed"), l.t("v-up-to-30-days"), over.iter().map(|i| tile(i)).collect::<String>());
     }
-    let _ = write!(body, "<h2 class=\"yh\" style=\"margin-top:14px\">{}</h2><div class=\"wall\">{}</div>", l.t("Demnächst", "Coming up"), up.iter().map(|i| tile(i)).collect::<String>());
+    let _ = write!(body, "<h2 class=\"yh\" style=\"margin-top:14px\">{}</h2><div class=\"wall\">{}</div>", l.t("v-coming-up"), up.iter().map(|i| tile(i)).collect::<String>());
     body
 }
 
@@ -337,24 +337,26 @@ pub fn numbers(y: &YearData, l: &L) -> String {
     sorted.sort_by_key(|(_, v)| std::cmp::Reverse(v.0));
     let bars: String = sorted.iter().map(|(k, (n, c))| format!("<div class=\"row\"><span>{}</span><div class=\"b\" style=\"--w:{}%;--c:{}\"></div><b>{n}</b></div>", e(k), n * 100 / mx, e(c))).collect();
     let wmax = per_week.values().copied().max().unwrap_or(1).max(1);
-    let spark: String = (1..=53u32).map(|w| format!("<i style=\"--h:{}%\" title=\"KW {w}: {}\"></i>", per_week.get(&w).copied().unwrap_or(0) * 100 / wmax, per_week.get(&w).copied().unwrap_or(0))).collect();
+    let spark: String = (1..=53u32).map(|w| format!("<i style=\"--h:{}%\" title=\"{}: {}\"></i>", l.week_short(w), per_week.get(&w).copied().unwrap_or(0) * 100 / wmax, per_week.get(&w).copied().unwrap_or(0))).collect();
     let mut top: Vec<(u32, usize)> = per_week.iter().map(|(k, v)| (*k, *v)).collect();
     top.sort_by_key(|(_, v)| std::cmp::Reverse(*v));
-    let top: String = top.iter().take(5).map(|(k, v)| format!("<li>KW <b>{k}</b> — {v} {}</li>", l.t("Termine", "events"))).collect();
+    let top: String = top.iter().take(5).map(|(k, v)| format!("<li><b>{}</b> — {v} {}</li>", l.week_short(*k), l.t("v-events"))).collect();
     let total: usize = percal.values().map(|v| v.0).sum();
     let wes = weekend_days.values().filter(|n| **n >= 2).count();
     format!(
         "<div class=\"kpis\"><div><b>{total}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{wes}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div></div>\
-<div class=\"stats\"><div class=\"ybox\"><h2 class=\"yh\">{}</h2>{bars}</div><div class=\"ybox\"><h2 class=\"yh\">{}</h2><div class=\"spark\">{spark}</div><div class=\"sub\">KW 1 → KW 53</div></div><div class=\"ybox topw\"><h2 class=\"yh\">{}</h2><ol>{top}</ol></div></div>",
-        l.t("Termine im Jahr", "events this year"),
+<div class=\"stats\"><div class=\"ybox\"><h2 class=\"yh\">{}</h2>{bars}</div><div class=\"ybox\"><h2 class=\"yh\">{}</h2><div class=\"spark\">{spark}</div><div class=\"sub\">{} → {}</div></div><div class=\"ybox topw\"><h2 class=\"yh\">{}</h2><ol>{top}</ol></div></div>",
+        l.t("v-events-this-year"),
         evenings.len(),
-        l.t("verplante Abende (ab 18 Uhr)", "evenings booked (from 6 pm)"),
-        l.t("volle Wochenendtage", "busy weekend days"),
+        l.t("v-evenings-booked-from-6-pm"),
+        l.t("v-busy-weekend-days"),
         y.birthdays.len(),
-        l.t("Geburtstage im Adressbuch", "birthdays in the address books"),
-        l.t("Termine je Kalender", "Events per calendar"),
-        l.t("Belegung je Kalenderwoche", "Load per week"),
-        l.t("Dichteste Wochen", "Busiest weeks")
+        l.t("v-birthdays-in-the-address-books"),
+        l.t("v-events-per-calendar"),
+        l.t("v-load-per-week"),
+        l.week_short(1),
+        l.week_short(53),
+        l.t("v-busiest-weeks")
     )
 }
 

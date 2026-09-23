@@ -19,9 +19,9 @@ inline-editable sheet, a quick-jump rail, and a card editor: view mode with acti
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
 preferred flags), address books with a colour · minimal tasks (VTODO) · universal search incl. "jump to a date" · orbit date
-picker · public/school holidays from the OpenHolidays API · vacation-day counting · browser
-push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German and
-English.
+picker · public/school holidays for 204 countries (OpenHolidays → Nager.Date) · vacation-day counting ·
+browser push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German,
+English, French and Spanish.
 
 It never talks to RustiCal over HTTP for data. It opens **RustiCal's own SQLite file** through
 RustiCal's store crates (`rustical_store_sqlite`, git dependency pinned to the RustiCal release)
@@ -164,13 +164,22 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   only after a 2 s typing pause (the ring in the field counts it down) or on a button. The map
   dialog is Leaflet 1.9.4 (vendored, BSD-2, loaded on first use) with tiles from
   tile.openstreetmap.org, attribution shown as the tile policy requires.
-- **Holidays** come from `openholidaysapi.org` (`HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`, per-user
-  region override), cached 30 days in `xui_holidays`; a failed fetch falls back to the stale cache.
+- **Holidays**: a source chain per request — public: `openholidaysapi.org` (36 countries, regions down
+  to municipalities) → `date.nager.at` (204 countries, ISO 3166-2 regions) → stale cache; school:
+  OpenHolidays → stale cache. 8 s timeout per link, answers cached 30 days in `xui_holidays`.
+  Each user picks country and region (default `HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`); regions
+  are stored as ISO 3166-2 codes where one exists. Country/region names in every UI language and the
+  region tree of countries OpenHolidays lacks come from Unicode CLDR 48, built in
+  (`build/src/data/regions.json`, regenerate with `python3 tools/gen_regions.py` in `build/`; the
+  file also snapshots which source covers which country). Unicode License v3.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
   a one-minute loop expands the subscribers' events a few days ahead, sends each VALARM once
   (`xui_alarms_sent`) and drops subscriptions the push service reports gone (404/410).
-- **i18n**: Fluent `.ftl` files (`build/locales/de.ftl`, `en.ftl`), embedded at compile time.
-  Language = user preference → session → `Accept-Language`.
+- **i18n**: Fluent `.ftl` files (`build/locales/{de,en,fr,es}.ftl`), embedded at compile time; a
+  missing key falls back to English, then German, and a test keeps all files complete. Language =
+  user preference → session → `Accept-Language`. app.js gets its `js-*` strings as JSON from the
+  page (placeholders `%name`); month/weekday names and date formats come from `Intl`. A new
+  language: its `.ftl`, `LANGS`/`NATIVE`/`LOCALE` in `src/i18n.rs`, `LANGS` in `tools/gen_regions.py`.
 
 ## Configuration
 
@@ -190,7 +199,7 @@ RustiCal reads every `RUSTICAL_*` variable as its own configuration and rejects 
 | `TRASH_RETENTION_DAYS` | `90` | grace period for deleted groups; RustiCal's `maintenance.trash_retention_days` must be ≥ this |
 | `SESSION_HOURS` | `12` | session inactivity limit |
 | `VAPID_PRIVATE_KEY_PEM`, `VAPID_SUBJECT` | – | Web Push reminders (`gen-vapid` creates a key); unset = push off |
-| `HOLIDAYS_COUNTRY`, `HOLIDAYS_SUBDIVISION`, `HOLIDAYS_ENABLED` | `DE`, –, `true` | OpenHolidays API defaults (users can override the subdivision) |
+| `HOLIDAYS_COUNTRY`, `HOLIDAYS_SUBDIVISION`, `HOLIDAYS_ENABLED` | `DE`, –, `true` | holiday region until a user picks one; `false` = no holiday requests |
 | `DEFAULT_TIMEZONE`, `DEFAULT_LANG` | `Europe/Berlin`, `de` | fallbacks |
 
 ## Commands

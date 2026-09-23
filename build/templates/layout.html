@@ -11,7 +11,8 @@
 <script>(function(){const h=document.documentElement;h.dataset.scheme=localStorage.scheme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");})();</script>
 {% block head %}{% endblock %}
 </head>
-<body data-lang="{{ ctx.lang }}" data-user="{{ ctx.user_id() }}"{% if ctx.dev %} data-dev="1"{% endif %}>
+<body data-lang="{{ ctx.lang }}" data-locale="{{ ctx.locale() }}" data-user="{{ ctx.user_id() }}"{% if ctx.dev %} data-dev="1"{% endif %}>
+<script type="application/json" id="i18n">{{ ctx.js_i18n()|safe }}</script>
 <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><!-- icon sprite: monochrome strokes in currentColor, used via <use href="#i-…"> -->
 <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
 <symbol id="i-contacts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></symbol>

@@ -1337,3 +1337,15 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .set .toggle input:checked + i { background: var(--accent); } .set .toggle input:checked + i::after { left: 20px; }
 .set .toggle input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 520px) { .set .cell .val :is(input[type=text], select) { max-width: 160px; } .set .cell .val .seg button { padding: 5px 7px; font-size: 13px; } }
+/* pickers (country, region, time zone): a filter field over a list, the current value ticked */
+.set .pick-q { margin-bottom: 12px; }
+.set .pick-q input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--fg); background: transparent; border: 0; padding: 11px 14px; }
+.set .pick-q input:focus { outline: none; }
+.set .cell.head { min-height: 0; padding: 14px 14px 4px; background: var(--bg); }
+.set .cell.head .label { margin: 0; }
+.set .cell.on { color: var(--accent); }
+.set .cell.on .val .ico { color: var(--accent); }
+.set .cell .sub:empty { display: none; }
+/* a setting without effect here (school holidays of a country no source covers): shown, kept, not editable —
+   not `disabled`, which would drop the value from the autosaved form */
+.set .cell.na { pointer-events: none; } .set .cell.na .val { opacity: .4; }

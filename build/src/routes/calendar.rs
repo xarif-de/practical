@@ -78,7 +78,7 @@ pub async fn view_ctx(state: &SharedState, user: &Principal, lang: &str) -> AppR
     let p = prefs::get(&state.db, &user.id).await?;
     let tz: chrono_tz::Tz = p.timezone.as_deref().and_then(|t| t.parse().ok()).unwrap_or_else(|| state.config.default_timezone.parse().unwrap_or(chrono_tz::Europe::Berlin));
     let today = Utc::now().with_timezone(&tz).date_naive();
-    Ok(ViewCtx { tz, today, l: L::new(lang) })
+    Ok(ViewCtx { tz, today, l: L::new(lang, state.i18n.clone()) })
 }
 
 pub fn parse_cals(cals: Option<&str>) -> Option<HashSet<String>> {
@@ -87,15 +87,15 @@ pub fn parse_cals(cals: Option<&str>) -> Option<HashSet<String>> {
 
 pub fn view_label(view: &str, l: &L) -> (String, bool) {
     match view {
-        "day" => (l.t("Tag", "Day").into(), false),
-        "week" => (l.t("Woche", "Week").into(), false),
-        "month" => (l.t("Monat", "Month").into(), false),
-        "planner" => (l.t("Jahresplaner", "Year planner").into(), true),
-        "weekends" => (l.t("Freie Wochenenden", "Free weekends").into(), true),
-        "vacation" => (l.t("Urlaubsplaner", "Vacation planner").into(), true),
-        "countdown" => (l.t("Countdown-Wand", "Countdown wall").into(), true),
-        "numbers" => (l.t("Jahr in Zahlen", "Year in numbers").into(), true),
-        _ => (l.t("Monat", "Month").into(), false),
+        "day" => (l.t("v-day").into(), false),
+        "week" => (l.t("v-week").into(), false),
+        "month" => (l.t("v-month").into(), false),
+        "planner" => (l.t("v-year-planner").into(), true),
+        "weekends" => (l.t("v-free-weekends-2").into(), true),
+        "vacation" => (l.t("v-vacation-planner").into(), true),
+        "countdown" => (l.t("v-countdown-wall").into(), true),
+        "numbers" => (l.t("v-year-in-numbers").into(), true),
+        _ => (l.t("v-month").into(), false),
     }
 }
 
@@ -123,7 +123,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
                     details.insert(i.key(), d);
                 }
             }
-            (if l.de { format!("{}. {} {}", date.day(), l.mon(m), y) } else { format!("{} {}, {}", l.mon(m), date.day(), y) }, render::day_view(date, vc.today, &inst, l, &names.join(", "), &details))
+            (l.ta("date-day-title", &[("day", i64::from(date.day()).into()), ("month", l.mon(m).into()), ("year", i64::from(y).into())]), render::day_view(date, vc.today, &inst, l, &names.join(", "), &details))
         }
         "week" => {
             let (ws, we) = render::week_window(date);
@@ -133,7 +133,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             let hf = NaiveDate::from_ymd_opt(hm.year(), hm.month(), 1).unwrap();
             let hs = hf - Duration::days(i64::from(hf.weekday().num_days_from_monday()));
             let inst = events::instances(state, cals, ws.min(hs), we.max(hs + Duration::days(42)), vc.tz).await?;
-            (format!("KW {} {}", date.iso_week().week(), date.iso_week().year()), render::week_view(date, vc.today, &inst, l))
+            (l.week_title(date), render::week_view(date, vc.today, &inst, l))
         }
         "planner" | "weekends" | "vacation" | "countdown" | "numbers" => {
             crate::routes::more::render(state, user, ctx, view, date, cals, vc).await?

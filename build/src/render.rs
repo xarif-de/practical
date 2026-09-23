@@ -7,42 +7,61 @@ use chrono::{Datelike, Duration, NaiveDate};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-pub const DOW_DE: [&str; 7] = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-pub const DOW_EN: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-pub const DOWL_DE: [&str; 7] = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
-pub const DOWL_EN: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-pub const MON_DE: [&str; 12] = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-pub const MON_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
+/// Words and dates of the server-rendered views in the page language (Fluent keys:
+/// `mon-N`, `dow-N`, `dowl-N`, `date-*`, `v-*`).
 pub struct L {
-    pub de: bool,
+    pub lang: String,
+    i18n: std::sync::Arc<crate::i18n::I18n>,
 }
 impl L {
-    pub fn new(lang: &str) -> Self {
-        Self { de: lang != "en" }
+    pub fn new(lang: &str, i18n: std::sync::Arc<crate::i18n::I18n>) -> Self {
+        Self { lang: lang.to_string(), i18n }
     }
-    pub fn dow(&self, d: NaiveDate) -> &'static str {
-        let i = d.weekday().num_days_from_monday() as usize;
-        if self.de { DOW_DE[i] } else { DOW_EN[i] }
+    pub fn t(&self, key: &str) -> String {
+        self.i18n.t(&self.lang, key)
     }
-    pub fn dowl(&self, d: NaiveDate) -> &'static str {
-        let i = d.weekday().num_days_from_monday() as usize;
-        if self.de { DOWL_DE[i] } else { DOWL_EN[i] }
+    /// Message with named arguments (numbers stay numbers, so plural rules apply).
+    pub fn ta(&self, key: &str, args: &[(&str, fluent_bundle::FluentValue<'static>)]) -> String {
+        let mut a = fluent_bundle::FluentArgs::new();
+        for (k, v) in args {
+            a.set(k.to_string(), v.clone());
+        }
+        self.i18n.t_args(&self.lang, key, Some(&a))
     }
-    pub fn mon(&self, m: u32) -> &'static str {
-        if self.de { MON_DE[(m - 1) as usize] } else { MON_EN[(m - 1) as usize] }
+    /// short weekday name, 0 = Monday
+    pub fn dow_i(&self, i: usize) -> String {
+        self.t(&format!("dow-{}", i + 1))
+    }
+    pub fn dowl_i(&self, i: usize) -> String {
+        self.t(&format!("dowl-{}", i + 1))
+    }
+    pub fn dow(&self, d: NaiveDate) -> String {
+        self.dow_i(d.weekday().num_days_from_monday() as usize)
+    }
+    pub fn dowl(&self, d: NaiveDate) -> String {
+        self.dowl_i(d.weekday().num_days_from_monday() as usize)
+    }
+    pub fn mon(&self, m: u32) -> String {
+        self.t(&format!("mon-{m}"))
     }
     pub fn mon3(&self, m: u32) -> String {
         self.mon(m).chars().take(3).collect()
     }
-    pub fn t(&self, de: &'static str, en: &'static str) -> &'static str {
-        if self.de { de } else { en }
-    }
     pub fn long_date(&self, d: NaiveDate) -> String {
-        if self.de { format!("{}, {}. {}", self.dowl(d), d.day(), self.mon(d.month())) } else { format!("{}, {} {}", self.dowl(d), self.mon(d.month()), d.day()) }
+        self.ta("date-long", &[("dow", self.dowl(d).into()), ("day", i64::from(d.day()).into()), ("month", self.mon(d.month()).into())])
     }
     pub fn dm(&self, d: NaiveDate) -> String {
-        if self.de { format!("{}.{}.", d.day(), d.month()) } else { format!("{}/{}", d.month(), d.day()) }
+        self.ta("date-dm", &[("d", i64::from(d.day()).into()), ("m", i64::from(d.month()).into())])
+    }
+    /// a full date as the language writes it (chrono format from `date-fmt`)
+    pub fn date(&self, d: NaiveDate) -> String {
+        d.format(&self.t("date-fmt")).to_string()
+    }
+    pub fn week_title(&self, d: NaiveDate) -> String {
+        self.ta("date-week", &[("week", i64::from(d.iso_week().week()).into()), ("year", i64::from(d.iso_week().year()).into())])
+    }
+    pub fn week_short(&self, w: u32) -> String {
+        self.ta("date-week-short", &[("week", i64::from(w).into())])
     }
 }
 
@@ -126,7 +145,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
     let idx = by_day(instances);
     let mut out = String::from("<div class=\"month\" role=\"grid\">");
     for d in 0..7 {
-        let _ = write!(out, "<div class=\"dow\">{}</div>", if l.de { DOW_DE[d] } else { DOW_EN[d] });
+        let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
     }
     for w in &weeks {
         // lanes for multi-day instances in this row
@@ -189,7 +208,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                 out.push_str(&ev_html(i, None));
             }
             if singles.len() > room {
-                let _ = write!(out, "<div class=\"more\" data-date=\"{d}\">+{} {}</div>", singles.len() - room, l.t("weitere", "more"));
+                let _ = write!(out, "<div class=\"more\" data-date=\"{d}\">+{} {}</div>", singles.len() - room, l.t("v-more"));
             }
             out.push_str("</div>");
         }
@@ -203,10 +222,10 @@ pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str) -> St
     let evs = idx.get(&date).cloned().unwrap_or_default();
     let mut out = format!("<section class=\"agenda\"><h2>{}</h2><ul>", e(title));
     if evs.is_empty() {
-        let _ = write!(out, "<li><time></time><span class=\"muted\">{}</span></li>", l.t("Keine Termine", "No events"));
+        let _ = write!(out, "<li><time></time><span class=\"muted\">{}</span></li>", l.t("v-no-events"));
     }
     for i in evs {
-        let tl = if i.all_day { l.t("ganztags", "all day").to_string() } else { i.time_label() };
+        let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
         let _ = write!(out, "<li><time>{}</time><span class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><i class=\"sw\" style=\"--c:{}\"></i> {}</span></li>", tl, e(&i.key()), i.start_date(), e(&i.color), e(&i.summary));
     }
     out.push_str("</ul></section>");
@@ -276,13 +295,13 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
     for wi in 0..count {
         let w0 = mon + Duration::days(7 * wi as i64);
         let w6 = w0 + Duration::days(6);
-        let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">KW {} <span>{} – {}</span></h2>", if w0 == today_mon { " now" } else { "" }, w0.iso_week().week(), l.dm(w0), l.dm(w6));
+        let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">{} <span>{} – {}</span></h2>", if w0 == today_mon { " now" } else { "" }, l.week_short(w0.iso_week().week()), l.dm(w0), l.dm(w6));
         for i in 0..7 {
             let d = w0 + Duration::days(i);
             let evs = idx.get(&d).cloned().unwrap_or_default();
             let mut items = String::new();
             for i in &evs {
-                let tl = if i.all_day { l.t("ganztags", "all day").to_string() } else { i.time_label() };
+                let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
                 let _ = write!(items, "<li><time>{}</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
             }
             if items.is_empty() {
@@ -313,11 +332,9 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
         heat.push_str("</div>");
     }
     // the heat panel names its month: the title carries the week now, so nothing else would
-    format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h4>{} <span class=\"hm\">{} {hy}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("Dichte", "Density"), l.mon(hm), tl_weeks(view_date, today))
+    format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h4>{} <span class=\"hm\">{} {hy}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("v-density"), l.mon(hm), tl_weeks(view_date, today))
 }
 
-const DOW_LONG_DE: [&str; 7] = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
-const DOW_LONG_EN: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const BYDAY: [&str; 7] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
 fn ico(name: &str) -> String {
@@ -342,50 +359,50 @@ pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
     let n: i64 = get("INTERVAL").parse().unwrap_or(1);
     let freq = get("FREQ");
     let mut out = match (freq, n) {
-        ("DAILY", 1) => l.t("Täglich", "Daily").to_string(),
-        ("WEEKLY", 1) => l.t("Wöchentlich", "Weekly").to_string(),
-        ("MONTHLY", 1) => l.t("Monatlich", "Monthly").to_string(),
-        ("YEARLY", 1) => l.t("Jährlich", "Yearly").to_string(),
-        ("DAILY", n) => if l.de { format!("Alle {n} Tage") } else { format!("Every {n} days") },
-        ("WEEKLY", n) => if l.de { format!("Alle {n} Wochen") } else { format!("Every {n} weeks") },
-        ("MONTHLY", n) => if l.de { format!("Alle {n} Monate") } else { format!("Every {n} months") },
-        ("YEARLY", n) => if l.de { format!("Alle {n} Jahre") } else { format!("Every {n} years") },
-        _ => return l.t("Serie", "Recurring").into(),
+        ("DAILY", 1) => l.t("v-daily").to_string(),
+        ("WEEKLY", 1) => l.t("v-weekly").to_string(),
+        ("MONTHLY", 1) => l.t("v-monthly").to_string(),
+        ("YEARLY", 1) => l.t("v-yearly").to_string(),
+        ("DAILY", n) => l.ta("v-rr-every-days", &[("n", n.into())]),
+        ("WEEKLY", n) => l.ta("v-rr-every-weeks", &[("n", n.into())]),
+        ("MONTHLY", n) => l.ta("v-rr-every-months", &[("n", n.into())]),
+        ("YEARLY", n) => l.ta("v-rr-every-years", &[("n", n.into())]),
+        _ => return l.t("v-recurring").into(),
     };
     let byday = get("BYDAY");
-    let names: Vec<&str> = byday
+    let names: Vec<String> = byday
         .split(',')
         .filter(|x| !x.is_empty())
         .filter_map(|x| {
             let code = x.trim_start_matches(|c: char| c.is_ascii_digit() || c == '-' || c == '+');
-            BYDAY.iter().position(|b| *b == code).map(|p| if l.de { DOW_LONG_DE[p] } else { DOW_LONG_EN[p] })
+            BYDAY.iter().position(|b| *b == code).map(|p| l.dowl_i(p))
         })
         .collect();
     let ord = byday.split(',').next().unwrap_or("").trim_end_matches(char::is_alphabetic).parse::<i32>().ok();
     if freq == "WEEKLY" && !names.is_empty() {
         let joined = names.join(", ");
-        let _ = write!(out, "{}", if l.de { format!(" am {joined}") } else { format!(" on {joined}") });
+        let _ = write!(out, " {}", l.ta("v-rr-on-days", &[("days", joined.into())]));
     } else if matches!(freq, "MONTHLY" | "YEARLY") {
         if let (Some(o), Some(day)) = (ord, names.first()) {
-            let which = if o == -1 { l.t("letzten", "last").to_string() } else if l.de { format!("{o}.") } else { format!("{o}.") };
-            let _ = write!(out, "{}", if l.de { format!(" am {which} {day}") } else { format!(" on the {which} {day}") });
+            let which = if o == -1 { l.t("v-last") } else { l.ta("v-rr-ordinal", &[("n", i64::from(o).into())]) };
+            let _ = write!(out, " {}", l.ta("v-rr-on-nth", &[("which", which.into()), ("day", day.clone().into())]));
         } else if let Ok(d) = get("BYMONTHDAY").parse::<u32>() {
-            let _ = write!(out, "{}", if l.de { format!(" am {d}.") } else { format!(" on the {d}.") });
+            let _ = write!(out, " {}", l.ta("v-rr-on-monthday", &[("d", i64::from(d).into())]));
         } else if freq == "YEARLY" {
-            let _ = write!(out, "{}", if l.de { format!(" am {}. {}", start.day(), l.mon(start.month())) } else { format!(" on {} {}", l.mon(start.month()), start.day()) });
+            let _ = write!(out, " {}", l.ta("v-rr-on-date", &[("d", i64::from(start.day()).into()), ("month", l.mon(start.month()).into())]));
         }
         if freq == "YEARLY" && ord.is_some() {
             if let Ok(mo) = get("BYMONTH").parse::<u32>() {
-                let _ = write!(out, "{}", if l.de { format!(" im {}", l.mon(mo)) } else { format!(" in {}", l.mon(mo)) });
+                let _ = write!(out, " {}", l.ta("v-rr-in-month", &[("month", l.mon(mo).into())]));
             }
         }
     }
     if let Ok(c) = get("COUNT").parse::<u32>() {
-        let _ = write!(out, "{}", if l.de { format!(", {c} Termine") } else { format!(", {c} times") });
+        let _ = write!(out, ", {}", l.ta("v-rr-count", &[("n", i64::from(c).into())]));
     } else if get("UNTIL").len() >= 8 {
         let u = get("UNTIL");
         if let Ok(d) = NaiveDate::parse_from_str(&u[..8], "%Y%m%d") {
-            let _ = write!(out, "{}", if l.de { format!(", bis {}", d.format("%d.%m.%Y")) } else { format!(", until {}", d.format("%Y-%m-%d")) });
+            let _ = write!(out, ", {}", l.ta("v-rr-until", &[("date", l.date(d).into())]));
         }
     }
     out
@@ -405,11 +422,11 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
     if !i.location.is_empty() || geo.is_some() {
         let mut v = String::new();
         if !i.location.is_empty() {
-            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{0}\" title=\"{1}\">{2}{0}</button>", e(&i.location), l.t("Adresse kopieren", "Copy address"), ico("copy"));
+            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{0}\" title=\"{1}\">{2}{0}</button>", e(&i.location), l.t("v-copy-address"), ico("copy"));
         }
         if let Some((lat, lon)) = geo {
             let c = format!("{lat:.5}, {lon:.5}");
-            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{c}\" title=\"{}\">{}{c}</button>", l.t("Koordinaten kopieren", "Copy coordinates"), ico("copy"));
+            let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{c}\" title=\"{}\">{}{c}</button>", l.t("v-copy-coordinates"), ico("copy"));
         }
         // the map query: coordinates when we have them, the address otherwise
         let q = geo.map(|(a, b)| format!("{a:.6},{b:.6}")).unwrap_or_else(|| i.location.clone());
@@ -422,33 +439,33 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
     if let Some(r) = d.and_then(|x| x.rrule.as_deref()) {
         row(ico("repeat"), format!("<span>{}</span>", e(&rrule_text(r, i.start_date(), l))), "");
     } else if i.recurring {
-        row(ico("repeat"), format!("<span>{}</span>", l.t("Serie", "Recurring")), "");
+        row(ico("repeat"), format!("<span>{}</span>", l.t("v-recurring")), "");
     }
     if !i.categories.is_empty() {
         row(ico("tag"), i.categories.iter().map(|c| format!("<span>{}</span>", e(c))).collect::<String>(), "");
     }
     let mut marks = String::new();
-    let mut mark = |icon: &str, text: &str| {
-        let _ = write!(marks, "<span class=\"st\">{}{}</span>", ico(icon), e(text));
+    let mut mark = |icon: &str, text: String| {
+        let _ = write!(marks, "<span class=\"st\">{}{}</span>", ico(icon), e(&text));
     };
     match d.map(|x| x.status.as_str()).unwrap_or(if i.cancelled { "CANCELLED" } else { "" }) {
-        "CANCELLED" => mark("x", l.t("Abgesagt", "Cancelled")),
-        "TENTATIVE" => mark("help", l.t("Vorläufig", "Tentative")),
+        "CANCELLED" => mark("x", l.t("v-cancelled")),
+        "TENTATIVE" => mark("help", l.t("v-tentative")),
         _ => {}
     }
     if d.map(|x| x.transp.as_str()) == Some("TRANSPARENT") {
-        mark("free", l.t("Blockiert keine Zeit", "Does not block time"));
+        mark("free", l.t("v-does-not-block-time"));
     }
     match d.map(|x| x.class.as_str()).unwrap_or("") {
-        "PRIVATE" => mark("lock", l.t("Privat", "Private")),
-        "CONFIDENTIAL" => mark("lock", l.t("Vertraulich", "Confidential")),
+        "PRIVATE" => mark("lock", l.t("v-private")),
+        "CONFIDENTIAL" => mark("lock", l.t("v-confidential")),
         _ => {}
     }
     if let Some(p) = d.and_then(|x| x.priority).filter(|p| (1..=9).contains(p)) {
         let (icon, text) = match p {
-            1..=4 => ("prio-high", l.t("Hohe Priorität", "High priority")),
-            5 => ("prio-mid", l.t("Mittlere Priorität", "Medium priority")),
-            _ => ("prio-low", l.t("Niedrige Priorität", "Low priority")),
+            1..=4 => ("prio-high", l.t("v-high-priority")),
+            5 => ("prio-mid", l.t("v-medium-priority")),
+            _ => ("prio-low", l.t("v-low-priority")),
         };
         mark(icon, text);
     }
@@ -459,7 +476,7 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
         let mut v = String::new();
         for (n, k) in links.iter().enumerate() {
             let icon = match k.kind.as_str() { "conference" => "users", "attach" => "download", _ => "globe" };
-            let label = if !k.label.is_empty() { k.label.clone() } else if !k.filename.is_empty() { k.filename.clone() } else if !k.uri.is_empty() { short_uri(&k.uri) } else { l.t("Anhang", "Attachment").to_string() };
+            let label = if !k.label.is_empty() { k.label.clone() } else if !k.filename.is_empty() { k.filename.clone() } else if !k.uri.is_empty() { short_uri(&k.uri) } else { l.t("v-attachment").to_string() };
             // an embedded file has no URI of its own — it is served from the event
             let href = if k.embedded { format!("/api/events/{}/{}/{}/attach/{}", i.principal, i.cal_id, i.object_id, k.bin_index.unwrap_or(n)) } else { k.uri.clone() };
             let _ = write!(v, "<a class=\"lk\" href=\"{}\" target=\"_blank\" rel=\"noopener\" title=\"{}\">{}{}</a>", e(&href), e(&href), ico(icon), e(&label));
@@ -506,12 +523,12 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     let (ds, de) = day_window(view_date);
     let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
-    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>", e(&l.long_date(view_date)), evs.len(), l.t("Termine", "events"), e(cal_names));
+    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names));
     if evs.is_empty() {
-        let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("Keine Termine an diesem Tag.", "No events on this day."));
+        let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
     }
     for i in &evs {
-        let time = if i.all_day { l.t("ganztags", "all day").to_string() } else if i.end > i.start { format!("{}–{}", i.time_label(), i.end_label()) } else { i.time_label() };
+        let time = if i.all_day { l.t("v-all-day").to_string() } else if i.end > i.start { format!("{}–{}", i.time_label(), i.end_label()) } else { i.time_label() };
         let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}{}</div></article>",
             e(&i.key()), i.start_date(), e(&i.summary),
             if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description)) },
@@ -524,25 +541,23 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
 
 pub fn alarm_label(m: i64, l: &L) -> String {
     if m == 0 {
-        return l.t("zum Termin", "at start").to_string();
+        return l.t("v-at-start").to_string();
     }
     // the offset counts backwards from the start, so a negative one fires after it
     let (n, after) = (m.abs(), m < 0);
-    let (v, unit) = if n % 1440 == 0 {
-        let d = n / 1440;
-        (d, if l.de { if d == 1 { "Tag" } else { "Tage" } } else if d == 1 { "day" } else { "days" })
+    let amount = if n % 1440 == 0 {
+        l.ta("v-n-days", &[("n", (n / 1440).into())])
     } else if n % 60 == 0 {
-        let h = n / 60;
-        (h, if l.de { if h == 1 { "Stunde" } else { "Stunden" } } else if h == 1 { "hour" } else { "hours" })
+        l.ta("v-n-hours", &[("n", (n / 60).into())])
     } else {
-        (n, if l.de { if n == 1 { "Minute" } else { "Minuten" } } else if n == 1 { "minute" } else { "minutes" })
+        l.ta("v-n-minutes", &[("n", n.into())])
     };
-    format!("{v} {unit} {}", if after { l.t("danach", "after") } else { l.t("vorher", "before") })
+    format!("{amount} {}", if after { l.t("v-after") } else { l.t("v-before") })
 }
 
 pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate) -> String {
     let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, view_date);
-    let title = if agenda_date == today { format!("{}, {}", l.t("Heute", "Today"), l.long_date(agenda_date)) } else { l.long_date(agenda_date) };
+    let title = if agenda_date == today { format!("{}, {}", l.t("v-today"), l.long_date(agenda_date)) } else { l.long_date(agenda_date) };
     format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today), agenda(agenda_date, instances, l, &title))
 }
 

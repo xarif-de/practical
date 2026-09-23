@@ -6,7 +6,7 @@
    their POST forms, which redirect back to their page. Without JS every page is visible. #}
 <div class="settings set" id="settings" data-t-saved="{{ ctx.t("flash-saved") }}">
 
-<form id="prefs-form" method="post" action="/settings/prefs" data-autosave>
+<form id="prefs-form" method="post" action="/settings/prefs" data-autosave data-default-tz="{{ default_timezone }}">
 <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
 <section class="page" id="home">
   <h2>{{ ctx.t("nav-settings") }}</h2>
@@ -15,19 +15,21 @@
   </div>
   <div class="label">{{ ctx.t("tab-general") }}</div>
   <div class="group">
-    <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></span></label>
+    <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload>{% for (code, name) in ctx.languages() %}<option value="{{ code }}"{% if self.lang_is(code) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></span></label>
     <div class="cell"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></span><span>{{ ctx.t("pref-scheme") }}</span><span class="val"><input type="hidden" name="scheme" value="{% if self.scheme_is("light") %}light{% else if self.scheme_is("dark") %}dark{% else %}auto{% endif %}"><span class="seg" data-field="scheme"><button type="button" data-v="auto" aria-pressed="{{ self.scheme_is("auto") }}">{{ ctx.t("scheme-auto") }}</button><button type="button" data-v="light" aria-pressed="{{ self.scheme_is("light") }}">{{ ctx.t("scheme-light") }}</button><button type="button" data-v="dark" aria-pressed="{{ self.scheme_is("dark") }}">{{ ctx.t("scheme-dark") }}</button></span></span></div>
   </div>
+  <input type="hidden" name="holiday_country" value="{{ region_country }}"><input type="hidden" name="holiday_subdivision" value="{{ region_sub }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
   <div class="label">{{ ctx.t("set-region") }}</div>
   <div class="group">
-    <label class="cell"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("set-country") }}</span><span class="val"><select name="holiday_country" id="set-country">{% if countries.is_empty() %}<option value="{{ region_country }}" selected>{{ region_country }}</option>{% endif %}{% for c in countries %}<option value="{{ c.code }}"{% if c.code == region_country %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></span></label>
-    <label class="cell"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg></span><span id="set-sub-label">{{ self.sub_label() }}</span><span class="val"><select name="holiday_subdivision" id="set-sub" data-t-whole="{{ ctx.t("set-region-whole") }}" data-t-label="{{ ctx.t("set-region-sub") }}"><option value="">{{ ctx.t("set-region-whole") }}</option>{% if !region_sub.is_empty() && !self.has_sub(region_sub) %}<option value="{{ region_sub }}" selected>{{ region_sub }}</option>{% endif %}{% for r in subdivisions %}<option value="{{ r.code }}"{% if r.code == region_sub %} selected{% endif %}>{% for _i in 0..r.depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ r.name }}</option>{% endfor %}</select></span></label>
-    <label class="cell"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><span>{{ ctx.t("timezone") }}</span><span class="val"><select name="timezone"><option value="">{{ ctx.t1("set-tz-default", "tz", default_timezone) }}</option>{% for (area, zones) in timezones %}<optgroup label="{{ area }}">{% for (id, name) in zones %}<option value="{{ id }}"{% if prefs.timezone.as_deref() == Some(id.as_str()) %} selected{% endif %}>{{ name }}</option>{% endfor %}</optgroup>{% endfor %}</select></span></label>
+    <a class="cell link" href="#pick-country"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("set-country") }}</span><span class="val"><span id="v-country">{{ self.country_name() }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#pick-region"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg></span><span id="v-sub-label">{{ self.sub_label() }}</span><span class="val"><span id="v-sub">{{ self.sub_name() }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#pick-tz"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><span>{{ ctx.t("timezone") }}</span><span class="val"><span id="v-tz">{{ self.tz_name() }}</span><span class="chev">›</span></span></a>
   </div>
+  <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     <label class="cell"><span class="swatch" style="background:var(--c3)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-public") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}><i></i></span></span></label>
-    <label class="cell"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-school") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}><i></i></span></span></label>
+    <label class="cell{% if !self.has_school() %} na{% endif %}" id="v-school"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-school") }}<span class="sub" id="v-school-na"{% if self.has_school() %} hidden{% endif %}>{{ ctx.t("set-school-na") }}</span></span><span class="val"><span class="toggle"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}><i></i></span></span></label>
     <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
     <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}<span class="chev">›</span></span></a>
   </div>
@@ -69,6 +71,14 @@
   {% if ctx.push_enabled %}<p class="foot">{{ ctx.t("push-hint") }}</p><ul class="plain foot" id="push-devices"></ul>{% endif %}
 </section>
 </form>
+
+<section class="page" id="pick">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2 id="pick-title"></h2>
+  <div class="group pick-q"><input type="search" id="pick-q" placeholder="{{ ctx.t("set-pick-search") }}" autocomplete="off" aria-label="{{ ctx.t("set-pick-search") }}"></div>
+  <div class="group" id="pick-list" role="listbox"></div>
+  <script type="application/json" id="pick-data">{{ picker_json|safe }}</script>
+</section>
 
 <section class="page" id="collections">
   <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>

@@ -49,6 +49,18 @@ impl PageCtx {
     pub fn tn<V: std::borrow::Borrow<i64>>(&self, key: &str, name: &str, value: V) -> String {
         self.i18n.t1(&self.lang, key, name, FluentValue::from(*value.borrow()))
     }
+    /// The js-* strings of the page language as JSON for app.js (`<` escaped for the <script> block).
+    pub fn js_i18n(&self) -> String {
+        let m: serde_json::Map<String, serde_json::Value> = self.i18n.with_prefix(&self.lang, "js-").into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
+        serde_json::Value::Object(m).to_string().replace('<', "\\u003c")
+    }
+    pub fn locale(&self) -> &'static str {
+        crate::i18n::locale(&self.lang)
+    }
+    /// (code, native name) of every UI language, for the language choice
+    pub fn languages(&self) -> &'static [(&'static str, &'static str)] {
+        crate::i18n::NATIVE
+    }
     pub fn user_id(&self) -> &str {
         self.user.as_ref().map(|u| u.id.as_str()).unwrap_or("")
     }

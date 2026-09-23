@@ -44,10 +44,9 @@ pub struct SettingsPage {
     /// the holiday region in effect (the user's or the configured default) and the lists to pick from
     pub region_country: String,
     pub region_sub: String,
-    pub countries: Vec<Region>,
     pub subdivisions: Vec<Region>,
-    /// IANA zones grouped by their first part ("Europe" → [("Europe/Berlin", "Berlin")])
-    pub timezones: Vec<(String, Vec<(String, String)>)>,
+    /// the pickers' data (countries, time zones) as JSON for app.js
+    pub picker_json: String,
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
@@ -69,8 +68,45 @@ impl SettingsPage {
     pub fn sub_label(&self) -> String {
         self.subdivisions.first().map(|r| r.category.clone()).filter(|c| !c.is_empty()).unwrap_or_else(|| self.ctx.t("set-region-sub"))
     }
-    pub fn has_sub(&self, code: &str) -> bool {
-        self.subdivisions.iter().any(|r| r.code == code)
+    pub fn country_name(&self) -> String {
+        holidays::region_name(&self.region_country, &self.ctx.lang).unwrap_or_else(|| self.region_country.clone())
+    }
+    /// the chosen region with its parents ("Zürich › Bülach"), or "whole country"
+    pub fn sub_name(&self) -> String {
+        if self.region_sub.is_empty() {
+            return self.ctx.t("set-region-whole");
+        }
+        let name = |c: &str| self.subdivisions.iter().find(|r| r.code == c).map(|r| (r.name.clone(), r.parent.clone())).or_else(|| holidays::region_name(c, &self.ctx.lang).map(|n| (n, String::new())));
+        let mut parts = vec![];
+        let mut code = self.region_sub.clone();
+        while let Some((n, p)) = name(&code) {
+            parts.push(n);
+            if p.len() <= 2 || parts.len() > 4 {
+                break;
+            }
+            code = p;
+        }
+        if parts.is_empty() { self.region_sub.clone() } else { parts.into_iter().rev().collect::<Vec<_>>().join(" › ") }
+    }
+    pub fn has_school(&self) -> bool {
+        holidays::has_school(&self.region_country)
+    }
+    /// "Holidays: OpenHolidays, Nager.Date · School holidays: OpenHolidays"
+    pub fn sources_text(&self) -> String {
+        let (public, school) = holidays::sources(&self.region_country);
+        let none = self.ctx.t("set-src-none");
+        let list = |v: Vec<&str>| if v.is_empty() { none.clone() } else { v.join(" → ") };
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("public", list(public));
+        args.set("school", list(school));
+        self.ctx.i18n.t_args(&self.ctx.lang, "set-sources", Some(&args))
+    }
+    /// the time zone as shown in its row: the chosen one or "Default (Europe/Berlin)"
+    pub fn tz_name(&self) -> String {
+        match &self.prefs.timezone {
+            Some(t) => t.replace('_', " "),
+            None => self.ctx.t1("set-tz-default", "tz", &self.default_timezone),
+        }
     }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
@@ -104,9 +140,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         default_timezone: state.config.default_timezone.clone(),
         region_country: region.0.clone(),
         region_sub: region.1.clone(),
-        countries: holidays::countries(&state, &ctx.lang).await?,
         subdivisions: holidays::subdivisions(&state, &region.0, &ctx.lang).await?,
-        timezones: timezones(),
+        picker_json: serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones() }).to_string().replace('<', "\\u003c"),
         calendars_all: collections::calendars_for(&state, &user, false).await?,
         vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
         vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
@@ -131,9 +166,9 @@ fn timezones() -> Vec<(String, Vec<(String, String)>)> {
     out
 }
 
-/// GET /api/holidays/countries — the countries OpenHolidays knows, in the page language.
-async fn api_countries(State(state): State<SharedState>, _user: Principal, ctx: PageCtx) -> AppResult<axum::Json<Vec<Region>>> {
-    Ok(axum::Json(holidays::countries(&state, &ctx.lang).await?))
+/// GET /api/holidays/countries — the countries a holiday source covers, in the page language.
+async fn api_countries(_user: Principal, ctx: PageCtx) -> axum::Json<Vec<Region>> {
+    axum::Json(holidays::countries(&ctx.lang))
 }
 
 #[derive(Deserialize)]
@@ -491,7 +526,7 @@ struct PrefsForm {
     alarm_snaps_end: String,
 }
 
-async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
+async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         let mut p = prefs::get(&state.db, &user.id).await?;
@@ -518,6 +553,10 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         prefs::set(&state.db, &user.id, &p).await?;
         if let Some(l) = &p.lang {
             session.insert(crate::ctx::SESSION_LANG, l).await?;
+        }
+        // the answer ("Saved.") speaks the language just chosen
+        if let Some(l) = p.lang.clone() {
+            ctx.lang = l;
         }
         Ok(Some("flash-saved"))
     }

@@ -168,14 +168,15 @@ async fn get_json(state: &AppState, url: &str, query: &[(&str, String)]) -> AppR
     resp.json().await.map_err(|e| AppError::Internal(format!("geocoder: {e}")))
 }
 
-/// Suggestions for a typed address (Photon), biased to `near` when the editor knows a position.
-pub async fn search(state: &AppState, q: &str, lang: &str, near: Option<(f64, f64)>) -> AppResult<Vec<Place>> {
+/// Suggestions for a typed address (Photon), biased to `near` when the editor knows a position;
+/// `home` is the user's country, left out of the labels of its own addresses.
+pub async fn search(state: &AppState, q: &str, lang: &str, near: Option<(f64, f64)>, home: &str) -> AppResult<Vec<Place>> {
     let q = q.trim();
     if q.chars().count() < 3 || q.len() > 200 {
         return Ok(vec![]);
     }
     let lang = if matches!(lang, "de" | "en" | "fr" | "it") { lang } else { "en" };
-    let key = format!("s|{lang}|{}", q.to_lowercase());
+    let key = format!("s|{lang}|{home}|{}", q.to_lowercase());
     if let Some(v) = state.geo.cached(&key).await {
         return Ok(v);
     }
@@ -186,24 +187,24 @@ pub async fn search(state: &AppState, q: &str, lang: &str, near: Option<(f64, f6
     }
     state.geo.throttle("photon").await;
     let body = get_json(state, &format!("{PHOTON}/api/"), &query).await?;
-    let places = parse_photon(&body, &state.config.holidays_country);
+    let places = parse_photon(&body, home);
     state.geo.remember(key, places.clone()).await;
     Ok(places)
 }
 
 /// The address at a position (Nominatim), rounded to ~10 m so nearby taps share a cache entry.
-pub async fn reverse(state: &AppState, lat: f64, lon: f64, lang: &str) -> AppResult<Option<Place>> {
+pub async fn reverse(state: &AppState, lat: f64, lon: f64, lang: &str, home: &str) -> AppResult<Option<Place>> {
     if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
         return Err(AppError::BadRequest("lat/lon out of range".into()));
     }
-    let key = format!("r|{lang}|{lat:.4}|{lon:.4}");
+    let key = format!("r|{lang}|{home}|{lat:.4}|{lon:.4}");
     if let Some(v) = state.geo.cached(&key).await {
         return Ok(v.into_iter().next());
     }
     let query = [("lat", format!("{lat:.6}")), ("lon", format!("{lon:.6}")), ("format", "jsonv2".into()), ("zoom", "18".into()), ("accept-language", lang.into())];
     state.geo.throttle("nominatim").await;
     let body = get_json(state, &format!("{NOMINATIM}/reverse"), &query).await?;
-    let place = parse_nominatim(&body, &state.config.holidays_country);
+    let place = parse_nominatim(&body, home);
     state.geo.remember(key, place.clone().into_iter().collect()).await;
     Ok(place)
 }

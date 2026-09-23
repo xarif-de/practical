@@ -51,6 +51,8 @@ pub use crate::domain::contacts::ContactHit;
 
 const MONTHS_DE: [&str; 12] = ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "dezember"];
 const MONTHS_EN: [&str; 12] = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTHS_FR: [&str; 12] = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const MONTHS_ES: [&str; 12] = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 /// `2027`, `märz`, `3. märz 2027`, `15.09.`, `15.9.2026`, `2026-09-15`, `sep 2027`.
 pub fn parse_date_query(q: &str, today: NaiveDate) -> Option<JumpTo> {
@@ -80,7 +82,7 @@ pub fn parse_date_query(q: &str, today: NaiveDate) -> Option<JumpTo> {
                 } else if (1..=31).contains(&n) && day.is_none() {
                     day = Some(n);
                 }
-            } else if let Some(i) = MONTHS_DE.iter().chain(MONTHS_EN.iter()).position(|m| m.starts_with(tok) && tok.len() >= 3) {
+            } else if let Some(i) = MONTHS_DE.iter().chain(MONTHS_EN.iter()).chain(MONTHS_FR.iter()).chain(MONTHS_ES.iter()).position(|m| m.starts_with(tok) && tok.len() >= 3) {
                 month = Some((i % 12) as u32 + 1);
             } else {
                 return None;
