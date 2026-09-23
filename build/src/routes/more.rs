@@ -43,9 +43,9 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
     let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
     let instances = events::instances(state, cals, start, end, vc.tz).await?;
     let p = prefs::get(&state.db, &user.id).await?;
-    let subdivision = p.holiday_subdivision.clone().unwrap_or_else(|| state.config.holidays_subdivision.clone());
-    let public = if p.holidays_enabled { holidays::get(state, "public", &state.config.holidays_country, &subdivision, year, &ctx.lang).await? } else { vec![] };
-    let school = if p.school_holidays_enabled { holidays::get(state, "school", &state.config.holidays_country, &subdivision, year, &ctx.lang).await? } else { vec![] };
+    let (country, subdivision) = p.region(&state.config);
+    let public = if p.holidays_enabled { holidays::get(state, "public", &country, &subdivision, year, &ctx.lang).await? } else { vec![] };
+    let school = if p.school_holidays_enabled { holidays::get(state, "school", &country, &subdivision, year, &ctx.lang).await? } else { vec![] };
     let rule: VacationRule = p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(VacationRule { kind: "category".into(), value: "Urlaub".into() });
     let vacations: Vec<Instance> = instances
         .iter()

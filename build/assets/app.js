@@ -108,6 +108,15 @@
         if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
       });
     });
+    // holiday region: another country brings its own subdivisions (and their name: Bundesland, Kanton …);
+    // the save of the country change already dropped the old subdivision on the server
+    const ctry = $('#set-country'), sub = $('#set-sub');
+    if (ctry && sub) ctry.addEventListener('change', async () => {
+      const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(ctry.value)); const d = r.ok ? await r.json() : [];
+      sub.replaceChildren(new Option(sub.dataset.tWhole, ''), ...d.map(x => new Option('\u00a0\u00a0\u00a0'.repeat(x.depth) + x.name, x.code)));
+      sub.value = '';
+      $('#set-sub-label').textContent = (d[0] && d[0].category) || sub.dataset.tLabel;
+    });
     // a segment stands for one hidden field: pressing sets it and saves like any other change
     $$('.seg[data-field]', settings).forEach(sg => sg.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if (!b || b.getAttribute('aria-pressed') === 'true') return;

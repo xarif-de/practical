@@ -6,6 +6,7 @@ use crate::ctx::{PageCtx, set_flash};
 use crate::domain::collections::{self, AbInfo, CalInfo, NewCalendar, Owner, PALETTE};
 use crate::domain::events;
 use crate::domain::groups::{self, GroupInfo, RemoveOutcome, TrashedGroup};
+use crate::domain::holidays::{self, Region};
 use crate::domain::prefs::{self, Prefs};
 use crate::domain::tokens;
 use crate::error::{AppError, AppResult};
@@ -40,8 +41,13 @@ pub struct SettingsPage {
     pub palette: Vec<String>,
     pub retention_days: u32,
     pub default_timezone: String,
-    pub holidays_country: String,
-    pub holidays_subdivision: String,
+    /// the holiday region in effect (the user's or the configured default) and the lists to pick from
+    pub region_country: String,
+    pub region_sub: String,
+    pub countries: Vec<Region>,
+    pub subdivisions: Vec<Region>,
+    /// IANA zones grouped by their first part ("Europe" → [("Europe/Berlin", "Berlin")])
+    pub timezones: Vec<(String, Vec<(String, String)>)>,
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
@@ -59,6 +65,13 @@ impl SettingsPage {
     pub fn lang_is(&self, l: &str) -> bool {
         self.prefs.lang.as_deref().unwrap_or(&self.ctx.lang) == l
     }
+    /// what the top level of the country is called ("Bundesland", "Kanton" …), from the API
+    pub fn sub_label(&self) -> String {
+        self.subdivisions.first().map(|r| r.category.clone()).filter(|c| !c.is_empty()).unwrap_or_else(|| self.ctx.t("set-region-sub"))
+    }
+    pub fn has_sub(&self, code: &str) -> bool {
+        self.subdivisions.iter().any(|r| r.code == code)
+    }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }
@@ -71,6 +84,7 @@ impl SettingsPage {
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
     let new_token: Option<String> = session.remove(SESSION_NEW_TOKEN).await?;
     let snaps = events::alarm_snaps(prefs::get(&state.db, &user.id).await?.alarm_snaps_json.as_deref());
+    let region = prefs::get(&state.db, &user.id).await?.region(&state.config);
     Ok(SettingsPage {
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
@@ -88,13 +102,48 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
         default_timezone: state.config.default_timezone.clone(),
-        holidays_country: state.config.holidays_country.clone(),
-        holidays_subdivision: state.config.holidays_subdivision.clone(),
+        region_country: region.0.clone(),
+        region_sub: region.1.clone(),
+        countries: holidays::countries(&state, &ctx.lang).await?,
+        subdivisions: holidays::subdivisions(&state, &region.0, &ctx.lang).await?,
+        timezones: timezones(),
         calendars_all: collections::calendars_for(&state, &user, false).await?,
         vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
         vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
         ctx,
     })
+}
+
+/// The IANA zones a person would pick, grouped by continent/ocean (legacy aliases such as
+/// "US/Eastern" or "Etc/GMT+1" left out).
+fn timezones() -> Vec<(String, Vec<(String, String)>)> {
+    const AREAS: [&str; 10] = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific"];
+    let mut out: Vec<(String, Vec<(String, String)>)> = AREAS.iter().map(|a| (a.to_string(), vec![])).collect();
+    for tz in chrono_tz::TZ_VARIANTS {
+        let name = tz.name();
+        if let Some((area, rest)) = name.split_once('/')
+            && let Some(g) = out.iter_mut().find(|(a, _)| a == area)
+        {
+            g.1.push((name.to_string(), rest.replace('_', " ").replace('/', " / ")));
+        }
+    }
+    out.retain(|(_, v)| !v.is_empty());
+    out
+}
+
+/// GET /api/holidays/countries — the countries OpenHolidays knows, in the page language.
+async fn api_countries(State(state): State<SharedState>, _user: Principal, ctx: PageCtx) -> AppResult<axum::Json<Vec<Region>>> {
+    Ok(axum::Json(holidays::countries(&state, &ctx.lang).await?))
+}
+
+#[derive(Deserialize)]
+struct CountryQuery {
+    country: String,
+}
+
+/// GET /api/holidays/subdivisions?country=CH — its subdivisions, all levels, parents first.
+async fn api_subdivisions(State(state): State<SharedState>, _user: Principal, ctx: PageCtx, axum::extract::Query(q): axum::extract::Query<CountryQuery>) -> AppResult<axum::Json<Vec<Region>>> {
+    Ok(axum::Json(holidays::subdivisions(&state, &q.country.to_uppercase(), &ctx.lang).await?))
 }
 
 /// Redirect back to the section. A success says something only when the reloaded
@@ -427,6 +476,8 @@ struct PrefsForm {
     #[serde(default)]
     school_holidays_enabled: Option<String>,
     #[serde(default)]
+    holiday_country: String,
+    #[serde(default)]
     holiday_subdivision: String,
     #[serde(default)]
     vacation_days: String,
@@ -449,7 +500,13 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         p.timezone = Some(f.timezone.trim().to_string()).filter(|t| !t.is_empty() && t.parse::<chrono_tz::Tz>().is_ok());
         p.holidays_enabled = f.holidays_enabled.is_some();
         p.school_holidays_enabled = f.school_holidays_enabled.is_some();
-        p.holiday_subdivision = Some(f.holiday_subdivision.trim().to_uppercase()).filter(|s| !s.is_empty());
+        // a chosen region is kept even when empty (= the whole country); a subdivision of another country is dropped
+        let country = f.holiday_country.trim().to_uppercase();
+        if country.len() == 2 && country.chars().all(|c| c.is_ascii_uppercase()) {
+            let sub = f.holiday_subdivision.trim().to_uppercase();
+            p.holiday_subdivision = Some(if sub.starts_with(&format!("{country}-")) { sub } else { String::new() });
+            p.holiday_country = Some(country);
+        }
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
         let kind = if f.vacation_kind == "calendar" { "calendar" } else { "category" };
         p.vacation_rule_json = Some(serde_json::json!({ "kind": kind, "value": f.vacation_value.trim() }).to_string());
@@ -556,6 +613,8 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
+        .route("/api/holidays/countries", get(api_countries))
+        .route("/api/holidays/subdivisions", get(api_subdivisions))
         .route("/settings/columns", post(columns_save))
         .route("/settings/list-fields", post(list_fields_save))
         .route("/settings/task-columns", post(task_columns_save))

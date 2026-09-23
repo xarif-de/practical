@@ -9,6 +9,8 @@ pub struct Prefs {
     pub timezone: Option<String>,
     pub holidays_enabled: bool,
     pub school_holidays_enabled: bool,
+    /// ISO country of the holidays (NULL = config); "" in `holiday_subdivision` = the whole country
+    pub holiday_country: Option<String>,
     pub holiday_subdivision: Option<String>,
     pub vacation_days: Option<i64>,
     pub vacation_rule_json: Option<String>,
@@ -26,6 +28,13 @@ impl Prefs {
     pub fn defaults() -> Self {
         Self { holidays_enabled: true, school_holidays_enabled: true, ..Default::default() }
     }
+    /// The holiday region in effect: the user's choice, else the configured default
+    /// (the default subdivision only belongs to the default country).
+    pub fn region(&self, cfg: &crate::config::Config) -> (String, String) {
+        let country = self.holiday_country.clone().unwrap_or_else(|| cfg.holidays_country.clone());
+        let sub = self.holiday_subdivision.clone().unwrap_or_else(|| if country == cfg.holidays_country { cfg.holidays_subdivision.clone() } else { String::new() });
+        (country, sub)
+    }
 }
 
 pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error> {
@@ -41,6 +50,7 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             timezone: r.get("timezone"),
             holidays_enabled: r.get::<i64, _>("holidays_enabled") != 0,
             school_holidays_enabled: r.get::<i64, _>("school_holidays_enabled") != 0,
+            holiday_country: r.get("holiday_country"),
             holiday_subdivision: r.get("holiday_subdivision"),
             vacation_days: r.get("vacation_days"),
             vacation_rule_json: r.get("vacation_rule_json"),
@@ -63,11 +73,11 @@ pub async fn get_lang(db: &SqlitePool, principal: &str) -> Result<Option<String>
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_subdivision, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
-           holiday_subdivision=excluded.holiday_subdivision, vacation_days=excluded.vacation_days,
+           holiday_country=excluded.holiday_country, holiday_subdivision=excluded.holiday_subdivision, vacation_days=excluded.vacation_days,
            vacation_rule_json=excluded.vacation_rule_json,
            contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
            alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, updated_at=CURRENT_TIMESTAMP",
@@ -78,6 +88,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(&p.timezone)
     .bind(i64::from(p.holidays_enabled))
     .bind(i64::from(p.school_holidays_enabled))
+    .bind(&p.holiday_country)
     .bind(&p.holiday_subdivision)
     .bind(p.vacation_days)
     .bind(&p.vacation_rule_json)
