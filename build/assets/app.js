@@ -1681,8 +1681,8 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en'
-    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', }
-    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
+    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', asc: 'Ascending', desc: 'Descending', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', start: 'Start', cats: 'Categories', edit: 'Edit', }
+    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', asc: 'Aufsteigend', desc: 'Absteigend', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
   const SORTL = lang === 'en'
     ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
     : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
@@ -1782,17 +1782,20 @@
   }
   const cbox = t => `<button class="tcb${t.status === 'IN-PROCESS' ? ' pp' : ''}" role="checkbox" aria-checked="${isDone(t)}" data-tog="${esc(key(t))}" title="${T.done}">${ic(t.status === 'IN-PROCESS' ? 'dots' : 'check', 'xs')}</button>`;
 
-  function bar(extra) {
-    const opts = Object.entries(SORTL).map(([v, l]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${esc(l)}</option>`).join('');
-    const rest = DONE_TOTAL - DONE.length;
-    return `<div class="tkbar">${extra || ''}<span class="grow"></span>${rest > 0 ? `<span class="muted small" id="tk-rest">${esc(root.dataset.tMore.replace('{n}', rest))}</span>` : ''}
-      <span class="sel">${ic('swap')}<span class="muted">${T.sort}</span><select id="tk-sort">${opts}</select></span>
-      <button class="icon-btn" id="tk-dir" title="${T.sort}">${ic('reset')}</button></div>`;
+  /* sort field and direction live in the page toolbar, between lookback and view switch; the
+     direction button always shows the current order. The history lists by completion only, so
+     there it keeps just the direction. */
+  const sortBox = $('#tk-sortbox');
+  sortBox.innerHTML = `<span class="sel" title="${esc(T.sort)}">${ic('swap')}<select id="tk-sort" aria-label="${esc(T.sort)}">${Object.entries(SORTL).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></span><button class="btn icon-btn" id="tk-dir" type="button"></button>`;
+  const sortSel = $('#tk-sort'), sortDir = $('#tk-dir');
+  function syncSort() {
+    sortSel.value = sort;
+    sortSel.closest('.sel').hidden = view === 'history';
+    sortDir.innerHTML = ic(desc ? 'sort-desc' : 'sort-asc');
+    sortDir.title = desc ? T.desc : T.asc; sortDir.setAttribute('aria-label', sortDir.title);
   }
-  function wireBar() {
-    const s = $('#tk-sort'); if (s) s.onchange = () => { sort = s.value; localStorage.tkSort = sort; render(); };
-    const d = $('#tk-dir'); if (d) d.onclick = () => { desc = !desc; localStorage.tkDesc = desc ? '1' : '0'; render(); };
-  }
+  sortSel.onchange = () => { sort = sortSel.value; localStorage.tkSort = sort; render(); };
+  sortDir.onclick = () => { desc = !desc; localStorage.tkDesc = desc ? '1' : '0'; render(); };
 
   // ---- A: groups ----
   function bucket(t) {
@@ -1804,7 +1807,7 @@
   }
   const GICON = { [T.overdue]: 'prio-high', [T.today]: 'today', [T.week]: 'dayline', [T.later]: 'calendar', [T.nodate]: 'note', [T.done]: 'check', [T.cancelled]: 'x' };
   function vGroups() {
-    let h = bar(`<b>${T.vGroups}</b>`);
+    let h = '';
     const order = [T.overdue, T.today, T.week, T.later, T.nodate, T.done, T.cancelled];
     order.forEach(g => {
       const items = sortList(TASKS.filter(t => bucket(t) === g), g === T.done && sort === 'due' ? 'done' : sort, desc);
@@ -1931,7 +1934,7 @@
   // ---- C: board ----
   const BCOLS = [['NEEDS-ACTION', T.open, 'list'], ['IN-PROCESS', T.doing, 'dots'], ['COMPLETED', T.done, 'check'], ['CANCELLED', T.cancelled, 'x']];
   function vBoard() {
-    let h = bar(`<b>${T.vBoard}</b>`) + '<div class="tkboard">';
+    let h = '<div class="tkboard">';
     BCOLS.forEach(([st, label, icon]) => {
       const items = sortList(TASKS.filter(t => (st === 'COMPLETED' ? isDone(t) : t.status === st && !isDone(t))), st === 'COMPLETED' && sort === 'due' ? 'done' : sort, desc);
       const n = st === 'COMPLETED' ? COMPLETED_TOTAL : st === 'CANCELLED' ? CANCELLED_TOTAL : items.length;
@@ -1956,7 +1959,7 @@
       if (n < LO || n > HI) continue;
       ax += `<span style="left:${x(n)}%">${d.toLocaleDateString(L, { month: 'short', year: '2-digit' })}</span><i style="left:${x(n)}%"></i>`;
     }
-    let h = bar(`<b>${T.vTimeline}</b>`) + `<div class="tktl"><div class="axis">${ax}</div><div class="now" style="left:${x(0)}%"><b>${T.today}</b></div>`;
+    let h = `<div class="tktl"><div class="axis">${ax}</div><div class="now" style="left:${x(0)}%"><b>${T.today}</b></div>`;
     sortList(TASKS.filter(t => t.due || t.completed_at), sort, desc).forEach(t => {
       const anchor = t.completed_at ? day(dt(t.completed_at)) : day(parse(t.due));
       const from = (!t.completed_at && t.start) ? day(parse(t.start)) : anchor;
@@ -1976,7 +1979,7 @@
   function vDeck() {
     const list = sortView(TASKS);
     if (deckI >= list.length) deckI = 0;
-    let h = bar(`<b>${T.vDeck}</b>`) + '<div class="tkdeck" tabindex="0">';
+    let h = '<div class="tkdeck" tabindex="0">';
     for (let k = Math.min(list.length - 1, deckI + 2); k >= deckI; k--) {
       const t = list[k], o = k - deckI;
       const p = pctOf(t);
@@ -2006,7 +2009,7 @@
       }
       cols += `<div class="wk">${cells}</div>`;
     }
-    let h = bar(`<b>${T.vHistory}</b>`) + `<div class="tkhm">${cols}</div><div class="muted small">${T.hist}</div>`;
+    let h = `<div class="tkhm">${cols}</div><div class="muted small">${T.hist}</div>`;
     const shown = sortList(pick ? done.filter(t => String(t.completed_at).slice(0, 10) === pick) : done, 'done', desc);
     h += '<div class="tkdl">';
     if (!shown.length) h += `<p class="muted">${T.histNone}</p>`;
@@ -2061,7 +2064,7 @@
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
-    wireBar();
+    syncSort();
     $$('[data-sk]', main).forEach(th => th.onclick = () => { if (sort === th.dataset.sk) desc = !desc; else { sort = th.dataset.sk; desc = false; } localStorage.tkSort = sort; localStorage.tkDesc = desc ? '1' : '0'; render(); });
     $$('[data-d]', main).forEach(el => el.onclick = async () => { pick = pick === el.dataset.d ? null : el.dataset.d; if (pick) await ensureUntil(pick); render(); });
     $$('.tkkc[draggable]', main).forEach(c => c.ondragstart = e => e.dataTransfer.setData('text/plain', c.dataset.key));

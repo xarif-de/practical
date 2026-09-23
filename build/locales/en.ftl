@@ -568,6 +568,5 @@ tk-v-timeline = Timeline
 tk-v-deck = Cards
 tk-v-history = History
 tk-loading = loading …
-tk-more = { $n } more completed
 tk-columns = Columns
 tk-col-created = Created

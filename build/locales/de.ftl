@@ -568,6 +568,5 @@ tk-v-timeline = Zeitstrahl
 tk-v-deck = Karten
 tk-v-history = Chronik
 tk-loading = lade …
-tk-more = { $n } weitere erledigte
 tk-columns = Spalten
 tk-col-created = Erstellt
