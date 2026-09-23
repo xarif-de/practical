@@ -24,6 +24,10 @@
     watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(watch).observe(mainEl, { childList: true, subtree: true });
   } else { setBars(); addEventListener('resize', setBars); }
 
+  /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
+     function — the look keys on aria-pressed="true", so a bare attribute ("") shows nothing */
+  window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
+
   const h = document.documentElement;
   const sb = $('#scheme');
   if (sb) sb.addEventListener('click', () => { h.dataset.scheme = h.dataset.scheme === 'dark' ? 'light' : 'dark'; localStorage.scheme = h.dataset.scheme; });
@@ -58,7 +62,7 @@
       let scope = 'event';
       const load = async () => { const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="${scope === 'task' ? '/tasks' : '/calendar'}?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
       list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del) + '?scope=' + scope, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
-      $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; $$('#cat-scope button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); load(); });
+      $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; segPress(b); load(); });
       $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
       load();
     }
@@ -507,7 +511,8 @@
   const today = root.dataset.today || fmt(new Date());
   // the host owns the current date and the calendar filter; without one the editor still works
   const state = { get date() { const h = HOST(); return (h.date && h.date()) || today; }, get cals() { const h = HOST(); return (h.cals && h.cals()) || ''; } };
-  const load = (push) => { const h = HOST(); if (h.reload) h.reload(push); };
+  // `saved`: the key just written, so a page that keeps the editor open can show it again after the reload
+  const load = (push, saved) => { const h = HOST(); if (h.reload) h.reload(push, saved); };
   const pk = document.getElementById('picker') || {};
   // which component this dialog edits: an event or a task (templates/editor.html, `editor_kind`)
   const ED_SCOPE = document.getElementById('ed').classList.contains('taskmode') ? 'task' : 'event';
@@ -527,7 +532,7 @@
   const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
-  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); }
+  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => form.classList.contains('mode-edit') && sig() !== baseline;
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
@@ -1405,11 +1410,12 @@
     }
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(d ? 'open' : 'new'); baseline = adjusted ? pre : serialize(); updateButtons();
   }
-  async function openEditor(key, date) {
+  // `quiet`: a new form that is always on screen (the tasks page) must not take the focus when it appears
+  async function openEditor(key, date, quiet) {
     if (key) {
       try { const r = await fetch(API + '/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
     } else fill(null, date);
-    ed.hidden = false; if (!key) f.summary.focus(); dayline();
+    ed.hidden = false; if (!key && !quiet) f.summary.focus(); dayline();
   }
   form.addEventListener('input', refresh);
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
@@ -1444,7 +1450,9 @@
     try {
       const r = await fetch(key ? API + '/' + key : API, { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
       if (!r.ok) { $('#ed-error').textContent = (r.status === 409 ? T.conflict : T.err + ' ' + r.status) + ': ' + (await r.text()).slice(0, 200); return; }
-      ntInvalidate(); ctInvalidate(); close(); load(false);
+      const res = await r.json().catch(() => ({}));
+      const saved = key || (res.id && body.principal && body.cal_id ? `${body.principal}/${body.cal_id}/${res.id}` : null);
+      ntInvalidate(); ctInvalidate(); close(); load(false, saved);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
   $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
@@ -1489,7 +1497,7 @@
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en' ? { del: 'Delete this contact?', err: 'Error', phone: 'Phone', email: 'Email', kinds: ['home', 'work', 'cell', 'other'], create: 'Create contact', save: 'Save', reset: 'Reset', cancel: 'Cancel', delete: 'Delete' } : { del: 'Diesen Kontakt löschen?', err: 'Fehler', phone: 'Telefon', email: 'E-Mail', kinds: ['home', 'work', 'cell', 'other'], create: 'Kontakt anlegen', save: 'Speichern', reset: 'Zurücksetzen', cancel: 'Abbrechen', delete: 'Löschen' };
   // view switch
-  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); $$('[data-ctview]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); localStorage.ctview = b.dataset.ctview; });
+  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
@@ -1670,8 +1678,8 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en'
-    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', pickone: 'Pick a task — or create one with +' }
-    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten', pickone: 'Aufgabe auswählen — oder mit + eine neue anlegen' };
+    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', vGroups: 'Groups', vTable: 'Table', vBoard: 'Board', vTimeline: 'Timeline', vDeck: 'Cards', vHistory: 'History', start: 'Start', cats: 'Categories', edit: 'Edit', }
+    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', vGroups: 'Gruppen', vTable: 'Tabelle', vBoard: 'Board', vTimeline: 'Zeitstrahl', vDeck: 'Karten', vHistory: 'Chronik', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
   const SORTL = lang === 'en'
     ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
     : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
@@ -1828,8 +1836,10 @@
     return `<select data-f="${f}">${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   }
   const edTxt = (f, v) => `<span contenteditable="plaintext-only" data-f="${f}">${esc(v)}</span>`;
+  // the calendar of a task is fixed (a task cannot move); only the new row picks one
+  const calOpts = () => { const picked = root.dataset.cals ? root.dataset.cals.split(',') : []; return $$('#ed-cal option').filter(o => !picked.length || picked.includes(o.value)).map(o => [o.value, o.textContent.trim()]); };
   const CELL = {
-    cal: t => `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
+    cal: t => t.fresh ? `<td>${selIn('cal', (calOpts()[0] || [''])[0], calOpts())}</td>` : `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
     start: t => `<td>${dtIn(t, 'start')}</td>`,
     due: t => `<td>${dtIn(t, 'due')}</td>`,
     status: t => `<td>${selIn('status', t.status || '', Object.entries(STL).filter(([v]) => v).map(([v, l]) => [v, l]).concat(t.status ? [] : [['', '—']]))}</td>`,
@@ -1843,13 +1853,25 @@
     description: t => `<td class="desc">${edTxt('description', t.description)}</td>`,
   };
   const rowHtml = (t, cols) => `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="pin"><div class="pinw">${cbox(t)}${edTxt('summary', t.summary)}</div></td>` +
-    cols.map(c => CELL[c](t)).join('') + `<td class="tkc"><button class="icon-btn" data-open title="${esc(T.edit)}">${ic('dots', 'xs')}</button></td></tr>`;
+    cols.map(c => CELL[c](t)).join('') + '</tr>';
+  // the new row has every column the table shows, so a task can be filled in completely before Enter
+  const BLANK = { fresh: true, summary: '', status: 'NEEDS-ACTION', percent: null, priority: 0, class: '', categories: [], location: '', description: '' };
+  const newRowHtml = cols => `<tr class="new"><td class="pin"><div class="pinw">${ic('plus', 'xs')}<span contenteditable="plaintext-only" data-f="summary" data-ph="${esc(root.dataset.tNew)}"></span></div></td>` +
+    cols.map(c => c === 'created' ? '<td class="ro"></td>' : CELL[c](BLANK)).join('') + '</tr>';
   function vTable() {
     const cols = shownCols().filter(c => CELL[c]);
     const th = (label, sk, cl) => `<th${cl ? ` class="${cl}"` : ''}${sk ? ` data-sk="${sk}"` : ''}>${esc(label)}${sk && sort === sk ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`;
-    return `<div class="sheetwrap"><table class="sheet"><thead><tr>${th(SORTL.title, 'title', 'pin')}${cols.map(c => th(colLabel(c), SORTABLE[c])).join('')}<th></th></tr></thead><tbody>` +
+    // the filler row takes up what a short table leaves of the box, so the new row sits at the bottom of the screen
+    return `<div class="sheetwrap"><table class="sheet"><thead><tr>${th(SORTL.title, 'title', 'pin')}${cols.map(c => th(colLabel(c), SORTABLE[c])).join('')}</tr></thead><tbody>` +
       sortView(TASKS).map(t => rowHtml(t, cols)).join('') +
-      `</tbody></table>${SENTINEL()}<div class="tknew">${ic('plus', 'xs')}<span contenteditable="plaintext-only" data-new data-ph="${esc(root.dataset.tNew)}"></span></div></div>`;
+      `</tbody><tbody class="fill"><tr><td colspan="${cols.length + 1}"></td></tr></tbody><tfoot>${newRowHtml(cols)}</tfoot></table>${SENTINEL()}</div>`;
+  }
+  function sizeFill() {
+    const w = $('.sheetwrap', main), td = $('.sheet .fill td', main);
+    if (!w || !td) return;
+    td.style.height = '0px';
+    const gap = w.clientHeight - $('.sheet', main).offsetHeight;
+    td.style.height = Math.max(0, gap) + 'px';
   }
   const find = k => TASKS.find(x => key(x) === k);
   // a row with the cursor in it is updated cell by cell, leaving the focused one alone —
@@ -1860,7 +1882,7 @@
     const tmp = document.createElement('tbody');
     tmp.innerHTML = rowHtml(t, shownCols().filter(c => CELL[c]));
     const fresh = tmp.firstElementChild;
-    if (!tr.contains(document.activeElement)) { fresh.classList.toggle('sel', tr.classList.contains('sel')); tr.replaceWith(fresh); return; }
+    if (!tr.contains(document.activeElement)) { fresh.classList.toggle('sel', tr.classList.contains('sel')); tr.replaceWith(fresh); sizeFill(); return; }
     tr.classList.toggle('off', fresh.classList.contains('off'));
     $('.tcb', tr).replaceWith($('.tcb', fresh));
     $$('[data-f]', fresh).forEach(n => {
@@ -1902,39 +1924,53 @@
   }
   main.addEventListener('focusin', e => { const el = e.target.closest('.sheet [contenteditable][data-f]'); if (el) el.dataset.before = el.textContent; });
   main.addEventListener('focusout', e => {
-    const el = e.target.closest('.sheet [contenteditable][data-f]');
+    const el = e.target.closest('.sheet tbody [contenteditable][data-f]');
     if (el && el.textContent.trim() !== (el.dataset.before || '').trim()) saveCell(el);
   });
-  main.addEventListener('change', e => { const el = e.target.closest('.sheet input[data-f], .sheet select[data-f]'); if (el) saveCell(el); });
+  main.addEventListener('change', e => { const el = e.target.closest('.sheet tbody input[data-f], .sheet tbody select[data-f]'); if (el) saveCell(el); });
   main.addEventListener('keydown', e => {
-    const el = e.target.closest('.sheetwrap [contenteditable]');
+    const fresh = e.target.closest('.sheet tr.new');
+    if (fresh) { if (e.key === 'Enter' && !e.target.matches('select')) { e.preventDefault(); createFromRow(fresh); } return; }
+    const el = e.target.closest('.sheet [contenteditable]');
     if (!el) return;
     if (e.key === 'Escape' && el.dataset.f) { el.textContent = el.dataset.before || ''; el.blur(); }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    if (el.hasAttribute('data-new')) createFromRow(el); else el.blur();
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
   });
-  // the new row files into the first calendar the filter shows (the editor's default for a new task)
-  async function createFromRow(el) {
-    const summary = el.textContent.trim();
-    if (!summary) return;
-    const picked = root.dataset.cals ? root.dataset.cals.split(',') : [];
-    const opt = $$('#ed-cal option').find(o => !picked.length || picked.includes(o.value)) || $('#ed-cal option');
-    if (!opt) return;
-    const [principal, cal_id] = opt.value.split('/');
-    const r = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ principal, cal_id, summary }) });
-    if (!r.ok) { alert(T.err + ' ' + r.status); return; }
+  // Enter in the new row files the task, into the calendar picked there (or the first the filter
+  // shows when that column is hidden); the progress fields follow the editor's rule
+  async function createFromRow(tr) {
+    const val = f => { const el = $(`[data-f="${f}"]`, tr); return !el ? undefined : el.isContentEditable ? el.textContent.trim() : el.value; };
+    const typ = f => { const el = $(`[data-f="${f}"]`, tr); return el ? el.type : ''; };
+    const summary = val('summary');
+    if (!summary) { $('[data-f=summary]', tr).focus(); return; }
+    const cal = val('cal') || (calOpts()[0] || [''])[0];
+    if (!cal) return;
+    const [principal, cal_id] = cal.split('/');
+    const pct = val('percent') ? Math.max(0, Math.min(100, Math.round(+val('percent')))) : null;
+    let status = val('status') || '';
+    if (val('completed_at') || pct === 100) status = 'COMPLETED';
+    else if (pct && !status) status = 'IN-PROCESS';
+    const body = { principal, cal_id, summary, status, percent: pct,
+      description: val('description') || '', location: val('location') || '', class: val('class') || '',
+      categories: (val('categories') || '').split(',').map(x => x.trim()).filter(Boolean),
+      priority: val('priority') ? +val('priority') : null,
+      start: val('start') || null, start_all_day: typ('start') !== 'datetime-local',
+      due: val('due') || null, due_all_day: typ('due') !== 'datetime-local',
+      completed_at: val('completed_at') || null };
+    const r = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    if (!r.ok) { alert(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200)); return; }
     const { id } = await r.json();
     const k = `${principal}/${cal_id}/${id}`;
     const d = await (await fetch('/api/tasks/' + k)).json();
-    OPEN.push({ ...d, object_id: id, cal_name: opt.textContent.trim(), color: d.color || opt.dataset.color, priority: d.priority || 0, alarms: 0, links: 0, created: new Date().toISOString().slice(0, 19) });
+    const opt = $$('#ed-cal option').find(o => o.value === cal);
+    OPEN.push({ ...d, object_id: id, cal_name: opt ? opt.textContent.trim() : '', color: d.color || (opt ? opt.dataset.color : ''), priority: d.priority || 0, alarms: 0, links: 0, created: new Date().toISOString().slice(0, 19) });
     rebuild();
     $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
     cur = k;
     render();
     const row = $$('.sheet tbody tr', main).find(x => x.dataset.key === k);
-    if (row) { row.scrollIntoView({ block: 'nearest' }); row.querySelector('.pin').classList.add('saved'); setTimeout(() => row.querySelector('.pin').classList.remove('saved'), 800); }
-    const nr = $('[data-new]', main); if (nr) nr.focus();
+    if (row) { row.scrollIntoView({ block: 'nearest' }); const pin = $('.pin', row); pin.classList.add('saved'); setTimeout(() => pin.classList.remove('saved'), 800); }
+    const nr = $('.sheet tr.new [data-f=summary]', main); if (nr) nr.focus();
   }
   $$('#tk-colpop input[data-col]').forEach(i => i.addEventListener('change', () => {
     render();
@@ -2072,6 +2108,7 @@
     const sw = $('.sheetwrap', main), top = sw ? sw.scrollTop : 0;
     main.classList.toggle('view-table', view === 'table');
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
+    sizeFill();
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
     wireBar();
@@ -2100,8 +2137,8 @@
     if (e.target.closest('[data-next]')) { deckI++; render(); return; }
     const holder = e.target.closest('[data-key]');
     if (!holder) return;
-    // the table edits in place; only its ⋯ button opens the dialog (for what has no column)
-    if (view === 'table' && !e.target.closest('[data-open]')) return;
+    // the table is its own editor
+    if (view === 'table') return;
     open(holder.dataset.key);
   });
 
@@ -2125,29 +2162,32 @@
   function reload() { location.href = url(); }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
-  // ---- the editor: the groups view shares the page with it on a wide window (list | editor, like
-  // the contacts page); every other view opens it as the dialog the calendar uses ----
+  // ---- the editor, placed the way the contacts page places its own: the groups view on a wide
+  // window is list | editor and the editor is always there — with nothing picked it is the form for
+  // a new task. Every other view (and a narrow window) opens it as the calendar's dialog. ----
   const MIN_DOCK = 1100;
+  let held;       // what the editor holds: a task key, null = the new-task form, undefined = nothing
+  let wantNew = false; // a new task asked for through + (outside the docked pane it is a dialog)
+  const docked = () => view === 'groups' && innerWidth >= MIN_DOCK;
+  function load(k, quiet) { held = k; window.rusticalEd.open(k, undefined, quiet); }
   function fit() {
-    const dock = view === 'groups' && innerWidth >= MIN_DOCK;
+    const dock = docked();
     root.classList.toggle('dock', dock);
     ed.classList.toggle('docked', dock);
-    // docked and nothing picked: the pane shows a hint instead of an empty form
-    ed.classList.toggle('blank', dock && !cur);
-    ed.dataset.empty = T.pickone;
-    ed.hidden = dock ? false : !cur;
+    if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
+    else ed.hidden = !(cur || wantNew);
   }
-  addEventListener('resize', fit);
+  addEventListener('resize', () => { fit(); sizeFill(); });
   function open(k) {
     cur = k;
     render();
+    load(k);
     fit();
-    window.rusticalEd.open(k);
   }
   function newTask() {
     // the table has its own new row at the bottom
-    if (view === 'table') { const nr = $('[data-new]', main); if (nr) nr.focus(); return; }
-    cur = null; render(); ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null);
+    if (view === 'table') { const nr = $('.sheet tr.new [data-f=summary]', main); if (nr) nr.focus(); return; }
+    cur = null; wantNew = true; render(); load(null); fit();
   }
   $('#tk-new').onclick = newTask;
   const fab = $('#fab'); if (fab) fab.onclick = newTask;
@@ -2157,25 +2197,28 @@
     kind: 'task',
     date: () => iso(TODAY),
     cals: () => root.dataset.cals || '',
-    reload: () => reload(),
-    // a docked editor never closes: it falls back to the empty state
-    closed: () => { cur = null; render(); fit(); },
+    // after a save the docked pane shows the saved task again (the contacts page keeps it in the hash)
+    reload: (push, saved) => { if (saved && docked()) sessionStorage.tkSel = saved; reload(); },
+    // closing the docked pane falls back to the new-task form; a dialog just goes away
+    closed: () => { cur = null; wantNew = false; held = undefined; render(); fit(); },
   };
 
   $('#tk-back').onchange = e => { const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); };
   $$('#tk-views button').forEach(b => b.onclick = () => {
     view = b.dataset.tkview;
-    $$('#tk-views button').forEach(x => x.toggleAttribute('aria-pressed', x === b));
+    segPress(b);
     $('#tk-colpick').hidden = view !== 'table';
     history.replaceState(null, '', url());
-    cur = null; // a pick does not travel between views: the dialog would pop up in the next one
+    // a pick does not travel between views: the dialog would pop up in the next one
+    cur = null; wantNew = false; held = undefined;
     render();
     fit();
   });
   addEventListener('popstate', () => location.reload());
 
-  fit();
-  render();
+  // back from a save in the docked pane: show what was saved
+  const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
+  if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
 })();
 
 /* ===== settings: import files, browser push ===== */

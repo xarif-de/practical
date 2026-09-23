@@ -180,6 +180,7 @@ ed-reset = Reset
 ed-close = Close
 ed-cat-add = Add category …
 ed-title-new = Create a new event
+ed-title-new-task = Create a new task
 ed-series-hint = Recurring event — changes apply to the whole series.
 ed-card-status = Flags
 ed-status = Status

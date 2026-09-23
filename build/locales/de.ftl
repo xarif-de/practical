@@ -180,6 +180,7 @@ ed-reset = Zurücksetzen
 ed-close = Schließen
 ed-cat-add = Kategorie hinzufügen …
 ed-title-new = Neuen Termin anlegen
+ed-title-new-task = Neue Aufgabe anlegen
 ed-series-hint = Serientermin — Änderungen gelten für die ganze Serie.
 ed-card-status = Kennzeichnung
 ed-status = Status
