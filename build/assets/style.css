@@ -397,6 +397,11 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 /* ---- Termin-Editor (dialog, blurred backdrop) ---- */
 .ed { position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); display: grid; place-items: center; padding: 16px; }
 .ed[hidden] { display: none; }
+/* the yes/no question (window.askYesNo): above every dialog, the same backdrop */
+.ask { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
+.ask-box { width: min(400px, 100%); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 18px 18px 14px; }
+.ask-box p { margin: 0 0 16px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.ask-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .ed .box { width: min(720px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: var(--bg); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); border: 1px solid var(--line); }
 .ed header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; } /* above the sticky month head of the repeat strip (z 1) */
 .ed header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c1); }

@@ -26,6 +26,23 @@
 
   /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
      function — the look keys on aria-pressed="true", so a bare attribute ("") shows nothing */
+  /* a minimal yes/no question over the page (the editor dialog's backdrop). Resolves true for "yes";
+     Escape, "no" and a click on the backdrop resolve false. "Yes" has the focus, so Enter confirms. */
+  window.askYesNo = (text, yes, no) => new Promise(done => {
+    const d = document.createElement('div');
+    d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
+    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn" type="button" data-a="0"></button><button class="btn btn-primary" type="button" data-a="1"></button></div></div>';
+    d.querySelector('p').textContent = text;
+    d.querySelector('[data-a="0"]').textContent = no; d.querySelector('[data-a="1"]').textContent = yes;
+    const prev = document.activeElement;
+    const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
+    addEventListener('keydown', key, true);
+    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d) end(false); });
+    document.body.appendChild(d);
+    d.querySelector('[data-a="1"]').focus();
+  });
+
   window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
 
   const h = document.documentElement;
@@ -1681,8 +1698,8 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = lang === 'en'
-    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', asc: 'Ascending', desc: 'Descending', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', start: 'Start', cats: 'Categories', edit: 'Edit', }
-    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', asc: 'Aufsteigend', desc: 'Absteigend', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
+    ? { open: 'Open', doing: 'In process', done: 'Completed', cancelled: 'Cancelled', nodate: 'No date', overdue: 'Overdue', today: 'Today', week: 'This week', later: 'Later', del: 'Delete this task?', err: 'Error', sort: 'Sort', askDone: 'Mark “{t}” as completed?', yes: 'Yes', no: 'No', asc: 'Ascending', desc: 'Descending', done_at: 'completed', due: 'due', wasdue: 'was due', empty: 'Nothing here.', prio: 'Priority', pct: '% done', count: 'of', keys: 'J/K browse · Space completes · E edits', hist: 'darker = more completed', histNone: 'Nothing completed on that day.', nodateBox: 'Without a date', loading: 'loading …', start: 'Start', cats: 'Categories', edit: 'Edit', }
+    : { open: 'Offen', doing: 'In Arbeit', done: 'Erledigt', cancelled: 'Abgebrochen', nodate: 'Ohne Datum', overdue: 'Überfällig', today: 'Heute', week: 'Diese Woche', later: 'Später', del: 'Diese Aufgabe löschen?', err: 'Fehler', sort: 'Sortierung', askDone: 'Aufgabe „{t}“ als erledigt markieren?', yes: 'Ja', no: 'Nein', asc: 'Aufsteigend', desc: 'Absteigend', done_at: 'erledigt', due: 'fällig', wasdue: 'war fällig', empty: 'Hier ist nichts.', prio: 'Priorität', pct: '% erledigt', count: 'von', keys: 'J/K blättern · Leer erledigt · E bearbeitet', hist: 'dunkler = mehr erledigt', histNone: 'An diesem Tag wurde nichts erledigt.', nodateBox: 'Ohne Datum', loading: 'lade …', start: 'Beginn', cats: 'Kategorien', edit: 'Bearbeiten' };
   const SORTL = lang === 'en'
     ? { due: 'Due', done: 'Completed on', prio: 'Priority', pct: 'Progress', title: 'Title', cal: 'Calendar', created: 'Created' }
     : { due: 'Fälligkeit', done: 'Erledigungsdatum', prio: 'Priorität', pct: 'Fortschritt', title: 'Titel', cal: 'Kalender', created: 'Erstellt' };
@@ -1736,7 +1753,7 @@
   const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const key = t => `${t.principal}/${t.cal_id}/${t.object_id}`;
 
-  const isDone = t => t.status === 'COMPLETED' || (!t.status && t.completed_at);
+  const isDone = t => t.status === 'COMPLETED' || (!t.status && !!t.completed_at);
   const isOpen = t => !isDone(t) && t.status !== 'CANCELLED';
   const overdue = t => isOpen(t) && t.due && day(parse(t.due)) < 0;
   const pctOf = t => t.percent == null ? (isDone(t) ? 100 : 0) : t.percent;
@@ -2102,8 +2119,10 @@
     if (!r.ok) { alert(T.err + ' ' + r.status); return false; }
     return true;
   }
+  // one click or key press is easily an accident: finishing a task asks first (reopening does not)
   async function toggle(k) {
     const t = TASKS.find(x => key(x) === k); if (!t) return;
+    if (!isDone(t) && !await askYesNo(T.askDone.replace('{t}', t.summary), T.yes, T.no)) return;
     if (await put(k, { principal: t.principal, cal_id: t.cal_id, summary: t.summary, completed: !isDone(t) })) { if (view === 'table') refresh(k); else reload(); }
   }
   async function setStatus(k, st) {
