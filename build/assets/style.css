@@ -1146,7 +1146,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 /* .main is a grid: without min-width 0 a wide table stretches the whole page (toolbar included) past
    the screen edge instead of scrolling inside its own box */
 .tkpage { min-width: 0; }
-.tkwrap { display: block; padding: 0 var(--pad) var(--pad); }
+.tkwrap { display: block; padding: 10px var(--pad) var(--pad); } /* 10px on top of the toolbar's own 10px: the views keep their distance from it */
 /* groups on a wide window: list | editor, half and half (≥1100px, set by app.js as `.dock`) */
 .tkwrap.dock { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 /* the task views bring their own chip: the app's `.chip` is the category tag and stacks its icon */
@@ -1265,8 +1265,10 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkdl .ri:hover { color: var(--accent); }
 
 /* the docked editor: the same dialog, as the right-hand pane of the groups view (sticky, scrolls on its own like the contacts pane) */
-.ed.docked { position: sticky; top: calc(var(--toolbar-h) + 4px); inset: auto; z-index: 1; display: block; padding: 0; background: none; backdrop-filter: none; }
-.ed.docked .box { width: 100%; max-height: calc(100dvh - var(--sticky-top) - 30px); box-shadow: none; border-radius: var(--radius); }
+/* `inset` before `top`: the shorthand after it reset top to auto and the pane scrolled away with the list.
+   app.js sets --ed-off (margin-top) so the pane starts level with the first task, not its group heading */
+.ed.docked { position: sticky; inset: auto; top: calc(var(--toolbar-h) + 10px + var(--ed-off, 0px)); margin-top: var(--ed-off, 0px); /* sticks where it starts: it never moves */ z-index: 1; display: block; padding: 0; background: none; backdrop-filter: none; }
+.ed.docked .box { width: 100%; max-height: calc(100dvh - var(--sticky-top) - 36px - var(--ed-off, 0px)); box-shadow: none; border-radius: var(--radius); }
 /* a task has no day to lay out: no day line, no toggle for it, one column (`task-hide`, see editor.html) */
 .ed.taskmode .task-hide { display: none !important; }
 .ed.taskmode .cols3 { grid-template-columns: 1fr; }

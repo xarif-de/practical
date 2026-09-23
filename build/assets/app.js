@@ -2065,6 +2065,7 @@
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
     syncSort();
+    alignEd();
     $$('[data-sk]', main).forEach(th => th.onclick = () => { if (sort === th.dataset.sk) desc = !desc; else { sort = th.dataset.sk; desc = false; } localStorage.tkSort = sort; localStorage.tkDesc = desc ? '1' : '0'; render(); });
     $$('[data-d]', main).forEach(el => el.onclick = async () => { pick = pick === el.dataset.d ? null : el.dataset.d; if (pick) await ensureUntil(pick); render(); });
     $$('.tkkc[draggable]', main).forEach(c => c.ondragstart = e => e.dataTransfer.setData('text/plain', c.dataset.key));
@@ -2134,8 +2135,14 @@
     ed.classList.toggle('docked', dock);
     if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
     else ed.hidden = !(cur || wantNew);
+    alignEd();
   }
   addEventListener('resize', fit);
+  // the docked pane starts level with the first task (below the first group heading)
+  function alignEd() {
+    const c = docked() && $('.tkcard', main);
+    ed.style.setProperty('--ed-off', c ? Math.round(c.getBoundingClientRect().top - main.getBoundingClientRect().top) + 'px' : '0px');
+  }
   function open(k) {
     cur = k;
     render();
