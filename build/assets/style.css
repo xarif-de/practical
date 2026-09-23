@@ -117,7 +117,7 @@ button, .btn { font: inherit; color: var(--fg); background: var(--bg-2); border:
 .fab { position: fixed; right: 18px; bottom: 74px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-size: 28px; line-height: 52px; text-align: center; box-shadow: var(--shadow); border: 0; }
 @media (min-width: 900px) { .fab { display: none; } }
 /* table views (contacts, tasks): the round + is how a new entry is added, on every width, bottom left */
-.fab.fab-add { display: block; left: 18px; right: auto; z-index: 30; } /* above the sticky table cells, below the dialogs (45) */
+.fab.fab-add { display: grid; place-items: center; padding: 0; line-height: 1; left: 18px; right: auto; z-index: 30; } /* above the sticky table cells, below the dialogs (45) */
 @media (min-width: 900px) { .fab.fab-add { bottom: 18px; } }
 .contacts:not(.view-table) #ct-fab { display: none; }
 /* the contacts table has no editor beside it: + opens the editor pane as a dialog over the table,

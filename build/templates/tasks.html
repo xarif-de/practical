@@ -21,7 +21,6 @@
     <option value="year"{% if back == "year" %} selected{% endif %}>{{ ctx.t("tk-back-year") }}</option>
     <option value="all"{% if back == "all" %} selected{% endif %}>{{ ctx.t("tk-back-all") }}</option>
   </select></span>
-  <button class="btn btn-primary icon-btn" id="tk-new" type="button" title="{{ ctx.t("task-add") }}" aria-label="{{ ctx.t("task-add") }}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
   {# table view only: the same column picker as the contacts table #}
   <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("tk-columns") }}" aria-label="{{ ctx.t("tk-columns") }}"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></button><div class="pop" id="tk-colpop"><h4>{{ ctx.t("tk-columns") }}</h4>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
   <span class="seg" role="group" id="tk-views">
@@ -40,7 +39,7 @@
   {% include "editor.html" %}
 </div>
 </div>
-<button class="fab" id="fab" type="button" aria-label="+">+</button>
+<button class="fab" id="fab" type="button" title="{{ ctx.t("ed-title-new-task") }}" aria-label="{{ ctx.t("ed-title-new-task") }}" hidden>+</button>
 <script type="application/json" id="tasks-data">{{ tasks_json|safe }}</script>
 <script type="application/json" id="alarm-presets-data">{{ alarm_presets_json|safe }}</script>
 <script type="application/json" id="category-rules-data">{{ category_rules_json|safe }}</script>

@@ -2058,7 +2058,6 @@
     // the table scrolls inside its own box (sticky head and new row): keep its place across a redraw
     const sw = $('.sheetwrap', main), top = sw ? sw.scrollTop : 0;
     main.classList.toggle('view-table', view === 'table');
-    const fab = $('#fab'); if (fab) fab.classList.toggle('fab-add', view === 'table');
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
@@ -2121,8 +2120,13 @@
   let wantNew = false; // a new task asked for through + (outside the docked pane it is a dialog)
   const docked = () => view === 'groups' && innerWidth >= MIN_DOCK;
   function load(k, quiet) { held = k; window.rusticalEd.open(k, undefined, quiet); }
+  /* the round + (bottom left) adds a task where nothing else can: table, board, timeline and cards,
+     and the groups view when its editor is not docked; the history shows finished work only */
+  const FAB_VIEWS = ['table', 'board', 'timeline', 'deck'];
   function fit() {
     const dock = docked();
+    const fab = $('#fab'), withFab = FAB_VIEWS.includes(view) || (view === 'groups' && !dock);
+    fab.hidden = !withFab; fab.classList.toggle('fab-add', withFab);
     root.classList.toggle('dock', dock);
     ed.classList.toggle('docked', dock);
     if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
@@ -2138,8 +2142,7 @@
   function newTask() {
     cur = null; wantNew = true; render(); load(null); fit();
   }
-  $('#tk-new').onclick = newTask;
-  const fab = $('#fab'); if (fab) fab.onclick = newTask;
+  $('#fab').onclick = newTask;
 
   // what the editor module asks of the page it runs on
   window.rusticalHost = {

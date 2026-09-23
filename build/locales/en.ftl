@@ -431,7 +431,6 @@ ct-add-field = another field (phone, email)
 tasks-open = open
 task-new-placeholder = New task …
 task-due = Due
-task-add = Add
 tasks-no-calendar = No calendar with tasks (VTODO). Create one with "VTODO" in the settings.
 task-done = Done
 tasks-none-open = Nothing open.

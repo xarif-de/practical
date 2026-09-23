@@ -431,7 +431,6 @@ ct-add-field = weiteres Feld (Telefon, E-Mail)
 tasks-open = offen
 task-new-placeholder = Neue Aufgabe …
 task-due = Fällig
-task-add = Hinzufügen
 tasks-no-calendar = Kein Kalender mit Aufgaben (VTODO). Lege in den Einstellungen einen Kalender mit „VTODO“ an.
 task-done = Erledigt
 tasks-none-open = Nichts offen.
