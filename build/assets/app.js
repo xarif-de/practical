@@ -43,6 +43,10 @@
     d.querySelector('[data-a="1"]').focus();
   });
 
+  // the app's own question instead of confirm(): same look everywhere, and a browser that
+  // suppresses native dialogs (automation, some embedded views) cannot swallow a delete
+  window.ask = text => askYesNo(text, ...(document.body.dataset.lang === 'en' ? ['Yes', 'No'] : ['Ja', 'Nein']));
+
   window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
 
   const h = document.documentElement;
@@ -50,7 +54,7 @@
   if (sb) sb.addEventListener('click', () => { h.dataset.scheme = h.dataset.scheme === 'dark' ? 'light' : 'dark'; localStorage.scheme = h.dataset.scheme; });
 
   // confirmations on destructive forms
-  $$('[data-confirm]').forEach(b => b.addEventListener('click', e => { if (!confirm(b.dataset.confirm)) e.preventDefault(); }));
+  $$('[data-confirm]').forEach(b => b.addEventListener('click', async e => { if (b.dataset.asked) { delete b.dataset.asked; return; } e.preventDefault(); if (await ask(b.dataset.confirm)) { b.dataset.asked = '1'; b.click(); } })); // the repeated click submits with this button
 
   // copy-to-clipboard
   $$('[data-copy]').forEach(b => b.addEventListener('click', async () => {
@@ -82,7 +86,7 @@
       const t = catPanel.dataset, list = $('#cat-list'), csrfTok = ($('meta[name=csrf]') || {}).content || '', h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       let scope = 'event';
       const load = async () => { const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="${scope === 'task' ? '/tasks' : '/calendar'}?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
-      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del) + '?scope=' + scope, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
+      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !await ask(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del) + '?scope=' + scope, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
       $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; segPress(b); load(); });
       $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
       load();
@@ -1464,12 +1468,12 @@
   function soloEnd() { if (!solo) return; solo = null; f.summary.readOnly = false; ed.classList.remove('solo'); $$('.card.solo-on', form).forEach(c => c.classList.remove('solo-on')); }
   form.addEventListener('input', refresh);
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
-  form.addEventListener('click', e => {
+  form.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (ruleMode) { if (b.dataset.cardAdd === 'where') RM.location = 'default'; if (b.dataset.cardAdd === 'repeat') RM.rrule = 'default'; rulesApply('change'); } /* a one-setting rule card starts as template */ if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode) { SCALARS.filter(k => FLD[k][0] === c.dataset.card).forEach(k => { RM[k] = 'off'; }); rulesApply('change'); } /* a removed rule card is off */ delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!await ask(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode) { SCALARS.filter(k => FLD[k][0] === c.dataset.card).forEach(k => { RM[k] = 'off'; }); rulesApply('change'); } /* a removed rule card is off */ delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
@@ -1500,7 +1504,7 @@
       ntInvalidate(); ctInvalidate(); close(); load(false, saved);
     } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
   });
-  $('#ed-delete').onclick = async () => { if (ruleMode) { if (confirm(T.delRule)) await ruleDelete(); return; } if (!confirm(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
+  $('#ed-delete').onclick = async () => { if (ruleMode) { if (await ask(T.delRule)) await ruleDelete(); return; } if (!await ask(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
   window.rusticalEd = { open: openEditor, openRule: openRuleEditor };
   { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
@@ -1630,14 +1634,14 @@
   // editing: dirty tracking, display name follows given + family, dates re-evaluate
   form.addEventListener('input', e => { if (e.target === f.given || e.target === f.family) { if (fnAuto) f.full_name.value = [f.given.value, f.family.value].filter(Boolean).join(' '); } else if (e.target === f.full_name) fnAuto = !f.full_name.value; const p = e.target.closest('.pdate'); if (p) dateInfo(p); updateButtons(); });
   form.addEventListener('change', updateButtons);
-  form.addEventListener('click', e => {
+  form.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
     if (b.dataset.add) { const row = addRow(b.dataset.add, b.dataset.add === 'phones' ? { kind: 'cell' } : b.dataset.add === 'emails' || b.dataset.add === 'addresses' ? { kind: 'home' } : null); const i = $('input:not([type=hidden])', row); if (i) i.focus(); updateButtons(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); updateButtons(); return; }
     if (b.classList.contains('pref')) { const list = b.closest('[data-list]'); const on = b.getAttribute('aria-pressed') === 'true'; $$('.pref', list).forEach(p => p.setAttribute('aria-pressed', p === b && !on ? 'true' : 'false')); updateButtons(); return; }
     if (b.hasAttribute('data-more')) { $('.morenames', form).hidden = false; b.hidden = true; return; }
     if (b.dataset.cardAdd) { const c = $(`.card[data-card="${b.dataset.cardAdd}"]`, form); c.dataset.added = '1'; c.hidden = false; b.disabled = true; b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'email') addRow('emails', { kind: 'home' }); if (b.dataset.cardAdd === 'adr') addRow('addresses', { kind: 'home' }); const i = $('input:not([type=hidden]), textarea', c); if (i && !i.closest('template')) i.focus(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!confirm(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => { if (!i.closest('template')) i.value = ''; }); $$('.rows .row', c).forEach(x => x.remove()); $$('.chip', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); updateButtons(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!await ask(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => { if (!i.closest('template')) i.value = ''; }); $$('.rows .row', c).forEach(x => x.remove()); $$('.chip', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); updateButtons(); return; }
     if (b.dataset.act) { action(b); return; }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); updateButtons(); } });
@@ -1681,7 +1685,7 @@
     if (!r.ok) { $('#ct-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; }
     const { id } = await r.json(); location.hash = `${body.principal}/${body.ab_id}/${id}`; location.reload();
   });
-  $('#ct-delete').onclick = async () => { if (!confirm(T.del)) return; const r = await fetch('/api/contacts/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { location.hash = ''; location.reload(); } };
+  $('#ct-delete').onclick = async () => { if (!await ask(T.del)) return; const r = await fetch('/api/contacts/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { location.hash = ''; location.reload(); } };
   // table inline edit: fetch → patch one field → PUT
   $$('.sheet td[contenteditable][data-f], .sheet .pin [contenteditable][data-f]').forEach(cell => {
     let before = '';
