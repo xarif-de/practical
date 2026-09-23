@@ -1140,6 +1140,9 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 
 /* ===== tasks page: six views over one list =====
    The atoms (.chip, .sw, .pb, .seg, .sel) are the app's; only the view shells live here. */
+/* .main is a grid: without min-width 0 a wide table stretches the whole page (toolbar included) past
+   the screen edge instead of scrolling inside its own box */
+.tkpage { min-width: 0; }
 .tkwrap { display: block; padding: 0 var(--pad) var(--pad); }
 /* groups on a wide window: list | editor, half and half (≥1100px, set by app.js as `.dock`) */
 .tkwrap.dock { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
