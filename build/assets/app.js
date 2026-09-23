@@ -1618,7 +1618,7 @@
   }
   $('#ct-lock').onclick = () => mode('edit');
   $('#ct-reset').onclick = () => show(current);
-  $('#ct-cancel').onclick = () => { if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
+  $('#ct-cancel').onclick = () => { if (wrap.classList.contains('dlg')) dlgClose(); else if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   $('#ct-vcf').onclick = () => { if (f.key.value) location.href = '/api/contacts/' + f.key.value + '/vcf'; };
   if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
   function collect() {
@@ -1663,7 +1663,10 @@
       } catch (e) { cell.textContent = before; alert(T.err + ': ' + e.message); }
     });
   });
-  const newRow = $('.sheet tr.new [data-new]'); if (newRow) { newRow.addEventListener('focus', () => { if (newRow.textContent.endsWith('…')) newRow.textContent = ''; }); newRow.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const v = newRow.textContent.trim(); if (!v) return; show(null); const parts = v.split(/\s+/); f.given.value = parts.slice(0, -1).join(' '); f.family.value = parts.slice(-1)[0]; wrap.classList.remove('view-table'); } }); }
+  // table view: + opens the editor as a dialog over the table (the list view has it beside the list)
+  const dlgClose = () => { wrap.classList.remove('dlg'); det.classList.remove('on'); if (!wide()) det.hidden = true; };
+  $('#ct-fab').onclick = () => { show(null); wrap.classList.add('dlg'); f.full_name.focus(); };
+  addEventListener('keydown', e => { if (e.key === 'Escape' && wrap.classList.contains('dlg')) dlgClose(); });
 })();
 
 /* ===== tasks page: six views over one list, the shared card editor beside them =====
@@ -1836,10 +1839,9 @@
     return `<select data-f="${f}">${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   }
   const edTxt = (f, v) => `<span contenteditable="plaintext-only" data-f="${f}">${esc(v)}</span>`;
-  // the calendar of a task is fixed (a task cannot move); only the new row picks one
-  const calOpts = () => { const picked = root.dataset.cals ? root.dataset.cals.split(',') : []; return $$('#ed-cal option').filter(o => !picked.length || picked.includes(o.value)).map(o => [o.value, o.textContent.trim()]); };
+  // the calendar of a task is fixed (a task cannot move)
   const CELL = {
-    cal: t => t.fresh ? `<td>${selIn('cal', (calOpts()[0] || [''])[0], calOpts())}</td>` : `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
+    cal: t => `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
     start: t => `<td>${dtIn(t, 'start')}</td>`,
     due: t => `<td>${dtIn(t, 'due')}</td>`,
     status: t => `<td>${selIn('status', t.status || '', Object.entries(STL).filter(([v]) => v).map(([v, l]) => [v, l]).concat(t.status ? [] : [['', '—']]))}</td>`,
@@ -1854,24 +1856,11 @@
   };
   const rowHtml = (t, cols) => `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="pin"><div class="pinw">${cbox(t)}${edTxt('summary', t.summary)}</div></td>` +
     cols.map(c => CELL[c](t)).join('') + '</tr>';
-  // the new row has every column the table shows, so a task can be filled in completely before Enter
-  const BLANK = { fresh: true, summary: '', status: 'NEEDS-ACTION', percent: null, priority: 0, class: '', categories: [], location: '', description: '' };
-  const newRowHtml = cols => `<tr class="new"><td class="pin"><div class="pinw">${ic('plus', 'xs')}<span contenteditable="plaintext-only" data-f="summary" data-ph="${esc(root.dataset.tNew)}"></span></div></td>` +
-    cols.map(c => c === 'created' ? '<td class="ro"></td>' : CELL[c](BLANK)).join('') + '</tr>';
   function vTable() {
     const cols = shownCols().filter(c => CELL[c]);
     const th = (label, sk, cl) => `<th${cl ? ` class="${cl}"` : ''}${sk ? ` data-sk="${sk}"` : ''}>${esc(label)}${sk && sort === sk ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`;
-    // the filler row takes up what a short table leaves of the box, so the new row sits at the bottom of the screen
     return `<div class="sheetwrap"><table class="sheet"><thead><tr>${th(SORTL.title, 'title', 'pin')}${cols.map(c => th(colLabel(c), SORTABLE[c])).join('')}</tr></thead><tbody>` +
-      sortView(TASKS).map(t => rowHtml(t, cols)).join('') +
-      `</tbody><tbody class="fill"><tr><td colspan="${cols.length + 1}"></td></tr></tbody><tfoot>${newRowHtml(cols)}</tfoot></table>${SENTINEL()}</div>`;
-  }
-  function sizeFill() {
-    const w = $('.sheetwrap', main), td = $('.sheet .fill td', main);
-    if (!w || !td) return;
-    td.style.height = '0px';
-    const gap = w.clientHeight - $('.sheet', main).offsetHeight;
-    td.style.height = Math.max(0, gap) + 'px';
+      sortView(TASKS).map(t => rowHtml(t, cols)).join('') + `</tbody></table>${SENTINEL()}</div>`;
   }
   const find = k => TASKS.find(x => key(x) === k);
   // a row with the cursor in it is updated cell by cell, leaving the focused one alone —
@@ -1882,7 +1871,7 @@
     const tmp = document.createElement('tbody');
     tmp.innerHTML = rowHtml(t, shownCols().filter(c => CELL[c]));
     const fresh = tmp.firstElementChild;
-    if (!tr.contains(document.activeElement)) { fresh.classList.toggle('sel', tr.classList.contains('sel')); tr.replaceWith(fresh); sizeFill(); return; }
+    if (!tr.contains(document.activeElement)) { fresh.classList.toggle('sel', tr.classList.contains('sel')); tr.replaceWith(fresh); return; }
     tr.classList.toggle('off', fresh.classList.contains('off'));
     $('.tcb', tr).replaceWith($('.tcb', fresh));
     $$('[data-f]', fresh).forEach(n => {
@@ -1929,49 +1918,11 @@
   });
   main.addEventListener('change', e => { const el = e.target.closest('.sheet tbody input[data-f], .sheet tbody select[data-f]'); if (el) saveCell(el); });
   main.addEventListener('keydown', e => {
-    const fresh = e.target.closest('.sheet tr.new');
-    if (fresh) { if (e.key === 'Enter' && !e.target.matches('select')) { e.preventDefault(); createFromRow(fresh); } return; }
     const el = e.target.closest('.sheet [contenteditable]');
     if (!el) return;
     if (e.key === 'Escape' && el.dataset.f) { el.textContent = el.dataset.before || ''; el.blur(); }
     if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
   });
-  // Enter in the new row files the task, into the calendar picked there (or the first the filter
-  // shows when that column is hidden); the progress fields follow the editor's rule
-  async function createFromRow(tr) {
-    const val = f => { const el = $(`[data-f="${f}"]`, tr); return !el ? undefined : el.isContentEditable ? el.textContent.trim() : el.value; };
-    const typ = f => { const el = $(`[data-f="${f}"]`, tr); return el ? el.type : ''; };
-    const summary = val('summary');
-    if (!summary) { $('[data-f=summary]', tr).focus(); return; }
-    const cal = val('cal') || (calOpts()[0] || [''])[0];
-    if (!cal) return;
-    const [principal, cal_id] = cal.split('/');
-    const pct = val('percent') ? Math.max(0, Math.min(100, Math.round(+val('percent')))) : null;
-    let status = val('status') || '';
-    if (val('completed_at') || pct === 100) status = 'COMPLETED';
-    else if (pct && !status) status = 'IN-PROCESS';
-    const body = { principal, cal_id, summary, status, percent: pct,
-      description: val('description') || '', location: val('location') || '', class: val('class') || '',
-      categories: (val('categories') || '').split(',').map(x => x.trim()).filter(Boolean),
-      priority: val('priority') ? +val('priority') : null,
-      start: val('start') || null, start_all_day: typ('start') !== 'datetime-local',
-      due: val('due') || null, due_all_day: typ('due') !== 'datetime-local',
-      completed_at: val('completed_at') || null };
-    const r = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
-    if (!r.ok) { alert(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200)); return; }
-    const { id } = await r.json();
-    const k = `${principal}/${cal_id}/${id}`;
-    const d = await (await fetch('/api/tasks/' + k)).json();
-    const opt = $$('#ed-cal option').find(o => o.value === cal);
-    OPEN.push({ ...d, object_id: id, cal_name: opt ? opt.textContent.trim() : '', color: d.color || (opt ? opt.dataset.color : ''), priority: d.priority || 0, alarms: 0, links: 0, created: new Date().toISOString().slice(0, 19) });
-    rebuild();
-    $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
-    cur = k;
-    render();
-    const row = $$('.sheet tbody tr', main).find(x => x.dataset.key === k);
-    if (row) { row.scrollIntoView({ block: 'nearest' }); const pin = $('.pin', row); pin.classList.add('saved'); setTimeout(() => pin.classList.remove('saved'), 800); }
-    const nr = $('.sheet tr.new [data-f=summary]', main); if (nr) nr.focus();
-  }
   $$('#tk-colpop input[data-col]').forEach(i => i.addEventListener('change', () => {
     render();
     fetch('/settings/task-columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(shownCols()) });
@@ -2107,8 +2058,8 @@
     // the table scrolls inside its own box (sticky head and new row): keep its place across a redraw
     const sw = $('.sheetwrap', main), top = sw ? sw.scrollTop : 0;
     main.classList.toggle('view-table', view === 'table');
+    const fab = $('#fab'); if (fab) fab.classList.toggle('fab-add', view === 'table');
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
-    sizeFill();
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
     wireBar();
@@ -2177,7 +2128,7 @@
     if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
     else ed.hidden = !(cur || wantNew);
   }
-  addEventListener('resize', () => { fit(); sizeFill(); });
+  addEventListener('resize', fit);
   function open(k) {
     cur = k;
     render();
@@ -2185,8 +2136,6 @@
     fit();
   }
   function newTask() {
-    // the table has its own new row at the bottom
-    if (view === 'table') { const nr = $('.sheet tr.new [data-f=summary]', main); if (nr) nr.focus(); return; }
     cur = null; wantNew = true; render(); load(null); fit();
   }
   $('#tk-new').onclick = newTask;

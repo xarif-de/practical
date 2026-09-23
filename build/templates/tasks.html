@@ -35,7 +35,7 @@
 </div>
 {# groups on a wide window: list | editor, like the contacts page (`.dock`); every other view opens the editor as a dialog, the table edits in place #}
 <div class="tkwrap" id="taskroot" data-view="{{ view }}" data-back="{{ back }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}"
-     data-t-more="{{ ctx.t1("tk-more", "n", "{n}") }}" data-t-new="{{ ctx.t("tk-new-row") }}" data-done-total="{{ done_total }}" data-chunk="120">
+     data-t-more="{{ ctx.t1("tk-more", "n", "{n}") }}" data-done-total="{{ done_total }}" data-chunk="120">
   <div class="tkmain" id="tkmain"></div>
   {% include "editor.html" %}
 </div>

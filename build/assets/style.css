@@ -116,6 +116,15 @@ button, .btn { font: inherit; color: var(--fg); background: var(--bg-2); border:
 .mini .m { color: var(--fg-3); }
 .fab { position: fixed; right: 18px; bottom: 74px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-size: 28px; line-height: 52px; text-align: center; box-shadow: var(--shadow); border: 0; }
 @media (min-width: 900px) { .fab { display: none; } }
+/* table views (contacts, tasks): the round + is how a new entry is added, on every width, bottom left */
+.fab.fab-add { display: block; left: 18px; right: auto; z-index: 30; } /* above the sticky table cells, below the dialogs (45) */
+@media (min-width: 900px) { .fab.fab-add { bottom: 18px; } }
+.contacts:not(.view-table) #ct-fab { display: none; }
+/* the contacts table has no editor beside it: + opens the editor pane as a dialog over the table,
+   with the calendar dialog's backdrop */
+.contacts.dlg::before { content: ""; position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); }
+.view-table.contacts.dlg .detail { display: block !important; position: fixed; inset: 16px; margin: auto; z-index: 46; width: min(900px, calc(100% - 32px)); height: fit-content; max-height: calc(100dvh - 32px); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+.contacts.dlg #ct-cancel { display: inline-grid !important; }
 
 /* Contacts */
 .contacts { display: grid; gap: var(--gap); padding: 0 var(--pad) var(--pad); }
@@ -559,12 +568,6 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .sheet [contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
 .sheet td[contenteditable]:empty::after { content: "–"; color: var(--fg-3); }
 .chip.bk { background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); border-color: transparent; color: var(--fg); }
-.sheet tr.new td { color: var(--fg-3); font-style: italic; font-weight: 400; }
-/* the "new contact" row sits in a sticky <tfoot> at the bottom of the table scroller (a sticky td in the
-   last tbody row cannot move — its containing block ends with it); its name cell stays pinned left too */
-.sheet tfoot { position: sticky; bottom: 0; z-index: 2; }
-.sheet tfoot td { border-top: 1px solid var(--line); box-shadow: 0 -6px 12px -8px rgba(0,0,0,.25); }
-.sheet tfoot td.pin { z-index: 4; }
 .sheet tr:hover td { background: var(--tile); }
 .sheet [data-c].off, .cols label.off { display: none; }
 .contacts .detail { display: none; grid-area: detail; position: sticky; top: 64px; align-self: start; }
@@ -1211,13 +1214,6 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkmain .sheet input[data-empty]:not(:focus) { opacity: 0; } .tkmain .sheet td:hover > input[data-empty] { opacity: 1; }
 .tkmain .sheet ::-webkit-calendar-picker-indicator { opacity: 0; } .tkmain .sheet td:hover ::-webkit-calendar-picker-indicator, .tkmain .sheet input:focus::-webkit-calendar-picker-indicator { opacity: .6; }
 .tkmain .sheet select { appearance: none; cursor: pointer; } .tkmain .sheet td:hover select { text-decoration: underline dotted var(--fg-3); }
-/* the table box reaches down to the bottom edge; a filler row (sized by app.js) takes what a short table
-   leaves, so the new row in the sticky <tfoot> is always at the bottom of the screen */
-.tkmain.view-table .sheetwrap { height: calc(100dvh - var(--sticky-top) - var(--pad) - 4px); max-height: none; }
-.tkmain .sheet .fill td { padding: 0; border: 0; background: transparent; }
-.tkmain .sheet tr.new td { font-style: normal; color: var(--fg); background: var(--tile); }
-.tkmain .sheet tr.new .pinw .ico { color: var(--fg-3); }
-.tkmain .sheet tr.new [data-f=summary]:empty::after { content: attr(data-ph); font-style: italic; font-weight: 400; }
 
 /* board */
 .tkboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }

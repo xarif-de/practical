@@ -25,7 +25,7 @@
 <div class="sheetwrap"><table class="sheet"><thead><tr><th class="pin">{{ ctx.t("col-name") }}</th><th data-c="phone">{{ ctx.t("col-phone") }}</th><th data-c="email">{{ ctx.t("col-email") }}</th><th data-c="category">{{ ctx.t("col-category") }}</th><th data-c="addressbook">{{ ctx.t("col-addressbook") }}</th><th data-c="birthday">{{ ctx.t("col-birthday") }}</th><th data-c="address">{{ ctx.t("col-address") }}</th><th data-c="org">{{ ctx.t("col-org") }}</th><th></th></tr></thead><tbody>
 {% for c in contacts %}<tr data-key="{{ c.principal }}/{{ c.ab_id }}/{{ c.object_id }}" data-cat="{{ c.category() }}" data-ab="{{ c.principal }}/{{ c.ab_id }}" data-letter="{{ c.letter() }}"><td class="pin"><span class="av" style="background:var(--c{{ c.color_index() }})">{{ c.initials() }}</span><span contenteditable data-f="full_name">{{ c.full_name }}</span></td><td data-c="phone" contenteditable data-f="phone">{{ c.primary_phone() }}</td><td data-c="email" contenteditable data-f="email">{{ c.primary_email() }}</td><td data-c="category" contenteditable data-f="category">{{ c.category() }}</td><td data-c="addressbook"><span class="chip bk" style="--c:{{ c.ab_color }}">{{ c.ab_name }}</span></td><td data-c="birthday" contenteditable data-f="birthday">{{ c.birthday_label() }}</td><td data-c="address" contenteditable data-f="address">{{ c.primary_address() }}</td><td data-c="org" contenteditable data-f="org">{{ c.org }}</td><td><button class="icon-btn" data-open="{{ c.principal }}/{{ c.ab_id }}/{{ c.object_id }}" title="…">…</button></td></tr>
 {% endfor %}
-</tbody><tfoot><tr class="new"><td class="pin" contenteditable data-new="1">{{ ctx.t("ct-new-row") }}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tfoot></table></div>
+</tbody></table></div>
 <section class="detail" id="detail" hidden>
 <form id="ctform" class="cardform mode-view" autocomplete="off" data-t-today="{{ ctx.t("ct-days-today") }}" data-t-in="{{ ctx.t1("ct-days-in", "n", "{n}") }}" data-t-turns="{{ ctx.t1("ct-turns", "n", "{n}") }}" data-t-copied="{{ ctx.t("act-copied") }}" data-t-missing="{{ ctx.t("act-goto-missing") }}" data-t-rmcard="{{ ctx.t("ct-remove-card-confirm") }}" data-t-create="{{ ctx.t("ct-create") }}" data-t-save="{{ ctx.t("save") }}" data-t-newname="{{ ctx.t("ct-new-row") }}" data-t-newtitle="{{ ctx.t("ct-new-title") }}" data-t-display="{{ ctx.t("ct-display-name") }}">
 <div class="photo"><span class="av" id="ct-av"></span><div class="names"><input name="full_name" placeholder="{{ ctx.t("ct-display-name") }}"><small class="views" id="ct-sub"></small><small class="edits">{{ ctx.t("ct-name-hint") }}</small></div></div>
@@ -57,6 +57,8 @@
 <input type="hidden" name="key"><input type="hidden" name="etag">
 </form>
 </section>
+{# table view: the way to add a contact — the editor opens as a dialog over the table #}
+<button class="fab fab-add" id="ct-fab" type="button" title="{{ ctx.t("ct-new-title") }}" aria-label="{{ ctx.t("ct-new-title") }}">+</button>
 <nav class="ct-rail" aria-label="{{ ctx.t("ct-rail") }}">{% for g in groups %}<button type="button" data-jump="{{ g.letter }}">{{ g.letter }}</button>{% endfor %}</nav>
 </div>
 {% endblock %}
