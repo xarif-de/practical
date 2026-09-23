@@ -104,6 +104,11 @@ CREATE TABLE xui_holidays (
          DROP TABLE xui_category_rules;\n\
          ALTER TABLE xui_category_rules_new RENAME TO xui_category_rules;",
     ),
+    (
+        8,
+        // the columns of the task table, per user (NULL = routes::tasks::DEFAULT_COLUMNS)
+        "ALTER TABLE xui_user_settings ADD COLUMN task_columns_json TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

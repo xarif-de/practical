@@ -22,6 +22,8 @@
     <option value="all"{% if back == "all" %} selected{% endif %}>{{ ctx.t("tk-back-all") }}</option>
   </select></span>
   <button class="btn btn-primary icon-btn" id="tk-new" type="button" title="{{ ctx.t("task-add") }}" aria-label="{{ ctx.t("task-add") }}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+  {# table view only: the same column picker as the contacts table #}
+  <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("tk-columns") }}" aria-label="{{ ctx.t("tk-columns") }}"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></button><div class="pop" id="tk-colpop"><h4>{{ ctx.t("tk-columns") }}</h4>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
   <span class="seg" role="group" id="tk-views">
     <button data-tkview="groups"{% if view == "groups" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-groups") }}" aria-label="{{ ctx.t("tk-v-groups") }}"><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg></button>
     <button data-tkview="table"{% if view == "table" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-table") }}" aria-label="{{ ctx.t("tk-v-table") }}"><svg class="ico" aria-hidden="true"><use href="#i-table"/></svg></button>
@@ -31,14 +33,13 @@
     <button data-tkview="history"{% if view == "history" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-history") }}" aria-label="{{ ctx.t("tk-v-history") }}"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button>
   </span>
 </div>
-{# the side editor lives next to the views when the window is wide enough (`.tk-wide`), else the dialog opens #}
+{# groups on a wide window: list | editor, like the contacts page (`.dock`); every other view opens the editor as a dialog, the table edits in place #}
 <div class="tkwrap" id="taskroot" data-view="{{ view }}" data-back="{{ back }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}"
-     data-t-more="{{ ctx.t1("tk-more", "n", "{n}") }}" data-done-total="{{ done_total }}" data-chunk="120">
+     data-t-more="{{ ctx.t1("tk-more", "n", "{n}") }}" data-t-new="{{ ctx.t("tk-new-row") }}" data-done-total="{{ done_total }}" data-chunk="120">
   <div class="tkmain" id="tkmain"></div>
-  <aside class="tkside" id="tkside" hidden></aside>
+  {% include "editor.html" %}
 </div>
 </div>
-{% include "editor.html" %}
 <button class="fab" id="fab" type="button" aria-label="+">+</button>
 <script type="application/json" id="tasks-data">{{ tasks_json|safe }}</script>
 <script type="application/json" id="alarm-presets-data">{{ alarm_presets_json|safe }}</script>

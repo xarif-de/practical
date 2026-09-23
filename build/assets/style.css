@@ -1140,8 +1140,9 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 
 /* ===== tasks page: six views over one list =====
    The atoms (.chip, .sw, .pb, .seg, .sel) are the app's; only the view shells live here. */
-.tkwrap { display: block; }
-.tkpage.wide { padding-right: 442px; }
+.tkwrap { display: block; padding: 0 var(--pad) var(--pad); }
+/* groups on a wide window: list 1/3 | editor 2/3, the contacts proportions (≥1100px, set by app.js as `.dock`) */
+.tkwrap.dock { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--gap); align-items: start; }
 /* the task views bring their own chip: the app's `.chip` is the category tag and stacks its icon */
 .tchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--tile); border-radius: 999px;
   padding: 2px 8px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap; line-height: 1.5; }
@@ -1181,17 +1182,40 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkcard .meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
 
 /* table */
-.tktable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.tktable th { text-align: left; font-weight: 600; color: var(--fg-2); font-size: 12px; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.tktable th[data-sk] { cursor: pointer; user-select: none; }
-.tktable th[data-sk]:hover { color: var(--accent); }
-.tktable th .a { color: var(--accent); font-size: 10px; }
-.tktable td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.tktable tr { cursor: pointer; }
-.tktable tr:hover td { background: var(--tile); }
-.tktable tr.sel td { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
-.tktable tr.off td .ti { text-decoration: line-through; color: var(--fg-3); }
-.tktable td.c { text-align: center; }
+/* table: the contacts sheet (.sheetwrap/.sheet) is the editor — every cell edits in place */
+.tkmain .sheet { min-width: 0; }
+/* the pin cell stays a table cell (as a flex box it would not stretch to the row's height) */
+.tkmain .sheet .pin { display: table-cell; min-width: 280px; }
+.tkmain .sheet .pinw { display: flex; align-items: center; gap: 10px; }
+.tkmain .sheet .pin [contenteditable] { flex: 1; min-width: 0; white-space: normal; }
+.tkmain .sheet tr.off .pin [contenteditable] { text-decoration: line-through; color: var(--fg-3); }
+.tkmain .sheet th[data-sk] { cursor: pointer; user-select: none; } .tkmain .sheet th[data-sk]:hover { color: var(--accent); }
+.tkmain .sheet th .a { color: var(--accent); font-size: 10px; }
+.tkmain .sheet td.tkc { text-align: center; }
+.tkmain .sheet td.ro { color: var(--fg-2); }
+.tkmain .sheet input, .tkmain .sheet select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 0; outline: none; }
+.tkmain .sheet input[type=number] { width: 4.5em; text-align: right; }
+.tkmain .sheet input:focus, .tkmain .sheet select:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.tkmain .sheet input.late { color: var(--today); }
+.tkmain .sheet td.desc [contenteditable] { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.tkmain .sheet td.saved { outline: 2px solid var(--c2); outline-offset: -2px; }
+.tkmain .sheet tr.sent td { border: 0; background: transparent; }
+.tknew [data-new]:empty::before { content: attr(data-ph); color: var(--fg-3); font-style: italic; font-weight: 400; }
+.tkmain .sheet [contenteditable][data-f]:empty::after { content: "–"; color: var(--fg-3); }
+/* an empty date shows a dash, the input appears on hover and while it has the focus */
+.tkmain .sheet td:has(> input[data-empty]) { position: relative; }
+.tkmain .sheet td:has(> input[data-empty]:not(:focus))::before { content: "–"; color: var(--fg-3); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.tkmain .sheet td:has(> input[data-empty]):hover::before { content: none; }
+.tkmain .sheet input[data-empty]:not(:focus) { opacity: 0; } .tkmain .sheet td:hover > input[data-empty] { opacity: 1; }
+.tkmain .sheet ::-webkit-calendar-picker-indicator { opacity: 0; } .tkmain .sheet td:hover ::-webkit-calendar-picker-indicator, .tkmain .sheet input:focus::-webkit-calendar-picker-indicator { opacity: .6; }
+.tkmain .sheet select { appearance: none; cursor: pointer; } .tkmain .sheet td:hover select { text-decoration: underline dotted var(--fg-3); }
+.tkmain .sheet [data-open] { padding: 2px 6px; }
+/* the table fills the page down to the bottom edge, so the new-task line is always at the bottom of the screen */
+.tkmain.view-table .sheetwrap { display: flex; flex-direction: column; height: calc(100dvh - var(--sticky-top) - var(--pad) - 4px); max-height: none; }
+.tkmain.view-table .sheet { flex: none; }
+.tknew { position: sticky; bottom: 0; left: 0; margin-top: auto; z-index: 4; display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--tile); border-top: 1px solid var(--line); box-shadow: 0 -6px 12px -8px rgba(0,0,0,.25); font-size: 14px; }
+.tknew .ico { color: var(--fg-3); } .tknew [data-new] { flex: 1; outline: none; min-height: 20px; }
+.tknew:focus-within { box-shadow: 0 -6px 12px -8px rgba(0,0,0,.25), inset 0 0 0 2px var(--accent); }
 
 /* board */
 .tkboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
@@ -1246,14 +1270,14 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkdl .ri { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 13.5px; cursor: pointer; }
 .tkdl .ri:hover { color: var(--accent); }
 
-/* the docked editor: the same dialog, pinned to the right instead of floating over the page */
-.ed.docked { position: fixed; inset: 56px 0 0 auto; width: 430px; background: var(--bg); border-left: 1px solid var(--line); z-index: 20; display: block; padding: 0; }
-.ed.docked .box { width: 100%; height: 100%; max-height: none; border-radius: 0; box-shadow: none; border: 0; }
-.ed.docked .cols3 { grid-template-columns: 1fr; }
-.ed.docked .dayline { display: none; }
-@media (max-width: 1179px) { .ed.docked { position: fixed; inset: 0; width: auto; } }
+/* the docked editor: the same dialog, as the right-hand pane of the groups view (sticky, scrolls on its own like the contacts pane) */
+.ed.docked { position: sticky; top: calc(var(--toolbar-h) + 4px); inset: auto; z-index: 1; display: block; padding: 0; background: none; backdrop-filter: none; }
+.ed.docked .box { width: 100%; max-height: calc(100dvh - var(--sticky-top) - 30px); box-shadow: none; border-radius: var(--radius); }
+/* a task has no day to lay out: no day line, no toggle for it, one column (`task-hide`, see editor.html) */
+.ed.taskmode .task-hide { display: none !important; }
+.ed.taskmode .cols3 { grid-template-columns: 1fr; }
 .ed.docked.blank .box { display: none; }
-.ed.docked.blank::after { content: attr(data-empty); display: block; padding: 60px 26px; color: var(--fg-3); font-size: 13.5px; text-align: center; }
+.ed.docked.blank::after { content: attr(data-empty); display: block; padding: 60px 26px; color: var(--fg-3); font-size: 13.5px; text-align: center; border: 1px dashed var(--line); border-radius: var(--radius); }
 /* the lookback picker sits in the page toolbar, where `.sel` is not otherwise used */
 .toolbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; color: var(--fg-2); }
 .toolbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }

@@ -569,3 +569,6 @@ tk-v-deck = Karten
 tk-v-history = Chronik
 tk-loading = lade …
 tk-more = { $n } weitere erledigte
+tk-columns = Spalten
+tk-new-row = Neue Aufgabe …
+tk-col-created = Erstellt

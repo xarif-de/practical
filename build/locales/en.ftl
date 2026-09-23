@@ -569,3 +569,6 @@ tk-v-deck = Cards
 tk-v-history = History
 tk-loading = loading …
 tk-more = { $n } more completed
+tk-columns = Columns
+tk-new-row = New task …
+tk-col-created = Created

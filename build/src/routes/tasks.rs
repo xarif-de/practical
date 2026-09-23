@@ -26,6 +26,13 @@ const LOOKBACKS: &[&str] = &["day", "week", "month", "quarter", "year", "all"];
 /// Finished tasks reach back as far as the lookback allows, which is unbounded by design — they
 /// arrive in pages as the views scroll. Open tasks are the working set and always travel whole.
 pub const DONE_CHUNK: usize = 120;
+/// Optional columns of the table view with their label's locale key; the title is always there.
+const COLUMNS: &[(&str, &str)] = &[
+    ("cal", "ed-calendar"), ("start", "ed-start"), ("due", "ed-due"), ("status", "ed-status"), ("percent", "ed-percent"), ("priority", "ed-priority"),
+    ("completed", "ed-completed-at"), ("categories", "ed-card-cats"), ("location", "ed-card-where"), ("class", "ed-class"), ("created", "tk-col-created"), ("description", "ed-card-note"),
+];
+pub const ALL_COLUMNS: &[&str] = &["cal", "start", "due", "status", "percent", "priority", "completed", "categories", "location", "class", "created", "description"];
+const DEFAULT_COLUMNS: &[&str] = &["cal", "start", "due", "status", "percent", "priority", "completed", "categories"];
 
 fn lookback_days(v: &str) -> Option<i64> {
     match v {
@@ -83,6 +90,17 @@ pub struct TasksPage {
     pub alarm_presets_json: String,
     pub alarm_snaps_json: String,
     pub category_rules_json: String,
+    /// the table view's visible columns
+    pub columns: Vec<String>,
+}
+
+impl TasksPage {
+    pub fn col(&self, name: &str) -> bool {
+        self.columns.iter().any(|c| c == name)
+    }
+    pub fn column_list(&self) -> &'static [(&'static str, &'static str)] {
+        COLUMNS
+    }
 }
 
 /// The order every view starts from: the newest completion first. A page of this list is a
@@ -147,6 +165,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         alarm_snaps_json: serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap(),
         alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
         category_rules_json: serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "task").await?).unwrap(),
+        columns: p.task_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| DEFAULT_COLUMNS.iter().map(|s| s.to_string()).collect()),
     })
 }
 
@@ -188,4 +207,15 @@ pub struct DonePage {
 
 pub fn router() -> Router<SharedState> {
     Router::new().route("/tasks", get(page)).route("/api/tasks/done", get(done_page))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_column_has_a_label_and_the_defaults_exist() {
+        assert_eq!(COLUMNS.iter().map(|(c, _)| *c).collect::<Vec<_>>(), ALL_COLUMNS);
+        assert!(DEFAULT_COLUMNS.iter().all(|c| ALL_COLUMNS.contains(c)));
+    }
 }

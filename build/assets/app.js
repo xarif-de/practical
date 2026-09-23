@@ -1810,29 +1810,136 @@
     return h;
   }
 
-  // ---- B: table ----
-  const COLS = [['summary', SORTL.title, 'title'], ['cal_name', SORTL.cal, 'cal'], ['start', T.start, null], ['due', SORTL.due, 'due'],
-                ['status', 'Status', null], ['percent', '%', 'pct'], ['priority', T.prio, 'prio'], ['completed_at', SORTL.done, 'done'], ['categories', T.cats, null]];
+  // ---- B: table — the sheet is the editor: each cell saves on its own, like the contacts table ----
   const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled, '': '—' };
-  function vTable() {
-    let h = bar(`<b>${T.vTable}</b>`) + '<table class="tktable"><thead><tr><th></th>' +
-      COLS.map(([, l, k]) => `<th${k ? ` data-sk="${k}"` : ''}>${esc(l)}${k && sort === k ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`).join('') + '<th></th></tr></thead><tbody>';
-    sortView(TASKS).forEach(t => {
-      const p = t.percent;
-      h += `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="c">${cbox(t)}</td>
-        <td><span class="ti">${esc(t.summary)}</span></td>
-        <td><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>
-        <td class="tnum">${t.start ? de(parse(t.start)) : '<span class="mut">—</span>'}</td>
-        <td class="tnum"${overdue(t) ? ' style="color:var(--today)"' : ''}>${t.due ? dueTxt(t) : '<span class="mut">—</span>'}</td>
-        <td>${esc(STL[t.status] || t.status)}</td>
-        <td class="c tnum">${p == null ? '<span class="mut">—</span>' : p}</td>
-        <td class="c">${t.priority ? `<span class="pr p${t.priority <= 4 ? 1 : t.priority === 5 ? 2 : 3}">${t.priority}</span>` : '<span class="mut">—</span>'}</td>
-        <td class="tnum">${t.completed_at ? deT(dt(t.completed_at)) : '<span class="mut">—</span>'}</td>
-        <td>${(t.categories || []).map(c => `<span class="tchip">${esc(c)}</span>`).join(' ') || '<span class="mut">—</span>'}</td>
-        <td class="c"><button class="icon-btn" data-open>${ic('dots', 'xs')}</button></td></tr>`;
-    });
-    return h + '</tbody></table>';
+  // the choices come from the editor's own selects, so both speak the same words
+  const optsOf = name => $$(`#ed select[name=${name}] option`).map(o => [o.value, o.textContent]);
+  const shownCols = () => $$('#tk-colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col);
+  const colLabel = c => { const i = $(`#tk-colpop input[data-col="${c}"]`); return i ? i.dataset.label : c; };
+  const SORTABLE = { cal: 'cal', due: 'due', percent: 'pct', priority: 'prio', completed: 'done', created: 'created' };
+  // a date input stays a date, a time stays a time: switching between the two is the dialog's job
+  function dtIn(t, f) {
+    const v = t[f] ? String(t[f]) : '';
+    const allDay = f === 'completed_at' ? false : (v ? t[f + '_all_day'] : true);
+    return `<input type="${allDay ? 'date' : 'datetime-local'}" data-f="${f}" value="${esc(allDay ? v.slice(0, 10) : v.slice(0, 16))}"${f === 'due' && overdue(t) ? ' class="late"' : ''}${v ? '' : ' data-empty'}>`;
   }
+  function selIn(f, cur, opts) {
+    const list = opts.some(([v]) => v === cur) ? opts : opts.concat([[cur, cur]]);
+    return `<select data-f="${f}">${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  }
+  const edTxt = (f, v) => `<span contenteditable="plaintext-only" data-f="${f}">${esc(v)}</span>`;
+  const CELL = {
+    cal: t => `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
+    start: t => `<td>${dtIn(t, 'start')}</td>`,
+    due: t => `<td>${dtIn(t, 'due')}</td>`,
+    status: t => `<td>${selIn('status', t.status || '', Object.entries(STL).filter(([v]) => v).map(([v, l]) => [v, l]).concat(t.status ? [] : [['', '—']]))}</td>`,
+    percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent" value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
+    priority: t => `<td>${selIn('priority', t.priority ? String(t.priority) : '', optsOf('priority'))}</td>`,
+    completed: t => `<td>${dtIn(t, 'completed_at')}</td>`,
+    categories: t => `<td>${edTxt('categories', (t.categories || []).join(', '))}</td>`,
+    location: t => `<td>${edTxt('location', t.location)}</td>`,
+    class: t => `<td>${selIn('class', t.class || '', optsOf('class'))}</td>`,
+    created: t => `<td class="ro tnum">${t.created ? deT(dt(t.created)) : '—'}</td>`,
+    description: t => `<td class="desc">${edTxt('description', t.description)}</td>`,
+  };
+  const rowHtml = (t, cols) => `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="pin"><div class="pinw">${cbox(t)}${edTxt('summary', t.summary)}</div></td>` +
+    cols.map(c => CELL[c](t)).join('') + `<td class="tkc"><button class="icon-btn" data-open title="${esc(T.edit)}">${ic('dots', 'xs')}</button></td></tr>`;
+  function vTable() {
+    const cols = shownCols().filter(c => CELL[c]);
+    const th = (label, sk, cl) => `<th${cl ? ` class="${cl}"` : ''}${sk ? ` data-sk="${sk}"` : ''}>${esc(label)}${sk && sort === sk ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`;
+    return `<div class="sheetwrap"><table class="sheet"><thead><tr>${th(SORTL.title, 'title', 'pin')}${cols.map(c => th(colLabel(c), SORTABLE[c])).join('')}<th></th></tr></thead><tbody>` +
+      sortView(TASKS).map(t => rowHtml(t, cols)).join('') +
+      `</tbody></table>${SENTINEL()}<div class="tknew">${ic('plus', 'xs')}<span contenteditable="plaintext-only" data-new data-ph="${esc(root.dataset.tNew)}"></span></div></div>`;
+  }
+  const find = k => TASKS.find(x => key(x) === k);
+  // a row with the cursor in it is updated cell by cell, leaving the focused one alone —
+  // tabbing on from a saved cell never loses the cursor and still sees the derived values
+  function redrawRow(k) {
+    const tr = $$('.sheet tbody tr', main).find(r => r.dataset.key === k), t = find(k);
+    if (!tr || !t) return;
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = rowHtml(t, shownCols().filter(c => CELL[c]));
+    const fresh = tmp.firstElementChild;
+    if (!tr.contains(document.activeElement)) { fresh.classList.toggle('sel', tr.classList.contains('sel')); tr.replaceWith(fresh); return; }
+    tr.classList.toggle('off', fresh.classList.contains('off'));
+    $('.tcb', tr).replaceWith($('.tcb', fresh));
+    $$('[data-f]', fresh).forEach(n => {
+      const o = $(`[data-f="${n.dataset.f}"]`, tr);
+      if (!o || o === document.activeElement) return;
+      o.replaceWith(n);
+    });
+  }
+  // after a save the server's answer wins: it keeps status, progress and completion consistent
+  async function refresh(k) {
+    const d = await (await fetch('/api/tasks/' + k)).json(), t = find(k);
+    if (!t) return;
+    ['summary', 'description', 'location', 'start', 'start_all_day', 'due', 'due_all_day', 'status', 'percent', 'completed_at', 'class', 'categories'].forEach(f => { t[f] = d[f]; });
+    t.priority = d.priority || 0;
+    $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
+    redrawRow(k);
+  }
+  async function saveCell(el) {
+    const k = el.closest('tr').dataset.key, f = el.dataset.f;
+    const v = el.isContentEditable ? el.textContent.trim() : el.value;
+    const d = await (await fetch('/api/tasks/' + k)).json();
+    switch (f) {
+      case 'summary': if (!v) { refresh(k); return; } d.summary = v; break;
+      case 'description': case 'location': d[f] = v; break;
+      case 'categories': d.categories = v.split(',').map(x => x.trim()).filter(Boolean); break;
+      case 'start': case 'due': d[f] = v || null; d[f + '_all_day'] = el.type === 'date'; break;
+      case 'class': d.class = v; break;
+      case 'priority': d.priority = v ? +v : null; break;
+      case 'status': d.status = v; if (v !== 'COMPLETED') d.completed_at = null; break;
+      // the three progress fields move together, the same rule the editor applies
+      case 'percent': { const n = v === '' ? null : Math.max(0, Math.min(100, Math.round(+v)));
+        d.percent = n; d.status = n === 100 ? 'COMPLETED' : n ? 'IN-PROCESS' : (d.status === 'COMPLETED' || d.status === 'IN-PROCESS' ? 'NEEDS-ACTION' : d.status); break; }
+      case 'completed_at': d.completed_at = v || null; d.status = v ? 'COMPLETED' : (d.status === 'COMPLETED' ? 'NEEDS-ACTION' : d.status); break;
+      default: return;
+    }
+    if (!await put(k, d)) { refresh(k); return; }
+    const td = el.closest('td'); td.classList.add('saved'); setTimeout(() => td.classList.remove('saved'), 800);
+    await refresh(k);
+  }
+  main.addEventListener('focusin', e => { const el = e.target.closest('.sheet [contenteditable][data-f]'); if (el) el.dataset.before = el.textContent; });
+  main.addEventListener('focusout', e => {
+    const el = e.target.closest('.sheet [contenteditable][data-f]');
+    if (el && el.textContent.trim() !== (el.dataset.before || '').trim()) saveCell(el);
+  });
+  main.addEventListener('change', e => { const el = e.target.closest('.sheet input[data-f], .sheet select[data-f]'); if (el) saveCell(el); });
+  main.addEventListener('keydown', e => {
+    const el = e.target.closest('.sheetwrap [contenteditable]');
+    if (!el) return;
+    if (e.key === 'Escape' && el.dataset.f) { el.textContent = el.dataset.before || ''; el.blur(); }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (el.hasAttribute('data-new')) createFromRow(el); else el.blur();
+  });
+  // the new row files into the first calendar the filter shows (the editor's default for a new task)
+  async function createFromRow(el) {
+    const summary = el.textContent.trim();
+    if (!summary) return;
+    const picked = root.dataset.cals ? root.dataset.cals.split(',') : [];
+    const opt = $$('#ed-cal option').find(o => !picked.length || picked.includes(o.value)) || $('#ed-cal option');
+    if (!opt) return;
+    const [principal, cal_id] = opt.value.split('/');
+    const r = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ principal, cal_id, summary }) });
+    if (!r.ok) { alert(T.err + ' ' + r.status); return; }
+    const { id } = await r.json();
+    const k = `${principal}/${cal_id}/${id}`;
+    const d = await (await fetch('/api/tasks/' + k)).json();
+    OPEN.push({ ...d, object_id: id, cal_name: opt.textContent.trim(), color: d.color || opt.dataset.color, priority: d.priority || 0, alarms: 0, links: 0, created: new Date().toISOString().slice(0, 19) });
+    rebuild();
+    $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
+    cur = k;
+    render();
+    const row = $$('.sheet tbody tr', main).find(x => x.dataset.key === k);
+    if (row) { row.scrollIntoView({ block: 'nearest' }); row.querySelector('.pin').classList.add('saved'); setTimeout(() => row.querySelector('.pin').classList.remove('saved'), 800); }
+    const nr = $('[data-new]', main); if (nr) nr.focus();
+  }
+  $$('#tk-colpop input[data-col]').forEach(i => i.addEventListener('change', () => {
+    render();
+    fetch('/settings/task-columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(shownCols()) });
+  }));
 
   // ---- C: board ----
   const BCOLS = [['NEEDS-ACTION', T.open, 'list'], ['IN-PROCESS', T.doing, 'dots'], ['COMPLETED', T.done, 'check'], ['CANCELLED', T.cancelled, 'x']];
@@ -1944,18 +2051,28 @@
     if (obs) obs.disconnect();
     const el = $('#tk-sent');
     if (!el) return;
-    obs = new IntersectionObserver(async es => { if (es.some(e => e.isIntersecting) && !loading) { if (await loadMore()) render(); } },
+    obs = new IntersectionObserver(async es => { if (es.some(e => e.isIntersecting) && !loading) { if (await loadMore()) renderIdle(); } },
       { root: scrollParent(el), rootMargin: '1200px 0px' });
     obs.observe(el);
   }
 
+  // a redraw would take the cursor out of a cell being typed in: wait until the focus leaves the view
+  function renderIdle() {
+    const a = document.activeElement;
+    if (a && main.contains(a) && a.matches('input, select, [contenteditable]')) { main.addEventListener('focusout', () => setTimeout(renderIdle, 0), { once: true }); return; }
+    render();
+  }
   function render() {
     if (!PREFIX_SAFE.includes(sort) && DONE.length < DONE_TOTAL) {
       main.innerHTML = `<div class="tksent">${esc(T.loading)}</div>`;
       ensureAll().then(render);
       return;
     }
-    main.innerHTML = (VIEWS[view] || vGroups)() + SENTINEL();
+    // the table scrolls inside its own box (sticky head and new row): keep its place across a redraw
+    const sw = $('.sheetwrap', main), top = sw ? sw.scrollTop : 0;
+    main.classList.toggle('view-table', view === 'table');
+    main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
+    const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
     watchSentinel();
     wireBar();
     $$('[data-sk]', main).forEach(th => th.onclick = () => { if (sort === th.dataset.sk) desc = !desc; else { sort = th.dataset.sk; desc = false; } localStorage.tkSort = sort; localStorage.tkDesc = desc ? '1' : '0'; render(); });
@@ -1982,7 +2099,10 @@
     if (tog) { e.stopPropagation(); toggle(tog.dataset.tog); return; }
     if (e.target.closest('[data-next]')) { deckI++; render(); return; }
     const holder = e.target.closest('[data-key]');
-    if (holder) open(holder.dataset.key);
+    if (!holder) return;
+    // the table edits in place; only its ⋯ button opens the dialog (for what has no column)
+    if (view === 'table' && !e.target.closest('[data-open]')) return;
+    open(holder.dataset.key);
   });
 
   // ---- writing ----
@@ -1993,7 +2113,7 @@
   }
   async function toggle(k) {
     const t = TASKS.find(x => key(x) === k); if (!t) return;
-    if (await put(k, { principal: t.principal, cal_id: t.cal_id, summary: t.summary, completed: !isDone(t) })) reload();
+    if (await put(k, { principal: t.principal, cal_id: t.cal_id, summary: t.summary, completed: !isDone(t) })) { if (view === 'table') refresh(k); else reload(); }
   }
   async function setStatus(k, st) {
     const t = TASKS.find(x => key(x) === k); if (!t || t.status === st) return;
@@ -2005,17 +2125,17 @@
   function reload() { location.href = url(); }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
-  // ---- the editor: docked beside the views when there is room, a dialog when there is not ----
-  const MIN_WIDE = 1180;
+  // ---- the editor: the groups view shares the page with it on a wide window (list | editor, like
+  // the contacts page); every other view opens it as the dialog the calendar uses ----
+  const MIN_DOCK = 1100;
   function fit() {
-    const wide = innerWidth >= MIN_WIDE;
-    root.classList.toggle('wide', wide);
-    document.getElementById('tkpage').classList.toggle('wide', wide);
-    ed.classList.toggle('docked', wide);
-    // docked and nothing picked: the column shows a hint instead of an empty form
-    ed.classList.toggle('blank', wide && !cur);
+    const dock = view === 'groups' && innerWidth >= MIN_DOCK;
+    root.classList.toggle('dock', dock);
+    ed.classList.toggle('docked', dock);
+    // docked and nothing picked: the pane shows a hint instead of an empty form
+    ed.classList.toggle('blank', dock && !cur);
     ed.dataset.empty = T.pickone;
-    ed.hidden = wide ? false : !cur;
+    ed.hidden = dock ? false : !cur;
   }
   addEventListener('resize', fit);
   function open(k) {
@@ -2024,7 +2144,11 @@
     fit();
     window.rusticalEd.open(k);
   }
-  const newTask = () => { cur = null; render(); ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null); };
+  function newTask() {
+    // the table has its own new row at the bottom
+    if (view === 'table') { const nr = $('[data-new]', main); if (nr) nr.focus(); return; }
+    cur = null; render(); ed.classList.remove('blank'); ed.hidden = false; window.rusticalEd.open(null);
+  }
   $('#tk-new').onclick = newTask;
   const fab = $('#fab'); if (fab) fab.onclick = newTask;
 
@@ -2042,8 +2166,11 @@
   $$('#tk-views button').forEach(b => b.onclick = () => {
     view = b.dataset.tkview;
     $$('#tk-views button').forEach(x => x.toggleAttribute('aria-pressed', x === b));
+    $('#tk-colpick').hidden = view !== 'table';
     history.replaceState(null, '', url());
+    cur = null; // a pick does not travel between views: the dialog would pop up in the next one
     render();
+    fit();
   });
   addEventListener('popstate', () => location.reload());
 

@@ -459,6 +459,16 @@ async fn columns_save(State(state): State<SharedState>, user: Principal, session
     Ok(axum::Json(cols))
 }
 
+/// Task table column choice (JSON array from app.js), stored per user.
+async fn task_columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::tasks::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    p.task_columns_json = Some(serde_json::to_string(&cols).unwrap());
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::Json(cols))
+}
+
 /// Contact list-view field choice (JSON array from app.js), stored per user.
 async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(fields): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
@@ -529,6 +539,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/columns", post(columns_save))
         .route("/settings/list-fields", post(list_fields_save))
+        .route("/settings/task-columns", post(task_columns_save))
         .route("/settings/export/calendars/{owner}/{id}", get(export_calendar))
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
