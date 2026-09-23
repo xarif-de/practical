@@ -79,7 +79,25 @@
     tabs.forEach(a => a.addEventListener('click', e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); fromHash(); }));
     addEventListener('hashchange', fromHash); fromHash();
     // a flash after a failed confirmation should keep the details open
-    $$('.toast.error').forEach(() => $$('details.danger-zone', settings).forEach(d => d.open = true));
+    // a danger zone (delete/purge a group) asks in a dialog: its text, the value to type, cancel or go.
+    // Without JS the <details> opens inline and works the same.
+    $$('details.danger-zone', settings).forEach(d => $('summary', d).addEventListener('click', e => {
+      e.preventDefault();
+      const form = $('form', d), inp = $('input[name=confirm]', form), go = $('button[type=submit]', form), want = inp.placeholder;
+      const w = document.createElement('div');
+      w.className = 'ask'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-modal', 'true');
+      w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn" type="button"></button><button class="btn danger" type="submit" disabled></button></div></form>';
+      $('p', w).textContent = ($('p', form) || {}).textContent || ''; $('.ask-type span', w).textContent = form.dataset.tType; $('.ask-type b', w).textContent = want;
+      const [no, yes] = $$('.ask-acts button', w); no.textContent = form.dataset.tCancel; yes.textContent = go.textContent;
+      const typed = $('.ask-type input', w); // no placeholder: a greyed copy of the answer reads as already filled in
+      const end = () => { removeEventListener('keydown', key, true); w.remove(); };
+      const key = ev => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); end(); } };
+      addEventListener('keydown', key, true);
+      typed.oninput = () => { yes.disabled = typed.value.trim() !== want; };
+      no.onclick = end; w.onclick = ev => { if (ev.target === w) end(); };
+      $('form', w).onsubmit = ev => { ev.preventDefault(); if (yes.disabled) return; inp.value = typed.value.trim(); end(); form.submit(); };
+      document.body.appendChild(w); typed.focus();
+    }));
     // categories tab: the index with counts, a rule per category (edited in the calendar's dialog)
     const catPanel = $('#categories');
     if (catPanel) {

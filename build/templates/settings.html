@@ -161,7 +161,7 @@
       <form method="post" action="/settings/groups/{{ g.id }}/leave" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
       <details class="danger-zone">
         <summary class="btn danger">{{ ctx.t("group-delete") }}</summary>
-        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form">
+        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form" data-t-type="{{ ctx.t("confirm-type") }}" data-t-cancel="{{ ctx.t("cancel") }}">
           <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
           <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
           <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
@@ -218,7 +218,7 @@
     <div class="actions">
       <form method="post" action="/settings/trash/groups/{{ g.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn btn-primary" type="submit">{{ ctx.t("restore") }}</button></form>
       <details class="danger-zone"><summary class="btn danger">{{ ctx.t("purge") }}</summary>
-        <form method="post" action="/settings/trash/groups/{{ g.id }}/purge" class="inline-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><input type="text" name="confirm" required placeholder="{{ g.id }}" autocomplete="off"><button class="btn danger" type="submit">{{ ctx.t("purge-confirm") }}</button></form>
+        <form method="post" action="/settings/trash/groups/{{ g.id }}/purge" class="inline-form" data-t-type="{{ ctx.t("confirm-type") }}" data-t-cancel="{{ ctx.t("cancel") }}"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><p class="small">{{ ctx.t1("group-purge-explain", "name", g.displayname) }}</p><input type="text" name="confirm" required placeholder="{{ g.id }}" autocomplete="off"><button class="btn danger" type="submit">{{ ctx.t("purge-confirm") }}</button></form>
       </details>
     </div>
   </article>
