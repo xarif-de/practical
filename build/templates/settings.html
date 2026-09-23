@@ -1,244 +1,268 @@
 {% extends "layout.html" %}
 {% block title %}{{ ctx.t("nav-settings") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block content %}
-<div class="toolbar"><h1>{{ ctx.t("nav-settings") }}</h1><span class="grow"></span>
-<span class="seg tabs" role="tablist">
-<a href="#prefs" role="tab">{{ ctx.t("tab-general") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#categories" role="tab">{{ ctx.t("tab-categories") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#account" role="tab">{{ ctx.t("tab-account") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a>
-</span></div>
-<div class="settings">
+{# Grouped lists (round 12, prototype C): a home page with drill-in pages, one <section class="page"> each,
+   switched by the URL hash (app.js). Preference fields save themselves (fetch, JSON answer); lists keep
+   their POST forms, which redirect back to their page. Without JS every page is visible. #}
+<div class="settings set" id="settings" data-t-saved="{{ ctx.t("flash-saved") }}">
 
-<section class="panel" id="prefs">
-  <h2>{{ ctx.t("tab-general") }}</h2>
-  <form method="post" action="/settings/prefs" class="stack">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <h3>{{ ctx.t("pref-sec-display") }}</h3>
-    <label>{{ ctx.t("pref-language") }}<select name="lang"><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></label>
-    <label>{{ ctx.t("pref-scheme") }}<select name="scheme"><option value="auto"{% if self.scheme_is("auto") %} selected{% endif %}>{{ ctx.t("scheme-auto") }}</option><option value="light"{% if self.scheme_is("light") %} selected{% endif %}>{{ ctx.t("scheme-light") }}</option><option value="dark"{% if self.scheme_is("dark") %} selected{% endif %}>{{ ctx.t("scheme-dark") }}</option></select></label>
-    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}" placeholder="{{ default_timezone }}"></label>
-    <h3>{{ ctx.t("pref-sec-days") }}</h3>
-    <fieldset class="row"><legend>{{ ctx.t("pref-holidays") }} ({{ holidays_country }})</legend>
-      <label class="inl"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-public") }}</label>
-      <label class="inl"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-school") }}</label>
-      <label class="inl">{{ ctx.t("pref-subdivision") }} <input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></label>
-    </fieldset>
-    <label>{{ ctx.t("pref-vacation-days") }}<input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}"></label>
-    <fieldset class="row"><legend>{{ ctx.t("vacation-rule") }}</legend>
-      <label class="inl"><input type="radio" name="vacation_kind" value="category"{% if vacation_kind != "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-category") }}</label>
-      <label class="inl"><input type="radio" name="vacation_kind" value="calendar"{% if vacation_kind == "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-calendar") }}</label>
-      <label class="inl">{{ ctx.t("vacation-rule-value") }} <input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values" size="28"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></label>
-      <div class="muted small">{{ ctx.t("vacation-rule-hint") }}</div>
-    </fieldset>
-    <h3>{{ ctx.t("pref-sec-alarms") }}</h3>
-    <fieldset class="row"><legend>{{ ctx.t("pref-snaps") }}</legend>
-      <label class="inl">{{ ctx.t("pref-snaps-start") }} <input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}" size="48"></label>
-      <label class="inl">{{ ctx.t("pref-snaps-end") }} <input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}" size="24"></label>
-      <div class="muted small">{{ ctx.t("pref-snaps-hint") }}</div>
-    </fieldset>
-    <fieldset class="row"><legend>{{ ctx.t("push-title") }}</legend>
-      {% if ctx.push_enabled %}
-      <p class="muted small">{{ ctx.t("push-hint") }}</p>
-      <div class="actions"><button class="btn" type="button" id="push-enable">{{ ctx.t("push-enable") }}</button><button class="btn" type="button" id="push-disable" hidden>{{ ctx.t("push-disable") }}</button><span class="muted small" id="push-status"></span></div>
-      <ul class="plain" id="push-devices"></ul>
-      {% else %}<p class="muted small">{{ ctx.t("push-unavailable") }}</p>{% endif %}
-    </fieldset>
-    <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
-  </form>
+<form id="prefs-form" method="post" action="/settings/prefs" data-autosave>
+<input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+<section class="page" id="home">
+  <h2>{{ ctx.t("nav-settings") }}</h2>
+  <div class="group">
+    <a class="cell link" href="#account"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg></span><span>{{ ctx.user_id() }}<span class="sub">{{ ctx.public_dav_url.trim_start_matches("https://").trim_start_matches("http://") }}</span></span><span class="val">{{ ctx.t("set-account-sub") }}<span class="chev">›</span></span></a>
+  </div>
+  <div class="label">{{ ctx.t("tab-general") }}</div>
+  <div class="group">
+    <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></span></label>
+    <div class="cell"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></span><span>{{ ctx.t("pref-scheme") }}</span><span class="val"><input type="hidden" name="scheme" value="{% if self.scheme_is("light") %}light{% else if self.scheme_is("dark") %}dark{% else %}auto{% endif %}"><span class="seg" data-field="scheme"><button type="button" data-v="auto" aria-pressed="{{ self.scheme_is("auto") }}">{{ ctx.t("scheme-auto") }}</button><button type="button" data-v="light" aria-pressed="{{ self.scheme_is("light") }}">{{ ctx.t("scheme-light") }}</button><button type="button" data-v="dark" aria-pressed="{{ self.scheme_is("dark") }}">{{ ctx.t("scheme-dark") }}</button></span></span></div>
+    <label class="cell"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}" placeholder="{{ default_timezone }}"></span></label>
+  </div>
+  <div class="label">{{ ctx.t("calendars") }}</div>
+  <div class="group">
+    <label class="cell"><span class="swatch" style="background:var(--c3)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-public") }} <span class="muted">({{ holidays_country }})</span></span><span class="val"><span class="toggle"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}><i></i></span></span></label>
+    <label class="cell"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-school") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}><i></i></span></span></label>
+    <label class="cell"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg></span><span>{{ ctx.t("pref-subdivision") }}</span><span class="val"><input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></span></label>
+    <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
+    <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}<span class="chev">›</span></span></a>
+  </div>
+  <div class="label">{{ ctx.t("set-data") }}</div>
+  <div class="group">
+    <a class="cell link" href="#collections"><span class="swatch" style="background:#5856d6"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ ctx.t("tab-collections") }}</span><span class="val">{{ calendars.len() + addressbooks.len() }}<span class="chev">›</span></span></a>
+    <a class="cell link" href="#categories"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span>{{ ctx.t("tab-categories") }}</span><span class="val"><span id="cat-total"></span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#groups"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg></span><span>{{ ctx.t("tab-groups") }}</span><span class="val">{{ groups.len() }}<span class="chev">›</span></span></a>
+    <a class="cell link" href="#trash"><span class="swatch" style="background:var(--fg-3)"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg></span><span>{{ ctx.t("tab-trash") }}</span><span class="val">{{ trashed.len() + deleted_calendars.len() + deleted_addressbooks.len() }}<span class="chev">›</span></span></a>
+  </div>
 </section>
 
-<section class="panel" id="collections">
+<section class="page" id="vacation">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("set-vacation") }}</h2>
+  <div class="group">
+    <label class="cell noic"><span>{{ ctx.t("pref-vacation-days") }}</span><span class="val"><input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}" placeholder="–"></span></label>
+    <div class="cell noic"><span>{{ ctx.t("vacation-rule") }}</span><span class="val"><input type="hidden" name="vacation_kind" value="{% if vacation_kind == "calendar" %}calendar{% else %}category{% endif %}"><span class="seg" data-field="vacation_kind"><button type="button" data-v="category" aria-pressed="{{ vacation_kind != "calendar" }}">{{ ctx.t("vacation-rule-category") }}</button><button type="button" data-v="calendar" aria-pressed="{{ vacation_kind == "calendar" }}">{{ ctx.t("vacation-rule-calendar") }}</button></span></span></div>
+    <label class="cell noic"><span>{{ ctx.t("vacation-rule-value") }}</span><span class="val"><input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></span></label>
+  </div>
+  <p class="foot">{{ ctx.t("vacation-rule-hint") }}</p>
+</section>
+
+<section class="page" id="alarms">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("pref-sec-alarms") }}</h2>
+  <div class="label">{{ ctx.t("pref-snaps") }}</div>
+  <div class="group">
+    <label class="cell noic"><span>{{ ctx.t("pref-snaps-start") }}</span><span class="val"><input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("pref-snaps-end") }}</span><span class="val"><input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}"></span></label>
+  </div>
+  <p class="foot">{{ ctx.t("pref-snaps-hint") }}</p>
+  <div class="label">{{ ctx.t("push-title") }}</div>
+  <div class="group">
+    {% if ctx.push_enabled %}
+    <div class="cell noic"><span>{{ ctx.t("set-push-here") }}<span class="sub" id="push-status"></span></span><span class="val"><button class="btn" type="button" id="push-enable">{{ ctx.t("push-enable") }}</button><button class="btn" type="button" id="push-disable" hidden>{{ ctx.t("push-disable") }}</button></span></div>
+    {% else %}<div class="cell noic"><span class="muted">{{ ctx.t("push-unavailable") }}</span></div>{% endif %}
+  </div>
+  {% if ctx.push_enabled %}<p class="foot">{{ ctx.t("push-hint") }}</p><ul class="plain foot" id="push-devices"></ul>{% endif %}
+</section>
+</form>
+
+<section class="page" id="collections">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
   <h2>{{ ctx.t("tab-collections") }}</h2>
-  <h3>{{ ctx.t("calendars") }}</h3>
-  <table class="tbl">
-    <thead><tr><th></th><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-owner") }}</th><th>{{ ctx.t("col-components") }}</th><th></th></tr></thead>
-    <tbody>
+  <div class="label">{{ ctx.t("calendars") }}</div>
+  <div class="group">
     {% for c in calendars %}
-    <tr>
-      <td><span class="sw" style="background:{{ c.color }}"></span></td>
-      <td><details><summary>{{ c.displayname }}</summary>
-        <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/update" class="stack">
-          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-          <label>{{ ctx.t("col-name") }}<input type="text" name="name" value="{{ c.displayname }}" required></label>
-          <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ c.color }}"></label>
-          <label>{{ ctx.t("col-description") }}<input type="text" name="description" value="{{ c.description }}"></label>
-          <div class="muted small">ID <code>{{ c.id }}</code>{% if let Some(u) = c.subscription_url %} · {{ ctx.t("subscription") }} <code>{{ u }}</code>{% endif %}</div>
-          <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
-        </form></details></td>
-      <td>{{ c.owner_label }}{% if c.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
-      <td><small>{{ c.components.join(", ") }}</small></td>
-      <td class="nowrap"><a class="link" href="/settings/export/calendars/{{ c.principal }}/{{ c.id }}">{{ ctx.t("export") }}</a> <label class="link file"><span>{{ ctx.t("import") }}</span><input type="file" accept=".ics,text/calendar" hidden data-import="/settings/import/calendars/{{ c.principal }}/{{ c.id }}"></label> <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
-    </tr>
+    <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {% endfor %}
-    </tbody>
-  </table>
-  <details class="create"><summary class="btn">{{ ctx.t("calendar-create") }}</summary>
-  <form method="post" action="/settings/calendars" class="stack">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <label>{{ ctx.t("col-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
-    <label>{{ ctx.t("col-name") }}<input type="text" name="name" required></label>
-    <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ palette[0] }}"></label>
-    <label>{{ ctx.t("col-description") }}<input type="text" name="description"></label>
-    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ default_timezone }}"></label>
-    <fieldset class="row"><legend>{{ ctx.t("col-components") }}</legend>
-      <label class="inl"><input type="checkbox" name="comp_event" checked> VEVENT</label>
-      <label class="inl"><input type="checkbox" name="comp_todo" checked> VTODO</label>
-      <label class="inl"><input type="checkbox" name="comp_journal"> VJOURNAL</label>
-    </fieldset>
-    <div><button class="btn btn-primary" type="submit">{{ ctx.t("create") }}</button></div>
-  </form></details>
-
-  <h3>{{ ctx.t("addressbooks") }}</h3>
-  <table class="tbl">
-    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-color") }}</th><th>{{ ctx.t("col-owner") }}</th><th></th></tr></thead>
-    <tbody>
+    <a class="cell btnrow" href="#new-calendar">{{ ctx.t("calendar-create") }}</a>
+  </div>
+  <div class="label">{{ ctx.t("addressbooks") }}</div>
+  <div class="group">
     {% for a in addressbooks %}
-    <tr>
-      <td><details><summary>{{ a.displayname }}</summary>
-        <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/update" class="stack">
-          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-          <label>{{ ctx.t("col-name") }}<input type="text" name="name" value="{{ a.displayname }}" required></label>
-          <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ a.color }}"></label>
-          <label>{{ ctx.t("col-description") }}<input type="text" name="description" value="{{ a.description }}"></label>
-          <div class="muted small">ID <code>{{ a.id }}</code></div>
-          <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
-        </form></details></td>
-      <td><span class="sw" style="background:{{ a.color }}"></span></td>
-      <td>{{ a.owner_label }}{% if a.is_group %} <small class="muted">{{ ctx.t("group") }}</small>{% endif %}</td>
-      <td class="nowrap"><a class="link" href="/settings/export/addressbooks/{{ a.principal }}/{{ a.id }}">{{ ctx.t("export") }}</a> <label class="link file"><span>{{ ctx.t("import") }}</span><input type="file" accept=".vcf,text/vcard" hidden data-import="/settings/import/addressbooks/{{ a.principal }}/{{ a.id }}"></label> <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("delete") }}</button></form></td>
-    </tr>
+    <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}"><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg></span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
     {% endfor %}
-    </tbody>
-  </table>
-  <details class="create"><summary class="btn">{{ ctx.t("addressbook-create") }}</summary>
-  <form method="post" action="/settings/addressbooks" class="stack">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <label>{{ ctx.t("col-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
-    <label>{{ ctx.t("col-name") }}<input type="text" name="name" required></label>
-    <label>{{ ctx.t("col-color") }}<input type="color" name="color" value="{{ palette[1] }}"></label>
-    <label>{{ ctx.t("col-description") }}<input type="text" name="description"></label>
-    <div><button class="btn btn-primary" type="submit">{{ ctx.t("create") }}</button></div>
-  </form></details>
+    <a class="cell btnrow" href="#new-addressbook">{{ ctx.t("addressbook-create") }}</a>
+  </div>
 </section>
 
-<section class="panel" id="categories" data-t-edit="{{ ctx.t("cat-rule-edit") }}" data-t-new="{{ ctx.t("cat-rule-new") }}" data-t-delete="{{ ctx.t("cat-rule-delete") }}" data-t-confirm="{{ ctx.t1("cat-rule-delete-confirm", "name", "{name}") }}" data-t-rule="{{ ctx.t("cat-rule-yes") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
-  <h2>{{ ctx.t("tab-categories") }}</h2>
-  <p class="muted small">{{ ctx.t("cat-hint") }}</p>
-  {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
-  <span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task">{{ ctx.t("cat-scope-tasks") }}</button></span>
-  <div id="cat-list" class="cat-list"></div>
-  <form class="inline-form" id="cat-new"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></form>
-</section>
-
-<section class="panel" id="groups">
-  <h2>{{ ctx.t("tab-groups") }}</h2>
-  <p class="muted small">{{ ctx.t("groups-intro") }}</p>
-  <form method="post" action="/settings/groups" class="inline-form">
+{% for c in calendars %}
+<section class="page" id="cal-{{ c.principal }}-{{ c.id }}">
+  <a class="back" href="#collections">‹ {{ ctx.t("tab-collections") }}</a>
+  <h2>{{ c.displayname }}</h2>
+  <form class="group" method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
     <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("group-name-placeholder") }}">
-    <button class="btn btn-primary" type="submit">{{ ctx.t("group-create") }}</button>
+    <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ c.displayname }}" required></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ c.color }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ c.description }}" placeholder="–"></span></label>
+    <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>
+    <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
+    {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}
   </form>
-  {% for g in groups %}
-  <article class="card">
-    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</small></header>
-    <ul class="members">
-      {% for m in g.members %}
-      <li><span class="chip">{{ m }}</span>
-        {% if m != ctx.user_id() %}
-        <form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ ctx.t("member-remove") }}</button></form>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    <div class="actions">
-      <form method="post" action="/settings/groups/{{ g.id }}/members" class="inline-form">
-        <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-        <select name="member" required>
-          <option value="">{{ ctx.t("member-pick") }}</option>
-          {% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}
-        </select>
-        <button class="btn" type="submit">{{ ctx.t("member-add") }}</button>
-      </form>
-      <span class="grow"></span>
-      <form method="post" action="/settings/groups/{{ g.id }}/leave" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
-      <details class="danger-zone">
-        <summary class="btn danger">{{ ctx.t("group-delete") }}</summary>
-        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form" data-t-type="{{ ctx.t("confirm-type") }}" data-t-cancel="{{ ctx.t("cancel") }}">
-          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-          <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
-          <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
-          <button class="btn danger" type="submit">{{ ctx.t("group-delete-confirm") }}</button>
-        </form>
-      </details>
+  <p class="foot">ID <code>{{ c.id }}</code></p>
+  <div class="group sp">
+    <a class="cell btnrow" href="/settings/export/calendars/{{ c.principal }}/{{ c.id }}">{{ ctx.t("set-export-ics") }}</a>
+    <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept=".ics,text/calendar" hidden data-import="/settings/import/calendars/{{ c.principal }}/{{ c.id }}"></label>
+  </div>
+  <form class="group sp" method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/delete"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("group-delete-confirm") }}</button></form>
+</section>
+{% endfor %}
+
+{% for a in addressbooks %}
+<section class="page" id="ab-{{ a.principal }}-{{ a.id }}">
+  <a class="back" href="#collections">‹ {{ ctx.t("tab-collections") }}</a>
+  <h2>{{ a.displayname }}</h2>
+  <form class="group" method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/update" data-autosave data-reload>
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ a.displayname }}" required></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ a.color }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ a.description }}" placeholder="–"></span></label>
+    <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>
+  </form>
+  <p class="foot">ID <code>{{ a.id }}</code></p>
+  <div class="group sp">
+    <a class="cell btnrow" href="/settings/export/addressbooks/{{ a.principal }}/{{ a.id }}">{{ ctx.t("set-export-vcf") }}</a>
+    <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept=".vcf,text/vcard" hidden data-import="/settings/import/addressbooks/{{ a.principal }}/{{ a.id }}"></label>
+  </div>
+  <form class="group sp" method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/delete"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", a.displayname) }}">{{ ctx.t("group-delete-confirm") }}</button></form>
+</section>
+{% endfor %}
+
+<section class="page" id="new-calendar">
+  <a class="back" href="#collections">‹ {{ ctx.t("tab-collections") }}</a>
+  <h2>{{ ctx.t("set-new-calendar") }}</h2>
+  <form method="post" action="/settings/calendars">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ palette[0] }}"></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>
+      <label class="cell noic"><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ default_timezone }}"></span></label>
     </div>
-  </article>
-  {% endfor %}
-  {% if groups.is_empty() %}<p class="muted">{{ ctx.t("groups-none") }}</p>{% endif %}
+    <div class="label">{{ ctx.t("col-components") }}</div>
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("set-comp-event") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp_event" checked><i></i></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("set-comp-todo") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp_todo" checked><i></i></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("set-comp-journal") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp_journal"><i></i></span></span></label>
+    </div>
+    <div class="group sp"><button class="cell btnrow" type="submit">{{ ctx.t("create") }}</button></div>
+  </form>
 </section>
 
-<section class="panel" id="account">
+<section class="page" id="new-addressbook">
+  <a class="back" href="#collections">‹ {{ ctx.t("tab-collections") }}</a>
+  <h2>{{ ctx.t("set-new-addressbook") }}</h2>
+  <form method="post" action="/settings/addressbooks">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ palette[1] }}"></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>
+    </div>
+    <div class="group sp"><button class="cell btnrow" type="submit">{{ ctx.t("create") }}</button></div>
+  </form>
+</section>
+
+<section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-count-task="{{ ctx.t1("cat-count-task", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("tab-categories") }}</h2>
+  {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
+  <div class="scope"><span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task" aria-pressed="false">{{ ctx.t("cat-scope-tasks") }}</button></span></div>
+  <div class="group" id="cat-list"></div>
+  <form class="group sp" id="cat-new"><div class="cell noic"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></div></form>
+  <p class="foot">{{ ctx.t("cat-hint") }}</p>
+</section>
+
+<section class="page" id="groups">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("tab-groups") }}</h2>
+  {% for g in groups %}
+  <div class="label">{{ g.displayname }} · {{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</div>
+  <div class="group">
+    {% for m in g.members %}
+    <div class="cell"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg></span><span>{{ m }}</span><span class="val">{% if m != ctx.user_id() %}<form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ ctx.t("member-remove") }}</button></form>{% endif %}</span></div>
+    {% endfor %}
+    <form class="cell noic" method="post" action="/settings/groups/{{ g.id }}/members">
+      <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+      <select name="member" required><option value="">{{ ctx.t("member-pick") }}</option>{% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}</select>
+      <button class="btn" type="submit">{{ ctx.t("member-add") }}</button>
+    </form>
+    <form method="post" action="/settings/groups/{{ g.id }}/leave"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
+    <details class="danger-zone">
+      <summary class="cell btnrow danger">{{ ctx.t("group-delete") }}</summary>
+      <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form" data-t-type="{{ ctx.t("confirm-type") }}" data-t-cancel="{{ ctx.t("cancel") }}">
+        <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+        <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
+        <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
+        <button class="btn danger" type="submit">{{ ctx.t("group-delete-confirm") }}</button>
+      </form>
+    </details>
+  </div>
+  {% endfor %}
+  {% if groups.is_empty() %}<p class="foot">{{ ctx.t("groups-none") }}</p>{% endif %}
+  <form class="group sp" method="post" action="/settings/groups"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><div class="cell noic"><input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("group-name-placeholder") }}"><button class="btn" type="submit">{{ ctx.t("group-create") }}</button></div></form>
+  <p class="foot">{{ ctx.t("groups-intro") }}</p>
+</section>
+
+<section class="page" id="account">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
   <h2>{{ ctx.t("tab-account") }}</h2>
-  <dl class="kv">
-    <dt>{{ ctx.t("profile-user") }}</dt><dd><code>{{ ctx.user_id() }}</code></dd>
-    <dt>CalDAV</dt><dd><code>{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code></dd>
-    <dt>CardDAV</dt><dd><code>{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code></dd>
-  </dl>
-  <p class="muted small">{{ ctx.t("profile-hint") }}</p>
-  <h3>{{ ctx.t("tab-tokens") }}</h3>
-  <p class="muted small">{{ ctx.t("tokens-intro") }}</p>
   {% if let Some(t) = new_token %}
   <div class="flash ok token-reveal">
     <p>{{ ctx.t("token-new-hint") }}</p>
     <code id="new-token">{{ t }}</code> <button class="btn" type="button" data-copy="#new-token">{{ ctx.t("copy") }}</button>
   </div>
   {% endif %}
-  <form method="post" action="/settings/tokens" class="inline-form">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("token-name-placeholder") }}">
-    <button class="btn btn-primary" type="submit">{{ ctx.t("token-create") }}</button>
-  </form>
-  {% if !tokens.is_empty() %}
-  <table class="tbl">
-    <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-created") }}</th><th></th></tr></thead>
-    <tbody>
+  <div class="group">
+    <div class="cell noic"><span>{{ ctx.t("profile-user") }}</span><span class="val"><code id="dav-user">{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-user" title="{{ ctx.t("copy") }}"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg></button></span></div>
+    <div class="cell noic"><span>CalDAV</span><span class="val"><code id="dav-cal">{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-cal" title="{{ ctx.t("copy") }}"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg></button></span></div>
+    <div class="cell noic"><span>CardDAV</span><span class="val"><code id="dav-card">{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-card" title="{{ ctx.t("copy") }}"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg></button></span></div>
+  </div>
+  <p class="foot">{{ ctx.t("profile-hint") }}</p>
+  <div class="label">{{ ctx.t("tab-tokens") }}</div>
+  <div class="group">
     {% for t in tokens %}
-    <tr><td>{{ t.name }}</td><td><small>{% if let Some(c) = t.created_at %}{{ c.format("%Y-%m-%d %H:%M") }}{% endif %}</small></td>
-      <td><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-delete-token", "name", t.name) }}">{{ ctx.t("delete") }}</button></form></td></tr>
+    <div class="cell"><span class="swatch" style="background:var(--fg-3)"><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg></span><span>{{ t.name }}{% if let Some(c) = t.created_at %}<span class="sub">{{ ctx.t("col-created") }} {{ c.format("%Y-%m-%d %H:%M") }}</span>{% endif %}</span><span class="val"><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-delete-token", "name", t.name) }}">{{ ctx.t("delete") }}</button></form></span></div>
     {% endfor %}
-    </tbody>
-  </table>
-  {% else %}<p class="muted">{{ ctx.t("tokens-none") }}</p>{% endif %}
+    <form class="cell noic" method="post" action="/settings/tokens"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("token-name-placeholder") }}"><button class="btn" type="submit">{{ ctx.t("token-create") }}</button></form>
+  </div>
+  <p class="foot">{{ ctx.t("tokens-intro") }}</p>
 </section>
 
-<section class="panel" id="trash">
+<section class="page" id="trash">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
   <h2>{{ ctx.t("tab-trash") }}</h2>
-  <p class="muted small">{{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
-  <h3>{{ ctx.t("tab-groups") }}</h3>
-  {% for g in trashed %}
-  <article class="card">
-    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }} · {{ ctx.t1("deleted-by", "name", g.deleted_by) }} {{ g.deleted_at.format("%Y-%m-%d") }} · {{ ctx.t("expires") }} {{ g.expires_at.format("%Y-%m-%d") }}</small></header>
-    <div class="actions">
-      <form method="post" action="/settings/trash/groups/{{ g.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn btn-primary" type="submit">{{ ctx.t("restore") }}</button></form>
-      <details class="danger-zone"><summary class="btn danger">{{ ctx.t("purge") }}</summary>
+  <div class="label">{{ ctx.t("tab-groups") }}</div>
+  <div class="group">
+    {% for g in trashed %}
+    <div class="cell"><span class="swatch" style="background:var(--fg-3)"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg></span><span>{{ g.displayname }}<span class="sub">{{ ctx.t1("deleted-by", "name", g.deleted_by) }} {{ g.deleted_at.format("%Y-%m-%d") }} · {{ ctx.t("expires") }} {{ g.expires_at.format("%Y-%m-%d") }}</span></span><span class="val">
+      <form method="post" action="/settings/trash/groups/{{ g.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit">{{ ctx.t("restore") }}</button></form>
+      <details class="danger-zone"><summary class="link danger">{{ ctx.t("purge") }}</summary>
         <form method="post" action="/settings/trash/groups/{{ g.id }}/purge" class="inline-form" data-t-type="{{ ctx.t("confirm-type") }}" data-t-cancel="{{ ctx.t("cancel") }}"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><p class="small">{{ ctx.t1("group-purge-explain", "name", g.displayname) }}</p><input type="text" name="confirm" required placeholder="{{ g.id }}" autocomplete="off"><button class="btn danger" type="submit">{{ ctx.t("purge-confirm") }}</button></form>
-      </details>
-    </div>
-  </article>
-  {% endfor %}
-  {% if trashed.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
-  <h3>{{ ctx.t("calendars") }}</h3>
-  {% for c in deleted_calendars %}
-  <div class="trash-row"><span class="sw" style="background:{{ c.color }}"></span> {{ c.displayname }} <small class="muted">{{ c.owner_label }}{% if let Some(d) = c.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</small><span class="grow"></span>
-    <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit">{{ ctx.t("restore") }}</button></form>
-    <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", c.displayname) }}">{{ ctx.t("purge") }}</button></form></div>
-  {% endfor %}
-  {% if deleted_calendars.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
-  <h3>{{ ctx.t("addressbooks") }}</h3>
-  {% for a in deleted_addressbooks %}
-  <div class="trash-row">{{ a.displayname }} <small class="muted">{{ a.owner_label }}{% if let Some(d) = a.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</small><span class="grow"></span>
-    <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit">{{ ctx.t("restore") }}</button></form>
-    <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", a.displayname) }}">{{ ctx.t("purge") }}</button></form></div>
-  {% endfor %}
-  {% if deleted_addressbooks.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
+      </details></span></div>
+    {% endfor %}
+    {% if trashed.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("trash-empty") }}</span></div>{% endif %}
+  </div>
+  <div class="label">{{ ctx.t("calendars") }}</div>
+  <div class="group">
+    {% for c in deleted_calendars %}
+    <div class="cell"><span class="swatch" style="background:{{ c.color }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if let Some(d) = c.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</span></span><span class="val">
+      <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit">{{ ctx.t("restore") }}</button></form>
+      <form method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", c.displayname) }}">{{ ctx.t("purge") }}</button></form></span></div>
+    {% endfor %}
+    {% if deleted_calendars.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("trash-empty") }}</span></div>{% endif %}
+  </div>
+  <div class="label">{{ ctx.t("addressbooks") }}</div>
+  <div class="group">
+    {% for a in deleted_addressbooks %}
+    <div class="cell"><span class="swatch" style="background:{{ a.color }}"><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg></span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if let Some(d) = a.deleted_at %} · {{ d.format("%Y-%m-%d") }}{% endif %}</span></span><span class="val">
+      <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/restore" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit">{{ ctx.t("restore") }}</button></form>
+      <form method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/purge" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", a.displayname) }}">{{ ctx.t("purge") }}</button></form></span></div>
+    {% endfor %}
+    {% if deleted_addressbooks.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("trash-empty") }}</span></div>{% endif %}
+  </div>
+  <p class="foot">{{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
 </section>
-
 </div>
 {% endblock %}

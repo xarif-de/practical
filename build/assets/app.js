@@ -47,6 +47,16 @@
   // suppresses native dialogs (automation, some embedded views) cannot swallow a delete
   window.ask = text => askYesNo(text, ...(document.body.dataset.lang === 'en' ? ['Yes', 'No'] : ['Ja', 'Nein']));
 
+  // the bottom toast (layout.html renders the server's one the same way): a success fades, an error stays until closed
+  window.toast = (text, err) => {
+    $$('.toast').forEach(t => t.remove());
+    const t = document.createElement('div'); t.className = 'toast' + (err ? ' error' : ''); t.setAttribute('role', err ? 'alert' : 'status');
+    t.innerHTML = '<span></span><button type="button" class="toast-x" aria-label="×">×</button>'; t.firstChild.textContent = text;
+    const bye = () => { t.classList.add('gone'); setTimeout(() => t.remove(), 400); };
+    t.lastChild.onclick = bye; if (!err) setTimeout(bye, 3000);
+    document.body.appendChild(t);
+  };
+
   window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
 
   const h = document.documentElement;
@@ -59,25 +69,50 @@
   // copy-to-clipboard
   $$('[data-copy]').forEach(b => b.addEventListener('click', async () => {
     const el = $(b.dataset.copy); if (!el) return;
-    try { await navigator.clipboard.writeText(el.textContent.trim()); b.textContent = '✓'; } catch (_) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    try { await navigator.clipboard.writeText(el.textContent.trim()); toast(document.body.dataset.lang === 'en' ? 'Copied.' : 'Kopiert.'); } catch (_) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); }
   }));
 
   // toast: a success fades by itself, an error stays until closed
   $$('.toast').forEach(t => { const bye = () => { t.classList.add('gone'); setTimeout(() => t.remove(), 400); }; $('.toast-x', t).onclick = bye; if (!t.classList.contains('error')) setTimeout(bye, 3000); });
 
-  // settings tabs (hash-driven; without JS every panel is visible)
+  // settings: grouped lists with drill-in pages, one <section class="page"> per URL hash (without JS all are shown)
   const settings = $('.settings');
   if (settings) {
-    const tabs = $$('.tabs a');
-    const show = id => {
-      settings.classList.add('tabbed');
-      $$('.panel', settings).forEach(p => p.classList.toggle('on', p.id === id));
-      tabs.forEach(a => { if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    const csrfTok = ($('meta[name=csrf]') || {}).content || '';
+    // old hashes: the tabs of the previous layout and the server's redirect anchors
+    const OLD = { profile: 'account', tokens: 'account', prefs: 'home', '': 'home' };
+    const show = () => {
+      let id = decodeURIComponent(location.hash.slice(1)); id = OLD[id] ?? id;
+      const pg = $('#' + CSS.escape(id), settings);
+      if (!pg || !pg.matches('.page')) id = 'home'; // empty or unknown hash; '#' alone is not a selector
+      settings.classList.add('paged');
+      $$('.page', settings).forEach(p => p.classList.toggle('on', p.id === id));
+      settings.closest('.main').scrollTop = 0; // the anchor jump would land mid-page
     };
-    const OLD = { profile: 'account', tokens: 'account' }; // tabs merged into "account"; old bookmarks still land there
-    const fromHash = () => { let id = location.hash.slice(1); id = OLD[id] || id; show(id && $('#' + CSS.escape(id), settings) ? id : 'prefs'); settings.closest('.main').scrollTop = 0; }; // empty hash → '#' is not a selector; the anchor jump would hide the heading under the toolbar
-    tabs.forEach(a => a.addEventListener('click', e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); fromHash(); }));
-    addEventListener('hashchange', fromHash); fromHash();
+    addEventListener('hashchange', show); show();
+    // a toast survives the reload that some saves need (language, a renamed calendar)
+    if (sessionStorage.toast) { toast(sessionStorage.toast); delete sessionStorage.toast; }
+    // autosave: a changed field of a [data-autosave] form posts the whole form; the server answers JSON
+    const save = async form => {
+      const r = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(form)) });
+      const d = r.ok ? await r.json().catch(() => ({ ok: false, msg: String(r.status) })) : { ok: false, msg: String(r.status) };
+      if (!d.ok) { toast(d.msg || String(r.status), true); return false; }
+      return d.msg || settings.dataset.tSaved;
+    };
+    $$('form[data-autosave]', settings).forEach(form => {
+      form.addEventListener('submit', e => e.preventDefault()); // Enter in a field saves through change, never navigates
+      form.addEventListener('change', async e => {
+        if (!e.target.name || e.target.type === 'file' || !form.reportValidity()) return;
+        const msg = await save(form); if (!msg) return;
+        if (e.target.name === 'scheme') { const v = e.target.value; if (v === 'auto') delete localStorage.scheme; else localStorage.scheme = v; document.documentElement.dataset.scheme = localStorage.scheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+        if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
+      });
+    });
+    // a segment stands for one hidden field: pressing sets it and saves like any other change
+    $$('.seg[data-field]', settings).forEach(sg => sg.addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
+      segPress(b); const inp = sg.closest('.val').querySelector(`input[name="${sg.dataset.field}"]`); inp.value = b.dataset.v; inp.dispatchEvent(new Event('change', { bubbles: true }));
+    }));
     // a flash after a failed confirmation should keep the details open
     // a danger zone (delete/purge a group) asks in a dialog: its text, the value to type, cancel or go.
     // Without JS the <details> opens inline and works the same.
@@ -98,15 +133,19 @@
       $('form', w).onsubmit = ev => { ev.preventDefault(); if (yes.disabled) return; inp.value = typed.value.trim(); end(); form.submit(); };
       document.body.appendChild(w); typed.focus();
     }));
-    // categories tab: the index with counts, a rule per category (edited in the calendar's dialog)
+    // categories: the index with counts; a click opens the category's rule in the calendar's (or tasks') editor
     const catPanel = $('#categories');
     if (catPanel) {
-      const t = catPanel.dataset, list = $('#cat-list'), csrfTok = ($('meta[name=csrf]') || {}).content || '', h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const t = catPanel.dataset, list = $('#cat-list'), h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       let scope = 'event';
-      const load = async () => { const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : []; list.innerHTML = d.length ? d.map(c => `<div class="cat-row"><b>${h(c.name)}</b><small>${c.count ? h(t.tCount.replace('{n}', c.count)) : ''}${c.rule ? (c.count ? ' · ' : '') + h(t.tRule) : ''}</small><span class="grow"></span><a class="btn" href="${scope === 'task' ? '/tasks' : '/calendar'}?rule=${encodeURIComponent(c.name)}&back=${encodeURIComponent('/settings#categories')}">${h(c.rule ? t.tEdit : t.tNew)}</a>${c.rule ? `<button class="btn danger" type="button" data-del="${h(c.name)}">${h(t.tDelete)}</button>` : ''}</div>`).join('') : `<p class="muted">${h(t.tNone)}</p>`; };
-      list.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !await ask(t.tConfirm.replace('{name}', b.dataset.del))) return; await fetch('/api/category-rules/' + encodeURIComponent(b.dataset.del) + '?scope=' + scope, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); load(); });
+      const ruleUrl = n => (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories');
+      const load = async () => {
+        const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : [];
+        if (scope === 'event') $('#cat-total').textContent = d.length;
+        list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h((scope === 'task' ? t.tCountTask : t.tCount).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
+      };
       $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; segPress(b); load(); });
-      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories'); });
+      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = ruleUrl(n); });
       load();
     }
   }
@@ -2282,7 +2321,7 @@
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;
     const r = await fetch(inp.dataset.import, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-CSRF-Token': csrf }, body: await file.arrayBuffer() });
-    if (r.ok) { const d = await r.json(); alert(T.done(d.imported)); location.reload(); } else alert(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300));
+    if (r.ok) { const d = await r.json(); sessionStorage.toast = T.done(d.imported); location.reload(); } else toast(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300), true);
     inp.value = '';
   }));
   // push

@@ -62,6 +62,10 @@ impl SettingsPage {
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }
+    /// VEVENT/VTODO/VJOURNAL as words ("Termine, Aufgaben")
+    pub fn comps(&self, c: &[String]) -> String {
+        c.iter().map(|k| match k.as_str() { "VEVENT" => self.ctx.t("set-comp-event"), "VTODO" => self.ctx.t("set-comp-todo"), "VJOURNAL" => self.ctx.t("set-comp-journal"), o => o.to_string() }).collect::<Vec<_>>().join(", ")
+    }
 }
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
@@ -97,6 +101,17 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
 /// page cannot show it (a save leaves the same values on screen); store errors
 /// become error flashes so the user never lands on a bare error page after a form post.
 async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<Option<&str>>, anchor: &str) -> Response {
+    // a form saved by fetch (settings autosave) gets its message back instead of a flash for the next page
+    if ctx.wants_json {
+        let (ok, msg) = match result {
+            Ok(key) => (true, key.map(|k| state.i18n.t(&ctx.lang, k))),
+            Err(AppError::Forbidden) => (false, Some(state.i18n.t(&ctx.lang, "flash-forbidden"))),
+            Err(AppError::NotFound) => (false, Some(state.i18n.t(&ctx.lang, "flash-not-found"))),
+            Err(AppError::BadRequest(m) | AppError::Conflict(m)) => (false, Some(m)),
+            Err(e) => (false, Some(e.to_string())),
+        };
+        return axum::Json(serde_json::json!({ "ok": ok, "msg": msg })).into_response();
+    }
     match result {
         Ok(None) => {}
         Ok(Some(key)) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,

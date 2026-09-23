@@ -35,6 +35,8 @@ pub struct PageCtx {
     pub asset_v: &'static str,
     /// Development mode (assets from disk + `/dev/reload`); adds `data-dev` to <body>.
     pub dev: bool,
+    /// The request asked for JSON (a form saved by fetch): answer instead of redirecting with a flash.
+    pub wants_json: bool,
 }
 
 impl PageCtx {
@@ -84,6 +86,7 @@ impl FromRequestParts<SharedState> for PageCtx {
 
     async fn from_request_parts(parts: &mut Parts, state: &SharedState) -> Result<Self, Infallible> {
         let session = parts.extensions.get::<Session>().cloned();
+        let wants_json = parts.headers.get(axum::http::header::ACCEPT).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains("application/json"));
         let user = parts.extensions.get::<Principal>().cloned();
         let accept = parts
             .headers
@@ -122,6 +125,7 @@ impl FromRequestParts<SharedState> for PageCtx {
             push_enabled: state.vapid.is_some(),
             asset_v: crate::routes::assets::asset_version(),
             dev: state.config.dev_assets_dir.is_some(),
+            wants_json,
         })
     }
 }

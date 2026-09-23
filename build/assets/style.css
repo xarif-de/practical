@@ -485,36 +485,12 @@ form.inline { display: inline; }
 .stack fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; gap: 14px; flex-wrap: wrap; }
 .stack legend { font-size: 12px; color: var(--fg-3); padding: 0 4px; }
 .stack input[type=color] { width: 44px; height: 32px; padding: 0; border: 0; background: none; }
-.settings { display: grid; gap: 14px; padding: 0 var(--pad) var(--pad); max-width: 980px; }
-.panel { background: var(--tile); border-radius: 14px; padding: 14px 18px; }
-.panel h2 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.02em; }
-.panel h3 { margin: 16px 0 6px; font-size: 14px; color: var(--fg-2); text-transform: uppercase; letter-spacing: .06em; }
-.settings .card { background: var(--bg); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
-.settings .card header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.settings .card header h3 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--fg); }
-.members { list-style: none; margin: 8px 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
-.members li { display: inline-flex; align-items: center; gap: 2px; }
 .chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--fg-2); background: var(--tile); }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .danger-zone summary { list-style: none; display: inline-block; }
 .danger-zone summary::-webkit-details-marker { display: none; }
 .danger-zone[open] { flex-basis: 100%; }
-.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
-.tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); font-weight: 600; padding: 6px 8px; }
-.tbl td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
-.tbl details summary { cursor: pointer; }
-.create summary { cursor: pointer; margin-top: 8px; display: inline-block; }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 14px; margin: 0; }
-.kv dt { color: var(--fg-3); } .kv dd { margin: 0; overflow-wrap: anywhere; }
-.trash-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .token-reveal code { font-size: 14px; user-select: all; overflow-wrap: anywhere; }
-.tabs a { padding: 5px 10px; border-radius: 6px; color: var(--fg-2); font-size: 13px; }
-.tabs a[aria-current] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.18); }
-.settings.tabbed .panel { display: none; } .settings.tabbed .panel.on { display: block; }
-.tabs a { white-space: nowrap; }
-.settings, .toolbar:has(> .tabs) { min-width: 0; } .settings .panel { min-width: 0; overflow-x: auto; } /* a wide table scrolls inside its panel, not the page */
-.settings .panel { scroll-margin-top: var(--toolbar-h); } /* the #anchor jump after a form post stops below the sticky toolbar */
-.settings .panel :is(input[type=text], input[type=number], select):not(.card *) { background: var(--bg); max-width: 100%; } /* the panel is --tile already: same-coloured fields vanished */
 .login { max-width: 380px; margin: 10vh auto; background: var(--tile); border-radius: 16px; padding: 24px; display: grid; gap: 12px; }
 .login h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 .login .pwform { display: grid; gap: 8px; } .login label { display: grid; gap: 4px; font-size: 13px; color: var(--fg-2); }
@@ -526,7 +502,6 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0; } ul.plain li { padding:
 .filter .row-link { display: block; padding: 6px; border-radius: 8px; } .filter .row-link:hover { background: var(--tile); }
 .filter .row-form { padding: 6px; }
 code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
-@media (max-width: 720px) { .toolbar .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; } .kv { grid-template-columns: 1fr; gap: 2px 0; } }
 .main { align-content: start; }
 
 /* ---- app: colours come from the calendar (hex), not from c1..c6 classes ---- */
@@ -650,7 +625,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .day { min-width: 0; } .ev { max-width: 100%; }
 .cal { min-width: 0; } .main { min-width: 0; overflow-x: hidden; }
 .nowrap { white-space: nowrap; } label.link.file { cursor: pointer; color: var(--accent); font-size: 13px; padding: 2px 6px; }
-.tkpage, .settings, .contacts, .placeholder { align-content: start; }
+.tkpage, .contacts, .placeholder { align-content: start; }
 .taskform { align-items: center; }
 
 /* ---- fixed page header: topbar and toolbar stay put, only the content below scrolls.
@@ -1042,9 +1017,6 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"] { display: none !important; }
 .ed.rulemode .cols3 { grid-template-columns: 1fr; } .ed.rulemode .dayline { display: none; } /* no day line in rule mode */
 .cat-list { display: grid; gap: 4px; margin: 8px 0 12px; }
-.cat-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-.cat-row small { color: var(--fg-3); }
-.cat-row .grow { flex: 1; }
 /* status / links cards, colour and coordinates */
 .ev.cancelled { text-decoration: line-through; opacity: .55; }
 .ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }
@@ -1312,3 +1284,56 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tbsep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; flex: none; }
 .tksort { display: inline-flex; align-items: center; gap: 4px; }
 .tksent { padding: 18px 4px 30px; color: var(--fg-3); font-size: 12.5px; text-align: center; }
+
+/* ===== settings: grouped lists (round 12, prototype C) — a home page and drill-in pages (one per hash,
+   app.js), rows ("cells") with a coloured symbol, the label and the value or control on the right ===== */
+.set { max-width: 680px; width: 100%; margin: 0 auto; padding: 8px var(--pad) 90px; box-sizing: border-box; min-width: 0; }
+.set.paged .page { display: none; } .set.paged .page.on { display: block; }
+.set .back { color: var(--accent); font-size: 15px; display: inline-block; margin: 4px 0 6px; }
+.set h2 { font: 700 28px/1.2 var(--font-display); letter-spacing: -.02em; margin: 4px 0 14px; overflow-wrap: anywhere; }
+.set .group { display: block; background: var(--tile); border-radius: 12px; overflow: hidden; margin: 0; }
+.set .group.sp { margin-top: 22px; }
+.set .label { margin: 22px 16px 6px; font: 600 11px/1.3 var(--font); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
+.set .foot { font-size: 12.5px; color: var(--fg-3); margin: 6px 16px 0; line-height: 1.45; }
+.set .scope { margin: 0 0 10px; }
+.set .cell { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 6px 14px; position: relative; font-size: 15px; color: var(--fg); box-sizing: border-box; width: 100%; }
+.set :is(button, summary, label).cell { font: inherit; font-size: 15px; background: none; border: 0; border-radius: 0; text-align: left; cursor: pointer; list-style: none; margin: 0; }
+.set summary.cell::-webkit-details-marker { display: none; }
+.set .cell.noic { grid-template-columns: minmax(0, 1fr) auto; }
+/* hairline between rows, indented past the symbol like iOS; forms/details wrapping a cell count as rows too */
+.set .group > * + * { position: relative; }
+.set .group > * + *::before { content: ""; position: absolute; top: 0; right: 0; left: 54px; border-top: 1px solid var(--line); z-index: 1; }
+.set .group > .noic + *::before, .set .group > * + .noic::before, .set .group > * + form::before, .set .group > * + details::before, .set .group > * + .btnrow::before { left: 14px; }
+.set .cell .swatch { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: #fff; flex: none; }
+.set .cell .swatch .ico { width: 16px; height: 16px; }
+.set .cell .sub { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set .cell .val { color: var(--fg-3); display: inline-flex; gap: 8px; align-items: center; justify-self: end; text-align: right; min-width: 0; }
+.set .cell .val :is(input[type=text], input[type=number], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
+.set .cell .val select { text-align-last: right; cursor: pointer; }
+.set .cell .val input:focus, .set .cell .val select:focus { outline: none; color: var(--fg); }
+.set .cell .val input[type=color] { width: 32px; height: 26px; border: 0; padding: 0; background: none; cursor: pointer; }
+.set .cell .val code { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.set .cell .val .btn.icon-btn { padding: 4px 6px; min-width: 0; background: none; border: 0; color: var(--fg-3); } .set .cell .val .btn.icon-btn:hover { color: var(--accent); }
+.set .cell .val .ico { width: 16px; height: 16px; }
+.set .cell .val form.inline { display: inline; }
+.set .cell .val .link { font-size: 14px; padding: 2px 4px; cursor: pointer; list-style: none; } .set .cell .val summary.link::-webkit-details-marker { display: none; }
+.set .cell .val .danger-zone { display: inline; }
+.set .cell.link { cursor: pointer; } .set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.set .cell .chev { color: var(--fg-3); font-size: 20px; line-height: 1; margin-left: 2px; }
+.set .cell.btnrow { grid-template-columns: 1fr; color: var(--accent); cursor: pointer; }
+.set .cell.btnrow.danger { color: var(--today); }
+.set form.cell { grid-template-columns: minmax(0, 1fr) auto; }
+.set .cell > input[type=text], .set .cell > select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 4px 0; min-width: 0; width: 100%; }
+.set .cell > input[type=text]:focus { outline: none; }
+.set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.set .mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+.set .flash { margin: 0 0 14px; }
+.set ul.plain { margin-top: 4px; }
+/* the switch (as in the event editor, `.ed .toggle`): a real checkbox inside, so the form posts it */
+.set .toggle { position: relative; display: inline-block; width: 44px; height: 26px; flex: none; }
+.set .toggle input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.set .toggle i { position: absolute; inset: 0; border-radius: 13px; background: var(--bg-3); transition: background .15s; pointer-events: none; }
+.set .toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+.set .toggle input:checked + i { background: var(--accent); } .set .toggle input:checked + i::after { left: 20px; }
+.set .toggle input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 520px) { .set .cell .val :is(input[type=text], select) { max-width: 160px; } .set .cell .val .seg button { padding: 5px 7px; font-size: 13px; } }
