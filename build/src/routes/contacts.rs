@@ -54,7 +54,7 @@ impl ContactsPage {
     }
 }
 
-pub const ALL_COLUMNS: &[&str] = &["phone", "email", "category", "addressbook", "birthday", "address", "org"];
+pub const ALL_COLUMNS: &[&str] = &["phone", "email", "category", "addressbook", "birthday", "address", "org", "note"];
 /// list view: everything but the note by default
 pub const ALL_LIST_FIELDS: &[&str] = &["phone", "email", "birthday", "address", "addressbook", "category", "note"];
 

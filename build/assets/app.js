@@ -524,6 +524,7 @@
   const pad = n => String(n).padStart(2, '0');
   const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const HOST = () => window.rusticalHost || {};
+  let solo = null, soloSigs = {}; // one-card mode (see soloStart); declared early, cards() reads it from the start
   const root = document.getElementById('viewroot') || document.body;
   const today = root.dataset.today || fmt(new Date());
   // the host owns the current date and the calendar filter; without one the editor still works
@@ -549,7 +550,7 @@
   const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
-  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); const h = HOST(); if (h.closed) h.closed(); }
+  function close() { ed.hidden = true; $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => form.classList.contains('mode-edit') && sig() !== baseline;
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
@@ -1343,7 +1344,7 @@
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || (edit && c.hasAttribute('data-always-edit')) || hasData(c) || (edit && c.dataset.added)); });
     // a task that is simply open has no progress to show: STATUS:NEEDS-ACTION is the absence of one
     const pc = TASK && $('.card[data-card="progress"]', form);
-    if (pc && !pc.dataset.added) pc.hidden = !(f.status.value && f.status.value !== 'NEEDS-ACTION') && !(+f.percent.value > 0) && !f.completed_date.value; /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
+    if (pc && !pc.dataset.added) pc.hidden = !(f.status.value && f.status.value !== 'NEEDS-ACTION') && !(+f.percent.value > 0) && !f.completed_date.value; /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); soloCards(); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
   function updateButtons() { const changed = sig() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
@@ -1365,7 +1366,7 @@
   }
   function whenLine() { if (TASK) return taskLine(); const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ updateButtons(); }
+  function refresh() { whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
@@ -1428,12 +1429,35 @@
     locInit(); syncDot(); mode(d ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(d ? 'open' : 'new'); baseline = adjusted ? pre : serialize(); updateButtons();
   }
   // `quiet`: a new form that is always on screen (the tasks page) must not take the focus when it appears
-  async function openEditor(key, date, quiet) {
+  // `only`: open a single card of an existing entry (a table cell that cannot be edited in place)
+  async function openEditor(key, date, quiet, only) {
+    soloEnd();
     if (key) {
       try { const r = await fetch(API + '/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
     } else fill(null, date);
+    if (key && only) soloStart(only);
     ed.hidden = false; if (!key && !quiet) f.summary.focus(); dayline();
   }
+  /* solo: the dialog shows one card, already in edit mode, and saves the whole entry as usual. A
+     category rule can fill other cards (location, reminders …): every card whose content changed
+     since the dialog opened is shown too, so nothing is written unseen. */
+  const cardSig = c => $$('input:not([type=hidden]), select, textarea', c).map(e => e.type === 'checkbox' ? String(e.checked) : e.value).join('|') + '|' + $$('.chip, .pchip, .rows .row', c).map(x => x.textContent).join(',');
+  function soloCards() {
+    if (!solo) return;
+    $$('.card', form).forEach(c => {
+      const own = c.dataset.card === solo, moved = soloSigs[c.dataset.card] !== undefined && cardSig(c) !== soloSigs[c.dataset.card];
+      if (own || moved) c.hidden = false;
+      c.classList.toggle('solo-on', own || moved);
+    });
+  }
+  function soloStart(card) {
+    solo = card; mode('edit');
+    const c = $(`.card[data-card="${card}"]`, form); if (c) { c.dataset.added = '1'; c.hidden = false; }
+    soloSigs = {}; $$('.card', form).forEach(x => { soloSigs[x.dataset.card] = cardSig(x); });
+    f.summary.readOnly = true; ed.classList.add('solo'); soloCards();
+    const first = c && ($('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c)); if (first) setTimeout(() => first.focus(), 0);
+  }
+  function soloEnd() { if (!solo) return; solo = null; f.summary.readOnly = false; ed.classList.remove('solo'); $$('.card.solo-on', form).forEach(c => c.classList.remove('solo-on')); }
   form.addEventListener('input', refresh);
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
   form.addEventListener('click', e => {
@@ -1577,7 +1601,7 @@
   function updateButtons() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed && form.classList.contains('new'); $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
   const initials = n => n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   function show(c) {
-    current = c; form.reset(); $('#ct-error').textContent = '';
+    current = c; form.reset(); form.classList.remove('solo'); wrap.classList.remove('solo'); f.full_name.readOnly = false; $('#ct-error').textContent = '';
     f.key.value = c ? KEY(c) : ''; f.etag.value = c ? c.etag : '';
     ['given', 'family', 'nickname', 'prefix', 'additional', 'suffix', 'org', 'department', 'title', 'note', 'full_name'].forEach(k => f[k].value = c ? (c[k] || '') : '');
     fnAuto = !c || !c.full_name || c.full_name === [c.given, c.family].filter(Boolean).join(' ');
@@ -1669,9 +1693,7 @@
           case 'full_name': { body.full_name = v; const parts = v.split(/\s+/); body.given = parts.slice(0, -1).join(' '); body.family = parts.slice(-1)[0] || ''; break; }
           case 'phone': body.phones = v ? [{ kind: (c.phones[0] || {}).kind || 'cell', value: v }, ...c.phones.slice(1)] : c.phones.slice(1); break;
           case 'email': body.emails = v ? [{ kind: (c.emails[0] || {}).kind || 'home', value: v }, ...c.emails.slice(1)] : c.emails.slice(1); break;
-          case 'category': body.categories = v ? [v] : []; break;
           case 'birthday': { const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/); body.birthday = m ? (m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`) : v; break; }
-          case 'address': body.addresses = v ? [{ ...(c.addresses[0] || { kind: 'home' }), street: v, code: '', city: '', region: '', country: '' }, ...c.addresses.slice(1)] : c.addresses.slice(1); break;
           case 'org': body.org = v; break;
         }
         const r = await fetch('/api/contacts/' + key, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
@@ -1681,8 +1703,21 @@
     });
   });
   // table view: + opens the editor as a dialog over the table (the list view has it beside the list)
-  const dlgClose = () => { wrap.classList.remove('dlg'); det.classList.remove('on'); if (!wide()) det.hidden = true; };
+  const dlgClose = () => { wrap.classList.remove('dlg', 'solo'); form.classList.remove('solo'); f.full_name.readOnly = false; det.classList.remove('on'); if (!wide()) det.hidden = true; };
   $('#ct-fab').onclick = () => { show(null); wrap.classList.add('dlg'); f.full_name.focus(); };
+  /* a cell the table cannot edit (categories, address, note) opens just that card of the editor,
+     already unlocked, as a dialog; saving writes the whole contact as the full editor does */
+  async function openSolo(key, card) {
+    await open(key);
+    const c = $(`.card[data-card="${card}"]`, form); if (!c) return;
+    c.dataset.added = '1'; mode('edit');
+    $$('.card', form).forEach(x => x.classList.toggle('solo-on', x === c)); c.hidden = false;
+    form.classList.add('solo'); wrap.classList.add('dlg', 'solo'); f.full_name.readOnly = true;
+    // an empty list card (addresses …) starts with one empty row, as a new contact does with its phone
+    const add = $('[data-add]', c); if (add && !$('.rows .row', c)) add.click();
+    const first = $('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c); if (first) first.focus();
+  }
+  $$('.sheet td.cardcell').forEach(td => td.onclick = () => openSolo(td.closest('tr').dataset.key, td.dataset.card));
   addEventListener('keydown', e => { if (e.key === 'Escape' && wrap.classList.contains('dlg')) dlgClose(); });
 })();
 
@@ -1858,6 +1893,7 @@
     const list = opts.some(([v]) => v === cur) ? opts : opts.concat([[cur, cur]]);
     return `<select data-f="${f}">${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   }
+  const cardCell = (card, html, cl) => `<td class="cardcell${cl ? ' ' + cl : ''}" data-card="${card}" title="${esc(T.edit)}">${html || '<span class="mut">–</span>'}</td>`;
   const edTxt = (f, v) => `<span contenteditable="plaintext-only" data-f="${f}">${esc(v)}</span>`;
   // the calendar of a task is fixed (a task cannot move)
   const CELL = {
@@ -1868,11 +1904,14 @@
     percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent" value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
     priority: t => `<td>${selIn('priority', t.priority ? String(t.priority) : '', optsOf('priority'))}</td>`,
     completed: t => `<td>${dtIn(t, 'completed_at')}</td>`,
-    categories: t => `<td>${edTxt('categories', (t.categories || []).join(', '))}</td>`,
-    location: t => `<td>${edTxt('location', t.location)}</td>`,
+    // what a cell cannot hold opens the editor's own card for it (cardCell)
+    categories: t => cardCell('cats', (t.categories || []).map(c => `<span class="tchip">${esc(c)}</span>`).join(' ')),
+    location: t => cardCell('where', esc(t.location)),
     class: t => `<td>${selIn('class', t.class || '', optsOf('class'))}</td>`,
     created: t => `<td class="ro tnum">${t.created ? deT(dt(t.created)) : '—'}</td>`,
-    description: t => `<td class="desc">${edTxt('description', t.description)}</td>`,
+    description: t => cardCell('note', esc(t.description), 'desc'),
+    alarms: t => cardCell('alarm', t.alarms ? `${ic('bell', 'xs')} ${t.alarms}` : ''),
+    links: t => cardCell('links', t.links ? `${ic('ext', 'xs')} ${t.links}` : ''),
   };
   const rowHtml = (t, cols) => `<tr class="${isDone(t) ? 'off' : ''}" data-key="${esc(key(t))}"><td class="pin"><div class="pinw">${cbox(t)}${edTxt('summary', t.summary)}</div></td>` +
     cols.map(c => CELL[c](t)).join('') + '</tr>';
@@ -1906,6 +1945,7 @@
     if (!t) return;
     ['summary', 'description', 'location', 'start', 'start_all_day', 'due', 'due_all_day', 'status', 'percent', 'completed_at', 'class', 'categories'].forEach(f => { t[f] = d[f]; });
     t.priority = d.priority || 0;
+    t.alarms = (d.alarms || []).length; t.links = (d.links || []).length;
     $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
     redrawRow(k);
   }
@@ -1915,8 +1955,6 @@
     const d = await (await fetch('/api/tasks/' + k)).json();
     switch (f) {
       case 'summary': if (!v) { refresh(k); return; } d.summary = v; break;
-      case 'description': case 'location': d[f] = v; break;
-      case 'categories': d.categories = v.split(',').map(x => x.trim()).filter(Boolean); break;
       case 'start': case 'due': d[f] = v || null; d[f + '_all_day'] = el.type === 'date'; break;
       case 'class': d.class = v; break;
       case 'priority': d.priority = v ? +v : null; break;
@@ -2108,8 +2146,8 @@
     if (e.target.closest('[data-next]')) { deckI++; render(); return; }
     const holder = e.target.closest('[data-key]');
     if (!holder) return;
-    // the table is its own editor
-    if (view === 'table') return;
+    // the table is its own editor; a card cell opens that one card of the editor
+    if (view === 'table') { const cc = e.target.closest('.cardcell'); if (cc) openCard(holder.dataset.key, cc.dataset.card); return; }
     open(holder.dataset.key);
   });
 
@@ -2168,6 +2206,7 @@
     load(k);
     fit();
   }
+  function openCard(k, card) { cur = k; held = k; window.rusticalEd.open(k, undefined, false, card); fit(); }
   function newTask() {
     cur = null; wantNew = true; render(); load(null); fit();
   }
@@ -2179,7 +2218,11 @@
     date: () => iso(TODAY),
     cals: () => root.dataset.cals || '',
     // after a save the docked pane shows the saved task again (the contacts page keeps it in the hash)
-    reload: (push, saved) => { if (saved && docked()) sessionStorage.tkSel = saved; reload(); },
+    reload: (push, saved) => {
+      if (saved && view === 'table' && find(saved)) { refresh(saved); return; } // a card saved from a cell: redraw that row only
+      if (saved && docked()) sessionStorage.tkSel = saved;
+      reload();
+    },
     // closing the docked pane falls back to the new-task form; a dialog just goes away
     closed: () => { cur = null; wantNew = false; held = undefined; render(); fit(); },
   };

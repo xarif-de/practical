@@ -125,6 +125,12 @@ button, .btn { font: inherit; color: var(--fg); background: var(--bg-2); border:
 .contacts.dlg::before { content: ""; position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); }
 .view-table.contacts.dlg .detail { display: block !important; position: fixed; inset: 16px; margin: auto; z-index: 46; width: min(900px, calc(100% - 32px)); height: fit-content; max-height: calc(100dvh - 32px); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
 .contacts.dlg #ct-cancel { display: inline-grid !important; }
+/* one card of the contact editor, opened from a table cell */
+.view-table.contacts.dlg.solo .detail { width: min(560px, calc(100% - 32px)); }
+#ctform.solo .cards { columns: 1; }
+#ctform.solo .card:not(.solo-on), #ctform.solo .addmenu, #ctform.solo #ct-delete, #ctform.solo #ct-vcf, #ctform.solo .names small { display: none !important; }
+#ctform.solo .names input { pointer-events: none; border-bottom-color: transparent; }
+.sheet td.ctnote { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 
 /* Contacts */
 .contacts { display: grid; gap: var(--gap); padding: 0 var(--pad) var(--pad); }
@@ -1204,7 +1210,11 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkmain .sheet input[type=number] { width: 4.5em; text-align: right; }
 .tkmain .sheet input:focus, .tkmain .sheet select:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .tkmain .sheet input.late { color: var(--today); }
-.tkmain .sheet td.desc [contenteditable] { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+/* cells edited through the editor's card (categories, place, note, reminders, links): a click opens it */
+.sheet td.cardcell { cursor: pointer; }
+.sheet td.cardcell:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.sheet td.cardcell .ico { display: inline-block; vertical-align: -2px; color: var(--fg-3); }
+.tkmain .sheet td.desc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .tkmain .sheet td.saved { outline: 2px solid var(--c2); outline-offset: -2px; }
 .tkmain .sheet tr.sent td { border: 0; background: transparent; }
 .tkmain .sheet [contenteditable][data-f]:empty::after { content: "–"; color: var(--fg-3); }
@@ -1277,6 +1287,12 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 /* a task has no day to lay out: no day line, no toggle for it, one column (`task-hide`, see editor.html) */
 .ed.taskmode .task-hide { display: none !important; }
 .ed.taskmode .cols3 { grid-template-columns: 1fr; }
+/* solo: one card of the editor, opened from a table cell (rusticalEd.open(key, …, only)). A card a
+   category rule changed is shown as well (.solo-on); title, other cards, add menu and delete stay out */
+.ed.solo .box { width: min(560px, 100%); }
+.ed.solo .cardform .cards { columns: 1; }
+.ed.solo .card:not(.solo-on), .ed.solo .addmenu, .ed.solo #ed-delete { display: none !important; }
+.ed.solo header .names input { pointer-events: none; border-bottom-color: transparent; }
 /* the lookback picker sits in the page toolbar, where `.sel` is not otherwise used */
 .toolbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; color: var(--fg-2); }
 .toolbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }

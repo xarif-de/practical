@@ -30,8 +30,9 @@ pub const DONE_CHUNK: usize = 120;
 const COLUMNS: &[(&str, &str)] = &[
     ("cal", "ed-calendar"), ("start", "ed-start"), ("due", "ed-due"), ("status", "ed-status"), ("percent", "ed-percent"), ("priority", "ed-priority"),
     ("completed", "ed-completed-at"), ("categories", "ed-card-cats"), ("location", "ed-card-where"), ("class", "ed-class"), ("created", "tk-col-created"), ("description", "ed-card-note"),
+    ("alarms", "ed-card-alarm"), ("links", "ed-card-links"),
 ];
-pub const ALL_COLUMNS: &[&str] = &["cal", "start", "due", "status", "percent", "priority", "completed", "categories", "location", "class", "created", "description"];
+pub const ALL_COLUMNS: &[&str] = &["cal", "start", "due", "status", "percent", "priority", "completed", "categories", "location", "class", "created", "description", "alarms", "links"];
 const DEFAULT_COLUMNS: &[&str] = &["cal", "start", "due", "status", "percent", "priority", "completed", "categories"];
 
 fn lookback_days(v: &str) -> Option<i64> {
