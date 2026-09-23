@@ -3,65 +3,46 @@
 {% block content %}
 <div class="toolbar"><h1>{{ ctx.t("nav-settings") }}</h1><span class="grow"></span>
 <span class="seg tabs" role="tablist">
-<a href="#profile" role="tab">{{ ctx.t("tab-profile") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#tokens" role="tab">{{ ctx.t("tab-tokens") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a><a href="#categories" role="tab">{{ ctx.t("tab-categories") }}</a><a href="#prefs" role="tab">{{ ctx.t("tab-prefs") }}</a>
+<a href="#prefs" role="tab">{{ ctx.t("tab-general") }}</a><a href="#collections" role="tab">{{ ctx.t("tab-collections") }}</a><a href="#categories" role="tab">{{ ctx.t("tab-categories") }}</a><a href="#groups" role="tab">{{ ctx.t("tab-groups") }}</a><a href="#account" role="tab">{{ ctx.t("tab-account") }}</a><a href="#trash" role="tab">{{ ctx.t("tab-trash") }}</a>
 </span></div>
 <div class="settings">
 
-<section class="panel" id="profile">
-  <h2>{{ ctx.t("tab-profile") }}</h2>
-  <dl class="kv">
-    <dt>{{ ctx.t("profile-user") }}</dt><dd><code>{{ ctx.user_id() }}</code></dd>
-    <dt>CalDAV</dt><dd><code>{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code></dd>
-    <dt>CardDAV</dt><dd><code>{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code></dd>
-    <dt>{{ ctx.t("profile-groups") }}</dt><dd>{% for g in groups %}<span class="chip">{{ g.displayname }}</span> {% endfor %}{% if groups.is_empty() %}<span class="muted">–</span>{% endif %}</dd>
-  </dl>
-  <p class="muted small">{{ ctx.t("profile-hint") }}</p>
-</section>
-
-<section class="panel" id="groups">
-  <h2>{{ ctx.t("tab-groups") }}</h2>
-  <p class="muted small">{{ ctx.t("groups-intro") }}</p>
-  <form method="post" action="/settings/groups" class="inline-form">
+<section class="panel" id="prefs">
+  <h2>{{ ctx.t("tab-general") }}</h2>
+  <form method="post" action="/settings/prefs" class="stack">
     <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("group-name-placeholder") }}">
-    <button class="btn btn-primary" type="submit">{{ ctx.t("group-create") }}</button>
+    <h3>{{ ctx.t("pref-sec-display") }}</h3>
+    <label>{{ ctx.t("pref-language") }}<select name="lang"><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></label>
+    <label>{{ ctx.t("pref-scheme") }}<select name="scheme"><option value="auto"{% if self.scheme_is("auto") %} selected{% endif %}>{{ ctx.t("scheme-auto") }}</option><option value="light"{% if self.scheme_is("light") %} selected{% endif %}>{{ ctx.t("scheme-light") }}</option><option value="dark"{% if self.scheme_is("dark") %} selected{% endif %}>{{ ctx.t("scheme-dark") }}</option></select></label>
+    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}" placeholder="{{ default_timezone }}"></label>
+    <h3>{{ ctx.t("pref-sec-days") }}</h3>
+    <fieldset class="row"><legend>{{ ctx.t("pref-holidays") }} ({{ holidays_country }})</legend>
+      <label class="inl"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-public") }}</label>
+      <label class="inl"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-school") }}</label>
+      <label class="inl">{{ ctx.t("pref-subdivision") }} <input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></label>
+    </fieldset>
+    <label>{{ ctx.t("pref-vacation-days") }}<input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}"></label>
+    <fieldset class="row"><legend>{{ ctx.t("vacation-rule") }}</legend>
+      <label class="inl"><input type="radio" name="vacation_kind" value="category"{% if vacation_kind != "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-category") }}</label>
+      <label class="inl"><input type="radio" name="vacation_kind" value="calendar"{% if vacation_kind == "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-calendar") }}</label>
+      <label class="inl">{{ ctx.t("vacation-rule-value") }} <input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values" size="28"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></label>
+      <div class="muted small">{{ ctx.t("vacation-rule-hint") }}</div>
+    </fieldset>
+    <h3>{{ ctx.t("pref-sec-alarms") }}</h3>
+    <fieldset class="row"><legend>{{ ctx.t("pref-snaps") }}</legend>
+      <label class="inl">{{ ctx.t("pref-snaps-start") }} <input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}" size="48"></label>
+      <label class="inl">{{ ctx.t("pref-snaps-end") }} <input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}" size="24"></label>
+      <div class="muted small">{{ ctx.t("pref-snaps-hint") }}</div>
+    </fieldset>
+    <fieldset class="row"><legend>{{ ctx.t("push-title") }}</legend>
+      {% if ctx.push_enabled %}
+      <p class="muted small">{{ ctx.t("push-hint") }}</p>
+      <div class="actions"><button class="btn" type="button" id="push-enable">{{ ctx.t("push-enable") }}</button><button class="btn" type="button" id="push-disable" hidden>{{ ctx.t("push-disable") }}</button><span class="muted small" id="push-status"></span></div>
+      <ul class="plain" id="push-devices"></ul>
+      {% else %}<p class="muted small">{{ ctx.t("push-unavailable") }}</p>{% endif %}
+    </fieldset>
+    <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
   </form>
-  {% for g in groups %}
-  <article class="card">
-    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</small></header>
-    <ul class="members">
-      {% for m in g.members %}
-      <li><span class="chip">{{ m }}</span>
-        {% if m != ctx.user_id() %}
-        <form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ ctx.t("member-remove") }}</button></form>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    <div class="actions">
-      <form method="post" action="/settings/groups/{{ g.id }}/members" class="inline-form">
-        <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-        <select name="member" required>
-          <option value="">{{ ctx.t("member-pick") }}</option>
-          {% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}
-        </select>
-        <button class="btn" type="submit">{{ ctx.t("member-add") }}</button>
-      </form>
-      <span class="grow"></span>
-      <form method="post" action="/settings/groups/{{ g.id }}/leave" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
-      <details class="danger-zone">
-        <summary class="btn danger">{{ ctx.t("group-delete") }}</summary>
-        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form">
-          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-          <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
-          <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
-          <button class="btn danger" type="submit">{{ ctx.t("group-delete-confirm") }}</button>
-        </form>
-      </details>
-    </div>
-  </article>
-  {% endfor %}
-  {% if groups.is_empty() %}<p class="muted">{{ ctx.t("groups-none") }}</p>{% endif %}
 </section>
 
 <section class="panel" id="collections">
@@ -138,8 +119,70 @@
   </form></details>
 </section>
 
-<section class="panel" id="tokens">
-  <h2>{{ ctx.t("tab-tokens") }}</h2>
+<section class="panel" id="categories" data-t-edit="{{ ctx.t("cat-rule-edit") }}" data-t-new="{{ ctx.t("cat-rule-new") }}" data-t-delete="{{ ctx.t("cat-rule-delete") }}" data-t-confirm="{{ ctx.t1("cat-rule-delete-confirm", "name", "{name}") }}" data-t-rule="{{ ctx.t("cat-rule-yes") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
+  <h2>{{ ctx.t("tab-categories") }}</h2>
+  <p class="muted small">{{ ctx.t("cat-hint") }}</p>
+  {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
+  <span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task">{{ ctx.t("cat-scope-tasks") }}</button></span>
+  <div id="cat-list" class="cat-list"></div>
+  <form class="inline-form" id="cat-new"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></form>
+</section>
+
+<section class="panel" id="groups">
+  <h2>{{ ctx.t("tab-groups") }}</h2>
+  <p class="muted small">{{ ctx.t("groups-intro") }}</p>
+  <form method="post" action="/settings/groups" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("group-name-placeholder") }}">
+    <button class="btn btn-primary" type="submit">{{ ctx.t("group-create") }}</button>
+  </form>
+  {% for g in groups %}
+  <article class="card">
+    <header><h3>{{ g.displayname }}</h3><code class="muted">{{ g.id }}</code><span class="grow"></span><small class="muted">{{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</small></header>
+    <ul class="members">
+      {% for m in g.members %}
+      <li><span class="chip">{{ m }}</span>
+        {% if m != ctx.user_id() %}
+        <form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="link" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ ctx.t("member-remove") }}</button></form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="actions">
+      <form method="post" action="/settings/groups/{{ g.id }}/members" class="inline-form">
+        <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+        <select name="member" required>
+          <option value="">{{ ctx.t("member-pick") }}</option>
+          {% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}
+        </select>
+        <button class="btn" type="submit">{{ ctx.t("member-add") }}</button>
+      </form>
+      <span class="grow"></span>
+      <form method="post" action="/settings/groups/{{ g.id }}/leave" class="inline"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button class="btn" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ ctx.t("group-leave") }}</button></form>
+      <details class="danger-zone">
+        <summary class="btn danger">{{ ctx.t("group-delete") }}</summary>
+        <form method="post" action="/settings/groups/{{ g.id }}/delete" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+          <p class="small">{{ ctx.t1("group-delete-explain", "name", g.displayname) }} {{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
+          <input type="text" name="confirm" required placeholder="{{ g.displayname }}" autocomplete="off">
+          <button class="btn danger" type="submit">{{ ctx.t("group-delete-confirm") }}</button>
+        </form>
+      </details>
+    </div>
+  </article>
+  {% endfor %}
+  {% if groups.is_empty() %}<p class="muted">{{ ctx.t("groups-none") }}</p>{% endif %}
+</section>
+
+<section class="panel" id="account">
+  <h2>{{ ctx.t("tab-account") }}</h2>
+  <dl class="kv">
+    <dt>{{ ctx.t("profile-user") }}</dt><dd><code>{{ ctx.user_id() }}</code></dd>
+    <dt>CalDAV</dt><dd><code>{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code></dd>
+    <dt>CardDAV</dt><dd><code>{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code></dd>
+  </dl>
+  <p class="muted small">{{ ctx.t("profile-hint") }}</p>
+  <h3>{{ ctx.t("tab-tokens") }}</h3>
   <p class="muted small">{{ ctx.t("tokens-intro") }}</p>
   {% if let Some(t) = new_token %}
   <div class="flash ok token-reveal">
@@ -152,6 +195,7 @@
     <input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("token-name-placeholder") }}">
     <button class="btn btn-primary" type="submit">{{ ctx.t("token-create") }}</button>
   </form>
+  {% if !tokens.is_empty() %}
   <table class="tbl">
     <thead><tr><th>{{ ctx.t("col-name") }}</th><th>{{ ctx.t("col-created") }}</th><th></th></tr></thead>
     <tbody>
@@ -161,7 +205,7 @@
     {% endfor %}
     </tbody>
   </table>
-  {% if tokens.is_empty() %}<p class="muted">{{ ctx.t("tokens-none") }}</p>{% endif %}
+  {% else %}<p class="muted">{{ ctx.t("tokens-none") }}</p>{% endif %}
 </section>
 
 <section class="panel" id="trash">
@@ -196,48 +240,5 @@
   {% if deleted_addressbooks.is_empty() %}<p class="muted">{{ ctx.t("trash-empty") }}</p>{% endif %}
 </section>
 
-<section class="panel" id="categories" data-t-edit="{{ ctx.t("cat-rule-edit") }}" data-t-new="{{ ctx.t("cat-rule-new") }}" data-t-delete="{{ ctx.t("cat-rule-delete") }}" data-t-confirm="{{ ctx.t1("cat-rule-delete-confirm", "name", "{name}") }}" data-t-rule="{{ ctx.t("cat-rule-yes") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
-  <h2>{{ ctx.t("tab-categories") }}</h2>
-  <p class="muted small">{{ ctx.t("cat-hint") }}</p>
-  {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
-  <span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task">{{ ctx.t("cat-scope-tasks") }}</button></span>
-  <div id="cat-list" class="cat-list"></div>
-  <form class="inline-form" id="cat-new"><input type="text" id="cat-new-name" placeholder="{{ ctx.t("cat-new-placeholder") }}" maxlength="80"><button class="btn" type="submit">{{ ctx.t("cat-rule-new") }}</button></form>
-</section>
-
-<section class="panel" id="prefs">
-  <h2>{{ ctx.t("tab-prefs") }}</h2>
-  <form method="post" action="/settings/prefs" class="stack">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
-    <label>{{ ctx.t("pref-language") }}<select name="lang"><option value="de"{% if self.lang_is("de") %} selected{% endif %}>Deutsch</option><option value="en"{% if self.lang_is("en") %} selected{% endif %}>English</option></select></label>
-    <label>{{ ctx.t("pref-scheme") }}<select name="scheme"><option value="auto"{% if self.scheme_is("auto") %} selected{% endif %}>{{ ctx.t("scheme-auto") }}</option><option value="light"{% if self.scheme_is("light") %} selected{% endif %}>{{ ctx.t("scheme-light") }}</option><option value="dark"{% if self.scheme_is("dark") %} selected{% endif %}>{{ ctx.t("scheme-dark") }}</option></select></label>
-    <label>{{ ctx.t("timezone") }}<input type="text" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}" placeholder="{{ default_timezone }}"></label>
-    <fieldset class="row"><legend>{{ ctx.t("pref-holidays") }} ({{ holidays_country }})</legend>
-      <label class="inl"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-public") }}</label>
-      <label class="inl"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}> {{ ctx.t("pref-holidays-school") }}</label>
-      <label class="inl">{{ ctx.t("pref-subdivision") }} <input type="text" name="holiday_subdivision" value="{{ prefs.holiday_subdivision.clone().unwrap_or_default() }}" placeholder="{{ holidays_subdivision }}" size="8"></label>
-    </fieldset>
-    <label>{{ ctx.t("pref-vacation-days") }}<input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}"></label>
-    <fieldset class="row"><legend>{{ ctx.t("vacation-rule") }}</legend>
-      <label class="inl"><input type="radio" name="vacation_kind" value="category"{% if vacation_kind != "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-category") }}</label>
-      <label class="inl"><input type="radio" name="vacation_kind" value="calendar"{% if vacation_kind == "calendar" %} checked{% endif %}> {{ ctx.t("vacation-rule-calendar") }}</label>
-      <label class="inl">{{ ctx.t("vacation-rule-value") }} <input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values" size="28"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></label>
-      <div class="muted small">{{ ctx.t("vacation-rule-hint") }}</div>
-    </fieldset>
-    <fieldset class="row"><legend>{{ ctx.t("pref-snaps") }}</legend>
-      <label class="inl">{{ ctx.t("pref-snaps-start") }} <input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}" size="48"></label>
-      <label class="inl">{{ ctx.t("pref-snaps-end") }} <input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}" size="24"></label>
-      <div class="muted small">{{ ctx.t("pref-snaps-hint") }}</div>
-    </fieldset>
-    <div><button class="btn btn-primary" type="submit">{{ ctx.t("save") }}</button></div>
-  </form>
-
-  <h3>{{ ctx.t("push-title") }}</h3>
-  {% if ctx.push_enabled %}
-  <p class="muted small">{{ ctx.t("push-hint") }}</p>
-  <div class="actions"><button class="btn btn-primary" type="button" id="push-enable">{{ ctx.t("push-enable") }}</button><button class="btn" type="button" id="push-disable" hidden>{{ ctx.t("push-disable") }}</button><span class="muted small" id="push-status"></span></div>
-  <ul class="plain" id="push-devices"></ul>
-  {% else %}<p class="muted small">{{ ctx.t("push-unavailable") }}</p>{% endif %}
-</section>
 </div>
 {% endblock %}

@@ -58,6 +58,9 @@
     try { await navigator.clipboard.writeText(el.textContent.trim()); b.textContent = '✓'; } catch (_) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); }
   }));
 
+  // toast: a success fades by itself, an error stays until closed
+  $$('.toast').forEach(t => { const bye = () => { t.classList.add('gone'); setTimeout(() => t.remove(), 400); }; $('.toast-x', t).onclick = bye; if (!t.classList.contains('error')) setTimeout(bye, 3000); });
+
   // settings tabs (hash-driven; without JS every panel is visible)
   const settings = $('.settings');
   if (settings) {
@@ -67,11 +70,12 @@
       $$('.panel', settings).forEach(p => p.classList.toggle('on', p.id === id));
       tabs.forEach(a => { if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     };
-    const fromHash = () => { const id = location.hash.slice(1); show(id && $('#' + CSS.escape(id), settings) ? id : 'profile'); }; // empty hash → '#' is not a selector
+    const OLD = { profile: 'account', tokens: 'account' }; // tabs merged into "account"; old bookmarks still land there
+    const fromHash = () => { let id = location.hash.slice(1); id = OLD[id] || id; show(id && $('#' + CSS.escape(id), settings) ? id : 'prefs'); settings.closest('.main').scrollTop = 0; }; // empty hash → '#' is not a selector; the anchor jump would hide the heading under the toolbar
     tabs.forEach(a => a.addEventListener('click', e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); fromHash(); }));
     addEventListener('hashchange', fromHash); fromHash();
     // a flash after a failed confirmation should keep the details open
-    $$('.flash.error').forEach(() => $$('details.danger-zone', settings).forEach(d => d.open = true));
+    $$('.toast.error').forEach(() => $$('details.danger-zone', settings).forEach(d => d.open = true));
     // categories tab: the index with counts, a rule per category (edited in the calendar's dialog)
     const catPanel = $('#categories');
     if (catPanel) {

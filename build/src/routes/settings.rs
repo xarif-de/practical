@@ -93,11 +93,13 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     })
 }
 
-/// Flash + redirect back to the section; store errors become error flashes so
-/// the user never lands on a bare error page after a form post.
-async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<&str>, anchor: &str) -> Response {
+/// Redirect back to the section. A success says something only when the reloaded
+/// page cannot show it (a save leaves the same values on screen); store errors
+/// become error flashes so the user never lands on a bare error page after a form post.
+async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<Option<&str>>, anchor: &str) -> Response {
     match result {
-        Ok(key) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,
+        Ok(None) => {}
+        Ok(Some(key)) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,
         Err(AppError::Forbidden) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-forbidden")).await,
         Err(AppError::NotFound) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-not-found")).await,
         Err(AppError::BadRequest(m) | AppError::Conflict(m)) => set_flash(session, "error", m).await,
@@ -121,7 +123,7 @@ async fn group_create(State(state): State<SharedState>, user: Principal, session
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         groups::create(&state, &user, &f.name).await?;
-        Ok("flash-group-created")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "groups").await
@@ -137,7 +139,7 @@ async fn group_add_member(State(state): State<SharedState>, user: Principal, ses
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         groups::add_member(&state, &user, &gid, &f.member).await?;
-        Ok("flash-member-added")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "groups").await
@@ -147,8 +149,9 @@ async fn group_remove_member(State(state): State<SharedState>, user: Principal, 
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         Ok(match groups::remove_member(&state, &user, &gid, &member).await? {
-            RemoveOutcome::Removed => "flash-member-removed",
-            RemoveOutcome::GroupTrashed => "flash-group-trashed",
+            RemoveOutcome::Removed => None,
+            // the last member leaving trashes the group: the one outcome the page does not show
+            RemoveOutcome::GroupTrashed => Some("flash-group-trashed"),
         })
     }
     .await;
@@ -159,8 +162,9 @@ async fn group_leave(State(state): State<SharedState>, user: Principal, session:
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         Ok(match groups::remove_member(&state, &user, &gid, &user.id).await? {
-            RemoveOutcome::Removed => "flash-left-group",
-            RemoveOutcome::GroupTrashed => "flash-group-trashed",
+            RemoveOutcome::Removed => None,
+            // the last member leaving trashes the group: the one outcome the page does not show
+            RemoveOutcome::GroupTrashed => Some("flash-group-trashed"),
         })
     }
     .await;
@@ -180,7 +184,7 @@ async fn group_delete(State(state): State<SharedState>, user: Principal, session
             AppError::BadRequest(_) => AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")),
             e => e,
         })?;
-        Ok("flash-group-trashed")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "groups").await
@@ -190,7 +194,7 @@ async fn group_restore(State(state): State<SharedState>, user: Principal, sessio
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         groups::restore(&state, &user, &gid).await?;
-        Ok("flash-group-restored")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -203,7 +207,7 @@ async fn group_purge(State(state): State<SharedState>, user: Principal, session:
             return Err(AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")));
         }
         groups::purge_by_member(&state, &user, &gid).await?;
-        Ok("flash-group-purged")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -248,7 +252,7 @@ async fn calendar_create(State(state): State<SharedState>, user: Principal, sess
             },
         )
         .await?;
-        Ok("flash-calendar-created")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -268,7 +272,7 @@ async fn calendar_update(State(state): State<SharedState>, user: Principal, sess
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::update_calendar(&state, &user, &owner, &id, &f.name, &f.color, &f.description).await?;
-        Ok("flash-saved")
+        Ok(Some("flash-saved"))
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -278,7 +282,7 @@ async fn calendar_delete(State(state): State<SharedState>, user: Principal, sess
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::delete_calendar(&state, &user, &owner, &id, false).await?;
-        Ok("flash-calendar-trashed")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -288,7 +292,7 @@ async fn calendar_restore(State(state): State<SharedState>, user: Principal, ses
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::restore_calendar(&state, &user, &owner, &id).await?;
-        Ok("flash-restored")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -298,7 +302,7 @@ async fn calendar_purge(State(state): State<SharedState>, user: Principal, sessi
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::delete_calendar(&state, &user, &owner, &id, true).await?;
-        Ok("flash-purged")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -318,7 +322,7 @@ async fn addressbook_create(State(state): State<SharedState>, user: Principal, s
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::create_addressbook(&state, &user, &f.owner, &f.name, &f.color, &f.description).await?;
-        Ok("flash-addressbook-created")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -337,7 +341,7 @@ async fn addressbook_update(State(state): State<SharedState>, user: Principal, s
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::update_addressbook(&state, &user, &owner, &id, &f.name, &f.color, &f.description).await?;
-        Ok("flash-saved")
+        Ok(Some("flash-saved"))
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -347,7 +351,7 @@ async fn addressbook_delete(State(state): State<SharedState>, user: Principal, s
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::delete_addressbook(&state, &user, &owner, &id, false).await?;
-        Ok("flash-addressbook-trashed")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "collections").await
@@ -357,7 +361,7 @@ async fn addressbook_restore(State(state): State<SharedState>, user: Principal, 
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::restore_addressbook(&state, &user, &owner, &id).await?;
-        Ok("flash-restored")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -367,7 +371,7 @@ async fn addressbook_purge(State(state): State<SharedState>, user: Principal, se
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         collections::delete_addressbook(&state, &user, &owner, &id, true).await?;
-        Ok("flash-purged")
+        Ok(None)
     }
     .await;
     finish(&state, &session, &ctx, r, "trash").await
@@ -378,20 +382,20 @@ async fn token_create(State(state): State<SharedState>, user: Principal, session
         csrf::check(&session, &f.csrf).await?;
         let t = tokens::create(&state, &user, &f.name).await?;
         session.insert(SESSION_NEW_TOKEN, t).await?;
-        Ok("flash-token-created")
+        Ok(None)
     }
     .await;
-    finish(&state, &session, &ctx, r, "tokens").await
+    finish(&state, &session, &ctx, r, "account").await
 }
 
 async fn token_delete(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path(id): Path<String>, Form(f): Form<Csrf>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         tokens::delete(&state, &user, &id).await?;
-        Ok("flash-token-deleted")
+        Ok(None)
     }
     .await;
-    finish(&state, &session, &ctx, r, "tokens").await
+    finish(&state, &session, &ctx, r, "account").await
 }
 
 #[derive(Deserialize)]
@@ -443,7 +447,7 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         if let Some(l) = &p.lang {
             session.insert(crate::ctx::SESSION_LANG, l).await?;
         }
-        Ok("flash-saved")
+        Ok(Some("flash-saved"))
     }
     .await;
     finish(&state, &session, &ctx, r, "prefs").await

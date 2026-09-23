@@ -94,16 +94,17 @@
     <button class="avatar" aria-haspopup="true" title="{{ ctx.user_id() }}">{{ ctx.initials() }}</button>
     <div class="pop">
       <h4>{{ ctx.user_id() }}</h4>
-      <a class="row-link" href="/settings#profile">{{ ctx.t("nav-settings") }}</a>
+      <a class="row-link" href="/settings#prefs">{{ ctx.t("nav-settings") }}</a>
       <form method="post" action="/logout" class="row-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button type="submit" class="btn">{{ ctx.t("logout") }}</button></form>
     </div>
   </div>
   {% endif %}
 </header>
 <main class="main">
-{% if let Some(f) = ctx.flash %}<div class="flash {{ f.kind }}" role="status">{{ f.text }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
+{# a toast, not a banner: fixed, so it never pushes the page down #}
+{% if let Some(f) = ctx.flash %}<div class="toast {{ f.kind }}" role="{% if f.kind == "error" %}alert{% else %}status{% endif %}"><span>{{ f.text }}</span><button type="button" class="toast-x" aria-label="{{ ctx.t("ed-close") }}">×</button></div>{% endif %}
 {% if ctx.user.is_some() %}
 <nav class="tabbar">
   <a href="/calendar"{% if ctx.is_active("/calendar") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><span>{{ ctx.t("nav-calendar") }}</span></a>
