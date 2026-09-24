@@ -53,6 +53,12 @@ pub struct CalendarPage {
     pub alarm_snaps_json: String,
     /// the user's category rules (`domain::catrules`), applied by the editor
     pub category_rules_json: String,
+    /// holiday switches of the filter popover, and whether the region has school holidays at all
+    pub holidays_on: bool,
+    pub school_on: bool,
+    pub has_school: bool,
+    /// `:root { --hol; --fer }` from the user's holiday colours
+    pub holiday_css: String,
 }
 
 #[derive(Template)]
@@ -169,7 +175,12 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
     let p = prefs::get(&state.db, &user.id).await?;
+    let has_school = crate::domain::holidays::has_school(&p.region(&state.config).0);
     Ok(CalendarPage {
+        holidays_on: p.holidays_enabled,
+        school_on: p.school_holidays_enabled,
+        has_school,
+        holiday_css: p.holiday_css(),
         editor_kind: "event",
         ctx,
         calendars: all_cals,

@@ -119,12 +119,13 @@ pub fn planner(y: &YearData, l: &L) -> String {
         let _ = write!(cols, "<div class=\"mcol\"><h3>{}</h3>{rows}</div>", l.mon(mi));
     }
     format!(
-        "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--c4) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--c3) 22%,var(--bg))\"></i>{}</span><span><i style=\"background:color-mix(in srgb,var(--c6) 35%,var(--bg))\"></i>{}</span><span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· KW {} · {}</span></div>",
+        "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--fer) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--hol) 22%,var(--bg))\"></i>{}</span><span><i style=\"background:color-mix(in srgb,var(--c6) 35%,var(--bg))\"></i>{}</span><span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· {} {} · {}</span></div>",
         l.t("v-school-holidays"),
         e(&y.subdivision),
         l.t("v-public-holiday"),
         l.t("v-vacation"),
         l.t("v-weekend"),
+        l.t("v-week-abbr"),
         l.t("v-top-right-on-mondays"),
         l.t("v-print-ctrl-p")
     )

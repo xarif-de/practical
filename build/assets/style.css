@@ -589,7 +589,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .planner { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; background: var(--tile); border-radius: 14px; padding: 10px; font-size: 10.5px; }
 .mcol h3 { margin: 0 0 4px; font-size: 12px; text-align: center; } .c { display: grid; grid-template-columns: 16px 10px 1fr; gap: 2px; align-items: center; height: 20px; border-bottom: 1px solid var(--line); padding: 0 3px; overflow: hidden; white-space: nowrap; position: relative; cursor: pointer; }
 .c b { font-weight: 600; } .c s { text-decoration: none; color: var(--fg-3); } .c i { position: absolute; right: 2px; top: 2px; font-size: 8px; color: var(--fg-3); font-style: normal; } .c span { overflow: hidden; text-overflow: ellipsis; }
-.c.we { background: var(--tile-weekend); } .c.fer { background: color-mix(in srgb, var(--c4) 18%, transparent); } .c.hol { background: color-mix(in srgb, var(--c3) 22%, transparent); } .c.t { outline: 2px solid var(--today); outline-offset: -2px; }
+.c.we { background: var(--tile-weekend); } .c.fer { background: color-mix(in srgb, var(--fer) 18%, transparent); } .c.hol { background: color-mix(in srgb, var(--hol) 22%, transparent); } .c.t { outline: 2px solid var(--today); outline-offset: -2px; }
 .c span.u { background: color-mix(in srgb, var(--c6) 35%, transparent); border-radius: 3px; padding: 0 3px; } .c.x { background: transparent; border: 0; }
 .leg { display: flex; gap: 14px; font-size: 12px; color: var(--fg-2); margin: 8px 4px; flex-wrap: wrap; } .leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
 @media print { .topbar, .tabbar, .tl, .toolbar, .fab { display: none !important; } .planner { font-size: 8px; } }
@@ -1350,14 +1350,16 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
    not `disabled`, which would drop the value from the autosaved form */
 .set .cell.na { pointer-events: none; } .set .cell.na .val { opacity: .4; }
 /* named holidays in day, week and month views (render.rs `hol_labels`): `.hday` labels, public
-   ones red-tinted, school holidays amber; the day itself gets `.hol` (number in red) or `.fer` */
-.hday { display: inline-block; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.5; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--c3) 14%, transparent); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-.hday.school { background: color-mix(in srgb, var(--c4) 22%, transparent); }
+   ones tinted --hol, school holidays --fer; the day itself gets `.hol` (number coloured) or `.fer`.
+   --hol/--fer default to the theme's red and amber; a user's own colours are set on the calendar page */
+:root { --hol: var(--c3); --fer: var(--c4); }
+.hday { display: inline-block; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.5; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--hol) 14%, transparent); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.hday.school { background: color-mix(in srgb, var(--fer) 22%, transparent); }
 .day > .hday { display: block; margin: 0 0 2px; }
-.day.hol .n, .lrow.hol b, .dayblock.hol .dl b { color: var(--c3); }
-.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--c4) 9%, var(--tile)); }
-.lrow.fer:not(.today) { background: color-mix(in srgb, var(--c4) 9%, transparent); }
-.fname { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--c4) 70%, var(--fg)); letter-spacing: 0; text-transform: none; }
+.day.hol .n, .lrow.hol b, .dayblock.hol .dl b { color: var(--hol); }
+.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) 5%, var(--tile)); }
+.lrow.fer:not(.today) { background: color-mix(in srgb, var(--fer) 5%, transparent); }
+.fname { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--fer) 70%, var(--fg)); letter-spacing: 0; text-transform: none; }
 .day .nline { display: flex; align-items: center; gap: 4px; min-width: 0; padding-right: 22px; } /* room for the + in the corner */
 .day .nline .fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .agenda > .hday { margin: 0 0 6px 4px; }

@@ -47,6 +47,8 @@ pub struct SettingsPage {
     pub subdivisions: Vec<Region>,
     /// the pickers' data (countries, time zones) as JSON for app.js
     pub picker_json: String,
+    /// `:root { --hol; --fer }` from the user's holiday colours ("" = the theme's)
+    pub holiday_css: String,
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
@@ -88,8 +90,12 @@ impl SettingsPage {
         }
         if parts.is_empty() { self.region_sub.clone() } else { parts.into_iter().rev().collect::<Vec<_>>().join(" › ") }
     }
-    pub fn has_school(&self) -> bool {
-        holidays::has_school(&self.region_country)
+    /// the colour pickers' values: the user's colour, else the (light) theme's
+    pub fn holiday_color(&self) -> String {
+        self.prefs.holiday_color.clone().unwrap_or_else(|| "#ff3b30".into())
+    }
+    pub fn school_color(&self) -> String {
+        self.prefs.school_color.clone().unwrap_or_else(|| "#ff9f0a".into())
     }
     /// "Holidays: OpenHolidays, Nager.Date · School holidays: OpenHolidays"
     pub fn sources_text(&self) -> String {
@@ -141,6 +147,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         region_country: region.0.clone(),
         region_sub: region.1.clone(),
         subdivisions: holidays::subdivisions(&state, &region.0, &ctx.lang).await?,
+        holiday_css: prefs::get(&state.db, &user.id).await?.holiday_css(),
         picker_json: serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones() }).to_string().replace('<', "\\u003c"),
         calendars_all: collections::calendars_for(&state, &user, false).await?,
         vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
@@ -507,9 +514,9 @@ struct PrefsForm {
     #[serde(default)]
     timezone: String,
     #[serde(default)]
-    holidays_enabled: Option<String>,
+    holiday_color: String,
     #[serde(default)]
-    school_holidays_enabled: Option<String>,
+    school_color: String,
     #[serde(default)]
     holiday_country: String,
     #[serde(default)]
@@ -533,8 +540,9 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::LANGS.contains(&l.as_str()));
         p.scheme = Some(f.scheme.clone()).filter(|s| s == "light" || s == "dark");
         p.timezone = Some(f.timezone.trim().to_string()).filter(|t| !t.is_empty() && t.parse::<chrono_tz::Tz>().is_ok());
-        p.holidays_enabled = f.holidays_enabled.is_some();
-        p.school_holidays_enabled = f.school_holidays_enabled.is_some();
+        // holiday colours: "" = the theme's; the switches live in the calendar's filter (holiday_display_save)
+        p.holiday_color = Some(f.holiday_color.trim().to_lowercase()).filter(|c| prefs::is_hex_color(c));
+        p.school_color = Some(f.school_color.trim().to_lowercase()).filter(|c| prefs::is_hex_color(c));
         // a chosen region is kept even when empty (= the whole country); a subdivision of another country is dropped
         let country = f.holiday_country.trim().to_uppercase();
         if country.len() == 2 && country.chars().all(|c| c.is_ascii_uppercase()) {
@@ -562,6 +570,27 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
     }
     .await;
     finish(&state, &session, &ctx, r, "prefs").await
+}
+
+#[derive(Deserialize)]
+struct HolidayDisplay {
+    public: Option<bool>,
+    /// absent where the region has no school holidays (the switch is not shown): kept as it was
+    school: Option<bool>,
+}
+
+/// Show public holidays / school holidays in the calendar (its filter popover, app.js).
+async fn holiday_display_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    if let Some(v) = d.public {
+        p.holidays_enabled = v;
+    }
+    if let Some(v) = d.school {
+        p.school_holidays_enabled = v;
+    }
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 /// Contact table column choice (JSON array from app.js), stored per user.
@@ -652,6 +681,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
+        .route("/settings/holiday-display", post(holiday_display_save))
         .route("/api/holidays/countries", get(api_countries))
         .route("/api/holidays/subdivisions", get(api_subdivisions))
         .route("/settings/columns", post(columns_save))

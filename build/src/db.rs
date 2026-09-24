@@ -114,6 +114,12 @@ CREATE TABLE xui_holidays (
         // the holiday country, per user (NULL = config HOLIDAYS_COUNTRY)
         "ALTER TABLE xui_user_settings ADD COLUMN holiday_country TEXT;",
     ),
+    (
+        10,
+        // the user's colours for public holidays and school holidays (NULL = the theme's)
+        "ALTER TABLE xui_user_settings ADD COLUMN holiday_color TEXT;
+         ALTER TABLE xui_user_settings ADD COLUMN school_color TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

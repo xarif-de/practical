@@ -177,8 +177,6 @@
           if (v !== hid('holiday_country').value) {
             hid('holiday_subdivision').value = ''; commit('holiday_country', v);
             $('#v-country').textContent = b.querySelector('span').textContent;
-            const c = pickData.countries.find(x => x.code === v);
-            $('#v-school').classList.toggle('na', !(c && c.school)); $('#v-school-na').hidden = !!(c && c.school);
             showRegion(await loadSubs(v), '');
             $('#v-sources').hidden = true; // the sources line is the server's; it returns with the next visit
           }
@@ -193,6 +191,12 @@
     const baseShow = show;
     show = () => { const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('pick-') && $('#pick')) { settings.classList.add('paged'); $$('.page', settings).forEach(p => p.classList.toggle('on', p.id === 'pick')); pick(id.slice(5)); settings.closest('.main').scrollTop = 0; } else baseShow(); };
     removeEventListener('hashchange', baseShow); addEventListener('hashchange', show); show();
+    // holiday colours: the picker writes its hidden field (empty = the theme's colour) and shows the colour at once
+    $$('input[type=color][data-color-for]', settings).forEach(inp => {
+      const name = inp.dataset.colorFor, field = hid(name), reset = $(`[data-color-reset="${name}"]`, settings), prop = name === 'holiday_color' ? '--hol' : '--fer';
+      inp.addEventListener('change', e => { e.stopPropagation(); field.value = inp.value; document.documentElement.style.setProperty(prop, inp.value); reset.hidden = false; field.dispatchEvent(new Event('change', { bubbles: true })); });
+      reset.addEventListener('click', () => { field.value = ''; document.documentElement.style.removeProperty(prop); $$('style').forEach(s => { s.textContent = s.textContent.replace(new RegExp(prop + ':#[0-9a-f]{6};'), ''); }); /* the page's own <style> carried the old colour */ inp.value = name === 'holiday_color' ? '#ff3b30' : '#ff9f0a'; reset.hidden = true; field.dispatchEvent(new Event('change', { bubbles: true })); });
+    });
     // a segment stands for one hidden field: pressing sets it and saves like any other change
     $$('.seg[data-field]', settings).forEach(sg => sg.addEventListener('click', e => {
       const b = e.target.closest('button[data-v]'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
@@ -285,6 +289,12 @@
     if (state.cals !== (root.dataset.cals || '')) load(false);
   }
   function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); }
+  // holidays: a setting of the user (not of this browser), saved at once, then the view redraws
+  $$('input[data-hol]', filterBox || document.createElement('div')).forEach(i => i.addEventListener('change', async () => {
+    const body = {}; $$('input[data-hol]', filterBox).forEach(x => { body[x.dataset.hol] = x.checked; }); // no school switch → the setting stays
+    await fetch('/settings/holiday-display', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    load(false);
+  }));
 
   // ---- navigation / fragment loading ----
   function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }

@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block title %}{{ ctx.t("nav-settings") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block head %}{% if !holiday_css.is_empty() %}<style>{{ holiday_css|safe }}</style>{% endif %}{% endblock %}
 {% block content %}
 {# Grouped lists (round 12, prototype C): a home page with drill-in pages, one <section class="page"> each,
    switched by the URL hash (app.js). Preference fields save themselves (fetch, JSON answer); lists keep
@@ -28,8 +29,8 @@
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
-    <label class="cell"><span class="swatch" style="background:var(--c3)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-public") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="holidays_enabled"{% if prefs.holidays_enabled %} checked{% endif %}><i></i></span></span></label>
-    <label class="cell{% if !self.has_school() %} na{% endif %}" id="v-school"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("pref-holidays-school") }}<span class="sub" id="v-school-na"{% if self.has_school() %} hidden{% endif %}>{{ ctx.t("set-school-na") }}</span></span><span class="val"><span class="toggle"><input type="checkbox" name="school_holidays_enabled"{% if prefs.school_holidays_enabled %} checked{% endif %}><i></i></span></span></label>
+    <div class="cell"><span class="swatch" style="background:var(--hol)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-color-public") }}</span><span class="val"><input type="hidden" name="holiday_color" value="{{ prefs.holiday_color.clone().unwrap_or_default() }}"><button class="link" type="button" data-color-reset="holiday_color"{% if prefs.holiday_color.is_none() %} hidden{% endif %}>{{ ctx.t("set-color-reset") }}</button><input type="color" data-color-for="holiday_color" value="{{ self.holiday_color() }}" aria-label="{{ ctx.t("set-color-public") }}"></span></div>
+    <div class="cell"><span class="swatch" style="background:var(--fer)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-color-school") }}</span><span class="val"><input type="hidden" name="school_color" value="{{ prefs.school_color.clone().unwrap_or_default() }}"><button class="link" type="button" data-color-reset="school_color"{% if prefs.school_color.is_none() %} hidden{% endif %}>{{ ctx.t("set-color-reset") }}</button><input type="color" data-color-for="school_color" value="{{ self.school_color() }}" aria-label="{{ ctx.t("set-color-school") }}"></span></div>
     <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
     <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}<span class="chev">›</span></span></a>
   </div>
