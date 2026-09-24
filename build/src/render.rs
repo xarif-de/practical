@@ -68,18 +68,21 @@ impl L {
 /// Named holidays by day (`domain::holidays::marks`); empty when the user switched them off.
 pub type Hols = HashMap<NaiveDate, Vec<crate::domain::holidays::Mark>>;
 
-/// The holidays of a day as labels: public in red, school holidays in amber.
-fn hol_labels(hol: &Hols, d: NaiveDate, tag: &str) -> String {
-    hol.get(&d).map(|v| v.iter().map(|m| format!("<{tag} class=\"hday{}\">{}</{tag}>", if m.school { " school" } else { "" }, e(&m.name))).collect()).unwrap_or_default()
+/// The holidays of a day as labels: public in red, school holidays (only with `school`) in amber.
+fn hol_labels(hol: &Hols, d: NaiveDate, tag: &str, school: bool) -> String {
+    hol.get(&d).map(|v| v.iter().filter(|m| school || !m.school).map(|m| format!("<{tag} class=\"hday{}\">{}</{tag}>", if m.school { " school" } else { "" }, e(&m.name))).collect()).unwrap_or_default()
 }
 
-/// "hol"/"fer" classes of a day cell (public holiday / school holiday)
-fn hol_class(hol: &Hols, d: NaiveDate) -> &'static str {
-    match hol.get(&d) {
-        Some(v) if v.iter().any(|m| !m.school) => " hol",
-        Some(v) if !v.is_empty() => " fer",
-        _ => "",
-    }
+/// Classes of a day cell: `hol` (public holiday, red number), `fer` (school holidays, tinted).
+fn hol_class(hol: &Hols, d: NaiveDate) -> String {
+    let v = hol.get(&d).map(|v| v.as_slice()).unwrap_or(&[]);
+    format!("{}{}", if v.iter().any(|m| !m.school) { " hol" } else { "" }, if v.iter().any(|m| m.school) { " fer" } else { "" })
+}
+
+/// School-holiday blocks of a day that start there — or everywhere with `always` (a view's
+/// first visible day, so a block begun earlier is named once).
+fn fer_names(hol: &Hols, d: NaiveDate, always: bool) -> Vec<String> {
+    hol.get(&d).into_iter().flatten().filter(|m| m.school && (always || m.start == d)).map(|m| m.name.clone()).collect()
 }
 
 pub fn e(s: &str) -> String {
@@ -197,14 +200,17 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             if *d == view_date && view_date != today {
                 cls.push_str(" sel");
             }
-            cls.push_str(hol_class(hol, *d));
+            cls.push_str(&hol_class(hol, *d));
             let evs: Vec<&Instance> = idx.get(d).cloned().unwrap_or_default();
-            let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\"><span class=\"n\">{}</span>{ADD}<div class=\"dots\">", d.day());
+            // a school-holiday block is named once: where it starts, or on the 1st if it began before
+            let fer: String = if other { String::new() } else { fer_names(hol, *d, d.day() == 1).iter().map(|n| format!("<b class=\"fname\">{}</b>", e(n))).collect() };
+            let num = if fer.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{fer}</span>", d.day()) };
+            let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{ADD}<div class=\"dots\">");
             for i in evs.iter().take(4) {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", e(&i.color));
             }
             out.push_str("</div>");
-            out.push_str(&hol_labels(hol, *d, "div"));
+            out.push_str(&hol_labels(hol, *d, "div", false));
             let mut shown = 0usize;
             // lanes first (multi-day bars), aligned across the row
             let max_lane = evs.iter().filter_map(|i| lane_of.get(&(i.key(), i.start))).max().copied();
@@ -239,7 +245,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
 pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str, hol: &Hols) -> String {
     let idx = by_day(instances);
     let evs = idx.get(&date).cloned().unwrap_or_default();
-    let mut out = format!("<section class=\"agenda\"><h2>{}</h2>{}<ul>", e(title), hol_labels(hol, date, "div"));
+    let mut out = format!("<section class=\"agenda\"><h2>{}</h2>{}<ul>", e(title), hol_labels(hol, date, "div", true));
     if evs.is_empty() {
         let _ = write!(out, "<li><time></time><span class=\"muted\">{}</span></li>", l.t("v-no-events"));
     }
@@ -314,7 +320,15 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
     for wi in 0..count {
         let w0 = mon + Duration::days(7 * wi as i64);
         let w6 = w0 + Duration::days(6);
-        let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">{} <span>{} – {}</span></h2>", if w0 == today_mon { " now" } else { "" }, l.week_short(w0.iso_week().week()), l.dm(w0), l.dm(w6));
+        // the week's school holidays are named in its head; the days themselves are only tinted
+        let mut fer: Vec<String> = vec![];
+        for n in (0..7).flat_map(|i| fer_names(hol, w0 + Duration::days(i), true)) {
+            if !fer.contains(&n) {
+                fer.push(n);
+            }
+        }
+        let fer: String = fer.iter().map(|n| format!(" <b class=\"fname\">{}</b>", e(n))).collect();
+        let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">{} <span>{} – {}</span>{fer}</h2>", if w0 == today_mon { " now" } else { "" }, l.week_short(w0.iso_week().week()), l.dm(w0), l.dm(w6));
         for i in 0..7 {
             let d = w0 + Duration::days(i);
             let evs = idx.get(&d).cloned().unwrap_or_default();
@@ -323,14 +337,14 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
                 let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
                 let _ = write!(items, "<li><time>{}</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
             }
-            let marks = hol_labels(hol, d, "span");
+            let marks = hol_labels(hol, d, "span", false);
             if items.is_empty() && marks.is_empty() {
                 items = "<li class=\"none\"><time></time><span>–</span></li>".into();
             }
             if !marks.is_empty() {
                 items = format!("<li class=\"hols\"><time></time><span>{marks}</span></li>{items}");
             }
-            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, hol_class(hol, d), d.day(), l.dow(d));
+            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d));
         }
         out.push_str("</div>");
     }
@@ -535,9 +549,10 @@ pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<Na
     for i in 0..count {
         let d = start + Duration::days(i as i64);
         let evs = idx.get(&d).cloned().unwrap_or_default();
-        // a holiday leads the row's text, the entries follow
-        let names: Vec<String> = hol.get(&d).into_iter().flatten().map(|m| e(&m.name)).chain(evs.iter().map(|i| e(&i.summary))).collect();
-        let _ = write!(out, "<a class=\"lrow{}{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, hol_class(hol, d), d.day(), l.dow(d), evs.len().min(6), names.join(", "));
+        // a public holiday leads the row's text, a school-holiday block only on its first day
+        // (the others are tinted); the entries follow
+        let names: Vec<String> = hol.get(&d).into_iter().flatten().filter(|m| !m.school || m.start == d).map(|m| e(&m.name)).chain(evs.iter().map(|i| e(&i.summary))).collect();
+        let _ = write!(out, "<a class=\"lrow{}{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d), evs.len().min(6), names.join(", "));
     }
     out
 }
@@ -547,7 +562,7 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     let (ds, de) = day_window(view_date);
     let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l, hol);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
-    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>{}", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names), { let m = hol_labels(hol, view_date, "span"); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
+    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>{}", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
     if evs.is_empty() {
         let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
     }

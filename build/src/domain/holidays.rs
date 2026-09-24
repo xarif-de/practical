@@ -528,6 +528,8 @@ pub async fn get(state: &AppState, kind: &str, country: &str, subdivision: &str,
 pub struct Mark {
     pub name: String,
     pub school: bool,
+    /// the first day of the holiday (block) this day belongs to
+    pub start: NaiveDate,
 }
 
 /// The holidays the user asked for (settings), by day, for `from..to` — named, in `lang`.
@@ -537,15 +539,20 @@ pub async fn marks(state: &AppState, user: &str, from: NaiveDate, to: NaiveDate,
     let p = crate::domain::prefs::get(&state.db, user).await?;
     let (country, sub) = p.region(&state.config);
     let mut out: HashMap<NaiveDate, Vec<Mark>> = HashMap::new();
+    // a block across New Year (Weihnachtsferien) comes back for both years: count it once
+    let mut seen = std::collections::HashSet::new();
     for (kind, on) in [("public", p.holidays_enabled), ("school", p.school_holidays_enabled)] {
         if !on {
             continue;
         }
         for year in from.year()..=to.year() {
             for h in get(state, kind, &country, &sub, year, lang).await? {
+                if !seen.insert((kind, h.start, h.end, h.name.clone())) {
+                    continue;
+                }
                 let mut d = h.start.max(from);
                 while d <= h.end && d < to {
-                    out.entry(d).or_default().push(Mark { name: h.name.clone(), school: kind == "school" });
+                    out.entry(d).or_default().push(Mark { name: h.name.clone(), school: kind == "school", start: h.start });
                     let Some(next) = d.succ_opt() else { break };
                     d = next;
                 }
