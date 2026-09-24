@@ -10,8 +10,8 @@
 //! days; OpenHolidays' subdivision lists the same way (year 0). Country and region *names* and
 //! the region hierarchy of countries OpenHolidays does not cover come from Unicode CLDR,
 //! built into the binary (`src/data/regions.json`, `tools/gen_regions.py`) — no request needed.
-//! Upkeep is lazy (`maintain`, hourly from tasks.rs; at start it only reads what is saved):
-//! which source covers which country is asked at most daily (`refresh_coverage`), CLDR is asked
+//! Upkeep is lazy (`maintain`, daily from tasks.rs; at start it only reads what is saved):
+//! which source covers which country is asked at most weekly (`refresh_coverage`), CLDR is asked
 //! at most weekly whether a newer release exists (`check_cldr`: one small request, usually a
 //! 304) and only then are its files fetched — about once a year. Saved answers live in
 //! `xui_holidays` (year 0) and win over the built-in snapshot when newer.
@@ -184,12 +184,12 @@ async fn refresh_coverage(state: &AppState) -> AppResult<()> {
     cache_put(state, "", "", 0, "coverage", &serde_json::to_string(&next).unwrap()).await
 }
 
-const COVERAGE_EVERY_H: i64 = 24;
+const COVERAGE_EVERY_H: i64 = 7 * 24;
 const CLDR_CHECK_EVERY_H: i64 = 7 * 24;
 const CLDR: &str = "https://raw.githubusercontent.com/unicode-org/cldr";
 const CLDR_LATEST: &str = "https://api.github.com/repos/unicode-org/cldr/releases/latest";
 
-/// Upkeep of the region data, called hourly by tasks.rs. The first call only reads what was
+/// Upkeep of the region data, called daily by tasks.rs (and once at start). The first call only reads what was
 /// saved; a request goes out when a check is due, a download only when there is something new.
 pub async fn maintain(state: &AppState, first: bool) -> AppResult<()> {
     if first {
@@ -253,7 +253,7 @@ async fn check_cldr(state: &AppState) -> AppResult<()> {
                 Ok(rel) => CldrCheck { etag, tag: rel.tag_name },
                 Err(e) => {
                     tracing::warn!("cldr check: {e}");
-                    return Ok(()); // no timestamp: try again next hour
+                    return Ok(()); // no timestamp: tried again with the next round (a day, or the next start)
                 }
             }
         }
@@ -277,7 +277,7 @@ async fn check_cldr(state: &AppState) -> AppResult<()> {
             }
             Err(e) => {
                 tracing::warn!("cldr {}: {e}", check.tag);
-                return Ok(()); // the check stays due, the download is retried next hour
+                return Ok(()); // the check stays due, the download is retried with the next round
             }
         }
     }
