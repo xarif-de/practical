@@ -1349,3 +1349,14 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 /* a setting without effect here (school holidays of a country no source covers): shown, kept, not editable —
    not `disabled`, which would drop the value from the autosaved form */
 .set .cell.na { pointer-events: none; } .set .cell.na .val { opacity: .4; }
+/* named holidays in day, week and month views (render.rs `hol_labels`): `.hday` labels, public
+   ones red-tinted, school holidays amber; the day itself gets `.hol` (number in red) or `.fer` */
+.hday { display: inline-block; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.5; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--c3) 14%, transparent); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.hday.school { background: color-mix(in srgb, var(--c4) 22%, transparent); }
+.day > .hday { display: block; margin: 0 0 2px; }
+.day.hol .n, .lrow.hol b, .dayblock.hol .dl b { color: var(--c3); }
+.day.fer { background: color-mix(in srgb, var(--c4) 8%, var(--tile)); }
+.agenda > .hday { margin: 0 0 6px 4px; }
+.dayblock li.hols span { display: flex; flex-wrap: wrap; gap: 4px; }
+.doc .hols { display: flex; flex-wrap: wrap; gap: 6px; margin: -14px 0 18px; }
+.doc .hols .hday { font-size: 13px; padding: 2px 8px; }

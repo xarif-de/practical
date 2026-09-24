@@ -65,6 +65,23 @@ impl L {
     }
 }
 
+/// Named holidays by day (`domain::holidays::marks`); empty when the user switched them off.
+pub type Hols = HashMap<NaiveDate, Vec<crate::domain::holidays::Mark>>;
+
+/// The holidays of a day as labels: public in red, school holidays in amber.
+fn hol_labels(hol: &Hols, d: NaiveDate, tag: &str) -> String {
+    hol.get(&d).map(|v| v.iter().map(|m| format!("<{tag} class=\"hday{}\">{}</{tag}>", if m.school { " school" } else { "" }, e(&m.name))).collect()).unwrap_or_default()
+}
+
+/// "hol"/"fer" classes of a day cell (public holiday / school holiday)
+fn hol_class(hol: &Hols, d: NaiveDate) -> &'static str {
+    match hol.get(&d) {
+        Some(v) if v.iter().any(|m| !m.school) => " hol",
+        Some(v) if !v.is_empty() => " fer",
+        _ => "",
+    }
+}
+
 pub fn e(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
@@ -140,7 +157,7 @@ fn ev_html(i: &Instance, role: Option<&str>) -> String {
 }
 
 /// Month grid with continuous multi-day bars (lane-aligned per week row).
-pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate) -> String {
+pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate, hol: &Hols) -> String {
     let weeks = month_weeks(year, month);
     let idx = by_day(instances);
     let mut out = String::from("<div class=\"month\" role=\"grid\">");
@@ -180,12 +197,14 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             if *d == view_date && view_date != today {
                 cls.push_str(" sel");
             }
+            cls.push_str(hol_class(hol, *d));
             let evs: Vec<&Instance> = idx.get(d).cloned().unwrap_or_default();
             let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\"><span class=\"n\">{}</span>{ADD}<div class=\"dots\">", d.day());
             for i in evs.iter().take(4) {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", e(&i.color));
             }
             out.push_str("</div>");
+            out.push_str(&hol_labels(hol, *d, "div"));
             let mut shown = 0usize;
             // lanes first (multi-day bars), aligned across the row
             let max_lane = evs.iter().filter_map(|i| lane_of.get(&(i.key(), i.start))).max().copied();
@@ -217,10 +236,10 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
     out
 }
 
-pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str) -> String {
+pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str, hol: &Hols) -> String {
     let idx = by_day(instances);
     let evs = idx.get(&date).cloned().unwrap_or_default();
-    let mut out = format!("<section class=\"agenda\"><h2>{}</h2><ul>", e(title));
+    let mut out = format!("<section class=\"agenda\"><h2>{}</h2>{}<ul>", e(title), hol_labels(hol, date, "div"));
     if evs.is_empty() {
         let _ = write!(out, "<li><time></time><span class=\"muted\">{}</span></li>", l.t("v-no-events"));
     }
@@ -288,7 +307,7 @@ pub fn week_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 
 /// `count` week blocks from the Monday of `start`. Each block stands on its own — no month
 /// context — so the stream can run on endlessly in both directions.
-pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: &[Instance], l: &L) -> String {
+pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: &[Instance], l: &L, hol: &Hols) -> String {
     let idx = by_day(instances);
     let (mon, today_mon) = (monday_of(start), monday_of(today));
     let mut out = String::new();
@@ -304,20 +323,24 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
                 let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
                 let _ = write!(items, "<li><time>{}</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
             }
-            if items.is_empty() {
+            let marks = hol_labels(hol, d, "span");
+            if items.is_empty() && marks.is_empty() {
                 items = "<li class=\"none\"><time></time><span>–</span></li>".into();
             }
-            let _ = write!(out, "<section class=\"dayblock{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() { " empty" } else { "" }, d.day(), l.dow(d));
+            if !marks.is_empty() {
+                items = format!("<li class=\"hols\"><time></time><span>{marks}</span></li>{items}");
+            }
+            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, hol_class(hol, d), d.day(), l.dow(d));
         }
         out.push_str("</div>");
     }
     out
 }
 
-pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L) -> String {
+pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, hol: &Hols) -> String {
     let (start, end) = week_window(view_date);
     let count = ((end - start).num_days() / 7) as usize;
-    let stream = week_blocks(start, count, today, instances, l);
+    let stream = week_blocks(start, count, today, instances, l, hol);
     let idx = by_day(instances);
     // the panel follows the focus week's month, the same rule the client applies while scrolling
     let focus = monday_of(view_date);
@@ -506,24 +529,25 @@ pub fn day_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 
 /// `count` ledger rows from `start`. The selection is the client's business once the ledger runs
 /// endlessly, so it is only marked on the rows the page itself brings.
-pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<NaiveDate>, instances: &[Instance], l: &L) -> String {
+pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<NaiveDate>, instances: &[Instance], l: &L, hol: &Hols) -> String {
     let idx = by_day(instances);
     let mut out = String::new();
     for i in 0..count {
         let d = start + Duration::days(i as i64);
         let evs = idx.get(&d).cloned().unwrap_or_default();
-        let names: Vec<String> = evs.iter().map(|i| e(&i.summary)).collect();
-        let _ = write!(out, "<a class=\"lrow{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, d.day(), l.dow(d), evs.len().min(6), names.join(", "));
+        // a holiday leads the row's text, the entries follow
+        let names: Vec<String> = hol.get(&d).into_iter().flatten().map(|m| e(&m.name)).chain(evs.iter().map(|i| e(&i.summary))).collect();
+        let _ = write!(out, "<a class=\"lrow{}{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, hol_class(hol, d), d.day(), l.dow(d), evs.len().min(6), names.join(", "));
     }
     out
 }
 
-pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str, details: &HashMap<String, EventDetail>) -> String {
+pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str, details: &HashMap<String, EventDetail>, hol: &Hols) -> String {
     let idx = by_day(instances);
     let (ds, de) = day_window(view_date);
-    let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l);
+    let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l, hol);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
-    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names));
+    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>{}", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names), { let m = hol_labels(hol, view_date, "span"); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
     if evs.is_empty() {
         let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
     }
@@ -555,10 +579,10 @@ pub fn alarm_label(m: i64, l: &L) -> String {
     format!("{amount} {}", if after { l.t("v-after") } else { l.t("v-before") })
 }
 
-pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate) -> String {
-    let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, view_date);
+pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate, hol: &Hols) -> String {
+    let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, view_date, hol);
     let title = if agenda_date == today { format!("{}, {}", l.t("v-today"), l.long_date(agenda_date)) } else { l.long_date(agenda_date) };
-    format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today), agenda(agenda_date, instances, l, &title))
+    format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today), agenda(agenda_date, instances, l, &title, hol))
 }
 
 #[cfg(test)]

@@ -110,6 +110,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
         "day" => {
             let (ds, de) = render::day_window(date);
             let inst = events::instances(state, cals, ds.min(grid_start), de.max(grid_end), vc.tz).await?;
+            let hol = crate::domain::holidays::marks(state, &user.id, ds, de, &ctx.lang).await?;
             let names: Vec<String> = cals.iter().map(|c| c.displayname.clone()).collect();
             // the document in the middle shows links, coordinates, the rule and the marking, none of
             // which an Instance carries — they are read for the handful of events of THIS day only,
@@ -123,7 +124,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
                     details.insert(i.key(), d);
                 }
             }
-            (l.ta("date-day-title", &[("day", i64::from(date.day()).into()), ("month", l.mon(m).into()), ("year", i64::from(y).into())]), render::day_view(date, vc.today, &inst, l, &names.join(", "), &details))
+            (l.ta("date-day-title", &[("day", i64::from(date.day()).into()), ("month", l.mon(m).into()), ("year", i64::from(y).into())]), render::day_view(date, vc.today, &inst, l, &names.join(", "), &details, &hol))
         }
         "week" => {
             let (ws, we) = render::week_window(date);
@@ -133,15 +134,17 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             let hf = NaiveDate::from_ymd_opt(hm.year(), hm.month(), 1).unwrap();
             let hs = hf - Duration::days(i64::from(hf.weekday().num_days_from_monday()));
             let inst = events::instances(state, cals, ws.min(hs), we.max(hs + Duration::days(42)), vc.tz).await?;
-            (l.week_title(date), render::week_view(date, vc.today, &inst, l))
+            let hol = crate::domain::holidays::marks(state, &user.id, ws, we, &ctx.lang).await?;
+            (l.week_title(date), render::week_view(date, vc.today, &inst, l, &hol))
         }
         "planner" | "weekends" | "vacation" | "countdown" | "numbers" => {
             crate::routes::more::render(state, user, ctx, view, date, cals, vc).await?
         }
         _ => {
             let inst = events::instances(state, cals, grid_start, grid_end, vc.tz).await?;
+            let hol = crate::domain::holidays::marks(state, &user.id, grid_start, grid_end, &ctx.lang).await?;
             let agenda_date = if date.month() == vc.today.month() && date.year() == vc.today.year() { vc.today } else { date };
-            (format!("{} {y}", l.mon(m)), render::month_view(date, vc.today, &inst, l, agenda_date))
+            (format!("{} {y}", l.mon(m)), render::month_view(date, vc.today, &inst, l, agenda_date, &hol))
         }
     })
 }
@@ -221,7 +224,8 @@ pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: Pa
     let end = q.start + Duration::days(i64::from(count));
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     let inst = events::instances(&state, &cals, q.start, end, vc.tz).await?;
-    Ok(Html(render::day_rows(q.start, count as usize, vc.today, None, &inst, &vc.l)).into_response())
+    let hol = crate::domain::holidays::marks(&state, &user.id, q.start, end, &ctx.lang).await?;
+    Ok(Html(render::day_rows(q.start, count as usize, vc.today, None, &inst, &vc.l, &hol)).into_response())
 }
 
 /// Week blocks for the endless week stream (app.js `mountWeeks`).
@@ -241,7 +245,8 @@ pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: P
     let end = start + Duration::days(7 * count as i64);
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     let inst = events::instances(&state, &cals, start, end, vc.tz).await?;
-    Ok(Html(render::week_blocks(start, count, vc.today, &inst, &vc.l)).into_response())
+    let hol = crate::domain::holidays::marks(&state, &user.id, start, end, &ctx.lang).await?;
+    Ok(Html(render::week_blocks(start, count, vc.today, &inst, &vc.l, &hol)).into_response())
 }
 
 #[derive(Deserialize)]

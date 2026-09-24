@@ -523,6 +523,38 @@ pub async fn get(state: &AppState, kind: &str, country: &str, subdivision: &str,
     }
 }
 
+/// A public holiday or school holiday on one day, as the day/week/month views show it.
+#[derive(Debug, Clone)]
+pub struct Mark {
+    pub name: String,
+    pub school: bool,
+}
+
+/// The holidays the user asked for (settings), by day, for `from..to` — named, in `lang`.
+/// Public ones come first on a day; the years in the window are fetched (cached) once each.
+pub async fn marks(state: &AppState, user: &str, from: NaiveDate, to: NaiveDate, lang: &str) -> AppResult<HashMap<NaiveDate, Vec<Mark>>> {
+    use chrono::Datelike;
+    let p = crate::domain::prefs::get(&state.db, user).await?;
+    let (country, sub) = p.region(&state.config);
+    let mut out: HashMap<NaiveDate, Vec<Mark>> = HashMap::new();
+    for (kind, on) in [("public", p.holidays_enabled), ("school", p.school_holidays_enabled)] {
+        if !on {
+            continue;
+        }
+        for year in from.year()..=to.year() {
+            for h in get(state, kind, &country, &sub, year, lang).await? {
+                let mut d = h.start.max(from);
+                while d <= h.end && d < to {
+                    out.entry(d).or_default().push(Mark { name: h.name.clone(), school: kind == "school" });
+                    let Some(next) = d.succ_opt() else { break };
+                    d = next;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 // ---- region choice ----
 
 /// A country or subdivision for the region choice. Subdivisions come flattened in display
