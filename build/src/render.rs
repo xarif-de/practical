@@ -167,6 +167,22 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
     for d in 0..7 {
         let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
     }
+    // a school-holiday block is named once in the month: on its first day there that is not a
+    // public holiday (a public holiday's own name has that place)
+    let mut fer_at: HashMap<NaiveDate, Vec<String>> = HashMap::new();
+    let mut placed: Vec<(NaiveDate, String)> = vec![];
+    for d in weeks.iter().flatten().filter(|d| d.month() == month) {
+        let marks = hol.get(d).map(|v| v.as_slice()).unwrap_or(&[]);
+        if marks.iter().any(|m| !m.school) {
+            continue;
+        }
+        for m in marks.iter().filter(|m| m.school) {
+            if !placed.iter().any(|(s, n)| *s == m.start && *n == m.name) {
+                placed.push((m.start, m.name.clone()));
+                fer_at.entry(*d).or_default().push(m.name.clone());
+            }
+        }
+    }
     for w in &weeks {
         // lanes for multi-day instances in this row
         let mut spans: Vec<&Instance> = vec![];
@@ -202,15 +218,20 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             }
             cls.push_str(&hol_class(hol, *d));
             let evs: Vec<&Instance> = idx.get(d).cloned().unwrap_or_default();
-            // a school-holiday block is named once: where it starts, or on the 1st if it began before
-            let fer: String = if other { String::new() } else { fer_names(hol, *d, d.day() == 1).iter().map(|n| format!("<b class=\"fname\">{}</b>", e(n))).collect() };
+            // names beside the day number: its public holidays, and a school-holiday block where it is placed
+            let fer: String = if other {
+                String::new()
+            } else {
+                let public = hol.get(d).into_iter().flatten().filter(|m| !m.school).map(|m| format!("<b class=\"fname pub\">{}</b>", e(&m.name)));
+                let school = fer_at.get(d).into_iter().flatten().map(|n| format!("<b class=\"fname\">{}</b>", e(n)));
+                public.chain(school).collect()
+            };
             let num = if fer.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{fer}</span>", d.day()) };
             let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{ADD}<div class=\"dots\">");
             for i in evs.iter().take(4) {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", e(&i.color));
             }
             out.push_str("</div>");
-            out.push_str(&hol_labels(hol, *d, "div", false));
             let mut shown = 0usize;
             // lanes first (multi-day bars), aligned across the row
             let max_lane = evs.iter().filter_map(|i| lane_of.get(&(i.key(), i.start))).max().copied();
@@ -611,5 +632,24 @@ mod tests {
         assert_eq!(w[0][0], NaiveDate::from_ymd_opt(2026, 8, 31).unwrap());
         assert_eq!(w[4][6], NaiveDate::from_ymd_opt(2026, 10, 4).unwrap());
         assert_eq!(week_of(NaiveDate::from_ymd_opt(2026, 9, 15).unwrap())[0], NaiveDate::from_ymd_opt(2026, 9, 14).unwrap());
+    }
+
+    #[test]
+    fn month_names_a_school_block_on_its_first_day_that_is_no_public_holiday() {
+        use crate::domain::holidays::Mark;
+        let d = |m, day| NaiveDate::from_ymd_opt(2026, m, day).unwrap();
+        let mut hol: Hols = HashMap::new();
+        // Weihnachtsferien from 25.12., which is also a public holiday; the block goes on into January
+        for day in 25..=31 {
+            hol.entry(d(12, day)).or_default().push(Mark { name: "Weihnachtsferien".into(), school: true, start: d(12, 25) });
+        }
+        hol.entry(d(12, 25)).or_default().push(Mark { name: "1. Weihnachtsfeiertag".into(), school: false, start: d(12, 25) });
+        let l = L::new("de", crate::i18n::I18n::load());
+        let html = month_grid(2026, 12, d(9, 1), &[], &l, 3, d(12, 1), &hol);
+        let tile = |day: u32| { let k = format!("data-date=\"{}\"", d(12, day)); let i = html.find(&k).unwrap(); html[i..].split("<div class=\"day").next().unwrap().to_string() };
+        assert!(tile(25).contains("fname pub\">1. Weihnachtsfeiertag") && !tile(25).contains(">Weihnachtsferien<"));
+        assert!(tile(26).contains("fname\">Weihnachtsferien"));
+        assert!(!tile(27).contains("fname"));
+        assert!(html.contains("day hol fer\" data-date=\"2026-12-25"), "a public holiday that is also a school-holiday day is both, `hol` wins in the CSS");
     }
 }

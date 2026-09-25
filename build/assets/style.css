@@ -1356,10 +1356,14 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .hday { display: inline-block; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.5; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--hol) 14%, transparent); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .hday.school { background: color-mix(in srgb, var(--fer) 22%, transparent); }
 .day > .hday { display: block; margin: 0 0 2px; }
-.day.hol .n, .lrow.hol b, .dayblock.hol .dl b { color: var(--hol); }
-.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) 5%, var(--tile)); }
-.lrow.fer:not(.today) { background: color-mix(in srgb, var(--fer) 5%, transparent); }
+
+/* tints mix into the page background, not the grey tile: lighter and warmer; a public holiday wins */
+.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
+.day.hol { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
+.lrow.fer:not(.today) { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
+.lrow.hol:not(.today) { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
 .fname { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--fer) 70%, var(--fg)); letter-spacing: 0; text-transform: none; }
+.fname.pub { color: color-mix(in srgb, var(--hol) 80%, var(--fg)); }
 .day .nline { display: flex; align-items: center; gap: 4px; min-width: 0; padding-right: 22px; } /* room for the + in the corner */
 .day .nline .fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .agenda > .hday { margin: 0 0 6px 4px; }
