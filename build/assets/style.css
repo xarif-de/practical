@@ -521,10 +521,11 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .cal.v-day { grid-template-columns: minmax(280px,420px) 1fr; gap: 0; padding: 0; }
 .ledger { border-right: 1px solid var(--line); overflow: auto; overflow-anchor: none; max-height: calc(100dvh - 120px); } /* app.js `mountLedger` restores the position itself when it prepends */
 .lhd { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--fg-2); } /* the month of the topmost row */
-.lrow { display: grid; grid-template-columns: 34px 26px 40px 1fr; gap: 8px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.lrow b { font-size: 15px; font-weight: 600; } .lrow span { font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
-.lrow i { height: 6px; border-radius: 3px; background: var(--accent); width: calc(var(--n) * 10px); opacity: .7; }
-.lrow em { font-style: normal; color: var(--fg-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* day ledger row: number | weekday | text, the entry count as a thin bar under the text */
+.lrow { display: grid; grid-template-columns: 34px 26px minmax(0, 1fr); grid-template-areas: "d w t" "d w bar"; column-gap: 8px; row-gap: 2px; align-items: center; padding: 6px 12px 5px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.lrow b { grid-area: d; font-size: 15px; font-weight: 600; } .lrow span { grid-area: w; font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
+.lrow i { grid-area: bar; height: 3px; border-radius: 2px; background: var(--accent); width: calc(var(--n) * 10px); max-width: 100%; opacity: .7; }
+.lrow em { grid-area: t; font-style: normal; color: var(--fg-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
 .lrow.we { background: var(--tile-weekend); } .lrow.today { background: color-mix(in srgb, var(--today) 8%, transparent); } .lrow.today b { color: var(--today); }
 .lrow.sel { box-shadow: inset 3px 0 0 var(--accent); }
 .doc { padding: 28px 40px; max-width: 720px; }
