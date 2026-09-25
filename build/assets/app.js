@@ -288,12 +288,12 @@
     state.cals = calsParam();
     if (state.cals !== (root.dataset.cals || '')) load(false);
   }
-  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); }
+  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); dropCarried(); }
   // holidays: a setting of the user (not of this browser), saved at once, then the view redraws
   $$('input[data-hol]', filterBox || document.createElement('div')).forEach(i => i.addEventListener('change', async () => {
     const body = {}; $$('input[data-hol]', filterBox).forEach(x => { body[x.dataset.hol] = x.checked; }); // no school switch → the setting stays
     await fetch('/settings/holiday-display', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
-    load(false);
+    dropCarried(); load(false);
   }));
 
   // ---- navigation / fragment loading ----
@@ -569,6 +569,8 @@
   // middle. The node itself is carried across fragment swaps, so the loaded days survive a pick. ----
   const LED_CHUNK = 30, LED_MAX = 400, LED_SLACK = 600; // days per fetch, days kept, px of slack before the next fetch
   let ledNode = null, ledScroll = null, ledPin = false, ledOff = null;
+  // a filter change (calendars, holidays) makes the carried ledger stale: the next swap takes the server's
+  function dropCarried() { ledNode = null; ledScroll = null; }
   function mountLedger(box) {
     if (ledOff) { ledOff(); ledOff = null; }
     if (!box || state.view !== 'day') { ledNode = null; ledPin = false; return; }
