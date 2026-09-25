@@ -96,7 +96,7 @@ pub fn view_label(view: &str, l: &L) -> (String, bool) {
         "day" => (l.t("v-day").into(), false),
         "week" => (l.t("v-week").into(), false),
         "month" => (l.t("v-month").into(), false),
-        "planner" => (l.t("v-year-planner").into(), true),
+        "planner" => (l.t("v-year-planner").into(), false),
         "weekends" => (l.t("v-free-weekends-2").into(), true),
         "vacation" => (l.t("v-vacation-planner").into(), true),
         "countdown" => (l.t("v-countdown-wall").into(), true),
