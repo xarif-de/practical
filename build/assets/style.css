@@ -642,6 +642,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .tl, .timeline, .cal.v-week .heat, .people, .contacts .detail { top: calc(var(--toolbar-h) + 4px); }
 .tl, .timeline { height: calc(100dvh - var(--sticky-top) - 30px); }
 .people, .ledger { max-height: calc(100dvh - var(--sticky-top) - 30px); }
+/* the day ledger is a panel of its own: it stays put while a long day document scrolls the page */
+@media (min-width: 900px) { .cal.v-day .ledger { position: sticky; top: var(--toolbar-h); align-self: start; } }
 .sheetwrap { max-height: calc(100dvh - var(--sticky-top) - 40px); }
 
 /* ---- contacts layout: list (1/3) | editor (2/3, always shown) | quick-jump rail; the table view
