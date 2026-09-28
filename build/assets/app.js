@@ -42,8 +42,10 @@
   /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
      function — the look keys on aria-pressed="true", so a bare attribute ("") shows nothing */
   /* a minimal yes/no question over the page (the editor dialog's backdrop). Resolves true for "yes";
-     Escape, "no" and a click on the backdrop resolve false. "Yes" has the focus, so Enter confirms. */
-  window.askYesNo = (text, yes, no) => new Promise(done => {
+     Escape, "no" and a click on the backdrop resolve false. "Yes" has the focus, so Enter confirms.
+     `modal`: the backdrop does not answer — a question whose "no" still changes something (a stray click
+     must not decide it); Escape stays the explicit "no". */
+  window.askYesNo = (text, yes, no, modal) => new Promise(done => {
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
     d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn" type="button" data-a="0"></button><button class="btn btn-primary" type="button" data-a="1"></button></div></div>';
@@ -53,7 +55,7 @@
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
     const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
     addEventListener('keydown', key, true);
-    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d) end(false); });
+    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d && !modal) end(false); });
     document.body.appendChild(d);
     d.querySelector('[data-a="1"]').focus();
   });
@@ -453,7 +455,8 @@
     const end = v => { removeEventListener('keydown', key, true); w.remove(); if (prev && prev.focus) prev.focus(); if (v) done(v); };
     const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(null); } else if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); end(hex); } };
     addEventListener('keydown', key, true);
-    w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-x]')) end(null); else if (e.target.closest('[data-ok]')) end(hex); else if (e.target.closest('[data-take]')) end(e.target.closest('[data-take]').dataset.take); });
+    // modal: only ×, Cancel and Escape cancel, the backdrop does not
+    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) end(null); else if (e.target.closest('[data-ok]')) end(hex); else if (e.target.closest('[data-take]')) end(e.target.closest('[data-take]').dataset.take); });
     document.body.appendChild(w); show(); pick(hex); $('[data-ok]', w).focus();
   }
 
@@ -490,7 +493,8 @@
     pop.addEventListener('pointerout', e => { if (e.target.closest('.cpk-sw') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.cpk-sw'))) { name.textContent = shown; pv.set(shownHex()); } });
     pop.addEventListener('click', e => {
       const b = e.target.closest('.cpk-sw'); if (!b) return;
-      if (b.hasAttribute('data-new')) { openNew(o, pal, v => { o.value = v; cache = null; o.onPick(v); open(anchor, o); }); return; }
+      // ＋: the popover comes back after the save and any question the save asks
+      if (b.hasAttribute('data-new')) { openNew(o, pal, async v => { o.value = v; cache = null; await o.onPick(v); open(anchor, o); }); return; }
       if (b.dataset.v === cur()) return;
       o.value = b.dataset.v; cache = null; mark(); o.onPick(o.value);
     });
@@ -544,7 +548,7 @@
     const post = apply => fetch('/api/colors/category', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ scope, name, from, to, apply }) }).then(r => r.ok ? r.json() : null).catch(() => null);
     const c = await post(false); if (!c || !c.count) return;
     close(); // the question needs the page, not the popover over it
-    if (!await askYesNo(tr('js-color-recolor-' + scope, { n: c.count, cat: name }), tr('js-color-recolor-yes'), tr('js-color-recolor-no'))) return;
+    if (!await askYesNo(tr('js-color-recolor-' + scope, { n: c.count, cat: name }), tr('js-color-recolor-yes'), tr('js-color-recolor-no'), true)) return;
     const d = await post(true); if (d) toast(tr('js-color-recolored', { n: d.count })); else toast(tr('js-set-err'), true);
   };
   const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
