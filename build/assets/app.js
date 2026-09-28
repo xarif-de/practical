@@ -140,7 +140,7 @@
     // region lists (#regions-public, #regions-school): a hidden field each, a comma list of region codes in the
     // user's order; the first public one is the user's own (vacation days and bridge days count by it).
     // Pickers (#pick-country-KIND, #pick-region-KIND-CODE, #pick-tz): one page with a filter field over a list;
-    // regions tick on and off in place, a region with subregions opens them as a further step
+    // a region ticks on or off and the list returns, a region with subregions opens them as a further step
     const prefsForm = $('#prefs-form'), pickData = (() => { try { return JSON.parse($('#pick-data').textContent); } catch (_) { return { countries: [], zones: [], names: {} }; } })();
     const hid = n => $(`input[type=hidden][name="${n}"]`, prefsForm);
     const names = pickData.names || {}; // code → [name, path above it]
@@ -209,9 +209,10 @@
         const v = b.dataset.v;
         if (b.dataset.more) { location.hash = '#pick-region-' + kind + '-' + v; return; }
         if (route === 'tz') { commit('timezone', v); $('#v-tz').textContent = v ? v.replace(/_/g, ' ') : b.textContent; location.hash = ''; return; }
-        // a region ticks on or off; the page stays for the next one
+        // a region ticks on or off; the list shows the result
         const r = (search || []).concat(rows).find(x => x.v === v); if (r && r.nm) names[v] = r.nm;
-        const l = listOf(kind); setList(kind, l.includes(v) ? l.filter(x => x !== v) : l.concat(v)); draw();
+        const l = listOf(kind); setList(kind, l.includes(v) ? l.filter(x => x !== v) : l.concat(v));
+        location.hash = '#regions-' + kind;
       };
     }
     const baseShow = show;
