@@ -165,6 +165,21 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   given another colour by hand is left alone.
   The closing list (what the picker offers, one row per colour) recolours every element of that colour at
   once — collections, events/tasks, category rules, holiday colours; read-only ones stay.
+  **Farben optimieren** (app.js `optimise`): one button per view whose colours meet — calendar view
+  (calendars, events, event categories, holidays) and task list (calendars, tasks, task categories); tasks
+  never show in the calendar (`events.rs` expands VEVENTs only), address books have no button. Families =
+  union of: event→first coloured category it carries (`/api/colors` sends `cats`), equal titles, then per
+  level word stem ("Urlaub"⊂"Urlaubstag"), abbreviation ("RB"~"Rufbereitschaft"), title series
+  ("X: …"); two different categories/calendars never merge. One slider, 6 levels: target = most used colour
+  (0–1) or the lead's (category > holiday > calendar, 2–5); families closer than T (0, .04, .06, .09, .12,
+  .12; OKLab) are pulled apart — the lighter one gives way, to a colour it already wears or the farthest of
+  14 hues × 3 lightnesses; calendars and user-picked colours never move; level 5 repaints every family from
+  that palette. Flow chart per family: element groups → action → colour after (SVG lines). Manual: pick a
+  colour on the result tile (the picker, `once`), ⊘ leave an element out, drag an element onto another action
+  (join) or a gap (own "Trennen" action), leave an action out; all marked ✋, undoable, and a level change
+  asks before it drops them. Hints: a picked colour too close to one that cannot move, hard to see on light
+  or dark, a calendar colour that changes the other view too. Apply = `POST /api/colors/batch`
+  (`colors::apply`: every change, failures counted, rules and prefs written once).
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

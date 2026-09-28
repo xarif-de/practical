@@ -28,10 +28,13 @@ pub struct Source {
     pub cal_color: Option<String>,
     /// false for objects of a subscribed calendar: the next refresh would overwrite a change
     pub editable: bool,
+    /// events and tasks: their CATEGORIES (the colour optimiser puts them with their category)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cats: Vec<String>,
 }
 
 fn src(kind: &'static str, name: &str, color: &str, key: String) -> Source {
-    Source { kind, name: name.to_string(), color: color.to_string(), key, cal: None, cal_color: None, editable: true }
+    Source { kind, name: name.to_string(), color: color.to_string(), key, cal: None, cal_color: None, editable: true, cats: vec![] }
 }
 
 /// Collections, holiday colours, category rules with a colour, then every event and task with a
@@ -60,9 +63,9 @@ pub async fn sources(state: &AppState, user: &Principal) -> AppResult<Vec<Source
 async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source>> {
     let mut out = vec![];
     for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-        let (kind, color, name) = match obj.get_inner().get_inner() {
-            CalendarInnerData::Event(ev, _) => ("event", ical::text(ev, "COLOR"), ical::text(ev, "SUMMARY")),
-            CalendarInnerData::Todo(t, _) => ("task", ical::text(t, "COLOR"), ical::text(t, "SUMMARY")),
+        let (kind, color, name, cats) = match obj.get_inner().get_inner() {
+            CalendarInnerData::Event(ev, _) => ("event", ical::text(ev, "COLOR"), ical::text(ev, "SUMMARY"), ical::list(ev, "CATEGORIES")),
+            CalendarInnerData::Todo(t, _) => ("task", ical::text(t, "COLOR"), ical::text(t, "SUMMARY"), ical::list(t, "CATEGORIES")),
             _ => continue,
         };
         let Some(color) = color.map(|c| c.trim().to_string()).filter(|c| events::valid_color(c)) else { continue };
@@ -74,6 +77,7 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
             cal: Some(cal.displayname.clone()),
             cal_color: Some(cal.color.clone()),
             editable: cal.subscription_url.is_none(),
+            cats: cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect(),
         });
     }
     Ok(out)
@@ -98,6 +102,63 @@ pub async fn category_objects(state: &AppState, user: &Principal, scope: &str, n
         }
     }
     Ok(out)
+}
+
+/// One change of the colour optimiser. `key` as in `Source`; `color` "#rrggbb", or "" where that means
+/// something: an event or task follows its calendar again, holidays/school holidays take the theme's.
+#[derive(Debug, serde::Deserialize)]
+pub struct Change {
+    pub kind: String,
+    pub key: String,
+    pub color: String,
+}
+
+/// Applies `changes` one by one and returns (done, failed): a failing one (gone, read-only, invalid) does
+/// not stop the others. Category rules and preferences are read once and written once.
+pub async fn apply(state: &AppState, user: &Principal, changes: &[Change]) -> AppResult<(usize, usize)> {
+    let (mut done, mut failed) = (0, 0);
+    let mut rules: std::collections::BTreeMap<&str, std::collections::BTreeMap<String, catrules::Rule>> = Default::default();
+    let mut p = None;
+    for ch in changes {
+        let color = ch.color.trim().to_lowercase();
+        let parts: Vec<&str> = ch.key.split('/').collect();
+        let ok = match (ch.kind.as_str(), parts.as_slice()) {
+            ("calendar", [o, id]) => set_calendar_color(state, user, o, id, &color).await.is_ok(),
+            ("event" | "task", [o, cal, id]) => set_object_color(state, user, o, cal, id, &color).await.is_ok(),
+            ("category" | "category-task", _) if prefs::is_hex_color(&color) => {
+                let scope = if ch.kind == "category" { "event" } else { "task" };
+                if !rules.contains_key(scope) {
+                    rules.insert(scope, catrules::all(&state.db, &user.id, scope).await?);
+                }
+                match rules.get_mut(scope).and_then(|r| r.get_mut(&ch.key)).and_then(|r| r.when.color.as_mut()) {
+                    Some(c) => { c.value = color; true }
+                    None => false,
+                }
+            }
+            ("holiday" | "school", _) if color.is_empty() || prefs::is_hex_color(&color) => {
+                if p.is_none() {
+                    p = Some(prefs::get(&state.db, &user.id).await?);
+                }
+                let v = Some(color).filter(|c| !c.is_empty());
+                let p = p.as_mut().unwrap();
+                if ch.kind == "holiday" { p.holiday_color = v } else { p.school_color = v }
+                true
+            }
+            _ => false,
+        };
+        if ok { done += 1 } else { failed += 1 }
+    }
+    for (scope, all) in &rules {
+        for (name, rule) in all {
+            if changes.iter().any(|c| &c.key == name && c.kind == if *scope == "event" { "category" } else { "category-task" }) {
+                catrules::put(&state.db, &user.id, scope, name, rule).await?;
+            }
+        }
+    }
+    if let Some(p) = p {
+        prefs::set(&state.db, &user.id, &p).await?;
+    }
+    Ok((done, failed))
 }
 
 pub async fn set_calendar_color(state: &AppState, user: &Principal, owner: &str, id: &str, color: &str) -> AppResult<()> {

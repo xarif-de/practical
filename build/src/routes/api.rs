@@ -164,6 +164,27 @@ async fn color_category(State(state): State<SharedState>, user: Principal, sessi
     Ok(Json(Count { count: keys.len() }))
 }
 
+#[derive(Deserialize)]
+struct ColorBatch {
+    changes: Vec<crate::domain::colors::Change>,
+}
+
+#[derive(serde::Serialize)]
+struct BatchDone {
+    count: usize,
+    failed: usize,
+}
+
+/// The colour optimiser's result in one go: every change it lists; a failing one is counted, not fatal.
+async fn colors_batch(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<ColorBatch>) -> AppResult<Json<BatchDone>> {
+    check_csrf(&session, &headers).await?;
+    if b.changes.len() > 5000 {
+        return Err(AppError::BadRequest("too many changes".into()));
+    }
+    let (count, failed) = crate::domain::colors::apply(&state, &user, &b.changes).await?;
+    Ok(Json(BatchDone { count, failed }))
+}
+
 /// One element's colour: calendar and addressbook `{principal}/{id}`, event and task
 /// `{principal}/{calendar}/{object}` ("" = the calendar's again).
 async fn color_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((kind, key)): Path<(String, String)>, Json(c): Json<ColorSet>) -> AppResult<axum::http::StatusCode> {
@@ -494,6 +515,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/categories", get(categories))
         .route("/api/colors", get(colors_get))
         .route("/api/colors/category", post(color_category))
+        .route("/api/colors/batch", post(colors_batch))
         .route("/api/colors/{kind}/{*key}", axum::routing::put(color_put))
         .route("/api/category-rules", get(category_rules_get))
         .route("/api/category-rules/{name}", axum::routing::put(category_rule_put).delete(category_rule_delete))
