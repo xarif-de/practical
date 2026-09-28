@@ -54,9 +54,11 @@ pub struct SettingsPage {
     pub calendars_all: Vec<CalInfo>,
     pub vacation_kind: String,
     pub vacation_value: String,
-    /// reminder strip snap points as typed ("2 min, 1 h, …")
+    /// reminder strip snap points as the server writes them ("2 min, 1 h, …"), and the built-in lists
     pub alarm_snaps_start: String,
     pub alarm_snaps_end: String,
+    pub alarm_snaps_default_start: String,
+    pub alarm_snaps_default_end: String,
 }
 
 fn vacation_rule(p: &Prefs) -> (String, String) {
@@ -129,6 +131,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     Ok(SettingsPage {
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
+        alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),
+        alarm_snaps_default_end: events::fmt_offsets(&events::AlarmSnaps::default().end),
         groups: groups::list_for_user(&state, &user).await?,
         individuals: groups::individuals(&state).await?,
         trashed: groups::trashed_for_user(&state, &user).await?,

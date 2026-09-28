@@ -32,7 +32,7 @@
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
-    <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}<span class="chev">›</span></span></a>
+    <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val"><span id="v-snaps">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}</span><span class="chev">›</span></span></a>
   </div>
   <div class="label">{{ ctx.t("set-data") }}</div>
   <div class="group">
@@ -59,10 +59,10 @@
   <h2>{{ ctx.t("pref-sec-alarms") }}</h2>
   <div class="label">{{ ctx.t("pref-snaps") }}</div>
   <div class="group">
-    <label class="cell noic"><span>{{ ctx.t("pref-snaps-start") }}</span><span class="val"><input type="text" name="alarm_snaps_start" value="{{ alarm_snaps_start }}"></span></label>
-    <label class="cell noic"><span>{{ ctx.t("pref-snaps-end") }}</span><span class="val"><input type="text" name="alarm_snaps_end" value="{{ alarm_snaps_end }}"></span></label>
+    <div class="snp" id="snaps" data-default-start="{{ alarm_snaps_default_start }}" data-default-end="{{ alarm_snaps_default_end }}"></div>
+    <input type="hidden" name="alarm_snaps_start" value="{{ alarm_snaps_start }}"><input type="hidden" name="alarm_snaps_end" value="{{ alarm_snaps_end }}">
   </div>
-  <p class="foot">{{ ctx.t("pref-snaps-hint") }}</p>
+  <p class="foot">{{ ctx.t("pref-snaps-hint") }} <button type="button" class="link" id="snaps-reset" hidden>{{ ctx.t("pref-snaps-reset") }}</button></p>
   <div class="label">{{ ctx.t("push-title") }}</div>
   <div class="group">
     {% if ctx.push_enabled %}

@@ -250,6 +250,85 @@
       $('form', w).onsubmit = ev => { ev.preventDefault(); if (yes.disabled) return; inp.value = typed.value.trim(); end(); form.submit(); };
       document.body.appendChild(w); typed.focus();
     }));
+    // reminder strip snap points (#snaps): the two hidden fields keep the lists as the server writes them
+    // ("2 min, 1 h, 1 d"). The strip draws them in the order of the event editor's strip (start points far to
+    // near, the start, end points, the end); a point opens an edit row below it, a "+" in a gap offers the
+    // round value between its neighbours. An empty start list would mean the built-in one: the last start point stays.
+    const snapBox = $('#snaps');
+    if (snapBox) {
+      const UNITS = [[1, 'min'], [60, 'h'], [1440, 'd'], [10080, 'w']], MAXM = 366 * 1440;
+      const NICE = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 45, 60, 90, 120, 150, 180, 240, 300, 360, 480, 600, 720, 960, 1080, 1440, 2160, 2880, 4320, 5760, 7200, 8640, 10080, 14400, 20160, 30240, 40320, 60480, 80640, 120960, 241920, 524160];
+      const unitOf = m => [...UNITS].reverse().find(([u]) => m % u === 0);
+      const parseL = v => v.split(',').map(t => { const x = t.trim().match(/^(\d+)\s*(min|h|d|w)$/); return x ? +x[1] * UNITS.find(u => u[1] === x[2])[0] : 0; }).filter(m => m > 0 && m <= MAXM);
+      const fmtL = l => l.map(m => { const [u, k] = unitOf(m); return `${m / u} ${k}`; }).join(', ');
+      const label = m => { const [u, k] = unitOf(m), n = m / u; return k === 'min' || k === 'h' ? tr('js-snp-' + k, { n }) : n === 1 ? tr(`js-snp-${k}1`) : tr('js-snp-' + k, { n }); };
+      const side = k => tr(k === 'start' ? 'js-snp-start' : 'js-snp-end');
+      const sortU = l => [...new Set(l)].sort((a, b) => a - b), same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+      let L = { start: sortU(parseL(hid('alarm_snaps_start').value)), end: sortU(parseL(hid('alarm_snaps_end').value)) };
+      const DEF = { start: sortU(parseL(snapBox.dataset.defaultStart)), end: sortU(parseL(snapBox.dataset.defaultEnd)) };
+      const resetBtn = $('#snaps-reset');
+      let edit = null; // { key, m } of the point in the edit row
+      const canRm = k => k !== 'start' || L.start.length > 1;
+      const store = () => {
+        L = { start: sortU(L.start), end: sortU(L.end) };
+        hid('alarm_snaps_start').value = fmtL(L.start); commit('alarm_snaps_end', fmtL(L.end)); // one change posts the whole form
+        $('#v-snaps').textContent = L.start.length === 1 ? tr('js-snaps-one') : tr('js-snaps-n', { n: L.start.length });
+      };
+      const draw = focus => {
+        const o = [...L.start].reverse().map(m => ({ key: 'start', m })).concat([{ fix: 'start' }], [...L.end].reverse().map(m => ({ key: 'end', m })), [{ fix: 'end' }]);
+        o.forEach((p, i) => { p.x = (i + 1) / (o.length + 1) * 100; });
+        const b = o.find(p => p.fix === 'start').x, e = o[o.length - 1].x;
+        let h = `<div class="snp-ax"></div><div class="snp-ev" style="left:${b}%;width:${e - b}%"></div>`, alt = 0;
+        for (const p of o) {
+          alt ^= 1; // labels alternate above and below, the start and the end included, so neighbours never share a row
+          if (p.fix) { h += `<span class="snp-pt fix ${alt ? 'up' : 'dn'}" style="left:${p.x}%">${esc2(tr(p.fix === 'start' ? 'js-snp-begin' : 'js-snp-finish'))}</span>`; continue; }
+          const on = !!edit && edit.key === p.key && edit.m === p.m;
+          h += `<button type="button" class="snp-pt ${alt ? 'up' : 'dn'}${on ? ' on' : ''}" data-key="${p.key}" data-m="${p.m}" style="left:${p.x}%" aria-label="${esc2(label(p.m) + ' ' + side(p.key))}" aria-expanded="${on}">${esc2(label(p.m))}</button>`;
+        }
+        // a gap belongs to the side of the point on its right (the start counts as a start point, the end as an end
+        // point); its "+" offers the round value nearest to the geometric middle of its neighbours
+        for (let i = 0; i < o.length; i++) {
+          const left = o[i - 1], right = o[i], key = right.key === 'start' || right.fix === 'start' ? 'start' : 'end';
+          const hi = left && left.key === key ? left.m : null, lo = right.key ? right.m : 0;
+          const top = hi ?? (key === 'start' ? Math.min(lo * 4, MAXM) : lo ? Math.min(lo * 2, 1440) : 60), mid = Math.sqrt(Math.max(lo, 1) * top);
+          const v = NICE.filter(n => n > lo && n <= top && n !== hi && !L[key].includes(n)).sort((x, y) => Math.abs(Math.log(x / mid)) - Math.abs(Math.log(y / mid)))[0];
+          if (v) { const t = tr('js-snp-add', { what: label(v) + ' ' + side(key) }); h += `<button type="button" class="snp-plus" data-add="${key}" data-m="${v}" style="left:${((left ? left.x : 0) + right.x) / 2}%" title="${esc2(t)}" aria-label="${esc2(t)}">+</button>`; }
+        }
+        let row = '';
+        if (edit) {
+          const [u] = unitOf(edit.m), last = !canRm(edit.key);
+          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok>${esc2(tr('js-snp-change'))}</button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}>${esc2(tr('js-snp-remove'))}</button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
+        }
+        const sc = $('.snp-scroll', snapBox), keep = sc ? sc.scrollLeft : 0; // redrawing must not jump a scrolled strip back
+        snapBox.innerHTML = `<div class="snp-scroll"><div class="snp-es" style="min-width:${(o.length + 1) * 31}px">${h}</div></div>${row}`;
+        $('.snp-scroll', snapBox).scrollLeft = keep;
+        resetBtn.hidden = same(L.start, DEF.start) && same(L.end, DEF.end);
+        if (focus === 'edit') $('.snp-edit input', snapBox).select();
+        else if (focus) { const f = $(`.snp-pt[data-key="${focus.key}"][data-m="${focus.m}"]`, snapBox); if (f) f.focus(); }
+      };
+      const apply = () => {
+        const inp = $('.snp-edit input', snapBox), err = $('.snp-err', snapBox), n = parseFloat(inp.value), m = Math.round(n * +$('.snp-edit .seg [aria-pressed=true]', snapBox).dataset.u);
+        const bad = !(n > 0) ? 'js-snp-bad' : m > MAXM ? 'js-snp-max' : m !== edit.m && L[edit.key].includes(m) ? 'js-snp-dup' : '';
+        if (bad) { err.textContent = tr(bad); inp.focus(); return; }
+        const key = edit.key; if (m !== edit.m) { L[key] = L[key].filter(x => x !== edit.m).concat(m); store(); }
+        edit = null; draw({ key, m });
+      };
+      snapBox.addEventListener('click', e => {
+        const t = e.target.closest('button'); if (!t) return;
+        if (t.dataset.add) { const key = t.dataset.add, m = +t.dataset.m; L[key].push(m); edit = null; store(); draw({ key, m }); }
+        else if (t.matches('.snp-pt[data-m]')) { const k = { key: t.dataset.key, m: +t.dataset.m }; const was = edit && edit.key === k.key && edit.m === k.m; edit = was ? null : k; draw(was ? k : 'edit'); }
+        else if (t.dataset.u) segPress(t);
+        else if (t.hasAttribute('data-ok')) apply();
+        else if (t.hasAttribute('data-del')) { const k = edit; L[k.key] = L[k.key].filter(x => x !== k.m); edit = null; store(); draw(); }
+        else if (t.hasAttribute('data-close')) { const k = edit; edit = null; draw(k); }
+      });
+      snapBox.addEventListener('keydown', e => {
+        if (!edit || !e.target.closest('.snp-edit')) return;
+        if (e.key === 'Enter') { e.preventDefault(); apply(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const k = edit; edit = null; draw(k); }
+      });
+      resetBtn.addEventListener('click', () => { L = { start: [...DEF.start], end: [...DEF.end] }; edit = null; store(); draw(); });
+      draw();
+    }
     // categories: the index with counts; a click opens the category's rule in the calendar's (or tasks') editor
     const catPanel = $('#categories');
     if (catPanel) {

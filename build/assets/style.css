@@ -1328,6 +1328,30 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .set .cell > input[type=text], .set .cell > select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 4px 0; min-width: 0; width: 100%; }
 .set .cell > input[type=text]:focus { outline: none; }
 .set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+/* reminders › snap points: the lists drawn as the event editor's strip (ordinal, one zone per point); labels
+   alternate above and below the axis, a "+" per gap shows on hover or focus (always on touch); a point opens
+   .snp-edit below. Narrow screens scroll the strip sideways (31 px per zone: two zones hold one label) */
+.snp-scroll { overflow-x: auto; padding: 0 8px; scrollbar-width: thin; }
+.snp-es { position: relative; height: 118px; user-select: none; }
+.snp-ax { position: absolute; left: 0; right: 0; top: 58px; border-top: 2px solid var(--line); }
+.snp-ev { position: absolute; top: 50px; height: 18px; border-radius: 4px; box-sizing: border-box; background: color-mix(in srgb, var(--accent) 18%, transparent); border-left: 3px solid var(--accent); }
+.snp-pt { position: absolute; transform: translateX(-50%); font: inherit; font-size: 11.5px; line-height: 1.3; padding: 2px 5px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--fg); white-space: nowrap; cursor: pointer; z-index: 2; }
+.snp-pt:hover, .snp-pt.on { border-color: var(--accent); color: var(--accent); }
+.snp-pt.on { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.snp-pt.up { top: 16px; } .snp-pt.dn { top: 82px; }
+.snp-pt::after { content: ""; position: absolute; left: 50%; border-left: 1px solid var(--line); }
+.snp-pt.up::after { top: 100%; height: 22px; } .snp-pt.dn::after { bottom: 100%; height: 16px; }
+.snp-pt.fix { cursor: default; background: none; border-color: transparent; color: var(--fg-3); font-weight: 600; }
+.snp-plus { position: absolute; top: 50px; width: 20px; height: 20px; margin-left: -10px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 14px; line-height: 1; color: var(--accent); background: var(--bg); border: 1px dashed var(--accent); opacity: 0; z-index: 3; }
+.snp-es:hover .snp-plus, .snp-plus:focus-visible { opacity: .6; }
+.snp-es .snp-plus:hover, .snp-plus:focus-visible { opacity: 1; background: var(--accent); color: var(--accent-fg); border-style: solid; }
+@media (hover: none) { .snp-plus { opacity: .6; } }
+.set .snp-edit { border-top: 1px solid var(--line); }
+.set .snp-edit .val { flex-wrap: wrap; justify-content: flex-end; }
+.set .snp-edit .val input[type=number] { width: 64px; min-width: 0; text-align: left; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.set .snp-edit .snp-err { color: var(--today); white-space: normal; }
+.set .snp-edit .snp-err:empty { display: none; }
+@media (max-width: 700px) { .set .cell.snp-edit { grid-template-columns: 1fr; } .set .snp-edit .val { justify-self: start; justify-content: flex-start; } }
 .set .mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
 .set .flash { margin: 0 0 14px; }
 .set ul.plain { margin-top: 4px; }

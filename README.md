@@ -130,8 +130,9 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   `/contacts#key`, several open a chooser. On save the persons go back unchanged, every parameter
   included (RSVP, DELEGATED-*, MEMBER, SENT-BY, DIR, LANGUAGE, SCHEDULE-*, X-…).
 - **Reminders** (event card): the edit mode shows the alarms on a timeline strip (a marker follows
-  the pointer and snaps to the user's snap points — settings, "Reminders: snap points" — each
-  point owning an equal share of the strip), a row of preset chips
+  the pointer and snaps to the user's snap points, each point owning an equal share of the strip;
+  settings › Reminders edits them on the same strip: a point opens number + unit / remove, a "+" per gap
+  adds the round value between its neighbours, the last start point stays), a row of preset chips
   that add or remove the matching alarm with one click, and one expandable entry per alarm whose
   fields follow the kind (text · sound file · subject, message, recipients) and the trigger (number +
   unit, or date and time). The star in an entry saves its setting — without text, subject and
