@@ -1460,6 +1460,9 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
    elements today → action → colour after, lines drawn in an SVG under the boxes */
 .cfo-block { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 4px 2px; }
 .cfo-block h3 { margin: 0; font: 600 16px/1.3 var(--font-display); }
+.cfo-opt { all: unset; cursor: pointer; white-space: nowrap; font: 600 13px/1 var(--font); color: var(--accent); padding: 6px 8px; border-radius: 7px; }
+.cfo-opt:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.cfo-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ask-box.cfo-dlg { width: min(1180px, 100%); padding: 0; max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
 .cfo-dh { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
 .cfo-dh b { font: 600 16px/1.2 var(--font-display); } .cfo-dh small { display: block; font-size: 12px; color: var(--fg-3); }
