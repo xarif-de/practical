@@ -813,6 +813,7 @@ js-color-k-holiday = Public holidays
 js-color-k-school = School holidays
 js-color-src = %kind “%name”
 js-color-more = + %n more
+js-color-count = %n entries
 js-color-std = Default
 js-color-own = Own colour
 js-color-ro = subscribed, read-only

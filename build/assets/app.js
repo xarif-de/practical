@@ -344,8 +344,10 @@
   const label = s => THEME[s.kind] ? kindText(s.kind) + (s.color ? '' : ' (' + tr('js-color-std') + ')') : tr('js-color-src', { kind: kindText(s.kind), name: s.name || '–' });
   // one entry per colour with its sources, in the server's order (collections first)
   const palette = list => { const m = new Map(); for (const s of list) { const x = hexOf(s); if (!x) continue; if (!m.has(x)) m.set(x, []); m.get(x).push(s); } return [...m].map(([hex, src]) => ({ hex, src })); };
-  const srcText = src => src.length <= 2 ? src.map(label).join(' · ') : label(src[0]) + ' · ' + label(src[1]) + ' ' + tr('js-color-more', { n: src.length - 2 });
-  const isSelf = (s, self) => self && s.kind === self.kind && s.key === self.key;
+  // equal labels once, with a count ("Termin „Urlaub“ 26×"); after two names only how many more
+  const srcText = src => { const m = new Map(); src.forEach(x => { const l = label(x); m.set(l, (m.get(l) || 0) + 1); }); const u = [...m].map(([l, n]) => n > 1 ? l + ' ' + n + '×' : l);
+    return u.length <= 2 ? u.join(' · ') : u[0] + ' · ' + u[1] + ' ' + tr('js-color-more', { n: u.length - 2 }); };
+  const isSelf = (s, self) => self && s.kind === self.kind && (self.keys ? self.keys.includes(s.key) : s.key === self.key);
 
   // ---- the preview: the colour where the app shows it, on the light and the dark page at once ----
   const preview = title => {
@@ -477,18 +479,18 @@
     pop = document.createElement('div'); pop.className = 'cpk'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', o.title);
     const circle = (v, hex, text, cls = '') => `<button type="button" class="cpk-sw${cls}" data-v="${v}" style="--c:${hex};--ink:${ink(hex)}" title="${esc(text)}" aria-label="${esc(text)}" aria-checked="false"></button>`;
     pop.innerHTML = `<div class="cpk-h"><span class="sq"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span><b>${esc(o.title)}</b><small>${esc(o.sub || '')}</small></span></div>
-      <div class="cpk-sws" role="radiogroup" aria-label="${esc(o.title)}">${o.inherit ? circle('', o.inherit.hex, o.inherit.text, ' inh') : ''}${pal.map(p => circle(p.hex, p.hex, srcText(p.src))).join('')}${extra ? circle(extra, extra, tr('js-color-current')) : ''}<button type="button" class="cpk-sw add" data-add title="${esc(tr('js-color-add'))}" aria-label="${esc(tr('js-color-add'))}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+      <div class="cpk-sws" role="radiogroup" aria-label="${esc(o.title)}">${o.inherit ? circle('', o.inherit.hex, o.inherit.text, ' inh') : ''}${pal.map(p => circle(p.hex, p.hex, srcText(p.src))).join('')}${extra ? circle(extra, extra, tr('js-color-current')) : ''}<button type="button" class="cpk-sw cpk-add" data-new title="${esc(tr('js-color-add'))}" aria-label="${esc(tr('js-color-add'))}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button></div>
       <div class="cpk-name"></div>`;
     const pv = preview(o.title); pop.appendChild(pv.el);
-    const name = $('.cpk-name', pop), sq = $('.cpk-h .sq', pop), sws = $$('.cpk-sw:not(.add)', pop);
+    const name = $('.cpk-name', pop), sq = $('.cpk-h .sq', pop), sws = $$('.cpk-sw:not(.cpk-add)', pop);
     const shownHex = () => cur() || (o.inherit ? o.inherit.hex : '#8e8e93');
     let shown = '';
     const mark = () => { const on = sws.find(b => b.dataset.v === cur()); check(sws, on); shown = on ? on.title : ''; name.textContent = shown; sq.style.background = shownHex(); pv.set(shownHex()); };
-    pop.addEventListener('pointerover', e => { const b = e.target.closest('.cpk-sw'); if (!b) return; name.textContent = b.title; if (!b.hasAttribute('data-add')) pv.set(b.dataset.v || o.inherit.hex); });
+    pop.addEventListener('pointerover', e => { const b = e.target.closest('.cpk-sw'); if (!b) return; name.textContent = b.title; if (!b.hasAttribute('data-new')) pv.set(b.dataset.v || o.inherit.hex); });
     pop.addEventListener('pointerout', e => { if (e.target.closest('.cpk-sw') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.cpk-sw'))) { name.textContent = shown; pv.set(shownHex()); } });
     pop.addEventListener('click', e => {
       const b = e.target.closest('.cpk-sw'); if (!b) return;
-      if (b.hasAttribute('data-add')) { openNew(o, pal, v => { o.value = v; cache = null; o.onPick(v); open(anchor, o); }); return; }
+      if (b.hasAttribute('data-new')) { openNew(o, pal, v => { o.value = v; cache = null; o.onPick(v); open(anchor, o); }); return; }
       if (b.dataset.v === cur()) return;
       o.value = b.dataset.v; cache = null; mark(); o.onPick(o.value);
     });
@@ -543,19 +545,28 @@
     if (b) { const f = b.form.elements[b.dataset.cpkFor]; f.value = v; paintBtn(b, v); }
     $$(`[data-cpk-swatch="${CSS.escape(kind + ':' + key)}"]`).forEach(s => { s.style.background = v; });
   };
+  // identical rows (kind, colour, name and origin alike: 26 × "Urlaub" in one calendar) are one row with a count
+  const merge = src => { const m = new Map(); for (const s of src) { const hex = hexOf(s), k = [s.kind, hex, s.name, s.cal || '', s.editable].join('\u0001'); if (!m.has(k)) m.set(k, { kind: s.kind, hex, name: s.name, cal: s.cal, cal_color: s.cal_color, color: s.color, editable: s.editable, key: s.key, keys: [] }); m.get(k).keys.push(s.key); } return [...m.values()]; };
+  // colour order: hue round the circle (OKLCH), lighter first; greys after the colours
+  const hueKey = hex => { const [L, c, h] = C.lch(hex); return c < 0.03 ? [1, 0, -L] : [0, h, -L]; };
+  const coll = new Intl.Collator(window.LOC, { sensitivity: 'base', numeric: true });
+  const order = (a, b) => { const x = hueKey(a.hex), y = hueKey(b.hex); for (let i = 0; i < 3; i++) if (Math.abs(x[i] - y[i]) > 1e-9) return x[i] - y[i];
+    return b.keys.length - a.keys.length || coll.compare(a.name || '', b.name || '') || coll.compare(a.cal || '', b.cal || ''); };
   const draw = async force => {
     const src = await load(force), pal = palette(src);
-    rows = src;
+    rows = merge(src);
     const row = (s, i) => {
-      const hex = hexOf(s), sw = `<span class="swatch" style="background:${hex}"><svg class="ico" aria-hidden="true"><use href="#${ICON[s.kind]}"/></svg></span>`;
+      const sw = `<span class="swatch" style="background:${s.hex}"><svg class="ico" aria-hidden="true"><use href="#${ICON[s.kind]}"/></svg></span>`;
       const name = VAR[s.kind] ? kindText(s.kind) : s.name || '–';
       const sub = VAR[s.kind] ? (s.color ? tr('js-color-own') : tr('js-color-std')) : s.cal ? tr('js-color-src', { kind: kindText('calendar'), name: s.cal }) + (s.editable ? '' : ' · ' + tr('js-color-ro')) : s.kind.startsWith('category') ? tr('js-color-in-rule') : '';
-      const body = `${sw}<span>${esc(name)}<span class="sub">${esc(sub)}</span></span><span class="val"><code>${hex}</code><span class="chev">›</span></span>`;
+      const n = s.keys.length > 1 ? `<span class="badge" title="${esc(tr('js-color-count', { n: s.keys.length }))}">${s.keys.length}×</span>` : '';
+      const body = `${sw}<span>${esc(name)}<span class="sub">${esc(sub)}</span></span><span class="val">${n}<code>${s.hex}</code><span class="chev">›</span></span>`;
       if (s.kind.startsWith('category')) return `<a class="cell link" href="${s.kind === 'category' ? '/calendar' : '/tasks'}?rule=${encodeURIComponent(s.key)}&amp;back=${encodeURIComponent('/settings#colors')}">${body}</a>`;
       if (!s.editable) return `<div class="cell">${body.replace('<span class="chev">›</span>', '')}</div>`;
       return `<button type="button" class="cell link" data-i="${i}">${body}</button>`;
     };
-    list.innerHTML = ORDER.map(k => { const idx = src.map((s, i) => [s, i]).filter(([s]) => s.kind === k || (k === 'holiday' && s.kind === 'school'));
+    list.innerHTML = ORDER.map(k => { const idx = rows.map((s, i) => [s, i]).filter(([s]) => s.kind === k || (k === 'holiday' && s.kind === 'school'));
+        if (k !== 'holiday') idx.sort((x, y) => order(x[0], y[0]));
         return idx.length ? `<div class="label">${esc(tr('js-color-g-' + k))}</div><div class="group">${idx.map(([s, i]) => row(s, i)).join('')}</div>` : ''; }).join('')
       + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${pal.map(p => `<div class="cell"><span class="swatch" style="background:${p.hex}"></span><span>${esc(srcText(p.src))}</span><span class="val"><code>${p.hex}</code></span></div>`).join('')}</div>`;
     const v = $('#v-colors'); if (v) v.textContent = pal.length;
@@ -565,9 +576,13 @@
     const s = rows[+b.dataset.i], vr = VAR[s.kind];
     const inherit = s.cal ? { hex: toHex(s.cal_color), text: tr('js-color-inherit-cal', { cal: s.cal }) } : vr ? { hex: toHex(THEME[s.kind]), text: tr('js-color-std') } : null;
     const title = vr ? kindText(s.kind) : s.name || '–';
-    open(b, { title, sub: kindText(s.kind), what: vr ? title : label(s), value: s.color, inherit, self: { kind: s.kind, key: s.key }, onPick: async v => {
+    open(b, { title, sub: kindText(s.kind) + (s.keys.length > 1 ? ' · ' + tr('js-color-count', { n: s.keys.length }) : ''), what: vr ? title : label(s), value: s.color, inherit, self: { kind: s.kind, keys: s.keys }, onPick: async v => {
       if (vr) { const f = field(vr[0]); f.value = v; themeVar(vr[1], v); f.dispatchEvent(new Event('change', { bubbles: true })); }
-      else { const r = await put(s.kind, s.key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); return; } toast(settingsSaved()); if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, s.key, v); }
+      else {
+        // a merged row changes all its elements
+        for (const key of s.keys) { const r = await put(s.kind, key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); draw(true); return; } if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, key, v); }
+        toast(settingsSaved());
+      }
       s.color = v; draw(true);
     } });
   });

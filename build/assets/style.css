@@ -1398,8 +1398,10 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .cpk-sw.inh { background: conic-gradient(from 45deg, var(--c) 0 50%, transparent 0); box-shadow: inset 0 0 0 2px var(--c); }
 .cpk-sw.inh[aria-checked=true] { box-shadow: inset 0 0 0 2px var(--c), 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
 .cpk-sw.inh::after { border-color: var(--fg); }
-.cpk-sw.add { background: none; border: 1.5px dashed var(--fg-3); color: var(--fg-2); }
-.cpk-sw.add .ico { width: 16px; height: 16px; }
+/* ＋ a new colour: a dashed empty circle (not `.add`, which is the calendar's day button) */
+.cpk-sw.cpk-add { background: var(--bg); border: 1.5px dashed var(--fg-3); color: var(--fg-2); }
+.cpk-sw.cpk-add:hover { border-color: var(--accent); color: var(--accent); }
+.cpk-sw.cpk-add .ico { width: 15px; height: 15px; }
 .cpk-name { text-align: center; font-size: 13px; color: var(--fg-2); min-height: 18px; padding: 4px 16px 12px; overflow-wrap: anywhere; }
 .cpk-pv { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
 .cpk-pvp { --pfg2: #6e6e73; background: #fff; color: #1d1d1f; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12px; }
