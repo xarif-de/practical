@@ -529,10 +529,16 @@
   }
 
   /* ---- settings page "Farben" (#colors): every element with a colour, grouped; a row opens the picker and
-     saves at once (PUT /api/colors/…); holiday colours go through their prefs fields; a category rule's colour
-     is set in its rule, the row leads there. At the end what the picker offers. ---- */
+     saves at once (PUT /api/colors/…); holiday colours go through their prefs fields, a category's into its rule
+     (GET + PUT /api/category-rules, the setting keeps its mode). At the end what the picker offers. ---- */
   const page = $('#colors'), list = page && $('#colors-list', page);
   if (!page) return;
+  const putRule = async (scope, name, color) => {
+    const q = '?scope=' + scope, rules = await (await fetch('/api/category-rules' + q)).json(), rule = rules[name];
+    if (!rule || !rule.when || !rule.when.color) return { ok: false, status: 404 };
+    rule.when.color.value = color;
+    return fetch('/api/category-rules/' + encodeURIComponent(name) + q, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify(rule) });
+  };
   const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
   const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-flag', school: 'i-flag', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
   const ORDER = ['calendar', 'addressbook', 'holiday', 'category', 'category-task', 'event', 'task'];
@@ -562,7 +568,6 @@
       const sub = VAR[s.kind] ? (s.color ? tr('js-color-own') : tr('js-color-std')) : s.cal ? tr('js-color-src', { kind: kindText('calendar'), name: s.cal }) + (s.editable ? '' : ' · ' + tr('js-color-ro')) : s.kind.startsWith('category') ? tr('js-color-in-rule') : '';
       const n = s.keys.length > 1 ? `<span class="badge" title="${esc(tr('js-color-count', { n: s.keys.length }))}">${s.keys.length}×</span>` : '';
       const body = `${sw}<span>${esc(name)}<span class="sub">${esc(sub)}</span></span><span class="val">${n}<code>${s.hex}</code><span class="chev">›</span></span>`;
-      if (s.kind.startsWith('category')) return `<a class="cell link" href="${s.kind === 'category' ? '/calendar' : '/tasks'}?rule=${encodeURIComponent(s.key)}&amp;back=${encodeURIComponent('/settings#colors')}">${body}</a>`;
       if (!s.editable) return `<div class="cell">${body.replace('<span class="chev">›</span>', '')}</div>`;
       return `<button type="button" class="cell link" data-i="${i}">${body}</button>`;
     };
@@ -580,8 +585,8 @@
     open(b, { title, sub: kindText(s.kind) + (s.keys.length > 1 ? ' · ' + tr('js-color-count', { n: s.keys.length }) : ''), what: vr ? title : label(s), value: s.color, inherit, self: { kind: s.kind, keys: s.keys }, onPick: async v => {
       if (vr) { const f = field(vr[0]); f.value = v; themeVar(vr[1], v); f.dispatchEvent(new Event('change', { bubbles: true })); }
       else {
-        // a merged row changes all its elements
-        for (const key of s.keys) { const r = await put(s.kind, key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); draw(true); return; } if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, key, v); }
+        // a merged row changes all its elements; a category's colour is a setting of its rule (its mode stays)
+        for (const key of s.keys) { const r = s.kind.startsWith('category') ? await putRule(s.kind === 'category' ? 'event' : 'task', key, v).catch(() => null) : await put(s.kind, key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); draw(true); return; } if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, key, v); }
         toast(settingsSaved());
       }
       s.color = v; draw(true);

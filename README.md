@@ -158,8 +158,8 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   (OKLab; "almost the same as …" offers that one instead) and a light and dark preview. A picked colour
   becomes a source, so the offer grows and shrinks with the data. Settings "Colours" lists every element with
   its colour and changes it in place (`PUT /api/colors/{kind}/{key}`); an event's or task's COLOR is rewritten
-  on its master component only (`colors::with_color`), every other line keeps its bytes. A category's colour
-  stays in its rule; the row leads to the rule editor.
+  on its master component only (`colors::with_color`), every other line keeps its bytes. A category's colour is
+  a setting of its rule: the row rewrites `when.color.value` (template or lock stays as it was).
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
