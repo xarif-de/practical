@@ -171,10 +171,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   union of: event→first coloured category it carries (`/api/colors` sends `cats`), equal titles, then per
   level word stem ("Urlaub"⊂"Urlaubstag"), abbreviation ("RB"~"Rufbereitschaft"), title series
   ("X: …"); two different categories/calendars never merge. One slider, 6 levels: target = most used colour
-  (0–1) or the lead's (category > holiday > calendar, 2–5); families closer than T (0, .04, .06, .09, .12,
-  .12; OKLab) are pulled apart — the lighter one gives way, to a colour it already wears or the farthest of
-  14 hues × 3 lightnesses; calendars and user-picked colours never move; level 5 repaints every family from
-  that palette. Flow chart per family: element groups → action → colour after (SVG lines). Manual: pick a
+  (0–1) or the lead's (holiday > category > calendar; holidays at every level, 2–5); families closer than T
+  (0, .04, .06, .09, .12, .09; OKLab) are pulled apart — the lighter one gives way; calendars, holidays and
+  user-picked colours never move. New colours: the farthest from what stays, tier by tier (Apple system
+  colours → Google Calendar event/calendar colours → OKLCH ring → browns), a tier until it cannot keep T.
+  Level 5 repaints every other family: farthest-point set, then each family takes the nearest colour of it. Flow chart per family: element groups → action → colour after (SVG lines). Manual: pick a
   colour on the result tile (the picker, `once`), ⊘ leave an element out, drag an element onto another action
   (join) or a gap (own "Trennen" action), leave an action out; all marked ✋, undoable, and a level change
   asks before it drops them. Hints: a picked colour too close to one that cannot move, hard to see on light

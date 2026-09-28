@@ -644,8 +644,9 @@
   const SHOWN_T = 0.09; // "too similar" in the numbers on top, whatever the level separates at
   // the one slider: every level adds to the one before; T = pull apart below this OKLab distance
   const S3 = { stem: true, abbr: true }, S5 = { stem: true, abbr: true, series: true };
-  const LEVELS = [{ title: {}, T: 0 }, { title: S3, T: 0.04 }, { title: S3, anchor: true, T: 0.06 }, { title: S3, anchor: true, T: 0.09, rec: true }, { title: S5, anchor: true, T: 0.12 }, { title: S5, anchor: true, T: 0.12, repaint: true }];
-  const ANCH = { category: 3, 'category-task': 3, holiday: 2, school: 2, calendar: 1 };
+  const LEVELS = [{ title: {}, T: 0 }, { title: S3, T: 0.04 }, { title: S3, anchor: true, T: 0.06 }, { title: S3, anchor: true, T: 0.09, rec: true }, { title: S5, anchor: true, T: 0.12 }, { title: S5, anchor: true, T: 0.09, repaint: true }];
+  // who leads a family: holidays first (their default colours are kept), then a category, then a calendar
+  const ANCH = { holiday: 4, school: 4, category: 3, 'category-task': 3, calendar: 1 };
   const num2 = new Intl.NumberFormat(window.LOC, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), dec = x => num2.format(x);
 
   // titles: "Urlaub" ~ "Urlaubstag" (stem), "RB" ~ "Rufbereitschaft" (abbreviation); "Regel-Demo: x" is a series
@@ -664,20 +665,35 @@
     return !!(o.series && series(a) && series(a) === series(b));
   };
 
-  // new colours: 14 hues × 3 lightnesses, seen on light and dark; the one farthest from `avoid`, near the old hue
-  let CANDS = null;
-  const cands = () => CANDS || (CANDS = [0.72, 0.62, 0.52].flatMap(L => [20, 45, 70, 95, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350].map(h => C.fromLch(L, Math.min(0.2, C.maxC(L, h) * 0.92), h))).filter(x => C.lch(x)[1] > 0.06 && C.contrast(x, LIGHT) >= 1.9 && C.contrast(x, DARK) >= 2.2));
+  // new colours come from professional palettes, in tiers: Apple's system colours (the app's own look,
+  // developer.apple.com HIG "Color"), then Google Calendar's event and calendar colours, then an even OKLCH
+  // ring; browns last, they read as dull. A tier is used until nothing in it keeps the distance T to what is
+  // taken; within a tier the farthest colour wins.
+  const TIERS = [
+    ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00c7be', '#30b0c7', '#32ade6', '#007aff', '#5856d6', '#af52de', '#ff2d55'],
+    ['#d50000', '#e67c73', '#f4511e', '#f6bf26', '#33b679', '#0b8043', '#039be5', '#3f51b5', '#7986cb', '#8e24aa', '#4285f4', '#ef6c00', '#ad1457', '#f09300', '#009688', '#7cb342', '#c0ca33', '#e4c441'],
+  ];
+  let RING = null;
+  const ring = () => RING || (RING = [0.7, 0.6].flatMap(L => [15, 40, 65, 90, 115, 140, 165, 190, 215, 240, 265, 290, 315, 340].map(h => C.fromLch(L, Math.min(0.19, C.maxC(L, h) * 0.95), h))));
+  const BROWN = ['#a2845e', '#795548'];
   const dist = (a, b) => (a === b ? 0 : C.dist(a, b));
-  const hueGap = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
-  const pickNew = (avoid, from, T) => {
-    const [L0, , h0] = C.lch(from); let best = null;
-    for (const x of cands()) {
-      if (avoid.includes(x)) continue;
-      const m = Math.min(1, ...avoid.map(a => dist(a, x))), [L, , h] = C.lch(x);
-      const s = Math.min(m, T * 1.8) - 0.04 * hueGap(h, h0) / 180 - 0.05 * Math.abs(L - L0);
-      if (!best || s > best.s) best = { x, s };
+  const room = (x, taken) => Math.min(1, ...taken.map(a => dist(a, x)));
+  const pickNew = (taken, T) => {
+    let best = null;
+    for (const tier of [...TIERS, ring(), BROWN]) {
+      for (const x of tier) { if (taken.includes(x)) continue; const m = room(x, taken); if (!best || m > best.m) best = { x, m }; }
+      if (best && best.m >= T) break;
     }
-    return best ? best.x : from;
+    return best ? best.x : '#8e8e93';
+  };
+  // a whole new palette for `n` families: farthest-point picks around what stays, then each family (heaviest
+  // first) takes the picked colour nearest to the one it has, so it keeps its character where it can
+  const palette_ = (fams, taken, T) => {
+    const set = [], all = [...taken];
+    for (let i = 0; i < fams.length; i++) { const x = pickNew(all, Math.min(T, SHOWN_T)); set.push(x); all.push(x); }
+    const out = new Map();
+    for (const F of fams) { let bi = 0; set.forEach((x, i) => { if (dist(x, F.to) < dist(set[bi], F.to)) bi = i; }); out.set(F, set.splice(bi, 1)[0]); }
+    return out;
   };
 
   // families: categories first (an event joins the first coloured category it carries), then equal titles,
@@ -731,35 +747,36 @@
       F.movable = F.inc.some(g => g.editable);
       F.cats = new Set(xs.filter(x => x.kind.startsWith('category')).map(x => x.name));
       F.cal = F.lead && F.lead.kind === 'calendar';
+      F.hol = F.lead && THEME[F.lead.kind];
     }
-    // the target: the user's pick, else the lead's colour (from "Ordnen" on) or the most used one
+    // the target: the user's pick, else the lead's colour (holidays always, others from "Ordnen" on) or the most used one
     for (const F of list) {
       if (!F.inc.length) { F.to = null; F.why = tr('js-cfo-why-none'); continue; }
       if (st.pins.has(F.key)) { F.to = st.pins.get(F.key); F.pinned = true; F.why = tr('js-cfo-why-pin'); }
       else if (F.split) { F.to = F.colors[0].hex; F.why = tr('js-cfo-why-split'); }
-      else if (L.anchor && F.lead) { F.to = F.lead.hex; F.why = F.lead.std ? tr('js-cfo-why-std', { kind: kindText(F.lead.kind) }) : tr(F.cal ? 'js-cfo-why-cal' : 'js-cfo-why-cat', { name: F.lead.name }); }
+      else if ((L.anchor || F.hol) && F.lead) { F.to = F.lead.hex; F.why = F.lead.std ? tr('js-cfo-why-std', { kind: kindText(F.lead.kind) }) : tr(F.cal ? 'js-cfo-why-cal' : 'js-cfo-why-cat', { name: F.lead.name }); }
       else { F.to = F.colors[0].hex; F.why = tr('js-cfo-why-most', { n: F.colors[0].n }); }
     }
+    // "Neue Palette": everything but calendars, holidays and the user's picks gets a colour of the palette
     if (L.repaint) {
       const byW = list.filter(F => F.to).sort((a, b) => b.weight - a.weight);
-      const keep = new Set(byW.filter(F => F.pinned || F.cal).map(F => F.key)); if (byW[0]) keep.add(byW[0].key);
-      const used = byW.filter(F => keep.has(F.key)).map(F => F.to);
-      for (const F of byW) if (!keep.has(F.key) && F.movable) { F.to = pickNew(used, F.to, L.T); F.why = tr('js-cfo-why-pal'); used.push(F.to); }
+      const keep = byW.filter(F => F.pinned || F.cal || F.hol || !F.movable);
+      const taken = [...keep.map(F => F.to), ...list.flatMap(F => F.groups.filter(g => st.excl.has(g.key) || !g.editable).map(g => g.hex))];
+      for (const [F, x] of palette_(byW.filter(F => !keep.includes(F)), taken, L.T)) { F.to = x; F.why = tr('js-cfo-why-pal'); }
     }
     // colours on screen afterwards: an active family shows its target, whatever is left out keeps its own
     const points = () => list.flatMap(F => F.groups.map(g => { const keeps = st.off.has(F.key) || st.excl.has(g.key) || !g.editable || !F.to; return { hex: keeps ? g.hex : F.to, F, g, fixed: keeps }; }));
     const clash = (T, only) => { const p = points(), out = []; for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) { const a = p[i], b = p[j]; if (a.F === b.F) continue; const d = dist(a.hex, b.hex); if (d < T && (!only || only(a, b))) out.push({ a, b, d }); } return out.sort((x, y) => x.d - y.d); };
-    // pull apart: picked colours, calendars and left-out elements stay; the lighter family gives way
+    // pull apart: picked colours, calendars, holidays and left-out elements stay; the lighter family gives way
     const notes = [], skip = new Set();
     if (L.T) for (let guard = 0; guard < 60; guard++) {
-      const can = x => !x.fixed && !x.F.pinned && !x.F.cal && x.F.movable && (x.F.movedN || 0) < 2;
+      const can = x => !x.fixed && !x.F.pinned && !x.F.cal && !x.F.hol && x.F.movable && (x.F.movedN || 0) < 2;
       const k = clash(L.T).find(k => (can(k.a) || can(k.b)) && !skip.has(k.a.F.key + '|' + k.b.F.key));
       if (!k) break;
       const [mv, ot] = can(k.a) && (!can(k.b) || k.a.F.weight <= k.b.F.weight) ? [k.a, k.b] : [k.b, k.a], F = mv.F;
       const avoid = [...new Set(points().filter(x => x.F !== F).map(x => x.hex))];
-      // a colour the family already wears and that is far enough from the rest beats a new one
-      const own = F.colors.find(c => c.hex !== F.to && Math.min(1, ...avoid.map(a => dist(a, c.hex))) >= L.T);
-      const to = own ? own.hex : pickNew(avoid, F.to, L.T);
+      // always the professional colour farthest from everything that stays
+      const to = pickNew(avoid, L.T);
       if (to === F.to) { skip.add(k.a.F.key + '|' + k.b.F.key); continue; }
       F.movedN = (F.movedN || 0) + 1; F.moved = true;
       F.why = tr(k.d < 0.005 ? 'js-cfo-why-same' : 'js-cfo-why-near', { other: ot.F.head, d: dec(k.d) });
@@ -772,7 +789,7 @@
       for (const k of clash(SHOWN_T, (a, b) => a.F === F || b.F === F)) {
         const o = k.a.F === F ? k.b : k.a; if (seen.has(o.F.key)) continue; seen.add(o.F.key);
         const who = o.F.head + (o.fixed && st.excl.has(o.g.key) ? ' ' + tr('js-cfo-n-excl') : '');
-        const why = o.F.pinned ? 'js-cfo-n-both' : o.F.cal ? 'js-cfo-n-cal' : o.fixed ? 'js-cfo-n-fixed' : 'js-cfo-n-full';
+        const why = o.F.pinned ? 'js-cfo-n-both' : o.F.cal ? 'js-cfo-n-cal' : o.F.hol ? 'js-cfo-n-hol' : o.fixed ? 'js-cfo-n-fixed' : 'js-cfo-n-full';
         notes.push({ warn: true, F, text: tr(k.d < 0.005 ? 'js-cfo-n-same' : 'js-cfo-n-near', { a: F.head, b: who, d: dec(k.d) }) + ' ' + tr(why) });
       }
       if (C.contrast(F.to, LIGHT) < 1.6) notes.push({ warn: true, F, text: tr('js-cfo-n-light', { a: F.head }) });
