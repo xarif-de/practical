@@ -914,9 +914,6 @@
       }
     });
     w.addEventListener('keydown', e => { const u = e.target.closest && e.target.closest('[data-unpin]'); if (u && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); st.pins.delete(u.dataset.unpin); draw(); } });
-    // pointing at a lane lights up its lines
-    bodyEl.addEventListener('pointerleave', () => { const svg = $('.cfo-svg', w); if (svg) { svg.dataset.hot = ''; $$('path', svg).forEach(p => p.classList.remove('hot')); } });
-    w.addEventListener('pointerover', e => { const svg = $('.cfo-svg', w); if (!svg || dg) return; const l = e.target.closest('[data-l]'), v = l ? l.dataset.l : ''; if (svg.dataset.hot === v) return; svg.dataset.hot = v; $$('path', svg).forEach(p => p.classList.toggle('hot', p.dataset.l === v)); });
 
     // ---- dragging an element up or down: onto an action = join it, onto a gap between two = its own action ----
     let dg = null;

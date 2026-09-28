@@ -1498,10 +1498,9 @@ html[data-scheme=dark] .cfo-lh em { color: #5fd592; }
 .cfo-head { font: 600 11px/1.2 var(--font); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); margin: 4px 0 6px; }
 .cfo-fd { position: relative; display: grid; }
 .cfo-svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
-.cfo-svg path { fill: none; stroke: var(--x); stroke-width: 2; opacity: .7; transition: opacity .12s; }
+.cfo-svg path { fill: none; stroke: var(--x); stroke-width: 2; opacity: .7; }
 .cfo-svg path.off { stroke: var(--fg-3); stroke-dasharray: 5 4; opacity: .45; }
 .cfo-svg path.stay { stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 2.5; }
-.cfo-svg[data-hot]:not([data-hot=""]) path { opacity: .12; } .cfo-svg path.hot { opacity: 1; stroke-width: 3; }
 .cfo-lane { align-items: center; padding: 10px 6px; margin: 0 -6px; border-top: 1px dashed var(--line); position: relative; border-radius: 10px; }
 .cfo-lane:first-of-type { border-top-color: transparent; }
 .cfo-lane.manual { box-shadow: inset 3px 0 0 #ff9f0a; }
