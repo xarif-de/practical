@@ -9,6 +9,7 @@
 
 <form id="prefs-form" method="post" action="/settings/prefs" data-autosave data-default-tz="{{ default_timezone }}">
 <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+<input type="hidden" name="holiday_color" value="{{ prefs.holiday_color.clone().unwrap_or_default() }}"><input type="hidden" name="school_color" value="{{ prefs.school_color.clone().unwrap_or_default() }}">
 <section class="page" id="home">
   <h2>{{ ctx.t("nav-settings") }}</h2>
   <div class="group">
@@ -18,6 +19,7 @@
   <div class="group">
     <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload>{% for (code, name) in ctx.languages() %}<option value="{{ code }}"{% if self.lang_is(code) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></span></label>
     <div class="cell"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></span><span>{{ ctx.t("pref-scheme") }}</span><span class="val"><input type="hidden" name="scheme" value="{% if self.scheme_is("light") %}light{% else if self.scheme_is("dark") %}dark{% else %}auto{% endif %}"><span class="seg" data-field="scheme"><button type="button" data-v="auto" aria-pressed="{{ self.scheme_is("auto") }}">{{ ctx.t("scheme-auto") }}</button><button type="button" data-v="light" aria-pressed="{{ self.scheme_is("light") }}">{{ ctx.t("scheme-light") }}</button><button type="button" data-v="dark" aria-pressed="{{ self.scheme_is("dark") }}">{{ ctx.t("scheme-dark") }}</button></span></span></div>
+    <a class="cell link" href="#colors"><span class="swatch cpk-rainbow"></span><span>{{ ctx.t("set-colors") }}</span><span class="val"><span id="v-colors"></span><span class="chev">›</span></span></a>
   </div>
   <input type="hidden" name="public_regions" value="{{ public_regions }}"><input type="hidden" name="school_regions" value="{{ school_regions }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
   <div class="label">{{ ctx.t("set-region") }}</div>
@@ -29,8 +31,6 @@
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
-    <div class="cell"><span class="swatch" style="background:var(--hol)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-color-public") }}</span><span class="val"><input type="hidden" name="holiday_color" value="{{ prefs.holiday_color.clone().unwrap_or_default() }}"><button class="link" type="button" data-color-reset="holiday_color"{% if prefs.holiday_color.is_none() %} hidden{% endif %}>{{ ctx.t("set-color-reset") }}</button><input type="color" data-color-for="holiday_color" value="{{ self.holiday_color() }}" aria-label="{{ ctx.t("set-color-public") }}"></span></div>
-    <div class="cell"><span class="swatch" style="background:var(--fer)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-color-school") }}</span><span class="val"><input type="hidden" name="school_color" value="{{ prefs.school_color.clone().unwrap_or_default() }}"><button class="link" type="button" data-color-reset="school_color"{% if prefs.school_color.is_none() %} hidden{% endif %}>{{ ctx.t("set-color-reset") }}</button><input type="color" data-color-for="school_color" value="{{ self.school_color() }}" aria-label="{{ ctx.t("set-color-school") }}"></span></div>
     <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
     <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}<span class="chev">›</span></span></a>
   </div>
@@ -71,6 +71,14 @@
   </div>
   {% if ctx.push_enabled %}<p class="foot">{{ ctx.t("push-hint") }}</p><ul class="plain foot" id="push-devices"></ul>{% endif %}
 </section>
+
+{# every element with a colour, drawn by app.js from /api/colors; a row opens the colour picker #}
+<section class="page" id="colors">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("set-colors") }}</h2>
+  <div id="colors-list"><div class="group"><div class="cell noic"><span class="muted">…</span></div></div></div>
+  <p class="foot">{{ ctx.t("set-colors-hint") }}</p>
+</section>
 </form>
 
 {# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}
@@ -98,14 +106,14 @@
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     {% for c in calendars %}
-    <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
+    <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ ctx.t("calendar-create") }}</a>
   </div>
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
     {% for a in addressbooks %}
-    <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}"><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg></span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
+    <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}" data-cpk-swatch="addressbook:{{ a.principal }}/{{ a.id }}"><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg></span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
     {% endfor %}
     <a class="cell btnrow" href="#new-addressbook">{{ ctx.t("addressbook-create") }}</a>
   </div>
@@ -118,7 +126,7 @@
   <form class="group" method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
     <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
     <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ c.displayname }}" required></span></label>
-    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ c.color }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ c.color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-kind="calendar" data-cpk-key="{{ c.principal }}/{{ c.id }}" data-cpk-title="{{ c.displayname }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
     <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ c.description }}" placeholder="–"></span></label>
     <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
@@ -140,7 +148,7 @@
   <form class="group" method="post" action="/settings/addressbooks/{{ a.principal }}/{{ a.id }}/update" data-autosave data-reload>
     <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
     <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ a.displayname }}" required></span></label>
-    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ a.color }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ a.color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-kind="addressbook" data-cpk-key="{{ a.principal }}/{{ a.id }}" data-cpk-title="{{ a.displayname }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
     <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ a.description }}" placeholder="–"></span></label>
     <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>
   </form>
@@ -161,7 +169,7 @@
     <div class="group">
       <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>
       <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
-      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ palette[0] }}"></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ palette[0] }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-title="{{ ctx.t("set-new-calendar") }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
       <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>
       <label class="cell noic"><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ default_timezone }}"></span></label>
     </div>
@@ -183,7 +191,7 @@
     <div class="group">
       <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>
       <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
-      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="color" name="color" value="{{ palette[1] }}"></span></label>
+      <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ palette[1] }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-title="{{ ctx.t("set-new-addressbook") }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
       <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>
     </div>
     <div class="group sp"><button class="cell btnrow" type="submit">{{ ctx.t("create") }}</button></div>

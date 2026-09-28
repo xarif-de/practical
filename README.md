@@ -149,6 +149,17 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   client-side expander for what the strip can paint; caldata on the server stays authoritative. Rules with
   parts the strip cannot paint (`BYSETPOS`, several ordinals, `BYHOUR` …) show as a custom rule text and are
   saved as typed.
+- **Colours** (`domain::colors`, app.js `colorPicker`): one picker everywhere a colour is set (calendar,
+  address book, event, task, category rule, holidays). Its circles are the colours already in use
+  (`GET /api/colors`: collections, holiday colours, rules with a colour, events/tasks with an own COLOR —
+  one scan of all objects), each named by its sources; first comes the fallback where there is one
+  ("like the calendar", "standard"). ＋ opens a dialog with a fan deck (14 families × 5 OKLCH tones) or a text
+  field (any CSS colour) with three linked sliders (simple/RGB/OKLCH), the distance to the colours in use
+  (OKLab; "almost the same as …" offers that one instead) and a light and dark preview. A picked colour
+  becomes a source, so the offer grows and shrinks with the data. Settings "Colours" lists every element with
+  its colour and changes it in place (`PUT /api/colors/{kind}/{key}`); an event's or task's COLOR is rewritten
+  on its master component only (`colors::with_color`), every other line keeps its bytes. A category's colour
+  stays in its rule; the row leads to the rule editor.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

@@ -78,12 +78,6 @@ impl SettingsPage {
         }
     }
     /// the colour pickers' values: the user's colour, else the (light) theme's
-    pub fn holiday_color(&self) -> String {
-        self.prefs.holiday_color.clone().unwrap_or_else(|| "#ff3b30".into())
-    }
-    pub fn school_color(&self) -> String {
-        self.prefs.school_color.clone().unwrap_or_else(|| "#ff9f0a".into())
-    }
     /// "Holidays: OpenHolidays, Nager.Date · School holidays: OpenHolidays"
     pub fn sources_text(&self) -> String {
         // over every chosen country, in chain order

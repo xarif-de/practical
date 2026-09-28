@@ -148,6 +148,13 @@ async fn set_addressbook_color(state: &AppState, owner: &str, id: &str, color: &
     Ok(())
 }
 
+/// The colour alone (settings page "Farben", colour picker).
+pub async fn set_addressbook_color_checked(state: &AppState, user: &Principal, owner: &str, id: &str, color: &str) -> AppResult<()> {
+    ensure_owner(user, owner)?;
+    state.addressbooks.get_addressbook(owner, id, false).await?;
+    set_addressbook_color(state, owner, id, color).await
+}
+
 pub struct NewCalendar {
     pub owner: String,
     pub name: String,

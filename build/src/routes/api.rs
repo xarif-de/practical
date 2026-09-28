@@ -121,6 +121,32 @@ async fn categories(State(state): State<SharedState>, user: Principal, Query(q):
     Ok(Json(out))
 }
 
+/// The colours in use, for the colour picker and the settings page "Farben".
+async fn colors_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<crate::domain::colors::Source>>> {
+    Ok(Json(crate::domain::colors::sources(&state, &user).await?))
+}
+
+#[derive(Deserialize)]
+struct ColorSet {
+    color: String,
+}
+
+/// One element's colour: calendar and addressbook `{principal}/{id}`, event and task
+/// `{principal}/{calendar}/{object}` ("" = the calendar's again).
+async fn color_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((kind, key)): Path<(String, String)>, Json(c): Json<ColorSet>) -> AppResult<axum::http::StatusCode> {
+    use crate::domain::colors;
+    check_csrf(&session, &headers).await?;
+    let parts: Vec<&str> = key.split('/').collect();
+    let color = c.color.trim().to_lowercase();
+    match (kind.as_str(), parts.as_slice()) {
+        ("calendar", [p, id]) => colors::set_calendar_color(&state, &user, p, id, &color).await?,
+        ("addressbook", [p, id]) => crate::domain::collections::set_addressbook_color_checked(&state, &user, p, id, &color).await?,
+        ("event" | "task", [p, cal, id]) => colors::set_object_color(&state, &user, p, cal, id, &color).await?,
+        _ => return Err(AppError::BadRequest("unknown colour target".into())),
+    }
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 async fn category_rules_get(State(state): State<SharedState>, user: Principal, Query(q): Query<ScopeQ>) -> AppResult<Json<std::collections::BTreeMap<String, crate::domain::catrules::Rule>>> {
     Ok(Json(crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?))
 }
@@ -433,6 +459,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/search", get(api_search))
         .route("/api/mentions", get(mentions))
         .route("/api/categories", get(categories))
+        .route("/api/colors", get(colors_get))
+        .route("/api/colors/{kind}/{*key}", axum::routing::put(color_put))
         .route("/api/category-rules", get(category_rules_get))
         .route("/api/category-rules/{name}", axum::routing::put(category_rule_put).delete(category_rule_delete))
         .route("/api/push/key", get(push_key))
