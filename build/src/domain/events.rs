@@ -413,6 +413,25 @@ pub async fn category_counts(state: &AppState, user: &Principal, scope: &str) ->
     Ok(out)
 }
 
+/// Every event title with its number of events, most used first (the vacation rule's title test in
+/// the settings runs over it). Same scan as `category_counts`.
+pub async fn title_counts(state: &AppState, user: &Principal) -> AppResult<Vec<(String, usize)>> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for cal in visible_calendars(state, user, None).await? {
+        for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+            if let CalendarInnerData::Event(ev, _) = obj.get_inner().get_inner() {
+                let t = ical::text(ev, "SUMMARY").unwrap_or_default().trim().to_string();
+                if !t.is_empty() {
+                    *counts.entry(t).or_default() += 1;
+                }
+            }
+        }
+    }
+    let mut out: Vec<(String, usize)> = counts.into_iter().collect();
+    out.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.to_lowercase().cmp(&b.0.to_lowercase())));
+    Ok(out)
+}
+
 /// Fills `target` of every RELATED-TO whose UID is an event or task in a visible calendar. One
 /// scan of all objects (≈ 320 ms in a debug build on 3 800 objects), only called when the
 /// event has RELATED-TO lines.

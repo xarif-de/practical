@@ -34,14 +34,6 @@ pub struct YearData {
     pub school_regions: String,
 }
 
-#[derive(serde::Deserialize, Default)]
-struct VacationRule {
-    #[serde(default)]
-    kind: String,
-    #[serde(default)]
-    value: String,
-}
-
 pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, year: i32, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<YearData> {
     let start = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
@@ -54,20 +46,9 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         Some(r) => holidays::for_regions(state, "public", &[r], year, &ctx.lang).await?,
         None => vec![],
     };
-    let rule: VacationRule = p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(VacationRule { kind: "category".into(), value: "Urlaub".into() });
-    let vacations: Vec<Instance> = instances
-        .iter()
-        .filter(|i| match rule.kind.as_str() {
-            "calendar" => format!("{}/{}", i.principal, i.cal_id) == rule.value,
-            // category rule: the CATEGORIES property OR a title that carries the word
-            // (many clients never write CATEGORIES; the real calendar's vacations are titled "Urlaub")
-            _ => {
-                let v = rule.value.to_lowercase();
-                !v.is_empty() && (i.categories.iter().any(|c| c.to_lowercase() == v) || i.summary.to_lowercase().split(|c: char| !c.is_alphanumeric()).any(|w| w == v))
-            }
-        })
-        .cloned()
-        .collect();
+    let rule = prefs::VacationRule::of(&p);
+    let is_vacation = rule.matcher();
+    let vacations: Vec<Instance> = instances.iter().filter(|i| is_vacation(&format!("{}/{}", i.principal, i.cal_id), &i.categories, &i.summary)).cloned().collect();
     let abs = collections::addressbooks_for(state, user, false).await?;
     let birthdays: Vec<Contact> = contacts::contacts_for(state, &abs).await?.into_iter().filter(|c| !c.birthday.is_empty()).collect();
     Ok(YearData {
@@ -80,9 +61,19 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         vacations,
         birthdays,
         vacation_days: p.vacation_days,
-        vacation_rule: format!("{}:{}", rule.kind, rule.value),
+        vacation_rule: vacation_rule_text(&rule, ctx, cals),
         school_regions: school_regions.join(", "),
     })
+}
+
+/// The rule as the planner's legend names it: "Kategorie „Urlaub“", "Kalender „Privat“", "Titel /^Urlaub/"
+fn vacation_rule_text(rule: &prefs::VacationRule, ctx: &PageCtx, cals: &[CalInfo]) -> String {
+    match rule.kind.as_str() {
+        "calendar" => format!("{} „{}“", ctx.t("vacation-kind-calendar"), cals.iter().find(|c| format!("{}/{}", c.principal, c.id) == rule.value).map_or(rule.value.as_str(), |c| c.displayname.as_str())),
+        _ if rule.legacy() => format!("{} „{}“", ctx.t("vacation-kind-legacy"), rule.value),
+        "title" => format!("{} /{}/", ctx.t("vacation-kind-title"), rule.value),
+        _ => format!("{} „{}“", ctx.t("vacation-kind-category"), rule.value),
+    }
 }
 
 fn in_hol(h: &[Holiday], d: NaiveDate) -> Option<&Holiday> {

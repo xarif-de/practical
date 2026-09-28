@@ -52,8 +52,18 @@ pub struct SettingsPage {
     /// `:root { --hol; --fer }` from the user's holiday colours ("" = the theme's)
     pub holiday_css: String,
     pub calendars_all: Vec<CalInfo>,
+    /// the vacation rule as the page edits it: its kind and one value per kind (the other two are
+    /// the defaults the page offers when the kind is switched)
     pub vacation_kind: String,
-    pub vacation_value: String,
+    pub vacation_category: String,
+    pub vacation_calendar: String,
+    pub vacation_title: String,
+    /// the calendars a rule can name: "principal/id" and the name
+    pub vacation_calendars: Vec<(String, String)>,
+    /// the rule names a calendar the user no longer sees: kept as an option so a save does not change it
+    pub vacation_calendar_unknown: bool,
+    /// the rule in the overview row: „Urlaub“, „Privat“ (a calendar's name), /^Urlaub/
+    pub vacation_summary: String,
     /// reminder strip snap points as the server writes them ("2 min, 1 h, …"), and the built-in lists
     pub alarm_snaps_start: String,
     pub alarm_snaps_end: String,
@@ -61,9 +71,18 @@ pub struct SettingsPage {
     pub alarm_snaps_default_end: String,
 }
 
-fn vacation_rule(p: &Prefs) -> (String, String) {
-    let v: serde_json::Value = p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(serde_json::json!({}));
-    (v["kind"].as_str().unwrap_or("category").to_string(), v["value"].as_str().unwrap_or("Urlaub").to_string())
+/// The rule as the page edits it: (kind, value). A rule from before v2 ("category or title word")
+/// becomes the category when one of that name is in use, else the whole word in the title.
+async fn vacation_rule(state: &SharedState, user: &Principal, p: &Prefs) -> AppResult<(String, String)> {
+    let r = prefs::VacationRule::of(p);
+    if !r.legacy() {
+        return Ok((if matches!(r.kind.as_str(), "calendar" | "title") { r.kind } else { "category".into() }, r.value));
+    }
+    let v = r.value.trim();
+    if let Some((name, _)) = events::category_counts(state, user, "event").await?.into_iter().find(|(c, _)| c.to_lowercase() == v.to_lowercase()) {
+        return Ok(("category".into(), name));
+    }
+    Ok(("title".into(), if v.is_empty() { String::new() } else { format!(r"\b{}\b", regex::escape(v)) }))
 }
 
 impl SettingsPage {
@@ -128,6 +147,13 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
             region_names.insert(code.clone(), holidays::describe(&state, code, &ctx.lang).await?);
         }
     }
+    let cals_all = collections::calendars_for(&state, &user, false).await?;
+    let (vac_kind, vac_value) = vacation_rule(&state, &user, &p).await?;
+    let vac_summary = match vac_kind.as_str() {
+        "title" => format!("/{vac_value}/"),
+        "calendar" => format!("„{}“", cals_all.iter().find(|c| format!("{}/{}", c.principal, c.id) == vac_value).map_or(vac_value.as_str(), |c| c.displayname.as_str())),
+        _ => format!("„{vac_value}“"),
+    };
     Ok(SettingsPage {
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
@@ -152,9 +178,14 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         school_regions: school_regions.join(","),
         region_names,
         holiday_css: p.holiday_css(),
-        calendars_all: collections::calendars_for(&state, &user, false).await?,
-        vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
-        vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
+        vacation_summary: vac_summary,
+        vacation_kind: vac_kind.clone(),
+        vacation_category: if vac_kind == "category" { vac_value.clone() } else { String::new() },
+        vacation_title: if vac_kind == "title" { vac_value.clone() } else if vac_kind == "category" && !vac_value.is_empty() { format!(r"\b{}\b", regex::escape(&vac_value)) } else { r"\bUrlaub\b".into() },
+        vacation_calendar_unknown: vac_kind == "calendar" && !vac_value.is_empty() && !cals_all.iter().any(|c| format!("{}/{}", c.principal, c.id) == vac_value),
+        vacation_calendar: if vac_kind == "calendar" { vac_value } else { String::new() },
+        vacation_calendars: cals_all.iter().filter(|c| c.components.is_empty() || c.components.iter().any(|x| x == "VEVENT")).map(|c| (format!("{}/{}", c.principal, c.id), c.displayname.clone())).collect(),
+        calendars_all: cals_all,
         ctx,
     })
 }
@@ -528,7 +559,11 @@ struct PrefsForm {
     #[serde(default)]
     vacation_kind: String,
     #[serde(default)]
-    vacation_value: String,
+    vacation_category: String,
+    #[serde(default)]
+    vacation_calendar: String,
+    #[serde(default)]
+    vacation_title: String,
     #[serde(default)]
     alarm_snaps_start: String,
     #[serde(default)]
@@ -562,8 +597,16 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
             p.school_regions = Some(regions(v));
         }
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
-        let kind = if f.vacation_kind == "calendar" { "calendar" } else { "category" };
-        p.vacation_rule_json = Some(serde_json::json!({ "kind": kind, "value": f.vacation_value.trim() }).to_string());
+        // vacation rule: the chosen kind with its own field; a title pattern must parse
+        let (kind, value) = match f.vacation_kind.as_str() {
+            "calendar" => ("calendar", f.vacation_calendar.trim()),
+            "title" => ("title", f.vacation_title.trim()),
+            _ => ("category", f.vacation_category.trim()),
+        };
+        if kind == "title" && !value.is_empty() {
+            prefs::VacationRule::title_regex(value).map_err(|e| AppError::BadRequest(format!("{}: {e}", ctx.t("vacation-title-bad"))))?;
+        }
+        p.vacation_rule_json = Some(serde_json::to_string(&prefs::VacationRule { v: 2, kind: kind.into(), value: value.into() }).unwrap());
         // reminder strip snap points: an empty list falls back to the built-in one; a bad token rejects the form
         let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
         let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;

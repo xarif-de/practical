@@ -3218,6 +3218,7 @@ dependencies = [
  "http",
  "openidconnect",
  "rand 0.10.2",
+ "regex",
  "reqwest 0.13.1",
  "rustical_dav_push",
  "rustical_ical",

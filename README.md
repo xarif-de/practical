@@ -211,6 +211,12 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   latest release are each asked at most weekly (one request with ETag, usually a 304); only a
   newer release is downloaded (~3.5 MB, about yearly) and saved in `xui_holidays`, where it wins over
   the built-in file. A broken answer (error, empty or halved list) never replaces a known one.
+- **Vacation rule** (settings › Vacation, `prefs::VacationRule`, `{"v":2,"kind","value"}`): a category
+  (picked from those in use, any case), a calendar, or a title regex (Rust `regex`, any case, ≤ 200
+  chars; the page offers building blocks and tests the pattern live against every event title from
+  `/api/titles`, translating `\b` to Unicode for JS and refusing look-around/back-references). Rules
+  without `v` meant "category OR title word" and count so until the next save; the page shows them as
+  the category if one of that name is in use, else as `\bword\b`.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
   a one-minute loop expands the subscribers' events a few days ahead, sends each VALARM once
   (`xui_alarms_sent`) and drops subscriptions the push service reports gone (404/410).

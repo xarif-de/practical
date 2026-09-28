@@ -31,7 +31,7 @@
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
-    <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}„{{ vacation_value }}“<span class="chev">›</span></span></a>
+    <a class="cell link" href="#vacation"><span class="swatch" style="background:var(--c1)"><svg class="ico" aria-hidden="true"><use href="#i-briefcase"/></svg></span><span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}<span id="v-vacation">{{ vacation_summary }}</span><span class="chev">›</span></span></a>
     <a class="cell link" href="#alarms"><span class="swatch" style="background:var(--c4)"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></span><span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val"><span id="v-snaps">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}</span><span class="chev">›</span></span></a>
   </div>
   <div class="label">{{ ctx.t("set-data") }}</div>
@@ -48,8 +48,14 @@
   <h2>{{ ctx.t("set-vacation") }}</h2>
   <div class="group">
     <label class="cell noic"><span>{{ ctx.t("pref-vacation-days") }}</span><span class="val"><input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}" placeholder="–"></span></label>
-    <div class="cell noic"><span>{{ ctx.t("vacation-rule") }}</span><span class="val"><input type="hidden" name="vacation_kind" value="{% if vacation_kind == "calendar" %}calendar{% else %}category{% endif %}"><span class="seg" data-field="vacation_kind"><button type="button" data-v="category" aria-pressed="{{ vacation_kind != "calendar" }}">{{ ctx.t("vacation-rule-category") }}</button><button type="button" data-v="calendar" aria-pressed="{{ vacation_kind == "calendar" }}">{{ ctx.t("vacation-rule-calendar") }}</button></span></span></div>
-    <label class="cell noic"><span>{{ ctx.t("vacation-rule-value") }}</span><span class="val"><input type="text" name="vacation_value" value="{{ vacation_value }}" list="vac-values"><datalist id="vac-values">{% for c in calendars_all %}<option value="{{ c.principal }}/{{ c.id }}">{{ c.displayname }}</option>{% endfor %}</datalist></span></label>
+    <div class="cell noic"><span>{{ ctx.t("vacation-rule") }}</span><span class="val"><input type="hidden" name="vacation_kind" value="{{ vacation_kind }}"><span class="seg" data-field="vacation_kind"><button type="button" data-v="category" aria-pressed="{{ vacation_kind == "category" }}">{{ ctx.t("vacation-kind-category") }}</button><button type="button" data-v="calendar" aria-pressed="{{ vacation_kind == "calendar" }}">{{ ctx.t("vacation-kind-calendar") }}</button><button type="button" data-v="title" aria-pressed="{{ vacation_kind == "title" }}">{{ ctx.t("vacation-kind-title") }}</button></span></span></div>
+    <label class="cell noic vac-k" data-k="category"{% if vacation_kind != "category" %} hidden{% endif %}><span>{{ ctx.t("vacation-kind-category") }}</span><span class="val"><select name="vacation_category" id="vac-cat"><option value="{{ vacation_category }}" selected>{% if vacation_category.is_empty() %}–{% else %}{{ vacation_category }}{% endif %}</option></select></span></label>
+    <label class="cell noic vac-k" data-k="calendar"{% if vacation_kind != "calendar" %} hidden{% endif %}><span>{{ ctx.t("vacation-kind-calendar") }}</span><span class="val"><select name="vacation_calendar" id="vac-cal">{% if vacation_calendar.is_empty() %}<option value="" selected>–</option>{% endif %}{% for (key, name) in vacation_calendars %}<option value="{{ key }}"{% if *key == vacation_calendar %} selected{% endif %}>{{ name }}</option>{% endfor %}{% if vacation_calendar_unknown %}<option value="{{ vacation_calendar }}" selected>{{ vacation_calendar }}</option>{% endif %}</select></span></label>
+    <div class="vac-k vac-re" data-k="title"{% if vacation_kind != "title" %} hidden{% endif %}>
+      <label class="cell noic"><span>{{ ctx.t("vacation-kind-title") }}</span><span class="val"><input type="text" name="vacation_title" id="vac-re" value="{{ vacation_title }}" maxlength="200" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="^Urlaub\b"></span></label>
+      <div class="vac-tools" id="vac-tools"></div>
+      <div class="vac-test" id="vac-test" aria-live="polite"></div>
+    </div>
   </div>
   <p class="foot">{{ ctx.t("vacation-rule-hint") }}</p>
 </section>

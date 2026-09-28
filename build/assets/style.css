@@ -1328,6 +1328,26 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .set .cell > input[type=text], .set .cell > select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 4px 0; min-width: 0; width: 100%; }
 .set .cell > input[type=text]:focus { outline: none; }
 .set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+/* vacation › rule: one row per kind (the grid of .cell would beat [hidden]); the title row carries building
+   blocks and a live test over the event titles */
+.set .vac-k[hidden] { display: none; }
+.set #vac-re { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 360px; }
+.set #vac-re.bad { color: var(--today); }
+.vac-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 10px; }
+.vac-tools .chip { cursor: pointer; font-size: 12px; padding: 3px 9px; }
+.vac-tools .chip:hover { border-color: var(--accent); color: var(--fg); }
+.vac-tools code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+.vac-test { border-top: 1px solid var(--line); padding: 8px 14px 10px; font-size: 13px; }
+.vac-th { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; color: var(--fg-2); margin-bottom: 6px; }
+.vac-th .seg button { font-size: 12px; padding: 3px 9px; min-height: 0; }
+.vac-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 260px; overflow: auto; }
+.vac-list li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.vac-list li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vac-list li.miss span { color: var(--fg-3); }
+.vac-list small { color: var(--fg-3); flex: none; font-variant-numeric: tabular-nums; }
+.vac-list mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.vac-note { margin: 4px 0 0; color: var(--fg-3); }
+.vac-err { margin: 0; color: var(--today); }
 /* reminders › snap points: the lists drawn as the event editor's strip (ordinal, one zone per point); labels
    alternate above and below the axis, a "+" per gap shows on hover or focus (always on touch); a point opens
    .snp-edit below. Narrow screens scroll the strip sideways (31 px per zone: two zones hold one label) */

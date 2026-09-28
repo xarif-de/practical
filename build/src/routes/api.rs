@@ -121,6 +121,11 @@ async fn categories(State(state): State<SharedState>, user: Principal, Query(q):
     Ok(Json(out))
 }
 
+/// Event titles with their counts: [[title, n], …], most used first.
+async fn titles(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<(String, usize)>>> {
+    Ok(Json(events::title_counts(&state, &user).await?))
+}
+
 /// The colours in use, for the colour picker and the settings page "Farben".
 async fn colors_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<crate::domain::colors::Source>>> {
     Ok(Json(crate::domain::colors::sources(&state, &user).await?))
@@ -513,6 +518,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/search", get(api_search))
         .route("/api/mentions", get(mentions))
         .route("/api/categories", get(categories))
+        .route("/api/titles", get(titles))
         .route("/api/colors", get(colors_get))
         .route("/api/colors/category", post(color_category))
         .route("/api/colors/batch", post(colors_batch))

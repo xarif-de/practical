@@ -329,6 +329,73 @@
       resetBtn.addEventListener('click', () => { L = { start: [...DEF.start], end: [...DEF.end] }; edit = null; store(); draw(); });
       draw();
     }
+    // vacation rule (#vacation): one kind (category · calendar · title) and one field per kind; the server
+    // reads the field of the chosen kind. Categories come from /api/categories; the title pattern is tested
+    // live against every event title (/api/titles). The server matches with Rust's regex crate, any case:
+    // the test translates \b and (?P< for JS and refuses what the crate lacks (look-around, back-references),
+    // and an invalid pattern blocks the autosave through the field's validity.
+    const vacKind = hid('vacation_kind');
+    if (vacKind && $('#vac-re')) {
+      const catSel = $('#vac-cat'), calSel = $('#vac-cal'), re = $('#vac-re'), tools = $('#vac-tools'), test = $('#vac-test');
+      let titles = null, cats = null, shown = 'match';
+      const summary = () => { const k = vacKind.value; $('#v-vacation').textContent = k === 'title' ? `/${re.value}/` : `„${k === 'calendar' ? (calSel.selectedOptions[0] || {}).textContent || '' : catSel.value}“`; };
+      const loadCats = async () => {
+        if (cats) return; cats = [];
+        try { const r = await fetch('/api/categories?scope=event'); if (r.ok) cats = await r.json(); } catch (_) {}
+        const cur = catSel.value, list = cats.filter(c => c.count || c.name === cur);
+        if (cur && !list.some(c => c.name === cur)) list.unshift({ name: cur, count: 0 });
+        catSel.innerHTML = (cur ? '' : '<option value="">–</option>') + list.map(c => `<option value="${esc2(c.name)}">${esc2(c.name)} (${c.count || tr('js-vac-no-events')})</option>`).join('');
+        catSel.value = cur;
+      };
+      // a switch to "category" with none chosen yet: the category the title pattern matches, else the most used
+      const pickCat = () => { const c = re.value.trim() ? compile(re.value.trim()) : {}, list = (cats || []).filter(x => x.count); const hit = c.rx && list.find(x => c.rx.test(x.name)); return (hit || list[0] || {}).name || ''; };
+      // Rust's \b and \w are Unicode-aware, JS's are ASCII even with /u: \b and \B become look-arounds over letters,
+      // digits, marks and connectors (outside character classes)
+      const W = '[\\p{L}\\p{N}\\p{M}\\p{Pc}]', WB = `(?:(?<=${W})(?!${W})|(?<!${W})(?=${W}))`, NWB = `(?:(?<=${W})(?=${W})|(?<!${W})(?!${W}))`;
+      const toJs = p => { let out = '', cls = false; for (let i = 0; i < p.length; i++) { const c = p[i];
+        if (c === '\\' && i + 1 < p.length) { const n = p[i + 1]; out += !cls && n === 'b' ? WB : !cls && n === 'B' ? NWB : c + n; i++; continue; }
+        if (c === '[') cls = true; else if (c === ']') cls = false; out += c; } return out.replace(/\(\?P</g, '(?<'); };
+      const compile = p => { if (/\(\?<?[=!]|\\[1-9]|\\k</.test(p)) return { err: tr('js-vac-unsup') }; try { return { rx: new RegExp(toJs(p), 'iu') }; } catch (e) { return { err: tr('js-vac-bad', { msg: e.message.replace(/^Invalid regular expression: \/.*\/[a-z]*: /s, '') }) }; } }; // the engine's text quotes the translated pattern: keep the reason only
+      const mark = (t, rx) => { const g = new RegExp(rx.source, 'giu'); let out = '', last = 0, m; while ((m = g.exec(t))) { if (!m[0].length) { g.lastIndex++; continue; } out += esc2(t.slice(last, m.index)) + `<mark>${esc2(m[0])}</mark>`; last = m.index + m[0].length; } return out + esc2(t.slice(last)); };
+      const run = () => {
+        const p = re.value.trim(), c = p ? compile(p) : {};
+        re.setCustomValidity(c.err || ''); re.classList.toggle('bad', !!c.err);
+        if (c.err) { test.innerHTML = `<p class="vac-err">${esc2(c.err)}</p>`; return; }
+        if (!p) { test.innerHTML = `<p class="vac-note">${esc2(tr('js-vac-empty'))}</p>`; return; }
+        if (!titles) { test.innerHTML = `<p class="vac-note">${esc2(tr('js-vac-loading'))}</p>`; return; }
+        const hit = titles.filter(([t]) => c.rx.test(t)), miss = titles.filter(([t]) => !c.rx.test(t)), list = shown === 'match' ? hit : miss, MAX = 40;
+        test.innerHTML = `<div class="vac-th"><span>${esc2(hit.length ? tr('js-vac-hits', { hits: hit.length, all: titles.length, events: hit.reduce((s, [, n]) => s + n, 0) }) : tr('js-vac-none'))}</span><span class="seg"><button type="button" data-show="match" aria-pressed="${shown === 'match'}">${esc2(tr('js-vac-match'))} · ${hit.length}</button><button type="button" data-show="miss" aria-pressed="${shown === 'miss'}">${esc2(tr('js-vac-miss'))} · ${miss.length}</button></span></div>`
+          + `<ul class="vac-list">${list.slice(0, MAX).map(([t, n]) => `<li class="${shown}"><span>${shown === 'match' ? mark(t, c.rx) : esc2(t)}</span><small>${n}×</small></li>`).join('')}</ul>${list.length > MAX ? `<p class="vac-note">${esc2(tr('js-vac-more', { n: list.length - MAX }))}</p>` : ''}`;
+      };
+      const loadTitles = async () => { if (titles) return; run(); try { const r = await fetch('/api/titles'); titles = r.ok ? await r.json() : []; } catch (_) { titles = []; } run(); };
+      // building blocks: each inserts at the cursor (a selection is wrapped where that makes sense)
+      const TOOLS = [['word', '\\b', '\\b'], ['begin', '^', ''], ['end', '', '$'], ['or', '|', ''], ['any', '.*', '']];
+      tools.innerHTML = TOOLS.map(([k, a, b]) => `<button type="button" class="chip" data-tool="${k}"><code>${esc2(k === 'word' ? '\\b…\\b' : a + b)}</code> ${esc2(tr('js-vac-' + k))}</button>`).join('');
+      tools.addEventListener('click', e => {
+        const b = e.target.closest('[data-tool]'); if (!b) return; const [k, a, z] = TOOLS.find(t => t[0] === b.dataset.tool);
+        let v = re.value, s = re.selectionStart ?? v.length, en = re.selectionEnd ?? v.length;
+        if (k === 'begin') { if (!v.startsWith('^')) { v = '^' + v; s++; en++; } s = en = s; }
+        else if (k === 'end') { if (!v.endsWith('$')) v += '$'; s = en = v.length; }
+        else { v = v.slice(0, s) + a + v.slice(s, en) + z + v.slice(en); s += a.length; en += a.length; if (k !== 'word') s = en; }
+        re.value = v; re.focus(); re.setSelectionRange(s, en); run(); re.dispatchEvent(new Event('change', { bubbles: true })); summary();
+      });
+      test.addEventListener('click', e => { const b = e.target.closest('[data-show]'); if (b) { shown = b.dataset.show; run(); } });
+      let tm = 0; re.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(run, 120); });
+      re.addEventListener('change', summary); catSel.addEventListener('change', summary); calSel.addEventListener('change', summary);
+      const showKind = () => {
+        const k = vacKind.value; $$('.vac-k', settings).forEach(r => { r.hidden = r.dataset.k !== k; });
+        if (k === 'title') loadTitles();
+      };
+      // the kind switch fires `change` on the hidden field before the form's autosave sees it: an empty list
+      // gets its first entry here, so the switch saves a rule that counts something
+      vacKind.addEventListener('change', () => {
+        if (vacKind.value === 'calendar' && !calSel.value) { const o = [...calSel.options].find(x => x.value); if (o) calSel.value = o.value; }
+        if (vacKind.value === 'category' && !catSel.value) { const n = pickCat(); if (n) catSel.value = n; }
+        showKind(); summary();
+      });
+      loadCats(); // before any switch, so the switch finds its list
+      showKind(); if (vacKind.value === 'title') run();
+    }
     // categories: the index with counts; a click opens the category's rule in the calendar's (or tasks') editor
     const catPanel = $('#categories');
     if (catPanel) {
