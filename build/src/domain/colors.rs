@@ -79,6 +79,27 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
     Ok(out)
 }
 
+/// Events (scope "event") or tasks ("task") carrying category `name` and the colour `from` — the ones a
+/// changed category colour should follow; an object someone gave another colour is left alone. Objects of
+/// subscribed calendars are skipped (read-only). Returns principal/calendar/object keys.
+pub async fn category_objects(state: &AppState, user: &Principal, scope: &str, name: &str, from: &str) -> AppResult<Vec<String>> {
+    let (name, from) = (name.trim(), from.trim().to_lowercase());
+    let mut out = vec![];
+    for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| c.subscription_url.is_none()) {
+        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+            let (cats, color) = match (obj.get_inner().get_inner(), scope) {
+                (CalendarInnerData::Event(ev, _), "event") => (ical::list(ev, "CATEGORIES"), ical::text(ev, "COLOR")),
+                (CalendarInnerData::Todo(t, _), "task") => (ical::list(t, "CATEGORIES"), ical::text(t, "COLOR")),
+                _ => continue,
+            };
+            if color.is_some_and(|c| c.trim().to_lowercase() == from) && cats.iter().any(|c| c.trim() == name) {
+                out.push(format!("{}/{}/{id}", cal.principal, cal.id));
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub async fn set_calendar_color(state: &AppState, user: &Principal, owner: &str, id: &str, color: &str) -> AppResult<()> {
     collections::ensure_owner(user, owner)?;
     if !prefs::is_hex_color(color) {

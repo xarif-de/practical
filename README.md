@@ -160,6 +160,9 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   its colour and changes it in place (`PUT /api/colors/{kind}/{key}`); an event's or task's COLOR is rewritten
   on its master component only (`colors::with_color`), every other line keeps its bytes. A category's colour is
   a setting of its rule: the row rewrites `when.color.value` (template or lock stays as it was).
+  Existing events/tasks with the category that still carry the old colour are counted
+  (`POST /api/colors/category`, `colors::category_objects`); the user is asked whether they follow — one
+  given another colour by hand is left alone.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

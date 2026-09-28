@@ -539,6 +539,14 @@
     rule.when.color.value = color;
     return fetch('/api/category-rules/' + encodeURIComponent(name) + q, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify(rule) });
   };
+  // a category's new colour: existing events/tasks with the category that still carry the old one may follow
+  const recolor = async (scope, name, from, to) => {
+    const post = apply => fetch('/api/colors/category', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ scope, name, from, to, apply }) }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const c = await post(false); if (!c || !c.count) return;
+    close(); // the question needs the page, not the popover over it
+    if (!await askYesNo(tr('js-color-recolor-' + scope, { n: c.count, cat: name }), tr('js-color-recolor-yes'), tr('js-color-recolor-no'))) return;
+    const d = await post(true); if (d) toast(tr('js-color-recolored', { n: d.count })); else toast(tr('js-set-err'), true);
+  };
   const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
   const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-flag', school: 'i-flag', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
   const ORDER = ['calendar', 'addressbook', 'holiday', 'category', 'category-task', 'event', 'task'];
@@ -588,6 +596,7 @@
         // a merged row changes all its elements; a category's colour is a setting of its rule (its mode stays)
         for (const key of s.keys) { const r = s.kind.startsWith('category') ? await putRule(s.kind === 'category' ? 'event' : 'task', key, v).catch(() => null) : await put(s.kind, key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); draw(true); return; } if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, key, v); }
         toast(settingsSaved());
+        if (s.kind.startsWith('category') && s.color && s.color !== v) await recolor(s.kind === 'category' ? 'event' : 'task', s.key, s.color, v);
       }
       s.color = v; draw(true);
     } });

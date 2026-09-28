@@ -131,6 +131,39 @@ struct ColorSet {
     color: String,
 }
 
+#[derive(Deserialize)]
+struct CategoryRecolor {
+    scope: String,
+    name: String,
+    from: String,
+    to: String,
+    /// false: only count
+    #[serde(default)]
+    apply: bool,
+}
+
+#[derive(serde::Serialize)]
+struct Count {
+    count: usize,
+}
+
+/// A category's colour changed from `from` to `to`: how many events/tasks with that category still carry
+/// `from`, and with `apply` give them `to`.
+async fn color_category(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(c): Json<CategoryRecolor>) -> AppResult<Json<Count>> {
+    use crate::domain::colors;
+    check_csrf(&session, &headers).await?;
+    let scope = if c.scope == "task" { "task" } else { "event" };
+    let keys = colors::category_objects(&state, &user, scope, &c.name, &c.from).await?;
+    if c.apply {
+        let to = c.to.trim().to_lowercase();
+        for k in &keys {
+            let [p, cal, id] = k.splitn(3, '/').collect::<Vec<_>>()[..] else { continue };
+            colors::set_object_color(&state, &user, p, cal, id, &to).await?;
+        }
+    }
+    Ok(Json(Count { count: keys.len() }))
+}
+
 /// One element's colour: calendar and addressbook `{principal}/{id}`, event and task
 /// `{principal}/{calendar}/{object}` ("" = the calendar's again).
 async fn color_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((kind, key)): Path<(String, String)>, Json(c): Json<ColorSet>) -> AppResult<axum::http::StatusCode> {
@@ -460,6 +493,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/mentions", get(mentions))
         .route("/api/categories", get(categories))
         .route("/api/colors", get(colors_get))
+        .route("/api/colors/category", post(color_category))
         .route("/api/colors/{kind}/{*key}", axum::routing::put(color_put))
         .route("/api/category-rules", get(category_rules_get))
         .route("/api/category-rules/{name}", axum::routing::put(category_rule_put).delete(category_rule_delete))
