@@ -9,9 +9,13 @@ pub struct Prefs {
     pub timezone: Option<String>,
     pub holidays_enabled: bool,
     pub school_holidays_enabled: bool,
-    /// ISO country of the holidays (NULL = config); "" in `holiday_subdivision` = the whole country
+    /// the single region before region lists (read only, as the lists' fallback): ISO country
+    /// (NULL = config); "" in `holiday_subdivision` = the whole country
     pub holiday_country: Option<String>,
     pub holiday_subdivision: Option<String>,
+    /// regions of public / school holidays: comma lists of region codes ("" = none; NULL = `region`)
+    pub public_regions: Option<String>,
+    pub school_regions: Option<String>,
     /// colours of public holidays / school holidays in the views (`#rrggbb`; NULL = the theme's)
     pub holiday_color: Option<String>,
     pub school_color: Option<String>,
@@ -31,8 +35,6 @@ impl Prefs {
     pub fn defaults() -> Self {
         Self { holidays_enabled: true, school_holidays_enabled: true, ..Default::default() }
     }
-    /// The holiday region in effect: the user's choice, else the configured default
-    /// (the default subdivision only belongs to the default country).
     /// `:root` custom properties for the user's holiday colours ("" when both are the theme's)
     pub fn holiday_css(&self) -> String {
         let mut v = String::new();
@@ -44,10 +46,32 @@ impl Prefs {
         }
         if v.is_empty() { v } else { format!(":root{{{v}}}") }
     }
-    pub fn region(&self, cfg: &crate::config::Config) -> (String, String) {
+    /// The single region of before the lists: the user's choice, else the configured default
+    /// (the default subdivision only belongs to the default country).
+    fn region(&self, cfg: &crate::config::Config) -> (String, String) {
         let country = self.holiday_country.clone().unwrap_or_else(|| cfg.holidays_country.clone());
         let sub = self.holiday_subdivision.clone().unwrap_or_else(|| if country == cfg.holidays_country { cfg.holidays_subdivision.clone() } else { String::new() });
         (country, sub)
+    }
+    /// The regions of public (`school` false) or school holidays, in the user's order.
+    pub fn regions(&self, cfg: &crate::config::Config, school: bool) -> Vec<String> {
+        match if school { &self.school_regions } else { &self.public_regions } {
+            Some(list) => list.split(',').filter(|c| !c.is_empty()).map(str::to_string).collect(),
+            None => {
+                let (country, sub) = self.region(cfg);
+                let one = if sub.is_empty() { country } else { sub };
+                if one.is_empty() { vec![] } else { vec![one] }
+            }
+        }
+    }
+    /// The user's own region: the first of the public holidays' list (vacation days and bridge
+    /// days count by it), else of the school holidays'.
+    pub fn own_region(&self, cfg: &crate::config::Config) -> Option<String> {
+        self.regions(cfg, false).into_iter().next().or_else(|| self.regions(cfg, true).into_iter().next())
+    }
+    /// The user's home country (address search prefers it): the own region's, else the configured one.
+    pub fn home_country(&self, cfg: &crate::config::Config) -> String {
+        self.own_region(cfg).map(|r| crate::domain::holidays::split(&r).0.to_string()).unwrap_or_else(|| cfg.holidays_country.clone())
     }
 }
 
@@ -66,6 +90,8 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             school_holidays_enabled: r.get::<i64, _>("school_holidays_enabled") != 0,
             holiday_country: r.get("holiday_country"),
             holiday_subdivision: r.get("holiday_subdivision"),
+            public_regions: r.get("public_regions"),
+            school_regions: r.get("school_regions"),
             holiday_color: r.get("holiday_color"),
             school_color: r.get("school_color"),
             vacation_days: r.get("vacation_days"),
@@ -89,11 +115,12 @@ pub async fn get_lang(db: &SqlitePool, principal: &str) -> Result<Option<String>
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
            holiday_country=excluded.holiday_country, holiday_subdivision=excluded.holiday_subdivision,
+           public_regions=excluded.public_regions, school_regions=excluded.school_regions,
            holiday_color=excluded.holiday_color, school_color=excluded.school_color, vacation_days=excluded.vacation_days,
            vacation_rule_json=excluded.vacation_rule_json,
            contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
@@ -107,6 +134,8 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(i64::from(p.school_holidays_enabled))
     .bind(&p.holiday_country)
     .bind(&p.holiday_subdivision)
+    .bind(&p.public_regions)
+    .bind(&p.school_regions)
     .bind(&p.holiday_color)
     .bind(&p.school_color)
     .bind(p.vacation_days)

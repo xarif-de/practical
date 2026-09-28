@@ -120,6 +120,14 @@ CREATE TABLE xui_holidays (
         "ALTER TABLE xui_user_settings ADD COLUMN holiday_color TEXT;
          ALTER TABLE xui_user_settings ADD COLUMN school_color TEXT;",
     ),
+    (
+        11,
+        // the regions of public holidays and of school holidays, each a comma list of region codes
+        // ("DE-SN,DE-BY"; "" = none). NULL = the single region of holiday_country/holiday_subdivision
+        // (prefs::Prefs::regions), so a region chosen before stays as the list's only entry.
+        "ALTER TABLE xui_user_settings ADD COLUMN public_regions TEXT;
+         ALTER TABLE xui_user_settings ADD COLUMN school_regions TEXT;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

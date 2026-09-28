@@ -123,73 +123,90 @@
         if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
       });
     });
-    // pickers (#pick-country, #pick-region[-CODE], #pick-tz): one page with a filter field over a list;
-    // a region with subregions opens them as a second step, whose first row picks the region itself
-    const prefsForm = $('#prefs-form'), pickData = (() => { try { return JSON.parse($('#pick-data').textContent); } catch (_) { return { countries: [], zones: [] }; } })();
+    // region lists (#regions-public, #regions-school): a hidden field each, a comma list of region codes in the
+    // user's order; the first public one is the user's own (vacation days and bridge days count by it).
+    // Pickers (#pick-country-KIND, #pick-region-KIND-CODE, #pick-tz): one page with a filter field over a list;
+    // regions tick on and off in place, a region with subregions opens them as a further step
+    const prefsForm = $('#prefs-form'), pickData = (() => { try { return JSON.parse($('#pick-data').textContent); } catch (_) { return { countries: [], zones: [], names: {} }; } })();
     const hid = n => $(`input[type=hidden][name="${n}"]`, prefsForm);
+    const names = pickData.names || {}; // code → [name, path above it]
     let subs = null, subsFor = '';
     const loadSubs = async c => { if (subsFor !== c) { const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(c)); subs = r.ok ? await r.json() : []; subsFor = c; } return subs; };
     const esc2 = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const commit = (name, value) => { const i = hid(name); i.value = value; i.dispatchEvent(new Event('change', { bubbles: true })); };
     const pathOf = (list, r) => { const out = []; let x = r; while (x && out.length < 5) { out.unshift(x.name); x = list.find(y => y.code === x.parent); } return out; };
-    const showRegion = (list, code) => {
-      const r = list.find(x => x.code === code);
-      $('#v-sub').textContent = r ? pathOf(list, r).join(' › ') : code ? code : tr('js-pick-whole');
-      $('#v-sub-label').textContent = (list[0] && list[0].category) || tr('js-pick-region');
+    const countryName = c => (pickData.countries.find(x => x.code === c) || { name: c }).name;
+    const listOf = kind => hid(kind + '_regions').value.split(',').filter(Boolean);
+    const nameOf = c => (names[c] || [c])[0];
+    const summary = kind => { const l = listOf(kind); $('#v-regions-' + kind).textContent = !l.length ? tr('js-regions-none') : l.length < 3 ? l.map(nameOf).join(', ') : tr('js-regions-n', { n: l.length }); };
+    const setList = (kind, l) => { commit(kind + '_regions', l.join(',')); summary(kind); $('#v-sources').hidden = true; /* the sources line is the server's; it returns with the next visit */ };
+    const icoBtn = (attr, ico, label) => `<button type="button" class="btn icon-btn" ${attr} title="${esc2(label)}" aria-label="${esc2(label)}"><svg class="ico" aria-hidden="true"><use href="#${ico}"/></svg></button>`;
+    const drawRegions = kind => {
+      const l = listOf(kind);
+      $(`#regions-${kind} .rlist`).innerHTML = l.length ? l.map((c, i) => `<div class="cell noic" data-code="${esc2(c)}"><span>${esc2(nameOf(c))}${(names[c] || [])[1] ? `<span class="sub">${esc2(names[c][1])}</span>` : ''}</span><span class="val">${kind === 'public' ? (i ? icoBtn('data-first', 'i-star', tr('js-region-first')) : `<span class="badge">${esc2(tr('js-region-own'))}</span>`) : ''}${icoBtn('data-rm', 'i-x', tr('js-region-remove'))}</span></div>`).join('')
+        : `<div class="cell noic"><span class="muted">${esc2(tr('js-regions-none'))}</span></div>`;
     };
+    $$('.page.regions', settings).forEach(pg => $('.rlist', pg).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      const kind = pg.dataset.kind, c = b.closest('[data-code]').dataset.code, l = listOf(kind).filter(x => x !== c);
+      if (b.hasAttribute('data-first')) l.unshift(c);
+      setList(kind, l); drawRegions(kind);
+    }));
     async function pick(route) {
       const title = $('#pick-title'), q = $('#pick-q'), box = $('#pick-list'), back = $('#pick .back');
-      back.setAttribute('href', '#'); back.textContent = '‹ ' + $('#home h2').textContent;
-      let rows = [], cur = '', search = null;
-      if (route === 'country') {
-        title.textContent = tr('js-pick-country'); cur = hid('holiday_country').value;
-        rows = pickData.countries.map(c => ({ v: c.code, name: c.name }));
-      } else if (route === 'tz') {
-        title.textContent = tr('js-pick-tz'); cur = hid('timezone').value;
+      const backTo = (href, text) => { back.setAttribute('href', href); back.textContent = '‹ ' + text; };
+      let rows = [], search = null, kind = '', on = () => false, count = () => 0;
+      const rm = route.match(/^region-(public|school)-([A-Z0-9-]+)$/), cm = route.match(/^country-(public|school)$/);
+      if (route === 'tz') {
+        backTo('#', $('#home h2').textContent);
+        title.textContent = tr('js-pick-tz'); const cur = hid('timezone').value; on = v => v === cur;
         rows = [{ v: '', name: tr('js-pick-default', { tz: prefsForm.dataset.defaultTz }) }];
         pickData.zones.forEach(([area, zs]) => { rows.push({ head: area }); zs.forEach(([id, name]) => rows.push({ v: id, name, sub: id })); });
-      } else {
-        const country = hid('holiday_country').value, list = await loadSubs(country), parent = route.startsWith('region-') ? route.slice(7) : '';
-        const p = list.find(x => x.code === parent); cur = hid('holiday_subdivision').value;
-        title.textContent = p ? p.name : ((list[0] && list[0].category) || tr('js-pick-region'));
-        if (p) { back.setAttribute('href', p.parent.length > 2 ? '#pick-region-' + p.parent : '#pick-region'); back.textContent = '‹ ' + (list.find(x => x.code === p.parent) || { name: (list[0] && list[0].category) || tr('js-pick-region') }).name; }
-        const kids = code => list.filter(x => x.parent === (code || country));
-        rows = [p ? { v: p.code, name: tr('js-pick-all', { name: p.name }) } : { v: '', name: tr('js-pick-whole') }]
-          .concat(kids(parent).map(x => ({ v: x.code, name: x.name, more: list.some(y => y.parent === x.code) })));
-        search = list.map(x => ({ v: x.code, name: x.name, sub: pathOf(list, x).slice(0, -1).join(' › '), more: false }));
-      }
+      } else if (cm) {
+        kind = cm[1]; backTo('#regions-' + kind, $(`#regions-${kind} h2`).textContent);
+        title.textContent = tr('js-pick-country');
+        count = v => listOf(kind).filter(x => x.slice(0, 2) === v).length;
+        rows = pickData.countries.filter(c => kind !== 'school' || c.school).map(c => ({ v: c.code, name: c.name, more: true }));
+      } else if (rm) {
+        kind = rm[1]; const parent = rm[2], country = parent.slice(0, 2), list = await loadSubs(country), cname = countryName(country);
+        const p = list.find(x => x.code === parent), full = x => [cname].concat(pathOf(list, x).slice(0, -1)).join(' › ');
+        title.textContent = p ? p.name : cname;
+        if (p) backTo('#pick-region-' + kind + '-' + p.parent, (list.find(x => x.code === p.parent) || { name: cname }).name); else backTo('#pick-country-' + kind, tr('js-pick-country'));
+        on = v => listOf(kind).includes(v);
+        const kids = code => list.filter(x => x.parent === code);
+        rows = [p ? { v: p.code, name: tr('js-pick-all', { name: p.name }), nm: [p.name, full(p)] } : { v: country, name: tr('js-pick-whole'), nm: [cname, ''] }]
+          .concat(kids(parent).map(x => ({ v: x.code, name: x.name, more: list.some(y => y.parent === x.code), nm: [x.name, full(x)] })));
+        search = list.map(x => ({ v: x.code, name: x.name, sub: pathOf(list, x).slice(0, -1).join(' › '), nm: [x.name, full(x)] }));
+      } else { location.hash = ''; return; } // an old or broken address
       const draw = () => {
         const f = q.value.trim().toLowerCase(), norm = x => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         const src = f && search ? search : rows, nf = norm(f);
         const hit = r => r.head || !f || norm(r.name).includes(nf) || (r.sub && norm(r.sub).includes(nf));
         const shown = src.filter(hit).filter((r, i, a) => !r.head || (a[i + 1] && !a[i + 1].head));
-        box.innerHTML = shown.length ? shown.map(r => r.head ? `<div class="cell noic head"><span class="label">${esc2(r.head)}</span></div>`
-          : `<button type="button" class="cell noic link${r.v === cur ? ' on' : ''}" data-v="${esc2(r.v)}"${r.more ? ' data-more="1"' : ''} role="option" aria-selected="${r.v === cur}"><span>${esc2(r.name)}${r.sub && (f || route !== 'tz') ? `<span class="sub">${esc2(r.sub)}</span>` : ''}</span><span class="val">${r.v === cur ? '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>' : ''}${r.more ? '<span class="chev">›</span>' : ''}</span></button>`).join('')
+        box.innerHTML = shown.length ? shown.map(r => { if (r.head) return `<div class="cell noic head"><span class="label">${esc2(r.head)}</span></div>`;
+          const sel = on(r.v), n = count(r.v);
+          return `<button type="button" class="cell noic link${sel ? ' on' : ''}" data-v="${esc2(r.v)}"${r.more ? ' data-more="1"' : ''} role="option" aria-selected="${sel}"><span>${esc2(r.name)}${r.sub && (f || route !== 'tz') ? `<span class="sub">${esc2(r.sub)}</span>` : ''}</span><span class="val">${n ? `<span class="badge">${n}</span>` : ''}${sel ? '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>' : ''}${r.more ? '<span class="chev">›</span>' : ''}</span></button>`; }).join('')
           : `<div class="cell noic"><span class="muted">${esc2(tr('js-pick-none'))}</span></div>`;
       };
       q.value = ''; q.oninput = draw; draw();
       if (matchMedia('(pointer: fine)').matches) q.focus();
-      box.onclick = async e => {
+      box.onclick = e => {
         const b = e.target.closest('button[data-v]'); if (!b) return;
-        if (b.dataset.more) { location.hash = '#pick-region-' + b.dataset.v; return; }
         const v = b.dataset.v;
-        if (route === 'country') {
-          if (v !== hid('holiday_country').value) {
-            hid('holiday_subdivision').value = ''; commit('holiday_country', v);
-            $('#v-country').textContent = b.querySelector('span').textContent;
-            showRegion(await loadSubs(v), '');
-            $('#v-sources').hidden = true; // the sources line is the server's; it returns with the next visit
-          }
-        } else if (route === 'tz') {
-          commit('timezone', v); $('#v-tz').textContent = v ? v.replace(/_/g, ' ') : b.textContent;
-        } else {
-          commit('holiday_subdivision', v); showRegion(subs || [], v);
-        }
-        location.hash = '';
+        if (b.dataset.more) { location.hash = '#pick-region-' + kind + '-' + v; return; }
+        if (route === 'tz') { commit('timezone', v); $('#v-tz').textContent = v ? v.replace(/_/g, ' ') : b.textContent; location.hash = ''; return; }
+        // a region ticks on or off; the page stays for the next one
+        const r = (search || []).concat(rows).find(x => x.v === v); if (r && r.nm) names[v] = r.nm;
+        const l = listOf(kind); setList(kind, l.includes(v) ? l.filter(x => x !== v) : l.concat(v)); draw();
       };
     }
     const baseShow = show;
-    show = () => { const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('pick-') && $('#pick')) { settings.classList.add('paged'); $$('.page', settings).forEach(p => p.classList.toggle('on', p.id === 'pick')); pick(id.slice(5)); settings.closest('.main').scrollTop = 0; } else baseShow(); };
+    show = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      if (id.startsWith('pick-') && $('#pick')) { settings.classList.add('paged'); $$('.page', settings).forEach(p => p.classList.toggle('on', p.id === 'pick')); pick(id.slice(5)); settings.closest('.main').scrollTop = 0; return; }
+      if (id.startsWith('regions-') && $('#' + CSS.escape(id))) drawRegions(id.slice(8));
+      baseShow();
+    };
     removeEventListener('hashchange', baseShow); addEventListener('hashchange', show); show();
     // holiday colours: the picker writes its hidden field (empty = the theme's colour) and shows the colour at once
     $$('input[type=color][data-color-for]', settings).forEach(inp => {

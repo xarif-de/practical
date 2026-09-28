@@ -21,13 +21,17 @@ pub struct YearData {
     pub year: i32,
     pub today: NaiveDate,
     pub instances: Vec<Instance>,
+    /// public / school holidays of all the user's regions (`Holiday::label` names them)
     pub public: Vec<Holiday>,
     pub school: Vec<Holiday>,
+    /// public holidays of the user's own region: what makes a day off (vacation days, bridge days)
+    pub own: Vec<Holiday>,
     pub vacations: Vec<Instance>,
     pub birthdays: Vec<Contact>,
     pub vacation_days: Option<i64>,
     pub vacation_rule: String,
-    pub subdivision: String,
+    /// the school holidays' regions ("DE-SN, DE-BY") for the legends
+    pub school_regions: String,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -43,9 +47,13 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
     let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
     let instances = events::instances(state, cals, start, end, vc.tz).await?;
     let p = prefs::get(&state.db, &user.id).await?;
-    let (country, subdivision) = p.region(&state.config);
-    let public = if p.holidays_enabled { holidays::get(state, "public", &country, &subdivision, year, &ctx.lang).await? } else { vec![] };
-    let school = if p.school_holidays_enabled { holidays::get(state, "school", &country, &subdivision, year, &ctx.lang).await? } else { vec![] };
+    let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
+    let public = if p.holidays_enabled { holidays::for_regions(state, "public", &public_regions, year, &ctx.lang).await? } else { vec![] };
+    let school = if p.school_holidays_enabled { holidays::for_regions(state, "school", &school_regions, year, &ctx.lang).await? } else { vec![] };
+    let own = match p.own_region(&state.config).filter(|_| p.holidays_enabled) {
+        Some(r) => holidays::for_regions(state, "public", &[r], year, &ctx.lang).await?,
+        None => vec![],
+    };
     let rule: VacationRule = p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(VacationRule { kind: "category".into(), value: "Urlaub".into() });
     let vacations: Vec<Instance> = instances
         .iter()
@@ -68,11 +76,12 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         instances,
         public,
         school,
+        own,
         vacations,
         birthdays,
         vacation_days: p.vacation_days,
         vacation_rule: format!("{}:{}", rule.kind, rule.value),
-        subdivision,
+        school_regions: school_regions.join(", "),
     })
 }
 
@@ -99,7 +108,7 @@ pub fn planner(y: &YearData, l: &L) -> String {
             let fer = in_hol(&y.school, d);
             let u = vac.get(&d).and_then(|v| v.first().map(|i| i.summary.clone()));
             let ev = idx.get(&d).and_then(|v| v.iter().find(|i| !y.vacations.iter().any(|x| x.key() == i.key() && x.start == i.start)).map(|i| i.summary.clone()));
-            let txt = hol.map(|h| h.name.clone()).or(u.clone()).or(ev).unwrap_or_default();
+            let txt = hol.map(Holiday::label).or(u.clone()).or(ev).unwrap_or_default();
             let mut cls = String::from("c");
             if d.weekday().num_days_from_monday() >= 5 {
                 cls.push_str(" we");
@@ -121,7 +130,7 @@ pub fn planner(y: &YearData, l: &L) -> String {
     format!(
         "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--fer) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--hol) 22%,var(--bg))\"></i>{}</span><span><i style=\"background:color-mix(in srgb,var(--c6) 35%,var(--bg))\"></i>{}</span><span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· {} {} · {}</span></div>",
         l.t("v-school-holidays"),
-        e(&y.subdivision),
+        e(&y.school_regions),
         l.t("v-public-holiday"),
         l.t("v-vacation"),
         l.t("v-weekend"),
@@ -150,7 +159,7 @@ pub fn weekends(y: &YearData, l: &L) -> String {
                 }
             }
         }
-        let longw = in_hol(&y.public, sa - Duration::days(1)).is_some() || in_hol(&y.public, so + Duration::days(1)).is_some();
+        let longw = in_hol(&y.own, sa - Duration::days(1)).is_some() || in_hol(&y.own, so + Duration::days(1)).is_some();
         let is_free = busy.is_empty();
         total += 1;
         if is_free {
@@ -190,7 +199,7 @@ pub fn vacation(y: &YearData, l: &L) -> String {
     let tod = if y.today.year() == y.year { format!("<div class=\"todaymark\" style=\"grid-column:{}\"></div>", col(y.today)) } else { String::new() };
     let mut hol = String::new();
     for h in &y.public {
-        let _ = write!(hol, "<div class=\"bar hol\" style=\"grid-column:{} / {}\" title=\"{}\"></div>", col(h.start), col(h.end) + 1, e(&h.name));
+        let _ = write!(hol, "<div class=\"bar hol\" style=\"grid-column:{} / {}\" title=\"{}\"></div>", col(h.start), col(h.end) + 1, e(&h.label()));
     }
     let bars = |items: &[(String, NaiveDate, NaiveDate)], cls: &str| {
         let mut out = String::new();
@@ -199,14 +208,14 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         }
         out
     };
-    let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.name.clone(), h.start, h.end)).collect();
+    let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.label(), h.start, h.end)).collect();
     let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.clone(), i.start_date(), i.last_date())).collect();
     // workdays used by vacation instances (weekends + public holidays excluded, plan D14)
     let mut used_days: std::collections::BTreeSet<NaiveDate> = Default::default();
     for (_, a, b) in &vacs {
         let mut d = *a;
         while d <= *b {
-            if d.year() == y.year && workday(d, &y.public) {
+            if d.year() == y.year && workday(d, &y.own) {
                 used_days.insert(d);
             }
             d += Duration::days(1);
@@ -214,9 +223,9 @@ pub fn vacation(y: &YearData, l: &L) -> String {
     }
     let used = used_days.len() as i64;
     let remaining = y.vacation_days.map(|v| (v - used).to_string()).unwrap_or_else(|| "–".into());
-    // bridge days: a public holiday on Tue → Mon off, Thu → Fri off
+    // bridge days: a public holiday on Tue → Mon off, Thu → Fri off (the own region's: a day off is one's own)
     let mut bridge = String::new();
-    for h in &y.public {
+    for h in &y.own {
         let d = h.start;
         let (off, span) = match d.weekday() {
             Weekday::Tue => (d - Duration::days(1), 4),
@@ -238,7 +247,7 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         l.t("v-weekends"),
         l.t("v-holidays"),
         l.t("v-school-holidays"),
-        e(&y.subdivision),
+        e(&y.school_regions),
         bars(&school, "f"),
         l.t("v-vacation"),
         bars(&vacs, "u"),
@@ -289,7 +298,7 @@ pub fn countdown(y: &YearData, l: &L) -> String {
     }
     for h in &y.public {
         if h.start >= y.today {
-            items.push(Item { date: h.start, label: h.name.clone(), icon: "🎌", over: false, color: 3 });
+            items.push(Item { date: h.start, label: h.label(), icon: "🎌", over: false, color: 3 });
         }
     }
     items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "🎆", over: false, color: 5 });

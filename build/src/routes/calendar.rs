@@ -175,7 +175,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
     let p = prefs::get(&state.db, &user.id).await?;
-    let has_school = crate::domain::holidays::has_school(&p.region(&state.config).0);
+    let has_school = p.regions(&state.config, true).iter().any(|r| crate::domain::holidays::has_school(crate::domain::holidays::split(r).0));
     Ok(CalendarPage {
         holidays_on: p.holidays_enabled,
         school_on: p.school_holidays_enabled,

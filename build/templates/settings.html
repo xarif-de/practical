@@ -19,11 +19,11 @@
     <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload>{% for (code, name) in ctx.languages() %}<option value="{{ code }}"{% if self.lang_is(code) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></span></label>
     <div class="cell"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-image"/></svg></span><span>{{ ctx.t("pref-scheme") }}</span><span class="val"><input type="hidden" name="scheme" value="{% if self.scheme_is("light") %}light{% else if self.scheme_is("dark") %}dark{% else %}auto{% endif %}"><span class="seg" data-field="scheme"><button type="button" data-v="auto" aria-pressed="{{ self.scheme_is("auto") }}">{{ ctx.t("scheme-auto") }}</button><button type="button" data-v="light" aria-pressed="{{ self.scheme_is("light") }}">{{ ctx.t("scheme-light") }}</button><button type="button" data-v="dark" aria-pressed="{{ self.scheme_is("dark") }}">{{ ctx.t("scheme-dark") }}</button></span></span></div>
   </div>
-  <input type="hidden" name="holiday_country" value="{{ region_country }}"><input type="hidden" name="holiday_subdivision" value="{{ region_sub }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
+  <input type="hidden" name="public_regions" value="{{ public_regions }}"><input type="hidden" name="school_regions" value="{{ school_regions }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
   <div class="label">{{ ctx.t("set-region") }}</div>
   <div class="group">
-    <a class="cell link" href="#pick-country"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("set-country") }}</span><span class="val"><span id="v-country">{{ self.country_name() }}</span><span class="chev">›</span></span></a>
-    <a class="cell link" href="#pick-region"><span class="swatch" style="background:var(--c2)"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg></span><span id="v-sub-label">{{ self.sub_label() }}</span><span class="val"><span id="v-sub">{{ self.sub_name() }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#regions-public"><span class="swatch" style="background:var(--hol)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-regions-public") }}</span><span class="val"><span id="v-regions-public">{{ self.regions_text(false) }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#regions-school"><span class="swatch" style="background:var(--fer)"><svg class="ico" aria-hidden="true"><use href="#i-flag"/></svg></span><span>{{ ctx.t("set-regions-school") }}</span><span class="val"><span id="v-regions-school">{{ self.regions_text(true) }}</span><span class="chev">›</span></span></a>
     <a class="cell link" href="#pick-tz"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><span>{{ ctx.t("timezone") }}</span><span class="val"><span id="v-tz">{{ self.tz_name() }}</span><span class="chev">›</span></span></a>
   </div>
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
@@ -72,6 +72,17 @@
   {% if ctx.push_enabled %}<p class="foot">{{ ctx.t("push-hint") }}</p><ul class="plain foot" id="push-devices"></ul>{% endif %}
 </section>
 </form>
+
+{# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}
+{% for kind in ["public", "school"] %}
+<section class="page regions" id="regions-{{ kind }}" data-kind="{{ kind }}">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{% if *kind == "public" %}{{ ctx.t("set-regions-public") }}{% else %}{{ ctx.t("set-regions-school") }}{% endif %}</h2>
+  <div class="group rlist"></div>
+  <div class="group"><a class="cell btnrow" href="#pick-country-{{ kind }}">＋ {{ ctx.t("set-region-add") }}</a></div>
+  <p class="foot">{% if *kind == "public" %}{{ ctx.t("set-regions-public-hint") }}{% else %}{{ ctx.t("set-regions-school-hint") }}{% endif %}</p>
+</section>
+{% endfor %}
 
 <section class="page" id="pick">
   <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>

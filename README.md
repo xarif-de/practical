@@ -167,8 +167,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
 - **Holidays**: a source chain per request — public: `openholidaysapi.org` (36 countries, regions down
   to municipalities) → `date.nager.at` (204 countries, ISO 3166-2 regions) → stale cache; school:
   OpenHolidays → stale cache. 8 s timeout per link, answers cached 30 days in `xui_holidays`.
-  Each user picks country and region (default `HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION`); regions
-  are stored as ISO 3166-2 codes where one exists. Country/region names in every UI language (all ISO
+  Each user keeps two region lists, public and school holidays (default: `HOLIDAYS_COUNTRY`/
+  `HOLIDAYS_SUBDIVISION`); an entry is a whole country (`DE`) or a region of any depth (`DE-SN`),
+  stored as ISO 3166-2 codes where one exists. Holidays several regions share show once; others
+  carry their regions' codes (`Buß- und Bettag (SN)`). The first public region is the user's own:
+  vacation days and bridge days count by it. Country/region names in every UI language (all ISO
   countries) and the region tree of countries OpenHolidays lacks come from Unicode CLDR, built in
   (`build/src/data/regions.json` from `tools/gen_regions.py`; Unicode License v3). Upkeep is lazy
   (daily task; at start it only reads saved state): which source covers which country and CLDR's

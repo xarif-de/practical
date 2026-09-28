@@ -19,6 +19,7 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use rustical_store::auth::{AppToken, Principal};
 use serde::Deserialize;
+use std::collections::HashMap;
 use tower_sessions::Session;
 
 const SESSION_NEW_TOKEN: &str = "new_token";
@@ -41,11 +42,12 @@ pub struct SettingsPage {
     pub palette: Vec<String>,
     pub retention_days: u32,
     pub default_timezone: String,
-    /// the holiday region in effect (the user's or the configured default) and the lists to pick from
-    pub region_country: String,
-    pub region_sub: String,
-    pub subdivisions: Vec<Region>,
-    /// the pickers' data (countries, time zones) as JSON for app.js
+    /// the regions of public / school holidays (codes, in the user's order), comma-joined for the form
+    pub public_regions: String,
+    pub school_regions: String,
+    /// name and path of every chosen region ("Sachsen", "Deutschland")
+    pub region_names: HashMap<String, (String, String)>,
+    /// the pickers' data (countries, time zones, chosen regions' names) as JSON for app.js
     pub picker_json: String,
     /// `:root { --hol; --fer }` from the user's holiday colours ("" = the theme's)
     pub holiday_css: String,
@@ -66,29 +68,14 @@ impl SettingsPage {
     pub fn lang_is(&self, l: &str) -> bool {
         self.prefs.lang.as_deref().unwrap_or(&self.ctx.lang) == l
     }
-    /// what the top level of the country is called ("Bundesland", "Kanton" …), from the API
-    pub fn sub_label(&self) -> String {
-        self.subdivisions.first().map(|r| r.category.clone()).filter(|c| !c.is_empty()).unwrap_or_else(|| self.ctx.t("set-region-sub"))
-    }
-    pub fn country_name(&self) -> String {
-        holidays::region_name(&self.region_country, &self.ctx.lang).unwrap_or_else(|| self.region_country.clone())
-    }
-    /// the chosen region with its parents ("Zürich › Bülach"), or "whole country"
-    pub fn sub_name(&self) -> String {
-        if self.region_sub.is_empty() {
-            return self.ctx.t("set-region-whole");
+    /// a region list as its row shows it: "Sachsen, Bayern", "3 regions" from three on, "none"
+    pub fn regions_text(&self, school: bool) -> String {
+        let list: Vec<&str> = if school { &self.school_regions } else { &self.public_regions }.split(',').filter(|c| !c.is_empty()).collect();
+        match list.len() {
+            0 => self.ctx.t("set-regions-none"),
+            1 | 2 => list.iter().map(|c| self.region_names.get(*c).map(|n| n.0.clone()).unwrap_or_else(|| c.to_string())).collect::<Vec<_>>().join(", "),
+            n => self.ctx.tn("set-regions-n", "n", n as i64),
         }
-        let name = |c: &str| self.subdivisions.iter().find(|r| r.code == c).map(|r| (r.name.clone(), r.parent.clone())).or_else(|| holidays::region_name(c, &self.ctx.lang).map(|n| (n, String::new())));
-        let mut parts = vec![];
-        let mut code = self.region_sub.clone();
-        while let Some((n, p)) = name(&code) {
-            parts.push(n);
-            if p.len() <= 2 || parts.len() > 4 {
-                break;
-            }
-            code = p;
-        }
-        if parts.is_empty() { self.region_sub.clone() } else { parts.into_iter().rev().collect::<Vec<_>>().join(" › ") }
     }
     /// the colour pickers' values: the user's colour, else the (light) theme's
     pub fn holiday_color(&self) -> String {
@@ -99,7 +86,18 @@ impl SettingsPage {
     }
     /// "Holidays: OpenHolidays, Nager.Date · School holidays: OpenHolidays"
     pub fn sources_text(&self) -> String {
-        let (public, school) = holidays::sources(&self.region_country);
+        // over every chosen country, in chain order
+        let mut public = vec![];
+        let mut school = vec![];
+        for code in self.public_regions.split(',').chain(self.school_regions.split(',')).filter(|c| !c.is_empty()) {
+            let (p, s) = holidays::sources(holidays::split(code).0);
+            public.extend(p);
+            school.extend(s);
+        }
+        for v in [&mut public, &mut school] {
+            v.sort_by_key(|x| usize::from(*x != "OpenHolidays"));
+            v.dedup();
+        }
         let none = self.ctx.t("set-src-none");
         let list = |v: Vec<&str>| if v.is_empty() { none.clone() } else { v.join(" → ") };
         let mut args = fluent_bundle::FluentArgs::new();
@@ -126,7 +124,14 @@ impl SettingsPage {
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
     let new_token: Option<String> = session.remove(SESSION_NEW_TOKEN).await?;
     let snaps = events::alarm_snaps(prefs::get(&state.db, &user.id).await?.alarm_snaps_json.as_deref());
-    let region = prefs::get(&state.db, &user.id).await?.region(&state.config);
+    let p = prefs::get(&state.db, &user.id).await?;
+    let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
+    let mut region_names = HashMap::new();
+    for code in public_regions.iter().chain(&school_regions) {
+        if !region_names.contains_key(code) {
+            region_names.insert(code.clone(), holidays::describe(&state, code, &ctx.lang).await?);
+        }
+    }
     Ok(SettingsPage {
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
@@ -144,11 +149,11 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
         default_timezone: state.config.default_timezone.clone(),
-        region_country: region.0.clone(),
-        region_sub: region.1.clone(),
-        subdivisions: holidays::subdivisions(&state, &region.0, &ctx.lang).await?,
-        holiday_css: prefs::get(&state.db, &user.id).await?.holiday_css(),
-        picker_json: serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones() }).to_string().replace('<', "\\u003c"),
+        picker_json: serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones(), "names": region_names }).to_string().replace('<', "\\u003c"),
+        public_regions: public_regions.join(","),
+        school_regions: school_regions.join(","),
+        region_names,
+        holiday_css: p.holiday_css(),
         calendars_all: collections::calendars_for(&state, &user, false).await?,
         vacation_kind: vacation_rule(&prefs::get(&state.db, &user.id).await?).0,
         vacation_value: vacation_rule(&prefs::get(&state.db, &user.id).await?).1,
@@ -517,10 +522,9 @@ struct PrefsForm {
     holiday_color: String,
     #[serde(default)]
     school_color: String,
-    #[serde(default)]
-    holiday_country: String,
-    #[serde(default)]
-    holiday_subdivision: String,
+    /// comma lists of region codes; absent = unchanged
+    public_regions: Option<String>,
+    school_regions: Option<String>,
     #[serde(default)]
     vacation_days: String,
     #[serde(default)]
@@ -543,12 +547,21 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         // holiday colours: "" = the theme's; the switches live in the calendar's filter (holiday_display_save)
         p.holiday_color = Some(f.holiday_color.trim().to_lowercase()).filter(|c| prefs::is_hex_color(c));
         p.school_color = Some(f.school_color.trim().to_lowercase()).filter(|c| prefs::is_hex_color(c));
-        // a chosen region is kept even when empty (= the whole country); a subdivision of another country is dropped
-        let country = f.holiday_country.trim().to_uppercase();
-        if country.len() == 2 && country.chars().all(|c| c.is_ascii_uppercase()) {
-            let sub = f.holiday_subdivision.trim().to_uppercase();
-            p.holiday_subdivision = Some(if sub.starts_with(&format!("{country}-")) { sub } else { String::new() });
-            p.holiday_country = Some(country);
+        // region lists: known-shaped codes, each once, in the user's order ("" = none)
+        let regions = |v: &str| {
+            let mut out: Vec<String> = vec![];
+            for c in v.split(',').map(|c| c.trim().to_uppercase()).filter(|c| holidays::valid_code(c)) {
+                if !out.contains(&c) && out.len() < 40 {
+                    out.push(c);
+                }
+            }
+            out.join(",")
+        };
+        if let Some(v) = &f.public_regions {
+            p.public_regions = Some(regions(v));
+        }
+        if let Some(v) = &f.school_regions {
+            p.school_regions = Some(regions(v));
         }
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
         let kind = if f.vacation_kind == "calendar" { "calendar" } else { "category" };
