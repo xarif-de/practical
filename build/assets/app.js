@@ -550,8 +550,9 @@
   // colour order: hue round the circle (OKLCH), lighter first; greys after the colours
   const hueKey = hex => { const [L, c, h] = C.lch(hex); return c < 0.03 ? [1, 0, -L] : [0, h, -L]; };
   const coll = new Intl.Collator(window.LOC, { sensitivity: 'base', numeric: true });
-  const order = (a, b) => { const x = hueKey(a.hex), y = hueKey(b.hex); for (let i = 0; i < 3; i++) if (Math.abs(x[i] - y[i]) > 1e-9) return x[i] - y[i];
-    return b.keys.length - a.keys.length || coll.compare(a.name || '', b.name || '') || coll.compare(a.cal || '', b.cal || ''); };
+  const byHue = (a, b) => { const x = hueKey(a), y = hueKey(b); for (let i = 0; i < 3; i++) if (Math.abs(x[i] - y[i]) > 1e-9) return x[i] - y[i]; return 0; };
+  // rows of a group: origin, name, count (most first), colour
+  const order = (a, b) => coll.compare(a.cal || '', b.cal || '') || coll.compare(a.name || '', b.name || '') || b.keys.length - a.keys.length || byHue(a.hex, b.hex);
   const draw = async force => {
     const src = await load(force), pal = palette(src);
     rows = merge(src);
@@ -568,7 +569,7 @@
     list.innerHTML = ORDER.map(k => { const idx = rows.map((s, i) => [s, i]).filter(([s]) => s.kind === k || (k === 'holiday' && s.kind === 'school'));
         if (k !== 'holiday') idx.sort((x, y) => order(x[0], y[0]));
         return idx.length ? `<div class="label">${esc(tr('js-color-g-' + k))}</div><div class="group">${idx.map(([s, i]) => row(s, i)).join('')}</div>` : ''; }).join('')
-      + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${pal.map(p => `<div class="cell"><span class="swatch" style="background:${p.hex}"></span><span>${esc(srcText(p.src))}</span><span class="val"><code>${p.hex}</code></span></div>`).join('')}</div>`;
+      + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${pal.map(p => ({ ...p, text: srcText(p.src) })).sort((a, b) => b.src.length - a.src.length || coll.compare(a.text, b.text) || byHue(a.hex, b.hex)).map(p => `<div class="cell"><span class="swatch" style="background:${p.hex}"></span><span>${esc(p.text)}</span><span class="val"><code>${p.hex}</code></span></div>`).join('')}</div>`; // what the picker offers: most used first, then name, colour
     const v = $('#v-colors'); if (v) v.textContent = pal.length;
   };
   list.addEventListener('click', e => {
