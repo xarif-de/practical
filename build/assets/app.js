@@ -349,7 +349,7 @@
   // equal labels once, with a count ("Termin „Urlaub“ 26×"); after two names only how many more
   const srcText = src => { const m = new Map(); src.forEach(x => { const l = label(x); m.set(l, (m.get(l) || 0) + 1); }); const u = [...m].map(([l, n]) => n > 1 ? l + ' ' + n + '×' : l);
     return u.length <= 2 ? u.join(' · ') : u[0] + ' · ' + u[1] + ' ' + tr('js-color-more', { n: u.length - 2 }); };
-  const isSelf = (s, self) => self && s.kind === self.kind && (self.keys ? self.keys.includes(s.key) : s.key === self.key);
+  const isSelf = (s, self) => self && (self.list ? self.list.includes(s) : s.kind === self.kind && (self.keys ? self.keys.includes(s.key) : s.key === self.key));
 
   // ---- the preview: the colour where the app shows it, on the light and the dark page at once ----
   const preview = title => {
@@ -574,6 +574,8 @@
   const draw = async force => {
     const src = await load(force), pal = palette(src);
     rows = merge(src);
+    // what the picker offers: most used first, then name, colour; a row recolours everything of its colour
+    offers = pal.map(p => ({ ...p, text: srcText(p.src) })).sort((a, b) => b.src.length - a.src.length || coll.compare(a.text, b.text) || byHue(a.hex, b.hex));
     const row = (s, i) => {
       const sw = `<span class="swatch" style="background:${s.hex}"><svg class="ico" aria-hidden="true"><use href="#${ICON[s.kind]}"/></svg></span>`;
       const name = VAR[s.kind] ? kindText(s.kind) : s.name || '–';
@@ -586,19 +588,41 @@
     list.innerHTML = ORDER.map(k => { const idx = rows.map((s, i) => [s, i]).filter(([s]) => s.kind === k || (k === 'holiday' && s.kind === 'school'));
         if (k !== 'holiday') idx.sort((x, y) => order(x[0], y[0]));
         return idx.length ? `<div class="label">${esc(tr('js-color-g-' + k))}</div><div class="group">${idx.map(([s, i]) => row(s, i)).join('')}</div>` : ''; }).join('')
-      + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${pal.map(p => ({ ...p, text: srcText(p.src) })).sort((a, b) => b.src.length - a.src.length || coll.compare(a.text, b.text) || byHue(a.hex, b.hex)).map(p => `<div class="cell"><span class="swatch" style="background:${p.hex}"></span><span>${esc(p.text)}</span><span class="val"><code>${p.hex}</code></span></div>`).join('')}</div>`; // what the picker offers: most used first, then name, colour
+      + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${offers.map((p, i) => { const body = `<span class="swatch" style="background:${p.hex}"></span><span>${esc(p.text)}</span><span class="val"><code>${p.hex}</code>`;
+        return p.src.some(x => x.editable) ? `<button type="button" class="cell link" data-o="${i}">${body}<span class="chev">›</span></span></button>` : `<div class="cell">${body}</span></div>`; }).join('')}</div>`;
     const v = $('#v-colors'); if (v) v.textContent = pal.length;
   };
+  let offers = [];
+  // one element's colour: collections, events and tasks through /api/colors, a category into its rule
+  // (the setting keeps its mode), a holiday colour into its prefs field (autosave)
+  const setOne = async (kind, key, v) => {
+    const vr = VAR[kind];
+    if (vr) { const f = field(vr[0]); f.value = v; themeVar(vr[1], v); f.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+    const r = await (kind.startsWith('category') ? putRule(kind === 'category' ? 'event' : 'task', key, v) : put(kind, key, v)).catch(() => null);
+    if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); return false; }
+    if (kind === 'calendar' || kind === 'addressbook') syncPage(kind, key, v);
+    return true;
+  };
   list.addEventListener('click', e => {
+    const o = e.target.closest('button[data-o]');
+    if (o) {
+      // a colour of the offer: every element that carries it gets the new one (read-only ones stay)
+      const p = offers[+o.dataset.o], els = p.src.filter(x => x.editable);
+      open(o, { title: p.text, sub: tr('js-color-count', { n: els.length }), what: p.text, value: p.hex, inherit: null, self: { list: p.src }, onPick: async v => {
+        let n = 0; for (const x of els) { if (!await setOne(x.kind, x.key, v)) break; n++; }
+        if (n === els.length) toast(tr('js-color-changed', { n })); draw(true);
+      } });
+      return;
+    }
     const b = e.target.closest('button[data-i]'); if (!b) return;
     const s = rows[+b.dataset.i], vr = VAR[s.kind];
     const inherit = s.cal ? { hex: toHex(s.cal_color), text: tr('js-color-inherit-cal', { cal: s.cal }) } : vr ? { hex: toHex(THEME[s.kind]), text: tr('js-color-std') } : null;
     const title = vr ? kindText(s.kind) : s.name || '–';
     open(b, { title, sub: kindText(s.kind) + (s.keys.length > 1 ? ' · ' + tr('js-color-count', { n: s.keys.length }) : ''), what: vr ? title : label(s), value: s.color, inherit, self: { kind: s.kind, keys: s.keys }, onPick: async v => {
-      if (vr) { const f = field(vr[0]); f.value = v; themeVar(vr[1], v); f.dispatchEvent(new Event('change', { bubbles: true })); }
+      if (vr) await setOne(s.kind, s.key, v);
       else {
-        // a merged row changes all its elements; a category's colour is a setting of its rule (its mode stays)
-        for (const key of s.keys) { const r = s.kind.startsWith('category') ? await putRule(s.kind === 'category' ? 'event' : 'task', key, v).catch(() => null) : await put(s.kind, key, v).catch(() => null); if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); draw(true); return; } if (s.kind === 'calendar' || s.kind === 'addressbook') syncPage(s.kind, key, v); }
+        // a merged row changes all its elements
+        for (const key of s.keys) if (!await setOne(s.kind, key, v)) { draw(true); return; }
         toast(settingsSaved());
         if (s.kind.startsWith('category') && s.color && s.color !== v) await recolor(s.kind === 'category' ? 'event' : 'task', s.key, s.color, v);
       }

@@ -814,6 +814,7 @@ js-color-k-school = Vacaciones escolares
 js-color-src = %kind «%name»
 js-color-more = + %n más
 js-color-count = %n entradas
+js-color-changed = Recoloreados: %n.
 js-color-recolor-event = Eventos existentes de la categoría «%cat» con el color antiguo: %n. ¿Darles el color nuevo?
 js-color-recolor-task = Tareas existentes de la categoría «%cat» con el color antiguo: %n. ¿Darles el color nuevo?
 js-color-recolor-yes = Recolorear

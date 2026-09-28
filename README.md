@@ -163,6 +163,8 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   Existing events/tasks with the category that still carry the old colour are counted
   (`POST /api/colors/category`, `colors::category_objects`); the user is asked whether they follow — one
   given another colour by hand is left alone.
+  The closing list (what the picker offers, one row per colour) recolours every element of that colour at
+  once — collections, events/tasks, category rules, holiday colours; read-only ones stay.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

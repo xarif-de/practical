@@ -814,6 +814,7 @@ js-color-k-school = School holidays
 js-color-src = %kind “%name”
 js-color-more = + %n more
 js-color-count = %n entries
+js-color-changed = Recoloured: %n.
 js-color-recolor-event = Existing events of the category “%cat” with the old colour: %n. Give them the new colour?
 js-color-recolor-task = Existing tasks of the category “%cat” with the old colour: %n. Give them the new colour?
 js-color-recolor-yes = Recolour
