@@ -689,6 +689,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .nav a { display: grid; place-items: center; padding: 6px 9px; }
 .tabbar .ico { width: 22px; height: 22px; }
 .icon-btn, .seg button { display: inline-grid; place-items: center; }
+/* the scheme button shows the setting in effect: system, light or dark */
+#scheme .ico { display: none; } html[data-pref-scheme=auto] #scheme .s-auto, html[data-pref-scheme=light] #scheme .s-light, html[data-pref-scheme=dark] #scheme .s-dark { display: block; }
 .seg button { min-height: 32px; min-width: 36px; box-sizing: border-box; } /* icon-only segments (contacts list/table, reminder settings) get the height of the text ones and of .icon-btn */
 .seg button .ico { width: 16px; height: 16px; }
 .btn[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }

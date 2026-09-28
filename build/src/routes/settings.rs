@@ -606,6 +606,20 @@ async fn holiday_display_save(State(state): State<SharedState>, user: Principal,
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
+#[derive(Deserialize)]
+struct SchemeChoice {
+    scheme: String,
+}
+
+/// The colour scheme from the button in the bar (app.js): auto | light | dark.
+async fn scheme_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    p.scheme = Some(d.scheme).filter(|s| s == "light" || s == "dark");
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 /// Contact table column choice (JSON array from app.js), stored per user.
 async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
@@ -695,6 +709,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/holiday-display", post(holiday_display_save))
+        .route("/settings/scheme", post(scheme_save))
         .route("/api/holidays/countries", get(api_countries))
         .route("/api/holidays/subdivisions", get(api_subdivisions))
         .route("/settings/columns", post(columns_save))

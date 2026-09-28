@@ -74,9 +74,23 @@
 
   window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
 
+  // colour scheme: the user's setting (auto | light | dark, stored on the server, rendered into <html>);
+  // the button in the bar steps through the three and saves, the settings' segment follows
   const h = document.documentElement;
   const sb = $('#scheme');
-  if (sb) sb.addEventListener('click', () => { h.dataset.scheme = h.dataset.scheme === 'dark' ? 'light' : 'dark'; localStorage.scheme = h.dataset.scheme; });
+  window.applyScheme = v => {
+    h.dataset.prefScheme = v; h.dataset.scheme = v === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : v;
+    if (sb) sb.title = sb.dataset['t' + v[0].toUpperCase() + v.slice(1)];
+  };
+  if (sb) sb.addEventListener('click', async () => {
+    const v = { auto: 'light', light: 'dark' }[h.dataset.prefScheme] || 'auto';
+    applyScheme(v);
+    const seg = $('.seg[data-field=scheme]');
+    if (seg) { segPress($(`button[data-v="${v}"]`, seg)); seg.closest('.val').querySelector('input[name=scheme]').value = v; }
+    if (!document.body.dataset.user) return; // the login page: for this visit only
+    const r = await fetch('/settings/scheme', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ scheme: v }) }).catch(() => null);
+    if (!r || !r.ok) toast(tr('js-set-err'), true);
+  });
 
   // confirmations on destructive forms
   $$('[data-confirm]').forEach(b => b.addEventListener('click', async e => { if (b.dataset.asked) { delete b.dataset.asked; return; } e.preventDefault(); if (await ask(b.dataset.confirm)) { b.dataset.asked = '1'; b.click(); } })); // the repeated click submits with this button
@@ -119,7 +133,7 @@
       form.addEventListener('change', async e => {
         if (!e.target.name || e.target.type === 'file' || !form.reportValidity()) return;
         const msg = await save(form); if (!msg) return;
-        if (e.target.name === 'scheme') { const v = e.target.value; if (v === 'auto') delete localStorage.scheme; else localStorage.scheme = v; document.documentElement.dataset.scheme = localStorage.scheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+        if (e.target.name === 'scheme') applyScheme(e.target.value);
         if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
       });
     });

@@ -37,6 +37,9 @@ pub struct PageCtx {
     pub dev: bool,
     /// The request asked for JSON (a form saved by fetch): answer instead of redirecting with a flash.
     pub wants_json: bool,
+    /// The user's colour scheme: auto (the system's) | light | dark — rendered into <html>, so it
+    /// holds on every device and nothing flickers
+    pub scheme: String,
 }
 
 impl PageCtx {
@@ -119,11 +122,16 @@ impl FromRequestParts<SharedState> for PageCtx {
             flash = session.remove::<Flash>(SESSION_FLASH).await.ok().flatten();
         }
         // user preference (DB) beats the session choice which beats Accept-Language
-        if lang.is_none()
-            && let Some(u) = &user
-            && let Ok(Some(l)) = crate::domain::prefs::get_lang(&state.db, &u.id).await
+        let mut scheme = "auto".to_string();
+        if let Some(u) = &user
+            && let Ok((l, s)) = crate::domain::prefs::get_look(&state.db, &u.id).await
         {
-            lang = Some(l);
+            if lang.is_none() {
+                lang = l;
+            }
+            if let Some(s) = s.filter(|s| s == "light" || s == "dark") {
+                scheme = s;
+            }
         }
         let lang = lang.unwrap_or_else(|| negotiate(accept.as_deref(), &state.config.default_lang));
         Ok(Self {
@@ -138,6 +146,7 @@ impl FromRequestParts<SharedState> for PageCtx {
             asset_v: crate::routes::assets::asset_version(),
             dev: state.config.dev_assets_dir.is_some(),
             wants_json,
+            scheme,
         })
     }
 }

@@ -105,12 +105,14 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
     })
 }
 
-pub async fn get_lang(db: &SqlitePool, principal: &str) -> Result<Option<String>, sqlx::Error> {
-    Ok(sqlx::query("SELECT lang FROM xui_user_settings WHERE principal = ?")
+/// Language and colour scheme — what every page needs (`PageCtx`), in one query.
+pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<(Option<String>, Option<String>), sqlx::Error> {
+    Ok(sqlx::query("SELECT lang, scheme FROM xui_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?
-        .and_then(|r| r.get::<Option<String>, _>("lang")))
+        .map(|r| (r.get("lang"), r.get("scheme")))
+        .unwrap_or_default())
 }
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
