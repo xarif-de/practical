@@ -1373,7 +1373,7 @@
       if (focus) focus.classList.remove('focus');
       focus = w; w.classList.add('focus');
       const d = parse(w.dataset.week);
-      state.date = w.dataset.week;
+      if (localIso(weekStart(parse(state.date))) !== w.dataset.week) state.date = w.dataset.week; // a new week starts on its Monday; a day picked elsewhere inside it stays picked
       const h1 = $('#title', root); if (h1) { h1.textContent = tr('js-week', { w: isoWeek(d), y: isoYear(d) }); document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
       history.replaceState(state, '', url(false).pathname + url(false).search);
       tlSelect(); heatSync(d);
@@ -1392,7 +1392,7 @@
             return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('') + '</div>'; }).join('');
         wireItems(heat);
       }
-      $$('.hw', heat).forEach(r => r.classList.toggle('focus', r.dataset.week === state.date)); }
+      $$('.hw', heat).forEach(r => r.classList.toggle('focus', r.dataset.week === localIso(weekStart(parse(state.date))))); }
     async function extend(dir) {
       if (busy) return; const bs = blocks(); if (!bs.length) return;
       const edge = dir > 0 ? bs[bs.length - 1] : bs[0];
