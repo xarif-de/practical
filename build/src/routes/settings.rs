@@ -566,6 +566,8 @@ struct PrefsForm {
     alarm_snaps_start: String,
     #[serde(default)]
     alarm_snaps_end: String,
+    /// days the search history is kept (prefs::HISTORY_DAYS); absent = unchanged
+    search_history_days: Option<String>,
 }
 
 async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
@@ -610,6 +612,9 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
         let snaps = events::AlarmSnaps { start: if start.is_empty() { events::AlarmSnaps::default().start } else { start }, end };
         p.alarm_snaps_json = if snaps == events::AlarmSnaps::default() { None } else { Some(serde_json::to_string(&snaps).unwrap()) };
+        if let Some(d) = f.search_history_days.as_deref().and_then(|d| d.parse::<i64>().ok()).filter(|d| prefs::HISTORY_DAYS.contains(d)) {
+            p.search_history_days = Some(d);
+        }
         prefs::set(&state.db, &user.id, &p).await?;
         if let Some(l) = &p.lang {
             session.insert(crate::ctx::SESSION_LANG, l).await?;

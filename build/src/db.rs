@@ -128,6 +128,13 @@ CREATE TABLE xui_holidays (
         "ALTER TABLE xui_user_settings ADD COLUMN public_regions TEXT;
          ALTER TABLE xui_user_settings ADD COLUMN school_regions TEXT;",
     ),
+    (
+        12,
+        // the top-bar search's history (domain::search_history): one row per query (q_norm = folded),
+        // with the result last opened from it; kept for search_history_days (NULL = 90, 0 = not recorded, -1 = unlimited)
+        "CREATE TABLE xui_search_history (id INTEGER PRIMARY KEY AUTOINCREMENT, principal TEXT NOT NULL, q TEXT NOT NULL, q_norm TEXT NOT NULL, target_json TEXT, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, uses INTEGER NOT NULL DEFAULT 1, UNIQUE (principal, q_norm));
+         ALTER TABLE xui_user_settings ADD COLUMN search_history_days INTEGER;",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

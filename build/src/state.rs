@@ -28,6 +28,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// geocoder proxy: throttle + cache (`domain::geo`)
     pub geo: crate::domain::geo::Geo,
+    /// the top-bar search's per-user corpus (`domain::search`)
+    pub search_index: crate::domain::search::IndexCache,
     pub vapid: Option<VapidKeypair>,
     pub started_at: chrono::DateTime<chrono::Utc>,
 }

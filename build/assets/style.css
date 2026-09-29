@@ -238,10 +238,19 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 @media (min-width: 900px) { .app { grid-template-columns: 1fr; } .topbar { grid-column: 1; } }
 .sidebar { display: none !important; }
 .topbar { gap: 10px; }
-.usearch { position: relative; flex: 1; max-width: 560px; margin: 0 auto; }
+.usearch { position: relative; flex: 1; max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 6px; }
+.usearch .sfield { position: relative; flex: 1; min-width: 0; }
 .usearch input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--tile); font: inherit; color: var(--fg); }
-.usearch::before { content: "⌕"; position: absolute; left: 12px; top: 7px; color: var(--fg-3); }
+.usearch .sfield::before { content: "⌕"; position: absolute; left: 12px; top: 7px; color: var(--fg-3); z-index: 1; }
 .usearch input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg); }
+/* history completion behind the caret: the typed part invisible, the rest grey (app.js search) */
+.usearch .ghost { position: absolute; inset: 0; padding: 9px 12px 9px 35px; font: inherit; white-space: pre; overflow: hidden; pointer-events: none; color: var(--fg-3); }
+.usearch .ghost .t { color: transparent; } .usearch .ghost:empty { display: none; }
+.usearch .shelp > button .ico { width: 17px; height: 17px; }
+.usearch .shelp .pop { width: 340px; font-size: 13px; line-height: 1.45; } .usearch .shelp ul { margin: 4px 0 8px; padding-left: 18px; } .usearch .shelp li { margin: 3px 0; }
+.usearch .shelp code, .usearch kbd { font: 12px ui-monospace, monospace; background: var(--tile); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.usearch .shelp .keys { color: var(--fg-2); font-size: 12px; margin: 0; }
+@media (max-width: 720px) { .usearch .shelp { display: none; } .usearch .sres { position: fixed; top: 56px; left: 8px; right: 8px; max-height: calc(100dvh - 140px); } } /* no hover on a phone, and the top bar has no room */
 .sres { position: absolute; top: 42px; left: 0; right: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; z-index: 30; }
 .sres h5 { margin: 6px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
 .sres .r { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: 10px; padding: 6px 10px; border-radius: 8px; align-items: center; }
@@ -252,6 +261,26 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .sres .r b { font-weight: 600; font-size: 14px; } .sres .r small { color: var(--fg-3); font-size: 12px; }
 .sres .jump { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .sres .none { padding: 10px; color: var(--fg-3); } .sres .r.done b { text-decoration: line-through; color: var(--fg-3); }
+.sres { max-height: min(70vh, 560px); overflow-y: auto; }
+.sres h5 { display: flex; justify-content: space-between; } .sres h5 span { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.sres .r.on { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); } /* the keyboard's (and the mouse's) pick */
+.sres .r mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; }
+.sres .r small .ico { width: 12px; height: 12px; vertical-align: -2px; margin-right: 2px; }
+.sres .r .ic .ico { width: 17px; height: 17px; }
+.sres .r.more { border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; margin-top: 4px; } .sres .r.more b { color: var(--accent); font-weight: 500; }
+.sres .r.hist { grid-template-columns: 28px 1fr auto; } .sres .r.hist .ic { color: var(--fg-3); } .sres .r.hist b { font-weight: 500; }
+.sres .r.hist .hx { all: unset; grid-row: 1 / span 2; grid-column: 3; cursor: pointer; color: var(--fg-3); width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; }
+.sres .r.hist .hx:hover { color: var(--today); background: var(--tile); } .sres .r.hist .hx .ico { width: 14px; height: 14px; }
+.sres .sscope { display: flex; align-items: center; gap: 6px; margin: 4px 10px 2px; font-size: 12px; color: var(--accent); } .sres .sscope .ico { width: 13px; height: 13px; }
+/* "all results" (app.js openAll): the drop-down's rows in a dialog */
+.ask-box.sdlg { width: min(720px, 100%); padding: 0; height: min(78vh, 720px); display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; }
+.sdlg .sd-head { display: flex; gap: 8px; align-items: center; padding: 14px 14px 8px; }
+.sdlg .sd-head .sfield { flex: 1; position: relative; } .sdlg .sd-head .sfield::before { content: "⌕"; position: absolute; left: 12px; top: 7px; color: var(--fg-3); }
+.sdlg .sd-head input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--tile); font: inherit; color: var(--fg); }
+.sdlg .sd-head input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg); }
+.sdlg .sd-tabs { margin: 0 14px 6px; justify-self: start; } .sdlg .sd-tabs .n { color: var(--fg-3); font-size: 12px; } .sdlg .sd-tabs button:disabled { opacity: .45; }
+.sdlg .sd-list { position: static; max-height: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; overflow-y: auto; padding: 6px 8px; }
+.sdlg .sd-foot { margin: 0; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-3); }
 .filter { position: relative; }
 .filter .pop { display: block; position: absolute; right: 0; top: 38px; width: 260px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 8px 10px; z-index: 30; }
 /* hover popovers (.filter: topbar filter, user menu, contacts field picker; .more: calendar views) share one

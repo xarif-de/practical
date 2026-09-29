@@ -29,9 +29,17 @@ pub struct Prefs {
     pub alarm_snaps_json: Option<String>,
     /// columns of the task table (JSON array of `routes::tasks::ALL_COLUMNS` names)
     pub task_columns_json: Option<String>,
+    /// days the search history is kept (NULL = 90, 0 = not recorded, -1 = unlimited; `history_days`)
+    pub search_history_days: Option<i64>,
 }
 
+/// The choices of the search history's retention (days; 0 = off, -1 = unlimited).
+pub const HISTORY_DAYS: [i64; 6] = [0, 7, 30, 90, 365, -1];
+
 impl Prefs {
+    pub fn history_days(&self) -> i64 {
+        self.search_history_days.filter(|d| HISTORY_DAYS.contains(d)).unwrap_or(90)
+    }
     pub fn defaults() -> Self {
         Self { holidays_enabled: true, school_holidays_enabled: true, ..Default::default() }
     }
@@ -101,6 +109,7 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             alarm_presets_json: r.get("alarm_presets_json"),
             alarm_snaps_json: r.get("alarm_snaps_json"),
             task_columns_json: r.get("task_columns_json"),
+            search_history_days: r.get("search_history_days"),
         },
     })
 }
@@ -117,8 +126,8 @@ pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<(Option<String
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
            holiday_country=excluded.holiday_country, holiday_subdivision=excluded.holiday_subdivision,
@@ -126,7 +135,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
            holiday_color=excluded.holiday_color, school_color=excluded.school_color, vacation_days=excluded.vacation_days,
            vacation_rule_json=excluded.vacation_rule_json,
            contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
-           alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, updated_at=CURRENT_TIMESTAMP",
+           alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, search_history_days=excluded.search_history_days, updated_at=CURRENT_TIMESTAMP",
     )
     .bind(principal)
     .bind(&p.lang)
@@ -147,6 +156,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(&p.alarm_presets_json)
     .bind(&p.alarm_snaps_json)
     .bind(&p.task_columns_json)
+    .bind(p.search_history_days)
     .execute(db)
     .await?;
     Ok(())

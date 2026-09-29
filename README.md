@@ -19,7 +19,7 @@ contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
-preferred flags), address books with a colour · minimal tasks (VTODO) · universal search incl. "jump to a date" (an event hit or a date jump shows its day in the calendar view on screen — day, week, month, year — else in the day view; a contact hit on the contacts page marks and scrolls to it in the list or table on screen (a click picks a contact in either view, hover tints faintly, and the picked one stays picked and in view across a view switch); a task hit stays in the tasks view on screen when that view can show the task (groups, table, board, timeline, deck; history for finished ones), else — and from elsewhere, `/tasks#key` — it lands in the groups list; a hit finished before the lookback widens it to "all". The picked task stays marked across view switches, a table row click picks, from elsewhere — and any `/contacts#key` link — it opens in the list) · orbit date
+preferred flags), address books with a colour · minimal tasks (VTODO) · universal search (see **Search**) · orbit date
 picker · public/school holidays for 204 countries (OpenHolidays → Nager.Date) · vacation-day counting ·
 browser push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German,
 English, French and Spanish.
@@ -183,6 +183,27 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   asks before it drops them. Hints: a picked colour too close to one that cannot move, hard to see on light
   or dark, a calendar colour that changes the other view too. Apply = `POST /api/colors/batch`
   (`colors::apply`: every change, failures counted, rules and prefs written once).
+- **Search** (top bar; `domain::search`, `/api/search`, app.js universal search): events (title, place,
+  categories, notes), contacts (name, nickname, organisation, e-mail, category, address, note, phone digits)
+  and tasks. Folded (case/diacritics off), every query word must match; per word: whole word > word start >
+  inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3
+  hits). Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
+  "n events"), openness and due date for tasks. Prefixes `termin:`/`event:`, `kontakt:`/`contact:`,
+  `aufgabe:`/`task:` (+ fr/es) narrow to one kind; a date query adds "jump to". Drop-down: ≤ 5 per kind,
+  ≤ 10 in all, split by each kind's share of the matches; "All results" / Enter opens a dialog with ≤ 200 per
+  kind and kind tabs; ↑↓ Enter Esc, `/` and Ctrl/⌘ K focus, <mark> on matches; an info button explains it.
+  A pick keeps the view on screen where it can show the hit: calendar day/week/month/year (else the day
+  view), contacts list/table (else the list; `/contacts#key` always opens the list), tasks
+  groups/table/board/timeline/deck/history (else the groups list; `/tasks#key`; finished before the
+  lookback → `back=all`). Picked contacts/tasks stay picked across view switches. Cost: per user, the
+  corpus (±2 years of occurrences, contacts, tasks, pre-folded) is cached in memory (`IndexCache`) under a
+  fingerprint of the user's collections' synctokens — rebuilt on any change (also CalDAV), dropped after
+  30 min idle; the client debounces (180 ms), aborts stale requests and keeps answers 30 s.
+  History (`xui_search_history`, `/api/search/history`): a query is kept when a result is opened from it
+  (with that result, so Tab on the grey completion jumps straight there) or on Enter; matching entries
+  show at the drop-down's foot (× deletes), recent ones on an empty focus. Settings → Search: retention
+  (`xui_user_settings.search_history_days`: 0 = off, 7/30/90 (default)/365 days, -1 = unlimited; ≤ 300
+  entries), the list with single deletes, clear all.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

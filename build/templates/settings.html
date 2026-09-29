@@ -20,6 +20,7 @@
     <label class="cell"><span class="swatch" style="background:var(--accent)"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span>{{ ctx.t("pref-language") }}</span><span class="val"><select name="lang" data-reload>{% for (code, name) in ctx.languages() %}<option value="{{ code }}"{% if self.lang_is(code) %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></span></label>
     <div class="cell"><span class="swatch" style="background:var(--c5)"><svg class="ico" aria-hidden="true"><use href="#i-scheme-auto"/></svg></span><span>{{ ctx.t("pref-scheme") }}</span><span class="val"><input type="hidden" name="scheme" value="{% if self.scheme_is("light") %}light{% else if self.scheme_is("dark") %}dark{% else %}auto{% endif %}"><span class="seg" data-field="scheme"><button type="button" data-v="auto" aria-pressed="{{ self.scheme_is("auto") }}">{{ ctx.t("scheme-auto") }}</button><button type="button" data-v="light" aria-pressed="{{ self.scheme_is("light") }}">{{ ctx.t("scheme-light") }}</button><button type="button" data-v="dark" aria-pressed="{{ self.scheme_is("dark") }}">{{ ctx.t("scheme-dark") }}</button></span></span></div>
     <a class="cell link" href="#colors"><span class="swatch cpk-rainbow"></span><span>{{ ctx.t("set-colors") }}</span><span class="val"><span id="v-colors"></span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#search"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-history"/></svg></span><span>{{ ctx.t("set-search") }}</span><span class="val"><span id="v-search">{% let hd = prefs.history_days() %}{% if hd == 0 %}{{ ctx.t("set-search-off") }}{% else if hd == -1 %}{{ ctx.t("set-search-forever") }}{% else if hd == 365 %}{{ ctx.t("set-search-year") }}{% else %}{{ ctx.tn("set-days", "n", hd) }}{% endif %}</span><span class="chev">›</span></span></a>
   </div>
   <input type="hidden" name="public_regions" value="{{ public_regions }}"><input type="hidden" name="school_regions" value="{{ school_regions }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
   <div class="label">{{ ctx.t("set-region") }}</div>
@@ -76,6 +77,19 @@
     {% else %}<div class="cell noic"><span class="muted">{{ ctx.t("push-unavailable") }}</span></div>{% endif %}
   </div>
   {% if ctx.push_enabled %}<p class="foot">{{ ctx.t("push-hint") }}</p><ul class="plain foot" id="push-devices"></ul>{% endif %}
+</section>
+
+<section class="page" id="search" data-t-empty="{{ ctx.t("set-search-empty") }}" data-t-rm="{{ ctx.t("set-search-rm") }}" data-t-uses="{{ ctx.t1("set-search-uses", "n", "{n}") }}" data-t-ask="{{ ctx.t("set-search-clear-ask") }}">
+  <a class="back" href="#">‹ {{ ctx.t("nav-settings") }}</a>
+  <h2>{{ ctx.t("set-search") }}</h2>
+  <div class="label">{{ ctx.t("set-search-hist") }}</div>
+  <div class="group">
+    <label class="cell noic"><span>{{ ctx.t("set-search-keep") }}</span><span class="val"><select name="search_history_days" id="hist-days">{% for d in [0i64, 7, 30, 90, 365, -1] %}<option value="{{ d }}"{% if prefs.history_days() == *d %} selected{% endif %}>{% if *d == 0 %}{{ ctx.t("set-search-off") }}{% else if *d == -1 %}{{ ctx.t("set-search-forever") }}{% else if *d == 365 %}{{ ctx.t("set-search-year") }}{% else %}{{ ctx.tn("set-days", "n", **d) }}{% endif %}</option>{% endfor %}</select></span></label>
+  </div>
+  <p class="foot">{{ ctx.t("set-search-hint") }}</p>
+  <div class="label">{{ ctx.t("set-search-entries") }} <span id="hist-n"></span></div>
+  <div class="group" id="hist-list"></div>
+  <div class="group sp"><button class="cell btnrow danger" type="button" id="hist-clear" disabled><svg class="ico" aria-hidden="true"><use href="#i-trash-2"/></svg><span>{{ ctx.t("set-search-clear") }}</span></button></div>
 </section>
 
 {# every element with a colour, drawn by app.js from /api/colors; a row opens the colour picker #}

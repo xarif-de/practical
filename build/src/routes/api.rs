@@ -384,11 +384,51 @@ async fn delete_task(State(state): State<SharedState>, user: Principal, session:
 #[derive(Deserialize)]
 struct SearchQuery {
     q: String,
+    /// "1": the "all results" dialog (200 per category) instead of the drop-down's 5
+    #[serde(default)]
+    all: Option<String>,
 }
 
 async fn api_search(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<SearchQuery>) -> AppResult<Json<search::SearchResult>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
-    Ok(Json(search::search(&state, &user, &q.q, vc.today, vc.tz).await?))
+    let limit = if q.all.as_deref() == Some("1") { 200 } else { 5 };
+    Ok(Json(search::search(&state, &user, &q.q, vc.today, vc.tz, limit).await?))
+}
+
+// ---- search history ----
+
+async fn history_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<crate::domain::search_history::Entry>>> {
+    let days = prefs::get(&state.db, &user.id).await?.history_days();
+    Ok(Json(crate::domain::search_history::list(&state.db, &user.id, days).await?))
+}
+
+#[derive(Deserialize)]
+struct HistoryIn {
+    q: String,
+    #[serde(default)]
+    target: Option<serde_json::Value>,
+}
+
+async fn history_post(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<HistoryIn>) -> AppResult<Json<bool>> {
+    check_csrf(&session, &headers).await?;
+    if b.q.chars().count() > 200 || b.target.as_ref().is_some_and(|t| t.to_string().len() > 2000) {
+        return Err(AppError::BadRequest("too long".into()));
+    }
+    let days = prefs::get(&state.db, &user.id).await?.history_days();
+    crate::domain::search_history::record(&state.db, &user.id, &b.q, b.target.as_ref(), days).await?;
+    Ok(Json(days != 0))
+}
+
+async fn history_clear(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap) -> AppResult<Json<bool>> {
+    check_csrf(&session, &headers).await?;
+    crate::domain::search_history::clear(&state.db, &user.id).await?;
+    Ok(Json(true))
+}
+
+async fn history_delete(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(id): Path<i64>) -> AppResult<Json<bool>> {
+    check_csrf(&session, &headers).await?;
+    crate::domain::search_history::remove(&state.db, &user.id, id).await?;
+    Ok(Json(true))
 }
 
 // ---- push (plan D12) ----
@@ -516,6 +556,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{p}/{c}/{id}", get(get_task).put(update_task).delete(delete_task))
         .route("/api/search", get(api_search))
+        .route("/api/search/history", get(history_get).post(history_post).delete(history_clear))
+        .route("/api/search/history/{id}", axum::routing::delete(history_delete))
         .route("/api/mentions", get(mentions))
         .route("/api/categories", get(categories))
         .route("/api/titles", get(titles))

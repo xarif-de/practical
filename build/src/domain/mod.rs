@@ -10,6 +10,7 @@ pub mod ical;
 pub mod prefs;
 pub mod push;
 pub mod search;
+pub mod search_history;
 pub mod tasks;
 pub mod tokens;
 pub mod transfer;
