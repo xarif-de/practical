@@ -2565,6 +2565,7 @@
       box.innerHTML = h; box.hidden = false;
       // an event hit shows its day in the calendar view on screen (day, week, month, year); from a "More" view or another page, in the day view
       const KEEP = ['day', 'week', 'month', 'planner'];
+      box.querySelectorAll('a.r[href^="/contacts#"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalContacts) { e.preventDefault(); const k = decodeURIComponent(new URL(a.href).hash.slice(1)); history.replaceState(null, '', '#' + k); window.rusticalContacts.reveal(k); box.hidden = true; } }));
       box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href), cur = window.rusticalCal.view(); window.rusticalCal.go(a.dataset.key && KEEP.includes(cur) ? cur : u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
     } catch (_) { box.hidden = true; }
   }
@@ -2584,7 +2585,7 @@
   const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
   // view switch
   $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; });
-  if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table')) $('[data-ctview=table]').click();
+  if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table') && location.hash.length <= 1) $('[data-ctview=table]').click(); // a link to one contact (#key) opens the list
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
   $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); fetch('/settings/columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
@@ -2707,7 +2708,16 @@
   $('#ct-reset').onclick = () => show(current);
   $('#ct-cancel').onclick = () => { if (wrap.classList.contains('dlg')) dlgClose(); else if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   $('#ct-vcf').onclick = () => { if (f.key.value) location.href = '/api/contacts/' + f.key.value + '/vcf'; };
-  if (location.hash.length > 1) open(location.hash.slice(1)); else if (wide()) show(null);
+  // reveal a contact (a search hit, a #key link): the table marks and scrolls to its row, the list opens it and scrolls its entry into view
+  async function reveal(key) {
+    if (wrap.classList.contains('view-table')) {
+      $$('.sheet tr.on', wrap).forEach(r => r.classList.remove('on')); const tr = $(`.sheet tr[data-key="${CSS.escape(key)}"]`, wrap);
+      if (tr) { tr.classList.add('on'); tr.scrollIntoView({ block: 'center' }); } return;
+    }
+    await open(key); const li = $(`.list li[data-key="${CSS.escape(key)}"]`, wrap); if (li) li.scrollIntoView({ block: 'center' });
+  }
+  window.rusticalContacts = { reveal };
+  if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1))); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
     const g = k => f[k].value.trim();
