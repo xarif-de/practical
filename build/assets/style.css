@@ -354,10 +354,10 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 #title { cursor: pointer; border-radius: 8px; padding: 2px 6px; margin-left: -6px; } #title:hover { background: var(--tile); } #title::after { content: " ▾"; font-size: 14px; color: var(--fg-3); }
 
 /* add buttons on hover */
-.add { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; background: var(--accent); color: #fff; font-size: 16px; line-height: 22px; opacity: 0; transition: opacity .12s; cursor: pointer; }
-.day { position: relative; } .day:hover .add, .dayblock:hover .add, .lrow:hover .add, .doc h2:hover .add { opacity: 1; }
+.add { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; --pl: 10px; background: linear-gradient(#fff, #fff) center / var(--pl) 2px no-repeat, linear-gradient(#fff, #fff) center / 2px var(--pl) no-repeat, var(--accent); color: #fff; font-size: 0; opacity: 0; transition: opacity .12s; cursor: pointer; } /* the + is drawn: the glyph sat low in its line box */
+.day { position: relative; } .day:hover .add, .dayblock:hover .add, .lrow:hover .add, .doc h2:hover .add { opacity: 1; transition-delay: .2s; } /* shown after a short hover, hidden at once */
 .lrow { position: relative; } .lrow .add { top: 50%; transform: translateY(-50%); }
-.doc h2 { position: relative; padding-right: 40px; } .doc h2 .add { top: 50%; transform: translateY(-50%); width: 26px; height: 26px; line-height: 26px; }
+.doc h2 { position: relative; padding-right: 40px; } .doc h2 .add { top: 50%; transform: translateY(-50%); width: 26px; height: 26px; --pl: 12px; }
 @media (hover: none) { .add { opacity: .9; } }
 
 /* picker (from round 5) */
