@@ -19,7 +19,7 @@ contacts as letter panels (fields per entry selectable) or an
 inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
-preferred flags), address books with a colour · minimal tasks (VTODO) · universal search incl. "jump to a date" · orbit date
+preferred flags), address books with a colour · minimal tasks (VTODO) · universal search incl. "jump to a date" (an event hit shows its day in the calendar view on screen — day, week, month, year — else in the day view) · orbit date
 picker · public/school holidays for 204 countries (OpenHolidays → Nager.Date) · vacation-day counting ·
 browser push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German,
 English, French and Spanish.

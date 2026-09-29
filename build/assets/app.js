@@ -1540,7 +1540,7 @@
 
 
   wire();
-  window.rusticalCal = { go, openEditor: edOpen };
+  window.rusticalCal = { go, view: () => state.view, openEditor: edOpen };
   // the editor module asks the page where "now" is and how to redraw after a save
   window.rusticalHost = { kind: root.dataset.kind || 'calendar', date: () => state.date, cals: () => state.cals, reload: (push) => load(push) };
 })();
@@ -2563,7 +2563,9 @@
       if (d.contacts.length) h += `<h5>${T.ct}</h5>` + d.contacts.map(c => `<a class="r" href="/contacts#${esc(c.key)}"><span class="av" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${c.bday ? '<svg class="ico" aria-hidden="true"><use href="#i-cake"/></svg>' : ''}${esc(c.sub)}</small></a>`).join('');
       if (!h) h = `<div class="none">${T.none}</div>`;
       box.innerHTML = h; box.hidden = false;
-      box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href); window.rusticalCal.go(u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
+      // an event hit shows its day in the calendar view on screen (day, week, month, year); from a "More" view or another page, in the day view
+      const KEEP = ['day', 'week', 'month', 'planner'];
+      box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href), cur = window.rusticalCal.view(); window.rusticalCal.go(a.dataset.key && KEEP.includes(cur) ? cur : u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
     } catch (_) { box.hidden = true; }
   }
   q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 180); });
