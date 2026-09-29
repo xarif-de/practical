@@ -393,7 +393,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .tip[hidden] { display: none; }
 
 /* "Mehr" dropdown in the view switcher */
-.more { position: relative; display: inline-flex; }
+.more { position: relative; display: inline-flex; } .seg > .more { font-size: inherit; color: inherit; padding-left: 0; } /* not the month cell's "+N" .more (11px, grey, indented) */
 .more .pop { display: grid; position: absolute; right: 0; top: 36px; min-width: 200px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; z-index: 30; }
 .more .pop a { padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--fg); }
 .more .pop a:hover { background: var(--tile); } .more .pop a[aria-pressed=true] { background: var(--tile); font-weight: 600; }
@@ -696,6 +696,18 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 #scheme .ico { display: none; } html[data-pref-scheme=auto] #scheme .s-auto, html[data-pref-scheme=light] #scheme .s-light, html[data-pref-scheme=dark] #scheme .s-dark { display: block; }
 .seg button { min-height: 32px; min-width: 36px; box-sizing: border-box; } /* icon-only segments (contacts list/table, reminder settings) get the height of the text ones and of .icon-btn */
 .seg button .ico { width: 16px; height: 16px; }
+/* a symbol beside a label (design round 16): buttons, links, menu rows and segments */
+.btn:not(.icon-btn):has(> .ico), button.link:has(> .ico), summary.link:has(> .ico), .seg button:has(> .ico + span), .more .pop a:has(> .ico), .filter .row a:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; }
+.btn:not(.icon-btn) > .ico, button.link > .ico, summary.link > .ico { width: 16px; height: 16px; }
+.filter .row a > .ico { width: 14px; height: 14px; }
+.more .pop a > .ico { color: var(--fg-2); }
+.seg [data-more] { display: inline-flex; align-items: center; gap: 2px; } .seg [data-more] > .ico:last-child { width: 14px; height: 14px; color: var(--fg-2); }
+.set .cell.btnrow:has(> .ico) { grid-template-columns: 18px 1fr; column-gap: 10px; align-items: center; }
+.list .bday .ico, .list .abchip .ico, a.r small .ico { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+.cfo-man .ico { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 3px; } .cfo-manbar .ico { width: 14px; height: 14px; }
+.cd .ic .ico { width: 20px; height: 20px; }
+.rrbottom .pillbtn .ico { width: 14px; height: 14px; }
+.tkmain .sheet th .a .ico { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; } .tkmain .sheet th .a.asc { --sort-down: .3; } .tkmain .sheet th .a.desc { --sort-up: .3; } /* i-sort: the arrow of the other direction dims */
 .btn[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 
 .btn.icon-btn { padding: 6px 9px; }
@@ -754,7 +766,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .cardform .act .ico { width: 14px; height: 14px; }
 .cardform .dateinfo { font-size: 12px; color: var(--fg-3); margin-left: 8px; }
 .cardform .pref { all: unset; cursor: pointer; color: var(--fg-3); font-size: 15px; width: 22px; text-align: center; }
-.cardform .pref[aria-pressed=true] { color: #ff9f0a; }
+.cardform .pref[aria-pressed=true] { color: #ff9f0a; --ico-fill: currentColor; } .cardform .pref .ico { width: 16px; height: 16px; margin: 0 auto; } /* i-star-h fills through --ico-fill */
 .cardform .rm { all: unset; cursor: pointer; color: var(--fg-3); width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%; font-size: 15px; }
 .cardform .rm:hover { color: #ff3b30; background: color-mix(in srgb, #ff3b30 12%, transparent); }
 .cardform .add { all: unset; cursor: pointer; font-size: 13px; color: var(--accent); padding: 6px 0 0 26px; display: inline-flex; gap: 6px; align-items: center; }

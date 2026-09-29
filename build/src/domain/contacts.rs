@@ -320,11 +320,14 @@ pub struct ContactHit {
     pub sub: String,
     pub initials: String,
     pub color_index: usize,
+    /// `sub` is the birthday: the client puts a cake in front of it
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub bday: bool,
 }
 
 impl ContactHit {
     pub fn of(c: &Contact, sub: String) -> Self {
-        ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index() }
+        ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index(), bday: false }
     }
 }
 

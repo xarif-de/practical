@@ -137,8 +137,9 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
         let abs = collections::addressbooks_for(state, user, false).await?;
         for c in contacts::contacts_for(state, &abs).await? {
             if c.full_name.to_lowercase().contains(&ql) || c.org.to_lowercase().contains(&ql) || c.primary_email().to_lowercase().contains(&ql) {
-                let sub = if !c.birthday.is_empty() { format!("🎂 {}", c.birthday_label()) } else if !c.org.is_empty() { c.org.clone() } else { c.category() };
-                ct_hits.push(ContactHit::of(&c, sub));
+                let bday = !c.birthday.is_empty();
+                let sub = if bday { c.birthday_label() } else if !c.org.is_empty() { c.org.clone() } else { c.category() };
+                ct_hits.push(ContactHit { bday, ..ContactHit::of(&c, sub) });
                 if ct_hits.len() >= 6 {
                     break;
                 }

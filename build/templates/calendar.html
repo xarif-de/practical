@@ -3,7 +3,7 @@
 {% block filter %}
 <div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}"><svg class="ico" aria-hidden="true"><use href="#i-filter"/></svg></button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
 {% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
-<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a><a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a></div>
+<div class="row"><a href="#" data-filter="all"><svg class="ico" aria-hidden="true"><use href="#i-checks"/></svg><span>{{ ctx.t("filter-all") }}</span></a><a href="#" data-filter="none"><svg class="ico" aria-hidden="true"><use href="#i-square"/></svg><span>{{ ctx.t("filter-none") }}</span></a><a href="#" data-filter="mine"><svg class="ico" aria-hidden="true"><use href="#i-user-check"/></svg><span>{{ ctx.t("filter-mine") }}</span></a></div>
 <h4>{{ ctx.t("filter-holidays") }}</h4>
 <label><input type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}><span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>
 {% if has_school %}<label><input type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}><span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{% endif %}

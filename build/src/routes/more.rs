@@ -272,37 +272,37 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         let age = |yr: i32| by.map(|b| format!(" · {}", yr - b)).unwrap_or_default();
         let ago = (y.today - this).num_days();
         if ago > 0 && ago <= 30 {
-            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "🎂", over: true, color: c.color_index() });
+            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true, color: c.color_index() });
         }
         let nd = if this >= y.today { this } else { NaiveDate::from_ymd_opt(y.today.year() + 1, bm, bd).unwrap_or(this) };
-        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "🎂", over: false, color: c.color_index() });
+        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false, color: c.color_index() });
     }
     for v in &y.vacations {
         if v.start_date() >= y.today {
-            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "🧳", over: false, color: 6 });
+            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false, color: 6 });
         } else {
             let ago = (y.today - v.last_date()).num_days();
             if ago > 0 && ago <= 30 {
-                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "🧳", over: true, color: 6 });
+                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true, color: 6 });
             }
         }
     }
     for h in &y.public {
         if h.start >= y.today {
-            items.push(Item { date: h.start, label: h.label(), icon: "🎌", over: false, color: 3 });
+            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false, color: 3 });
         }
     }
-    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "🎆", over: false, color: 5 });
+    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false, color: 5 });
     items.sort_by_key(|i| i.date);
     let tile = |i: &Item| {
         if i.over {
             let ago = (y.today - i.date).num_days();
             let pct = 100 - ago * 100 / 30;
-            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.t("v-days"), i.icon, e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
+            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.t("v-days"), crate::render::ico(i.icon), e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
         } else {
             let left = (i.date - y.today).num_days();
             let pct = (100 - left * 100 / 365).clamp(0, 100);
-            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.t("v-days"), i.icon, e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
+            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.t("v-days"), crate::render::ico(i.icon), e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
         }
     };
     let over: Vec<&Item> = items.iter().filter(|i| i.over).collect();

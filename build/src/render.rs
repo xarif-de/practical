@@ -416,7 +416,7 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
 
 const BYDAY: [&str; 7] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
-fn ico(name: &str) -> String {
+pub fn ico(name: &str) -> String {
     format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-{name}\"/></svg>")
 }
 

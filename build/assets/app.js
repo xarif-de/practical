@@ -297,7 +297,7 @@
         let row = '';
         if (edit) {
           const [u] = unitOf(edit.m), last = !canRm(edit.key);
-          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok>${esc2(tr('js-snp-change'))}</button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}>${esc2(tr('js-snp-remove'))}</button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
+          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok><svg class="ico" aria-hidden="true"><use href="#i-pencil"/></svg><span>${esc2(tr('js-snp-change'))}</span></button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}>${esc2(tr('js-snp-remove'))}</button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
         }
         const sc = $('.snp-scroll', snapBox), keep = sc ? sc.scrollLeft : 0; // redrawing must not jump a scrolled strip back
         snapBox.innerHTML = `<div class="snp-scroll"><div class="snp-es" style="min-width:${(o.length + 1) * 31}px">${h}</div></div>${row}`;
@@ -550,7 +550,7 @@
   function fieldPicker(onPick) {
     let hex = '#000000', mode = MODES[localStorage.cpkMode] ? localStorage.cpkMode : 'simple', vals = [0, 0, 0], rows = [];
     const el = document.createElement('div'); el.className = 'cpk-field';
-    el.innerHTML = `<div class="cpk-in"><span class="cpk-chip"></span><input type="text" spellcheck="false" autocomplete="off" aria-label="${esc(tr('js-color-text'))}"><button class="btn icon-btn" type="button" title="${esc(tr('js-color-dice'))}">🎲</button></div><div class="cpk-err" hidden></div>
+    el.innerHTML = `<div class="cpk-in"><span class="cpk-chip"></span><input type="text" spellcheck="false" autocomplete="off" aria-label="${esc(tr('js-color-text'))}"><button class="btn icon-btn" type="button" title="${esc(tr('js-color-dice'))}" aria-label="${esc(tr('js-color-dice'))}"><svg class="ico" aria-hidden="true"><use href="#i-dice"/></svg></button></div><div class="cpk-err" hidden></div>
       <span class="seg">${Object.keys(MODES).map(m => `<button type="button" data-m="${m}" aria-pressed="${m === mode}">${esc(tr('js-color-m-' + m))}</button>`).join('')}</span><div class="cpk-sl"></div>
       <div class="cpk-cap">${esc(tr('js-color-sugg'))}</div><div class="cpk-sugg">${SUGG.map(x => `<button type="button" data-v="${x}" style="background:${x}" title="${x}" aria-checked="false"></button>`).join('')}</div>`;
     const box = $('.cpk-in', el), chip = $('.cpk-chip', el), inp = $('input', el), err = $('.cpk-err', el), sl = $('.cpk-sl', el), sugg = $$('.cpk-sugg button', el);
@@ -581,7 +581,7 @@
     let tab = localStorage.cpkTab === 'field' ? 'field' : 'fan';
     const w = document.createElement('div'); w.className = 'ask cpk-ask'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-color-new'));
     w.innerHTML = `<div class="ask-box cpk-dlg"><div class="cpk-dh"><span><b>${esc(tr('js-color-new'))}</b><small>${esc(tr('js-color-for', { what: o.what || o.title }))}</small></span>
-      <span class="seg"><button type="button" data-t="fan">${esc(tr('js-color-tab-fan'))}</button><button type="button" data-t="field">${esc(tr('js-color-tab-field'))}</button></span>
+      <span class="seg"><button type="button" data-t="fan"><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><span>${esc(tr('js-color-tab-fan'))}</span></button><button type="button" data-t="field"><svg class="ico" aria-hidden="true"><use href="#i-eyedropper"/></svg><span>${esc(tr('js-color-tab-field'))}</span></button></span>
       <button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div>
       <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn" type="button" data-x>${esc(tr('js-ct-cancel'))}</button><button class="btn btn-primary" type="button" data-ok>${esc(tr('js-color-apply'))}</button></div></div>`;
     const pv = preview(o.title); $('.cpk-near', w).after(pv.el);
@@ -698,7 +698,7 @@
     const d = await post(true); if (d) toast(tr('js-color-recolored', { n: d.count })); else toast(tr('js-set-err'), true);
   };
   const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
-  const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-flag', school: 'i-flag', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
+  const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-holiday', school: 'i-holiday', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
   // two blocks whose colours are seen together (calendar view, task list), each with "Farben optimieren"; address books apart
   const BLOCKS = [['event', ['calendar', 'holiday', 'category', 'event']], ['task', ['category-task', 'task']], ['', ['addressbook']]];
   const VAR = { holiday: ['holiday_color', '--hol'], school: ['school_color', '--fer'] };
@@ -978,7 +978,7 @@
       const ex = st.excl.has(g.key), stay = !ex && g.editable && F.to && g.hex === F.to, n = g.items.length;
       const sub = [kindText(g.kind) + (n > 1 ? ' · ' + n + '×' : ''), cname(g.hex, g.raw), ex ? tr('js-cfo-excl-state') : !g.editable ? tr('js-cfo-ro') : stay ? tr('js-cfo-stay') : ''].filter(Boolean).join(' · ');
       return `<div class="cfo-src${ex ? ' excl' : ''}${g.moved ? ' moved' : ''}${stay ? ' stay' : ''}${g.editable ? '' : ' ro'}" data-n="g:${esc(g.key)}" data-g="${esc(g.key)}" data-l="${li}" style="--x:${g.hex}">`
-        + `<span class="cfo-grip" title="${esc(tr('js-cfo-grip'))}">⠿</span>${sw(g.hex)}<span class="cfo-t"><b>${esc(g.name)}</b><small>${esc(sub)}</small>${g.moved ? `<span class="cfo-man">✋ ${esc(tr(g.moved === 'split' ? 'js-cfo-man-split' : 'js-cfo-man-moved'))}</span>` : ''}</span>`
+        + `<span class="cfo-grip" title="${esc(tr('js-cfo-grip'))}">⠿</span>${sw(g.hex)}<span class="cfo-t"><b>${esc(g.name)}</b><small>${esc(sub)}</small>${g.moved ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr(g.moved === 'split' ? 'js-cfo-man-split' : 'js-cfo-man-moved'))}</span>` : ''}</span>`
         + (g.moved ? `<button type="button" class="cfo-mini" data-unmove="${esc(g.key)}" title="${esc(tr('js-cfo-unmove'))}">↺</button>` : '')
         + (g.editable ? `<button type="button" class="cfo-mini${ex ? ' on' : ''}" data-excl="${esc(g.key)}" title="${esc(tr(ex ? 'js-cfo-incl-t' : 'js-cfo-excl'))}">${ex ? esc(tr('js-cfo-incl')) : '⊘'}</button>` : '') + '</div>';
     };
@@ -992,16 +992,16 @@
         if (F.to) edges.push(['m:' + F.key, 'r:' + F.key, on ? 'out' : 'off', li, F.to]);
         const tag = F.split ? 'js-cfo-tag-split' : F.groups.some(g => g.moved) ? 'js-cfo-tag-moved' : F.pinned ? 'js-cfo-tag-pin' : '';
         const warn = P.notes.some(x => x.warn && x.F === F);
-        const mid = `<button type="button" class="cfo-mid${on ? '' : ' off'}${F.manual ? ' manual' : ''}" data-n="m:${esc(F.key)}" data-off="${esc(F.key)}" data-l="${li}" title="${esc(tr(on ? 'js-cfo-off-t' : 'js-cfo-on-t'))}"><span class="cfo-b ${F.type}">${esc(tr('js-cfo-t-' + F.type))}</span>${tag ? `<span class="cfo-man">✋ ${esc(tr(tag))}</span>` : ''}<small>${esc(F.why)}</small><span class="cfo-ck">${esc(on ? (changes.length ? tr('js-cfo-on', { n: changes.length }) : tr('js-cfo-none')) : tr('js-cfo-off'))}</span></button>`;
+        const mid = `<button type="button" class="cfo-mid${on ? '' : ' off'}${F.manual ? ' manual' : ''}" data-n="m:${esc(F.key)}" data-off="${esc(F.key)}" data-l="${li}" title="${esc(tr(on ? 'js-cfo-off-t' : 'js-cfo-on-t'))}"><span class="cfo-b ${F.type}">${esc(tr('js-cfo-t-' + F.type))}</span>${tag ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr(tag))}</span>` : ''}<small>${esc(F.why)}</small><span class="cfo-ck">${esc(on ? (changes.length ? tr('js-cfo-on', { n: changes.length }) : tr('js-cfo-none')) : tr('js-cfo-off'))}</span></button>`;
         const inh = F.cal && F.inc.some(g => g.kind !== 'calendar');
-        const res = F.to ? `<button type="button" class="cfo-res${on ? '' : ' off'}${F.pinned ? ' pinned' : ''}${warn ? ' warn' : ''}" data-n="r:${esc(F.key)}" data-pick="${esc(F.key)}" data-l="${li}" title="${esc(tr('js-cfo-pick'))}">${sw(F.to)}<span class="cfo-t"><b>${esc(cname(F.to, (F.colors.find(c => c.hex === F.to) || {}).raw))}</b><small>${esc(tr('js-cfo-entries', { n: F.n }) + (inh ? ' · ' + tr('js-color-inherit-cal', { cal: F.lead.name }) : '') + (F.moved && !F.pinned ? ' · ' + tr('js-cfo-new') : ''))}</small>${F.pinned ? `<span class="cfo-man">✋ ${esc(tr('js-cfo-tag-pin'))}${warn ? ' · ⚠' : ''}</span>` : ''}</span>${F.pinned ? `<span class="cfo-mini" role="button" tabindex="0" data-unpin="${esc(F.key)}" title="${esc(tr('js-cfo-unpin'))}">↺</span>` : `<span class="cfo-edit">${esc(tr('js-cfo-edit'))}</span>`}</button>` : '';
+        const res = F.to ? `<button type="button" class="cfo-res${on ? '' : ' off'}${F.pinned ? ' pinned' : ''}${warn ? ' warn' : ''}" data-n="r:${esc(F.key)}" data-pick="${esc(F.key)}" data-l="${li}" title="${esc(tr('js-cfo-pick'))}">${sw(F.to)}<span class="cfo-t"><b>${esc(cname(F.to, (F.colors.find(c => c.hex === F.to) || {}).raw))}</b><small>${esc(tr('js-cfo-entries', { n: F.n }) + (inh ? ' · ' + tr('js-color-inherit-cal', { cal: F.lead.name }) : '') + (F.moved && !F.pinned ? ' · ' + tr('js-cfo-new') : ''))}</small>${F.pinned ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr('js-cfo-tag-pin'))}${warn ? ' · ⚠' : ''}</span>` : ''}</span>${F.pinned ? `<span class="cfo-mini" role="button" tabindex="0" data-unpin="${esc(F.key)}" title="${esc(tr('js-cfo-unpin'))}">↺</span>` : `<span class="cfo-edit">${esc(tr('js-cfo-edit'))}</span>`}</button>` : '';
         return `<div class="cfo-lane${F.manual ? ' manual' : ''}" data-l="${li}" data-f="${esc(F.key)}"><div class="cfo-lc">${left}</div><div class="cfo-lc">${mid}</div><div class="cfo-lc">${res}</div></div>`;
       }).join('');
       const L = P.L, lv = st.level;
       bodyEl.innerHTML = `<div class="cfo-level"><div class="cfo-lh"><span>${esc(tr('js-cfo-scope'))}</span><b>${esc(tr('js-cfo-l' + lv))}</b>${L.rec ? `<em>${esc(tr('js-cfo-rec'))}</em>` : ''}</div>
         <input type="range" min="0" max="${LEVELS.length - 1}" step="1" value="${lv}" data-level aria-label="${esc(tr('js-cfo-scope'))}">
         <div class="cfo-ticks">${LEVELS.map((x, i) => `<button type="button" data-lv="${i}" aria-pressed="${i === lv}">${esc(tr('js-cfo-l' + i))}</button>`).join('')}</div><p class="cfo-ltext">${esc(tr('js-cfo-l' + lv + '-text'))}</p></div>
-        <div class="cfo-sum"><span class="cfo-m good">${esc(tr('js-cfo-m-colors', { a: P.before, b: P.after }))}</span><span class="cfo-m${P.sim1 < P.sim0 ? ' good' : ''}">${esc(tr('js-cfo-m-similar', { a: P.sim0, b: P.sim1 }))}</span><span class="cfo-m">${esc(tr('js-cfo-m-changes', { n: P.changes.length }))}</span>${n ? `<span class="cfo-manbar">✋ ${esc(tr('js-cfo-manual', { n }))} <button type="button" class="link" data-discard>${esc(tr('js-cfo-discard'))}</button></span>` : ''}</div>
+        <div class="cfo-sum"><span class="cfo-m good">${esc(tr('js-cfo-m-colors', { a: P.before, b: P.after }))}</span><span class="cfo-m${P.sim1 < P.sim0 ? ' good' : ''}">${esc(tr('js-cfo-m-similar', { a: P.sim0, b: P.sim1 }))}</span><span class="cfo-m">${esc(tr('js-cfo-m-changes', { n: P.changes.length }))}</span>${n ? `<span class="cfo-manbar"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr('js-cfo-manual', { n }))} <button type="button" class="link" data-discard>${esc(tr('js-cfo-discard'))}</button></span>` : ''}</div>
         ${P.notes.length ? `<div class="cfo-notes">${P.notes.map(x => `<p class="${x.warn ? 'warn' : 'info'}">${x.warn ? '⚠' : 'ℹ'} ${esc(x.text)}</p>`).join('')}</div>` : ''}
         ${P.lanes.length ? `<div class="cfo-head"><span>${esc(tr('js-cfo-h-now'))}</span><span>${esc(tr('js-cfo-h-act'))}</span><span>${esc(tr('js-cfo-h-after'))}</span></div><div class="cfo-fd"><svg class="cfo-svg" aria-hidden="true"></svg>${lanes}</div><p class="cfo-help">${esc(tr('js-cfo-help'))}</p>`
           : `<div class="cfo-empty"><b>${esc(tr('js-cfo-empty'))}</b><span>${esc(tr('js-cfo-empty-hint'))}</span></div>`}`;
@@ -1783,7 +1783,7 @@
   // mirrored into the hidden `alarms_json` input so dirty tracking and reset work like for any field. ----
   const AL = $('#ed-alarm-card'), AT = AL.dataset, alBox = $('[data-list="alarms"]', AL), tline = $('#ed-tline'), apre = $('#ed-apre');
   let ALARMS = [], alSeq = 0;
-  const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-bell', AUDIO: '#i-sound', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
+  const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-bell', AUDIO: '#i-bell-ring', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
   const SNAPS = (() => { try { const j = JSON.parse($('#alarm-snaps-data').textContent); if (Array.isArray(j.start) && j.start.length) return j; } catch (_) {} return { start: [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], end: [5, 10, 15, 30, 60] }; })(); // per-user snap points of the strip (settings)
   const SNAP_START = SNAPS.start, SNAP_END_ALL = SNAPS.end, AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months
   const DEFAULT_PRESETS = [0, 10].map(m => ({ action: 'DISPLAY', minutes: m, related_end: false, repeat: 0, duration_minutes: 0, attendees: [], attach: '', proximity: '' }));
@@ -2066,7 +2066,7 @@
     const idx = LK.links.map((l, i) => i);
     const conf = idx.filter(i => LK.links[i].kind === 'conference'), web = conf.filter(i => /^https?:/i.test(LK.links[i].uri)), tel = conf.filter(i => /^tel:/i.test(LK.links[i].uri));
     let c = '';
-    if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}">${esc(LKT.tJoin)}</button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
+    if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}"><svg class="ico" aria-hidden="true"><use href="#i-headset"/></svg><span>${esc(LKT.tJoin)}</span></button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
     c += conf.filter(i => i !== web[0] && !tel.includes(i)).map(lkRow).join('') + (web.length ? lkRow(web[0]) .replace('class="lk-row', 'class="lk-row edits') : '');
     if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
     const internal = LK.related.map((r, i) => lkRelRow(i)).join('');
@@ -2306,12 +2306,12 @@
     const isRaw = RR.freq === 'RAW';
     rrBox.insertAdjacentHTML('beforeend', `<div class="rrsegs"><span class="seg" data-w="freq">${[''].concat(RR_FREQS).map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${RR.freq === v}" title="${esc(longs[i])}">${esc(freqs[i])}</button>`).join('')}${isRaw ? `<button type="button" data-v="RAW" aria-pressed="true" title="${esc(RT.tCustom)}">${esc(RT.tCustomShort)}</button>` : ''}</span></div>`);
     $('[data-w=freq]', rrBox).onclick = e => { const b = e.target.closest('button'); if (!b) return; RR.freq = b.dataset.v; if (RR.freq === 'WEEKLY' && !RR.byday.length) RR.byday = [DAYS[rrWd(s0)]]; rrSet(); };
-    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled>${esc(RT.tInterval)}</button><button class="pillbtn ghost" type="button" disabled>${esc(RT.tEnd)}</button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
+    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-ruler"/></svg><span>${esc(RT.tInterval)}</span></button><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-cal-x"/></svg><span>${esc(RT.tEnd)}</span></button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
     if (RR.freq && !isRaw) {
       const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
       const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
       const endLabel = () => RR.end.kind === 'count' ? D.tCount.replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
-      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i">${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e">${esc(endLabel())}</button></div><hr class="rrsep">`);
+      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i"><svg class="ico" aria-hidden="true"><use href="#i-ruler"/></svg><span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e"><svg class="ico" aria-hidden="true"><use href="#i-cal-x"/></svg><span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
       $('.rrbottom', rrBox).onclick = e => { const b = e.target.closest('.pillbtn'); if (!b) return;
         if (b.dataset.s === 'i') rrPop(b, [1, 2, 3, 4, 6].map(n => ({ v: n, label: n === 1 ? each : D.tEvery.replace('{n}', n) + ' ' + u })).concat({ v: 'n', label: RT.tN }), RR.interval, v => { if (v === 'n') rrAskNumber(b, RT.tIntQ.replace('{u}', u), RR.interval, n => { RR.interval = n; rrSet(); }); else { RR.interval = +v; rrSet(); } });
         else rrPop(b, [{ v: 'never', label: RT.tNoEnd }, { v: 'count', label: RT.tEndCount + ' …' }, { v: 'until', label: RT.tEndUntil + ' …' }], RR.end.kind, v => { if (v === 'count') rrAskNumber(b, RT.tCountQ, RR.end.count, n => { RR.end = { ...RR.end, kind: 'count', count: n }; rrSet(); }); else if (v === 'until') { rrPicking = true; rrRender(); } else { RR.end = { ...RR.end, kind: 'never' }; rrSet(); } }); };
@@ -2559,7 +2559,7 @@
       const r = await fetch('/api/search?q=' + encodeURIComponent(v)); const d = await r.json(); let h = '';
       if (d.jump) h += `<a class="r jump" href="/calendar?view=${d.jump.view}&date=${d.jump.date}"><span class="ic">⇢</span><b>${T.jump} ${esc(d.jump.label)}</b><small>${d.jump.date}</small></a>`;
       if (d.events.length) h += `<h5>${T.ev}</h5>` + d.events.map(e => `<a class="r" href="/calendar?view=day&date=${e.date}" data-key="${esc(e.key)}"><span class="sw" style="--c:${esc(e.color)}"></span><b>${esc(e.summary)}</b><small>${e.date}${e.time ? ' · ' + e.time : ''} · ${esc(e.cal_name)}</small></a>`).join('');
-      if (d.contacts.length) h += `<h5>${T.ct}</h5>` + d.contacts.map(c => `<a class="r" href="/contacts#${esc(c.key)}"><span class="av" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></a>`).join('');
+      if (d.contacts.length) h += `<h5>${T.ct}</h5>` + d.contacts.map(c => `<a class="r" href="/contacts#${esc(c.key)}"><span class="av" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${c.bday ? '<svg class="ico" aria-hidden="true"><use href="#i-cake"/></svg>' : ''}${esc(c.sub)}</small></a>`).join('');
       if (!h) h = `<div class="none">${T.none}</div>`;
       box.innerHTML = h; box.hidden = false;
       box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href); window.rusticalCal.go(u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
@@ -2866,7 +2866,7 @@
     if (t.alarms) out.push(`<span class="tchip">${ic('bell', 'xs')}${t.alarms}</span>`);
     if (t.links) out.push(`<span class="tchip">${ic('ext', 'xs')}${t.links}</span>`);
     if (t.class === 'PRIVATE' || t.class === 'CONFIDENTIAL') out.push(`<span class="tchip">${ic('lock', 'xs')}</span>`);
-    if (t.status === 'CANCELLED') out.push(`<span class="tchip warn">${ic('x', 'xs')}${T.cancelled}</span>`);
+    if (t.status === 'CANCELLED') out.push(`<span class="tchip warn">${ic('thumbs-down', 'xs')}${T.cancelled}</span>`);
     if (t.status === 'IN-PROCESS') out.push(`<span class="tchip">${ic('dots', 'xs')}${T.doing}</span>`);
     return out.join('');
   }
@@ -2895,7 +2895,7 @@
     const n = day(parse(t.due));
     return n < 0 ? T.overdue : n === 0 ? T.today : n <= 7 ? T.week : T.later;
   }
-  const GICON = { [T.overdue]: 'prio-high', [T.today]: 'today', [T.week]: 'dayline', [T.later]: 'calendar', [T.nodate]: 'note', [T.done]: 'check', [T.cancelled]: 'x' };
+  const GICON = { [T.overdue]: 'prio-high', [T.today]: 'today', [T.week]: 'dayline', [T.later]: 'calendar', [T.nodate]: 'note', [T.done]: 'check', [T.cancelled]: 'thumbs-down' };
   function vGroups() {
     let h = '';
     const order = [T.overdue, T.today, T.week, T.later, T.nodate, T.done, T.cancelled];
@@ -2955,7 +2955,7 @@
     cols.map(c => CELL[c](t)).join('') + '</tr>';
   function vTable() {
     const cols = shownCols().filter(c => CELL[c]);
-    const th = (label, sk, cl) => `<th${cl ? ` class="${cl}"` : ''}${sk ? ` data-sk="${sk}"` : ''}>${esc(label)}${sk && sort === sk ? ` <span class="a">${desc ? '▼' : '▲'}</span>` : ''}</th>`;
+    const th = (label, sk, cl) => `<th${cl ? ` class="${cl}"` : ''}${sk ? ` data-sk="${sk}"` : ''}>${esc(label)}${sk && sort === sk ? ` <span class="a ${desc ? 'desc' : 'asc'}">${ic('sort', 'xs')}</span>` : ''}</th>`;
     return `<div class="sheetwrap"><table class="sheet"><thead><tr>${th(SORTL.title, 'title', 'pin')}${cols.map(c => th(colLabel(c), SORTABLE[c])).join('')}</tr></thead><tbody>` +
       sortView(TASKS).map(t => rowHtml(t, cols)).join('') + `</tbody></table>${SENTINEL()}</div>`;
   }
@@ -3025,7 +3025,7 @@
   }));
 
   // ---- C: board ----
-  const BCOLS = [['NEEDS-ACTION', T.open, 'list'], ['IN-PROCESS', T.doing, 'dots'], ['COMPLETED', T.done, 'check'], ['CANCELLED', T.cancelled, 'x']];
+  const BCOLS = [['NEEDS-ACTION', T.open, 'list'], ['IN-PROCESS', T.doing, 'dots'], ['COMPLETED', T.done, 'check'], ['CANCELLED', T.cancelled, 'thumbs-down']];
   function vBoard() {
     let h = '<div class="tkboard">';
     BCOLS.forEach(([st, label, icon]) => {
@@ -3080,7 +3080,7 @@
         <h3${isDone(t) ? ' class="off"' : ''}>${esc(t.summary)}</h3>${o ? '' :
         `${t.description ? `<p class="dsc">${esc(t.description)}</p>` : ''}<div class="fx">${chips(t)}<span class="tchip">${ic('calendar', 'xs')}${esc(t.cal_name)}</span></div>
          ${p > 0 && p < 100 ? `<div class="pb"><i style="width:${p}%"></i></div>` : ''}
-         <div class="act"><button class="btn" data-tog="${esc(key(t))}">${isDone(t) ? '↺' : '✓'}</button><button class="btn" data-open>${T.edit}</button><button class="btn" data-next>→</button></div>`}</div>`;
+         <div class="act"><button class="btn" data-tog="${esc(key(t))}">${isDone(t) ? '↺' : '✓'}</button><button class="btn icon-btn" data-open title="${esc(T.edit)}" aria-label="${esc(T.edit)}">${ic('pencil')}</button><button class="btn" data-next>→</button></div>`}</div>`;
     }
     return h + `</div><div class="tkcnt">${list.length ? deckI + 1 : 0} ${T.count} ${list.length}</div><div class="tkkeys">${esc(T.keys)}</div>`;
   }

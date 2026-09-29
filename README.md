@@ -303,3 +303,9 @@ Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `te
 workflows and `.gitlab-ci.yml` from `base/dagger-ci-basics`. Image:
 `registry.gitlab.com/xarif/docker/rustical-ui:main` (built on Forgejo, pulled from the
 gitlab.com mirror like every xarif image).
+
+**Icons** (`templates/layout.html`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
+plus single SVGs copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT),
+Iconoir (MIT), Bootstrap Icons (MIT), Material Design Icons (Apache-2.0) and Material Symbols
+(Apache-2.0); `i-al-*` are drawn from Lucide `log-in`/`log-out`. `i-sort` dims one arrow via
+`--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`.
