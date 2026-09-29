@@ -528,16 +528,16 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
         let _ = write!(marks, "<span class=\"st\">{}{}</span>", ico(icon), e(&text));
     };
     match d.map(|x| x.status.as_str()).unwrap_or(if i.cancelled { "CANCELLED" } else { "" }) {
-        "CANCELLED" => mark("x", l.t("v-cancelled")),
+        "CANCELLED" => mark("thumbs-down", l.t("v-cancelled")),
         "TENTATIVE" => mark("help", l.t("v-tentative")),
         _ => {}
     }
     if d.map(|x| x.transp.as_str()) == Some("TRANSPARENT") {
-        mark("free", l.t("v-does-not-block-time"));
+        mark("free", l.t("v-shown-free"));
     }
     match d.map(|x| x.class.as_str()).unwrap_or("") {
         "PRIVATE" => mark("lock", l.t("v-private")),
-        "CONFIDENTIAL" => mark("lock", l.t("v-confidential")),
+        "CONFIDENTIAL" => mark("agent", l.t("v-confidential")),
         _ => {}
     }
     if let Some(p) = d.and_then(|x| x.priority).filter(|p| (1..=9).contains(p)) {
