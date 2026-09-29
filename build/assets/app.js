@@ -2583,8 +2583,9 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
-  // view switch
-  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; });
+  // view switch; the picked contact (activeKey) stays picked and in view
+  let activeKey = null;
+  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; if (activeKey) reveal(activeKey); });
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table') && location.hash.length <= 1) $('[data-ctview=table]').click(); // a link to one contact (#key) opens the list
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
@@ -2665,6 +2666,7 @@
     const b = $('#ct-save'); b.title = c ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     mode(c ? 'view' : 'edit'); baseline = serialize(); updateButtons();
     det.hidden = false; det.classList.add('on');
+    activeKey = c ? KEY(c) : null; markRow(activeKey);
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
   async function open(key) { try { const r = await fetch('/api/contacts/' + key); if (!r.ok) throw new Error(r.status); show(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); } }
@@ -2709,13 +2711,14 @@
   $('#ct-cancel').onclick = () => { if (wrap.classList.contains('dlg')) dlgClose(); else if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   $('#ct-vcf').onclick = () => { if (f.key.value) location.href = '/api/contacts/' + f.key.value + '/vcf'; };
   // reveal a contact (a search hit, a #key link): the table marks and scrolls to its row, the list opens it and scrolls its entry into view
+  function markRow(key) { let hit = null; $$('.sheet tr[data-key]', wrap).forEach(r => { const on = r.dataset.key === key; r.classList.toggle('on', on); if (on) hit = r; }); return hit; }
   async function reveal(key) {
-    if (wrap.classList.contains('view-table')) {
-      $$('.sheet tr.on', wrap).forEach(r => r.classList.remove('on')); const tr = $(`.sheet tr[data-key="${CSS.escape(key)}"]`, wrap);
-      if (tr) { tr.classList.add('on'); tr.scrollIntoView({ block: 'center' }); } return;
-    }
-    await open(key); const li = $(`.list li[data-key="${CSS.escape(key)}"]`, wrap); if (li) li.scrollIntoView({ block: 'center' });
+    activeKey = key;
+    if (wrap.classList.contains('view-table')) { const tr = markRow(key); if (tr) tr.scrollIntoView({ block: 'center' }); return; }
+    if (!current || KEY(current) !== key) await open(key); const li = $(`.list li[data-key="${CSS.escape(key)}"]`, wrap); if (li) li.scrollIntoView({ block: 'center' });
   }
+  // the table picks a contact with a click on its row; the list opens it (above)
+  $$('.sheet tr[data-key]', wrap).forEach(tr => tr.addEventListener('click', () => { activeKey = tr.dataset.key; markRow(activeKey); }));
   window.rusticalContacts = { reveal };
   if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1))); else if (wide()) show(null);
   function collect() {

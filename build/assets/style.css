@@ -578,8 +578,8 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .detail .multi { display: grid; grid-template-columns: 90px 1fr auto; gap: 6px; align-items: center; padding: 4px 0; }
 .detail .multi input { font: inherit; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--fg); }
 .detail .multi select { font: inherit; border: 0; background: transparent; color: var(--fg-3); font-size: 12px; }
-.list li { cursor: pointer; } .list li.on { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.contacts .sheet tr.on td { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); } .contacts .sheet tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); } /* the revealed contact (app.js reveal) */
+.list li { cursor: pointer; } .list li.on { box-shadow: inset 0 0 0 1.5px var(--accent); } .list li:not(.on):hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 28%, transparent); }
+.contacts .sheet tr[data-key]:not(.on):hover td { background: color-mix(in srgb, var(--accent) 5%, var(--bg)); } .contacts .sheet tr.on td { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); } .contacts .sheet tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); } /* the picked contact (app.js activeKey): hover faint, picked blue, as in the calendar */
 .list li.hide, .lpanel.hide, .sheet tr.hide { display: none; }
 @media (max-width: 1099px) { .contacts { grid-template-areas: "cols" "list"; grid-template-columns: 1fr; } .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; } }
 
