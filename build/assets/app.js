@@ -1135,7 +1135,11 @@
   const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
-  let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '' };
+  // date = the picked day, which every view shows as selected; month = the month view's month on screen
+  // (YYYY-MM) once scrolling left the picked day's — scrolling never changes the picked day
+  let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '', month: new URL(location.href).searchParams.get('month') };
+  const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.date; // the date whose month or week is on screen
+  root.dataset.date = shown();
   const today = root.dataset.today;
 
   // ---- filter (localStorage-persisted set of hidden calendars) ----
@@ -1157,14 +1161,14 @@
   }));
 
   // ---- navigation / fragment loading ----
-  function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
+  function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.view === 'month' && state.month && state.month !== state.date.slice(0, 7)) u.searchParams.set('month', state.month); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
   let loading = null;
   async function load(push = true) {
     const u = url(true);
     loading = u;
     // a month-to-month change glides (wheel, rail, orbit picker, today alike); the months in between are fetched alongside the target
-    const turnOf = from => root.dataset.view === 'month' && state.view === 'month' && from.slice(0, 7) !== state.date.slice(0, 7) ? (state.date > from ? 1 : -1) : 0;
-    const from0 = root.dataset.date, between0 = turnOf(from0) ? monthsBetween(from0, state.date) : [];
+    const turnOf = from => root.dataset.view === 'month' && state.view === 'month' && from.slice(0, 7) !== shown().slice(0, 7) ? (shown() > from ? 1 : -1) : 0;
+    const from0 = root.dataset.date, between0 = turnOf(from0) ? monthsBetween(from0, shown()) : [];
     const midsP = between0.length && between0.length <= FLIP_FETCH && !reducedMotion() ? fetchMonths(between0) : Promise.resolve(null);
     try {
       const r = await fetch(u, { headers: { Accept: 'text/html' } });
@@ -1173,9 +1177,9 @@
       const html = await r.text(), mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
       if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
-      const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, state.date); // another load swapped meanwhile: the prefetched months no longer fit
+      const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, shown()); // another load swapped meanwhile: the prefetched months no longer fit
       root.innerHTML = html;
-      root.dataset.view = state.view; root.dataset.date = state.date;
+      root.dataset.view = state.view; root.dataset.date = shown();
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
       wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
@@ -1186,12 +1190,13 @@
     const d = parse(state.date);
     if (state.view === 'day') d.setDate(d.getDate() + dir);
     else if (state.view === 'week') d.setDate(d.getDate() + 7 * dir);
-    else if (['month'].includes(state.view)) { d.setDate(1); d.setMonth(d.getMonth() + dir); }
+    else if (state.view === 'month') { const m = parse(shown()); m.setDate(1); m.setMonth(m.getMonth() + dir); state.month = localIso(m).slice(0, 7); return load(); }
     else d.setFullYear(d.getFullYear() + dir);
     state.date = iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
     load();
   }
-  function go(view, date) { if (view) state.view = view; if (date) state.date = date; load(); }
+  function go(view, date) { if (date || (view && view !== state.view)) state.month = null; if (view) state.view = view; if (date) state.date = date; load(); } // a picked day or another view shows the picked day's month again
+  function pick(date) { state.month = shown().slice(0, 7); state.date = date; load(false); history.replaceState(state, '', url(false).pathname + url(false).search); } // month view: a click picks the day, the month stays
   // the month grid owns the wheel: one gesture turns exactly one page, however far it goes. A new
   // gesture is told by speed, not by a pause: a trackpad's momentum tail only ever slows down, while
   // a fresh swipe arrives faster than the tail it interrupts — the speed must have fallen below half
@@ -1223,7 +1228,7 @@
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const localIso = d => iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
   function monthsBetween(a, b) { const out = [], d = parse(a.slice(0, 7) + '-01'), dir = b > a ? 1 : -1; for (;;) { d.setMonth(d.getMonth() + dir); const m = localIso(d); if (m.slice(0, 7) === b.slice(0, 7)) return out; out.push(m); } } // first days of the months strictly between, in travel order
-  const fetchMonths = list => Promise.all(list.map(async m => { try { const u = url(true); u.searchParams.set('date', m); const r = await fetch(u, { headers: { Accept: 'text/html' } }); return r.ok ? new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('.month') : null; } catch { return null; } }));
+  const fetchMonths = list => Promise.all(list.map(async m => { try { const u = url(true); u.searchParams.set('month', m.slice(0, 7)); const r = await fetch(u, { headers: { Accept: 'text/html' } }); return r.ok ? new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('.month') : null; } catch { return null; } }));
   function skeleton(m, dows) { const d = parse(m), y = d.getFullYear(), mo = d.getMonth(), first = new Date(y, mo, 1), c = new Date(y, mo, 1 - ((first.getDay() + 6) % 7)); let h = dows.map(x => `<div class="dow">${esc(x)}</div>`).join('');
     for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== mo || c.getFullYear() !== y)) break; h += `<div class="day${c.getMonth() !== mo ? ' other' : ''}"><span class="n">${c.getDate()}</span></div>`; }
     const el = document.createElement('div'); el.className = 'month'; el.innerHTML = h; return el; } // same week rule as render.rs month_weeks
@@ -1301,20 +1306,20 @@
   }
   const svgShow = (el, on) => on ? el.removeAttribute('hidden') : el.setAttribute('hidden', ''); // SVG elements have no .hidden property
   function tlMark() { // selection ring on the viewed period
-    if (!tlSvg) return; const sel = tlSvg.querySelector('.sel'); const p = fmt(periodOf(tlKind, parse(state.date)));
+    if (!tlSvg) return; const sel = tlSvg.querySelector('.sel'); const p = fmt(periodOf(tlKind, parse(shown())));
     const it = tlItems.find(i => i.period === p); if (it) sel.setAttribute('cy', it.y); svgShow(sel, !!it);
   }
   const TL_EDGE = 14; // px the ring keeps from the rail's edge — its own radius plus a little air
   function tlFollow() { // one rule for every rail (weeks in day/week, months elsewhere): it only moves when the
     const rail = $('.tl', root); if (!rail || !tlSvg) return; // ring would leave it, and then just far enough to let the ring hang at that edge
-    const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); if (!it) return;
+    const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(shown())))); if (!it) return;
     const y = it.y - rail.scrollTop, h = rail.clientHeight, edge = TL_EDGE + TL_LABEL; // the sticky year label sits on the top edge
     if (y < edge) rail.scrollTop = Math.max(0, it.y - edge);
     else if (y > h - TL_EDGE) rail.scrollTop = it.y - (h - TL_EDGE);
   }
   const tlSelect = () => { tlMark(); tlFollow(); }; // the viewed period changed: mark it and keep it in sight
   let tlHome = false; // the today button is the one jump that centres the rail instead of letting the ring hang at an edge
-  const tlCentre = box => { tlMark(); const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(state.date)))); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0; };
+  const tlCentre = box => { tlMark(); const it = tlItems.find(i => i.period === fmt(periodOf(tlKind, parse(shown())))); box.scrollTop = it ? Math.max(0, it.y - box.clientHeight / 2) : 0; };
   function tlExtend(box) { // keep two chunks of slack above and below the viewport
     let changed = false;
     if (box.scrollTop < 300) { tlFirst = stepDate(tlKind, tlFirst, -tlChunk); const before = tlSvg.getBoundingClientRect().height; const h = tlBuild(tlKind); box.scrollTop += h - before; changed = true; }
@@ -1340,7 +1345,7 @@
     const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
     box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
     box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
-    box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; if (state.view === 'week') goWeek(it.date); else go(null, it.date); } };
+    box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; if (state.view === 'week') goWeek(it.date); else if (state.view === 'month') { state.month = it.date.slice(0, 7); load(); } else go(null, it.date); } };
     box.onscroll = () => { tlYearSync(box); if (!box._busy) { box._busy = true; requestAnimationFrame(() => { tlExtend(box); tlYearSync(box); box._busy = false; }); } };
     tlExtend(box);
   }
@@ -1480,7 +1485,8 @@
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
     $$('.heat i[data-date], .c[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
     $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }); // picking in the ledger leaves it exactly where it is
-    $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
+    $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); go('day', el.closest('[data-date]').dataset.date); });
+    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pick(el.dataset.date); });
     $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
     // the day document's details sit inside the clickable entry, so each of them stops the click

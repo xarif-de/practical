@@ -637,8 +637,9 @@ pub fn alarm_label(m: i64, l: &L) -> String {
     format!("{amount} {}", if after { l.t("v-after") } else { l.t("v-before") })
 }
 
-pub fn month_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate, hol: &Hols) -> String {
-    let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, view_date, hol);
+/// `view_date` picks the month, `picked` the day marked in it.
+pub fn month_view(view_date: NaiveDate, picked: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, agenda_date: NaiveDate, hol: &Hols) -> String {
+    let grid = month_grid(view_date.year(), view_date.month(), today, instances, l, 3, picked, hol);
     let title = if agenda_date == today { format!("{}, {}", l.t("v-today"), l.long_date(agenda_date)) } else { l.long_date(agenda_date) };
     format!("<div class=\"cal v-month on\">{grid}{}{}</div>", tl_months(view_date, today), agenda(agenda_date, instances, l, &title, hol))
 }

@@ -28,6 +28,9 @@ pub struct CalQuery {
     pub cals: Option<String>,
     #[serde(default)]
     pub fragment: Option<String>,
+    /// month view: the month on screen (`YYYY-MM`) when it is not the one `date` (the picked day) lies in
+    #[serde(default)]
+    pub month: Option<String>,
 }
 
 #[derive(Template, WebTemplate)]
@@ -106,7 +109,8 @@ pub fn view_label(view: &str, l: &L) -> (String, bool) {
 }
 
 /// Renders title + body for a view; the window loaded depends on the view.
-pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, view: &str, date: NaiveDate, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<(String, String)> {
+/// `shown` is the month view's month on screen; the other views follow `date`.
+pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, view: &str, date: NaiveDate, shown: Option<NaiveDate>, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<(String, String)> {
     let l = &vc.l;
     let (y, m) = (date.year(), date.month());
     let month_start = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
@@ -147,10 +151,17 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             crate::routes::more::render(state, user, ctx, view, date, cals, vc).await?
         }
         _ => {
+            // scrolling turns the month without touching the picked day; the agenda shows the picked
+            // day while it is on screen, else today, else the month's first
+            let same = |a: NaiveDate, b: NaiveDate| a.year() == b.year() && a.month() == b.month();
+            let month = shown.unwrap_or(date);
+            let month_start = NaiveDate::from_ymd_opt(month.year(), month.month(), 1).unwrap();
+            let grid_start = month_start - Duration::days(i64::from(month_start.weekday().num_days_from_monday()));
+            let grid_end = grid_start + Duration::days(42);
             let inst = events::instances(state, cals, grid_start, grid_end, vc.tz).await?;
             let hol = crate::domain::holidays::marks(state, &user.id, grid_start, grid_end, &ctx.lang).await?;
-            let agenda_date = if date.month() == vc.today.month() && date.year() == vc.today.year() { vc.today } else { date };
-            (format!("{} {y}", l.mon(m)), render::month_view(date, vc.today, &inst, l, agenda_date, &hol))
+            let agenda_date = if same(date, month) { date } else if same(vc.today, month) { vc.today } else { month_start };
+            (format!("{} {}", l.mon(month.month()), month.year()), render::month_view(month, date, vc.today, &inst, l, agenda_date, &hol))
         }
     })
 }
@@ -165,7 +176,8 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         Some(f) => all_cals.iter().filter(|c| f.contains(&format!("{}/{}", c.principal, c.id))).cloned().collect(),
         None => all_cals.clone(),
     };
-    let (title, body) = render_view(&state, &user, &ctx, &view, date, &cals, &vc).await?;
+    let shown = q.month.as_deref().and_then(|m| NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").ok());
+    let (title, body) = render_view(&state, &user, &ctx, &view, date, shown, &cals, &vc).await?;
     let (view_label, in_more) = view_label(&view, &vc.l);
     let cals_param = q.cals.clone().unwrap_or_default();
     if q.fragment.is_some() {
