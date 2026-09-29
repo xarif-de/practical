@@ -24,8 +24,8 @@
   <input type="hidden" name="public_regions" value="{{ public_regions }}"><input type="hidden" name="school_regions" value="{{ school_regions }}"><input type="hidden" name="timezone" value="{{ prefs.timezone.clone().unwrap_or_default() }}">
   <div class="label">{{ ctx.t("set-region") }}</div>
   <div class="group">
-    <a class="cell link" href="#regions-public"><span class="swatch" style="background:var(--hol)"><svg class="ico" aria-hidden="true"><use href="#i-holiday"/></svg></span><span>{{ ctx.t("set-regions-public") }}</span><span class="val"><span id="v-regions-public">{{ self.regions_text(false) }}</span><span class="chev">›</span></span></a>
-    <a class="cell link" href="#regions-school"><span class="swatch" style="background:var(--fer)"><svg class="ico" aria-hidden="true"><use href="#i-holiday"/></svg></span><span>{{ ctx.t("set-regions-school") }}</span><span class="val"><span id="v-regions-school">{{ self.regions_text(true) }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#regions-public"><span class="swatch" style="background:var(--hol)"><svg class="ico" aria-hidden="true"><use href="#i-party"/></svg></span><span>{{ ctx.t("set-regions-public") }}</span><span class="val"><span id="v-regions-public">{{ self.regions_text(false) }}</span><span class="chev">›</span></span></a>
+    <a class="cell link" href="#regions-school"><span class="swatch" style="background:var(--fer)"><svg class="ico" aria-hidden="true"><use href="#i-grad"/></svg></span><span>{{ ctx.t("set-regions-school") }}</span><span class="val"><span id="v-regions-school">{{ self.regions_text(true) }}</span><span class="chev">›</span></span></a>
     <a class="cell link" href="#pick-tz"><span class="swatch" style="background:var(--c6)"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><span>{{ ctx.t("timezone") }}</span><span class="val"><span id="v-tz">{{ self.tz_name() }}</span><span class="chev">›</span></span></a>
   </div>
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>

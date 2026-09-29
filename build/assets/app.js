@@ -698,7 +698,7 @@
     const d = await post(true); if (d) toast(tr('js-color-recolored', { n: d.count })); else toast(tr('js-set-err'), true);
   };
   const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
-  const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-holiday', school: 'i-holiday', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
+  const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-party', school: 'i-grad', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
   // two blocks whose colours are seen together (calendar view, task list), each with "Farben optimieren"; address books apart
   const BLOCKS = [['event', ['calendar', 'holiday', 'category', 'event']], ['task', ['category-task', 'task']], ['', ['addressbook']]];
   const VAR = { holiday: ['holiday_color', '--hol'], school: ['school_color', '--fer'] };
