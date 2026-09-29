@@ -96,6 +96,13 @@ pub struct TasksPage {
 }
 
 impl TasksPage {
+    /// a group calendar is in the filter: only then does "only mine" differ from "all"
+    pub fn has_shared(&self) -> bool {
+        self.calendars.iter().any(|c| c.is_group)
+    }
+}
+
+impl TasksPage {
     pub fn col(&self, name: &str) -> bool {
         self.columns.iter().any(|c| c == name)
     }

@@ -3,6 +3,7 @@
 {% block filter %}
 <div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}"><svg class="ico" aria-hidden="true"><use href="#i-filter"/></svg></button><div class="pop" id="abfilter"><h4>{{ ctx.t("filter-addressbooks") }}</h4>
 {% for a in addressbooks %}<label><input type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}"><span class="sw" style="background:{{ a.color }}"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{% endfor %}
+<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a>{% if self.has_shared() %}<a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a>{% endif %}</div>
 {% if !categories.is_empty() %}<h4>{{ ctx.t("filter-categories") }}</h4>{% for c in categories %}<label><input type="checkbox" checked data-cat="{{ c }}">{{ c }}</label>{% endfor %}{% endif %}
 </div></div>
 {% endblock %}

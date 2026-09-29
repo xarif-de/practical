@@ -888,7 +888,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .aldet .pset { all: unset; cursor: pointer; color: var(--fg-3); display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; } /* frameless like the other inline stars */
 .ed .cardform .aldet .pset:hover:not(:disabled) { color: var(--fg-2); } .ed .cardform .aldet .pset:focus-visible { outline: 2px solid var(--accent); } .ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
 .ed .cardform .aldet .pset .ico { width: 18px; height: 18px; }
-.ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: currentColor; }
+.ed .cardform .aldet .pset[aria-pressed=true] { color: var(--accent); --ico-fill: currentColor; } /* i-star-h fills through --ico-fill */
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }
@@ -1061,7 +1061,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .ed .cardform .lk-add { margin: 0 0 8px 26px; display: grid; gap: 6px; }
 .ed .cardform .lk-in { display: flex; gap: 6px; align-items: center; }
 .ed .cardform .lk-in input { flex: 1; min-width: 0; }
-.ed .cardform .lk-drop { border: 2px dashed var(--line); border-radius: 10px; padding: 8px; text-align: center; color: var(--fg-3); font-size: 11.5px; cursor: pointer; }
+.ed .cardform .lk-drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--bg); padding: 8px; text-align: center; color: var(--fg-3); font-size: 11.5px; cursor: pointer; }
 .ed .cardform .lk-drop b { display: block; color: var(--fg-2); font-weight: 500; font-size: 12.5px; }
 .ed .cardform .lk-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .ed .cardform .lk-msg:empty { display: none; }

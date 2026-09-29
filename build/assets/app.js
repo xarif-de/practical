@@ -1147,7 +1147,7 @@
   // ---- filter (localStorage-persisted set of hidden calendars) ----
   const filterBox = $('#calfilter');
   const hidden = new Set(JSON.parse(localStorage.calHidden || '[]'));
-  function calsParam() { const all = $$('input[data-cal]', filterBox).map(i => i.dataset.cal); const on = all.filter(c => !hidden.has(c)); return on.length === all.length ? '' : on.join(','); }
+  function calsParam() { const all = $$('input[data-cal]', filterBox).map(i => i.dataset.cal); const on = all.filter(c => !hidden.has(c)); return on.length === all.length ? '' : on.join(',') || '-'; } // '-' matches no calendar: an empty list means all of them
   if (filterBox) {
     $$('input[data-cal]', filterBox).forEach(i => { i.checked = !hidden.has(i.dataset.cal); i.addEventListener('change', () => { if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); persistFilter(); load(); }); });
     $$('[data-filter]', filterBox).forEach(a => a.addEventListener('click', e => { e.preventDefault(); const all = $$('input[data-cal]', filterBox); all.forEach(i => { const mine = !i.parentElement.querySelector('small'); i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && mine); if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); }); persistFilter(); load(); }));
@@ -1872,7 +1872,7 @@
       ${a.action === 'DISPLAY' ? field(AT.tText, `<input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">`) : ''}
       ${a.action === 'AUDIO' ? field(AT.tSound, `<input type="url" data-w="attach" value="${esc(a.attach)}" placeholder="${esc(AT.tSoundHint)}">`) : ''}
       ${a.action === 'EMAIL' ? field(AT.tSubject, `<input type="text" data-w="subject" value="${esc(a.summary)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tBody, `<input type="text" data-w="text" value="${esc(a.description)}" placeholder="${esc(AT.tTextHint)}">`) + field(AT.tTo, `<input type="text" data-w="to" value="${esc(a.attendees.join(', '))}" placeholder="${esc(AT.tToHint)}">`) : ''}
-      <div class="foot"><button class="pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}" aria-label="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star')}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
+      <div class="foot"><button class="pset" type="button" data-w="pset" aria-pressed="${isPreset}" ${a.at ? 'disabled' : ''} title="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}" aria-label="${esc(a.at ? AT.tPresetAt : isPreset ? AT.tPresetRm : AT.tPresetAdd)}">${alIco('#i-star-h')}</button><span>${esc(a.at ? AT.tPresetAt : AT.tPresetHint)}</span></div>`;
     const w = k => $(`[data-w=${k}]`, d);
     w('rel').onclick = e => { const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v; if (v === 'at') { a.at = a.at || (TASK ? (getStamp('due')[0] || today + 'T09:00:00') : (f.date.value || today) + 'T' + (f.all_day.checked ? '09:00' : (f.from.value || '09:00')) + ':00'); } else { const [dir, anc] = v.split('-'); a.related_end = anc === 'end'; a.at = null; a.minutes = (Math.abs(a.minutes) || 15) * (dir === 'after' ? -1 : 1); } alRender(); refresh(); };
     if (w('n')) { const apply = () => { const n = parseFloat(w('n').value.replace(',', '.')); if (isNaN(n) || n < 0) { w('n').classList.add('err'); return; } a.minutes = Math.sign(a.minutes || 1) * Math.round(n * +w('unit').value); alRender(); refresh(); }; w('n').onchange = apply; w('unit').onchange = apply; w('n').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }; }
@@ -2600,6 +2600,7 @@
     if (typeof railMark === 'function') setTimeout(railMark, 0);
   }
   if (fb) $$('input', fb).forEach(i => i.addEventListener('change', applyFilter));
+  if (fb) $$('[data-filter]', fb).forEach(a => a.addEventListener('click', e => { e.preventDefault(); $$('input[data-ab]', fb).forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); applyFilter(); })); // as the calendar filter
   // quick-jump rail: scroll the letter's panel (list) or first row (table) to the top of its scroller
   const scrollerOf = el => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if (o === 'auto' || o === 'scroll') return p; } return document.querySelector('.main'); };
   $$('.ct-rail [data-jump]', wrap).forEach(b => b.onclick = () => {
@@ -3209,6 +3210,17 @@
     if (await put(k, d)) reload();
   }
   function reload() { location.href = url(); }
+  // ---- calendar filter: the calendar page's hidden set (localStorage.calHidden), sent as ?cals= like there ----
+  const cf = $('#calfilter');
+  if (cf) {
+    const hid = new Set(JSON.parse(localStorage.calHidden || '[]')), boxes = $$('input[data-cal]', cf);
+    const param = () => { const on = boxes.filter(i => i.checked).map(i => i.dataset.cal); return on.length === boxes.length ? '' : on.join(',') || '-'; };
+    const apply = () => { boxes.forEach(i => { if (i.checked) hid.delete(i.dataset.cal); else hid.add(i.dataset.cal); }); localStorage.calHidden = JSON.stringify([...hid]); root.dataset.cals = param(); reload(); };
+    boxes.forEach(i => { i.checked = !hid.has(i.dataset.cal); i.addEventListener('change', apply); });
+    $$('[data-filter]', cf).forEach(a => a.addEventListener('click', e => { e.preventDefault(); boxes.forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); apply(); }));
+    // a filter set on the calendar page applies here too; a rule link (?rule=) keeps its page
+    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); reload(); }
+  }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
   // ---- the editor, placed the way the contacts page places its own: the groups view on a wide
