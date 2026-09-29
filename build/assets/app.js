@@ -1442,9 +1442,12 @@
     if (sel && !(keep && ledPin)) led.scrollTop += sel.getBoundingClientRect().top - led.getBoundingClientRect().top - (led.clientHeight - sel.offsetHeight) / 2;
     ledPin = false;
     wireItems(led);
-    const headSync = () => { if (!head) return; const y = led.getBoundingClientRect().top + head.offsetHeight + 1;
-      const r = rows().find(x => x.getBoundingClientRect().bottom > y); if (!r) return;
-      const d = parse(r.dataset.date); head.textContent = `${MON[d.getMonth()]} ${d.getFullYear()}`; };
+    const headSync = () => { if (!head) return; // the heading names the month with the most days in sight (row middle visible); a tie goes to the one covering more pixels
+      const top = led.getBoundingClientRect().top + head.offsetHeight, bottom = Math.min(led.getBoundingClientRect().bottom, innerHeight), seen = new Map();
+      for (const x of rows()) { const r = x.getBoundingClientRect(); if (r.bottom <= top) continue; if (r.top >= bottom) break;
+        const m = x.dataset.date.slice(0, 7), s = seen.get(m) || { n: 0, px: 0 }, mid = (r.top + r.bottom) / 2; if (mid >= top && mid <= bottom) s.n++; s.px += Math.min(r.bottom, bottom) - Math.max(r.top, top); seen.set(m, s); }
+      let best = null; for (const [m, s] of seen) if (!best || s.n > best[1].n || (s.n === best[1].n && s.px > best[1].px)) best = [m, s]; if (!best) return;
+      const d = parse(best[0] + '-01'); head.textContent = `${MON[d.getMonth()]} ${d.getFullYear()}`; };
     headSync();
     if (led.scrollHeight <= led.clientHeight + 1) return; // narrow layout: the page scrolls, not the ledger, and an endless list would never stop growing
     let busy = false, tick = 0;
