@@ -27,7 +27,7 @@ button, .btn { font: inherit; color: var(--fg); background: var(--bg-2); border:
 .nav a { padding: 6px 10px; border-radius: var(--radius-s); color: var(--fg-2); }
 .nav a[aria-current] { background: var(--bg-2); color: var(--fg); }
 .spacer { flex: 1; }
-.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; font-size: 13px; font-weight: 600; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; padding: 0; font-size: 13px; font-weight: 600; } /* padding: the base button padding (12px a side) left 6px for the initials */
 .sidebar { display: none; }
 .main { min-width: 0; display: grid; grid-template-rows: auto 1fr; }
 .tabbar { display: flex; justify-content: space-around; border-top: 1px solid var(--line); background: var(--bg); position: sticky; bottom: 0; padding: 6px 0 max(6px, env(safe-area-inset-bottom)); }
@@ -117,7 +117,8 @@ button, .btn { font: inherit; color: var(--fg); background: var(--bg-2); border:
 .fab { position: fixed; right: 18px; bottom: 74px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-size: 28px; line-height: 52px; text-align: center; box-shadow: var(--shadow); border: 0; }
 @media (min-width: 900px) { .fab { display: none; } }
 /* table views (contacts, tasks): the round + is how a new entry is added, on every width, bottom left */
-.fab.fab-add { display: grid; place-items: center; padding: 0; line-height: 1; left: 18px; right: auto; z-index: 30; } /* above the sticky table cells, below the dialogs (45) */
+.fab.fab-add { display: grid; place-items: center; padding: 0; line-height: 1; left: 18px; right: auto; z-index: 30; width: 44px; height: 44px; font-size: 0;
+  background: linear-gradient(var(--accent-fg), var(--accent-fg)) center / 16px 2px no-repeat, linear-gradient(var(--accent-fg), var(--accent-fg)) center / 2px 16px no-repeat, var(--accent); } /* z-index: above the sticky table cells, below the dialogs (45); the + is drawn, the glyph sat ~3px low in its line box */
 @media (min-width: 900px) { .fab.fab-add { bottom: 18px; } }
 .contacts:not(.view-table) #ct-fab { display: none; }
 /* the contacts table has no editor beside it: + opens the editor pane as a dialog over the table,
