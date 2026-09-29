@@ -2565,11 +2565,11 @@
       if (d.tasks.length) h += `<h5>${T.tk}</h5>` + d.tasks.map(t => `<a class="r${t.completed ? ' done' : ''}" href="/tasks?view=groups${t.completed ? '&back=all' : ''}#${esc(t.key)}"><span class="sw" style="--c:${esc(t.color)}"></span><b>${esc(t.summary)}</b><small>${t.due ? t.due + ' · ' : ''}${esc(t.cal_name)}</small></a>`).join('');
       if (!h) h = `<div class="none">${T.none}</div>`;
       box.innerHTML = h; box.hidden = false;
-      // an event hit shows its day in the calendar view on screen (day, week, month, year); from a "More" view or another page, in the day view
+      // an event hit or a date jump shows its day in the calendar view on screen (day, week, month, year); from a "More" view or another page, the hit's own view (day; a month or year query: month / year)
       const KEEP = ['day', 'week', 'month', 'planner'];
       box.querySelectorAll('a.r[href^="/tasks"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalTasks) { e.preventDefault(); window.rusticalTasks.reveal(decodeURIComponent(new URL(a.href).hash.slice(1))); box.hidden = true; } }));
       box.querySelectorAll('a.r[href^="/contacts#"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalContacts) { e.preventDefault(); const k = decodeURIComponent(new URL(a.href).hash.slice(1)); history.replaceState(null, '', '#' + k); window.rusticalContacts.reveal(k); box.hidden = true; } }));
-      box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href), cur = window.rusticalCal.view(); window.rusticalCal.go(a.dataset.key && KEEP.includes(cur) ? cur : u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
+      box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href), cur = window.rusticalCal.view(); window.rusticalCal.go(KEEP.includes(cur) ? cur : u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
     } catch (_) { box.hidden = true; }
   }
   q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 180); });
