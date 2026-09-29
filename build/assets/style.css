@@ -885,7 +885,9 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .aldet input[data-w=n] { width: 56px; text-align: right; flex: none; }
 .ed .cardform .aldet input[data-w=n].err { color: #ff3b30; border-bottom-color: #ff3b30; }
 .ed .cardform .aldet .foot { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); margin-top: 2px; font-size: 12.5px; color: var(--fg-3); }
-.ed .cardform .aldet .pset .ico { width: 18px; height: 18px; } /* the size of the other icon buttons */
+.ed .cardform .aldet .pset { all: unset; cursor: pointer; color: var(--fg-3); display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; } /* frameless like the other inline stars */
+.ed .cardform .aldet .pset:hover:not(:disabled) { color: var(--fg-2); } .ed .cardform .aldet .pset:focus-visible { outline: 2px solid var(--accent); } .ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
+.ed .cardform .aldet .pset .ico { width: 18px; height: 18px; }
 .ed .cardform .aldet .pset[aria-pressed=true] .ico { fill: currentColor; }
 .ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
@@ -1056,7 +1058,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .ed .cardform .geo-txt:empty { display: none; }
 /* links & attachments (round 17 K): add box (paste, search, drop), rows in three groups (conference
    with a join card, in this calendar, on the internet), an edit card for the selected row */
-.ed .cardform .lk-add { margin: 0 0 8px 26px; background: var(--bg); border-radius: 12px; padding: 8px 10px; display: grid; gap: 6px; }
+.ed .cardform .lk-add { margin: 0 0 8px 26px; display: grid; gap: 6px; }
 .ed .cardform .lk-in { display: flex; gap: 6px; align-items: center; }
 .ed .cardform .lk-in input { flex: 1; min-width: 0; }
 .ed .cardform .lk-drop { border: 2px dashed var(--line); border-radius: 10px; padding: 8px; text-align: center; color: var(--fg-3); font-size: 11.5px; cursor: pointer; }
