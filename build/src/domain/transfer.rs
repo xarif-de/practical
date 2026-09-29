@@ -7,11 +7,11 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use caldata::component::{Component, ComponentMut, IcalCalendar};
 use caldata::generator::Emitter;
-use caldata::parser::ParserOptions;
+use caldata::parser::{ContentLine, ParserOptions};
 use caldata::{IcalParser, VcardParser};
 use rustical_ical::{AddressObject, CalendarObject, CalendarObjectType};
 use rustical_store::auth::Principal;
-use rustical_store::{AddressbookReadStore, AddressbookWriteStore, Calendar, CalendarMetadata, CalendarReadStore, CalendarWriteStore};
+use rustical_store::{Addressbook, AddressbookReadStore, AddressbookWriteStore, Calendar, CalendarMetadata, CalendarReadStore, CalendarWriteStore};
 
 pub async fn export_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str) -> AppResult<(String, String)> {
     collections::ensure_owner(user, principal)?;
@@ -123,6 +123,49 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
         components,
     };
     state.calendars.import_calendar(cal, objects, false).await?;
+    Ok((id, count))
+}
+
+/// Creates an address book from a .vcf file in one transaction (RustiCal's `import_addressbook`); a card
+/// without UID gets one, as RustiCal's own IMPORT does. The colour (ours, not RustiCal's) is written
+/// after the import succeeded. Returns (id, cards).
+pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str, vcf: &[u8]) -> AppResult<(String, usize)> {
+    collections::ensure_owner(user, owner)?;
+    if name.trim().is_empty() {
+        return Err(AppError::BadRequest("name required".into()));
+    }
+    if !collections::valid_color(color) {
+        return Err(AppError::BadRequest("color must be #rrggbb".into()));
+    }
+    let mut objects = vec![];
+    for card in VcardParser::from_slice(vcf) {
+        let mut card = card.map_err(|e| AppError::BadRequest(format!("vcf: {e}")))?;
+        if card.get_uid().is_none() {
+            let mut m = card.mutable();
+            m.add_content_line(ContentLine { name: "UID".into(), value: uuid::Uuid::new_v4().to_string(), params: vec![].into() });
+            card = m.build(&ParserOptions::default(), None).map_err(|e| AppError::BadRequest(format!("vcf: {e}")))?;
+        }
+        let id = card.get_uid().unwrap_or_default().to_string();
+        if !id.is_empty() && !id.contains('/') {
+            objects.push((id, AddressObject::from(card)));
+        }
+    }
+    if objects.is_empty() {
+        return Err(AppError::BadRequest("no vCards found".into()));
+    }
+    let count = objects.len();
+    let id = uuid::Uuid::new_v4().to_string();
+    let ab = Addressbook {
+        principal: owner.to_string(),
+        id: id.clone(),
+        displayname: Some(name.trim().to_string()),
+        description: Some(description.trim().to_string()).filter(|d| !d.is_empty()),
+        deleted_at: None,
+        synctoken: 0,
+        push_topic: uuid::Uuid::new_v4().to_string(),
+    };
+    state.addressbooks.import_addressbook(ab, objects, false).await?;
+    collections::set_addressbook_color_checked(state, user, owner, &id, color).await?;
     Ok((id, count))
 }
 

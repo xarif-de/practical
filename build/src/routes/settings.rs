@@ -759,6 +759,22 @@ async fn import_new_calendar(State(state): State<SharedState>, user: Principal, 
     Ok(axum::Json(ImportedNew { id, owner, imported }))
 }
 
+#[derive(serde::Deserialize)]
+struct NewAbImportQ {
+    owner: String,
+    name: String,
+    color: String,
+    #[serde(default)]
+    description: String,
+}
+
+/// A new address book from a .vcf file: the metadata in the query, the raw file as the body.
+async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::extract::Query(q): axum::extract::Query<NewAbImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let (id, imported) = crate::domain::transfer::import_new_addressbook(&state, &user, &q.owner, &q.name, q.color.trim(), &q.description, &body).await?;
+    Ok(axum::Json(ImportedNew { id, owner: q.owner, imported }))
+}
+
 async fn import_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     Ok(axum::Json(Imported { imported: crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await? }))
@@ -798,5 +814,6 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
         .route("/settings/import/calendars", post(import_new_calendar).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
+        .route("/settings/import/addressbooks", post(import_new_addressbook).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
 }

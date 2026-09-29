@@ -131,7 +131,7 @@ pub async fn addressbooks_for(state: &AppState, user: &Principal, deleted: bool)
 }
 
 /// `#rrggbb` only — the value lands in a style attribute.
-fn valid_color(c: &str) -> bool {
+pub fn valid_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
 }
 

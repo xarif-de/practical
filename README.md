@@ -211,8 +211,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   latest release are each asked at most weekly (one request with ETag, usually a 304); only a
   newer release is downloaded (~3.5 MB, about yearly) and saved in `xui_holidays`, where it wins over
   the built-in file. A broken answer (error, empty or halved list) never replaces a known one.
-- **Import**: into an existing collection (`.ics` merged by UID, `.vcf`), or a new calendar from an
-  `.ics` (settings › Calendars & address books › Import calendar …): the page prefills name,
+- **Import**: into an existing collection (`.ics` merged by UID, `.vcf`), or a new collection from a
+  file (settings › Calendars & address books › Import calendar … / Import address book …). A `.vcf`
+  names no book: the file name is suggested, contacts and groups are counted, a card without UID
+  gets one (as RustiCal's IMPORT), the colour is written after `AddressbookStore::import_addressbook`
+  succeeded. For an `.ics` the page prefills name,
   description, colour and zone from the file's X-WR-CALNAME/-CALDESC/-CALCOLOR/-TIMEZONE (as
   RustiCal's own IMPORT; colour also X-APPLE-CALENDAR-COLOR), counts the objects per type and locks
   those types on; the server drops the X-WR-* lines from the objects and creates calendar and
