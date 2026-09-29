@@ -3089,6 +3089,7 @@
 
   // ---- E: deck ----
   let deckI = 0;
+  function deckGo(i) { const list = sortView(TASKS); deckI = i >= list.length ? 0 : i; if (list[deckI]) act = key(list[deckI]); } // the card on top is the picked task
   function vDeck() {
     const list = sortView(TASKS);
     if (deckI >= list.length) deckI = 0;
@@ -3189,8 +3190,8 @@
     const deck = $('.tkdeck', main);
     if (deck) deck.onkeydown = e => {
       const list = sortView(TASKS);
-      if (e.key === 'j' || e.key === 'ArrowDown') { deckI = Math.min(list.length - 1, deckI + 1); if (deckI > list.length - 6) loadMore().then(d => d && render()); render(); $('.tkdeck', main).focus(); }
-      if (e.key === 'k' || e.key === 'ArrowUp') { deckI = Math.max(0, deckI - 1); render(); $('.tkdeck', main).focus(); }
+      if (e.key === 'j' || e.key === 'ArrowDown') { deckGo(Math.min(list.length - 1, deckI + 1)); if (deckI > list.length - 6) loadMore().then(d => d && render()); render(); $('.tkdeck', main).focus(); }
+      if (e.key === 'k' || e.key === 'ArrowUp') { deckGo(Math.max(0, deckI - 1)); render(); $('.tkdeck', main).focus(); }
       if (e.key === ' ') { e.preventDefault(); const t = list[deckI]; if (t) toggle(key(t)); }
       if (e.key === 'e') { e.preventDefault(); const t = list[deckI]; if (t) open(key(t)); }
     };
@@ -3201,7 +3202,7 @@
   main.addEventListener('click', e => {
     const tog = e.target.closest('[data-tog]');
     if (tog) { e.stopPropagation(); toggle(tog.dataset.tog); return; }
-    if (e.target.closest('[data-next]')) { deckI++; render(); return; }
+    if (e.target.closest('[data-next]')) { deckGo(deckI + 1); render(); return; }
     const holder = e.target.closest('[data-key]');
     if (!holder) return;
     // the table is its own editor; a card cell opens that one card of the editor
