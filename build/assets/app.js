@@ -48,9 +48,9 @@
   window.askYesNo = (text, yes, no, modal) => new Promise(done => {
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
-    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn" type="button" data-a="0"></button><button class="btn btn-primary" type="button" data-a="1"></button></div></div>';
+    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn icon-btn" type="button" data-a="0"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-a="1"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button></div></div>';
     d.querySelector('p').textContent = text;
-    d.querySelector('[data-a="0"]').textContent = no; d.querySelector('[data-a="1"]').textContent = yes;
+    for (const [a, t] of [['0', no], ['1', yes]]) { const b = d.querySelector(`[data-a="${a}"]`); b.title = t; b.setAttribute('aria-label', t); }
     const prev = document.activeElement;
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
     const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
@@ -238,9 +238,9 @@
       const form = $('form', d), inp = $('input[name=confirm]', form), go = $('button[type=submit]', form), want = inp.placeholder;
       const w = document.createElement('div');
       w.className = 'ask'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-modal', 'true');
-      w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn" type="button"></button><button class="btn danger" type="submit" disabled></button></div></form>';
+      w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn icon-btn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn danger icon-btn" type="submit" disabled><svg class="ico" aria-hidden="true"><use href="#i-trash-2"/></svg></button></div></form>';
       $('p', w).textContent = ($('p', form) || {}).textContent || ''; $('.ask-type span', w).textContent = form.dataset.tType; $('.ask-type b', w).textContent = want;
-      const [no, yes] = $$('.ask-acts button', w); no.textContent = form.dataset.tCancel; yes.textContent = go.textContent;
+      const [no, yes] = $$('.ask-acts button', w); const goText = go.textContent.trim(); no.title = form.dataset.tCancel; no.setAttribute('aria-label', no.title); yes.title = goText; yes.setAttribute('aria-label', goText);
       const typed = $('.ask-type input', w); // no placeholder: a greyed copy of the answer reads as already filled in
       const end = () => { removeEventListener('keydown', key, true); w.remove(); };
       const key = ev => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); end(); } };
@@ -297,7 +297,7 @@
         let row = '';
         if (edit) {
           const [u] = unitOf(edit.m), last = !canRm(edit.key);
-          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok><svg class="ico" aria-hidden="true"><use href="#i-pencil"/></svg><span>${esc2(tr('js-snp-change'))}</span></button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}>${esc2(tr('js-snp-remove'))}</button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
+          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok><svg class="ico" aria-hidden="true"><use href="#i-pencil"/></svg><span>${esc2(tr('js-snp-change'))}</span></button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>${esc2(tr('js-snp-remove'))}</span></button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
         }
         const sc = $('.snp-scroll', snapBox), keep = sc ? sc.scrollLeft : 0; // redrawing must not jump a scrolled strip back
         snapBox.innerHTML = `<div class="snp-scroll"><div class="snp-es" style="min-width:${(o.length + 1) * 31}px">${h}</div></div>${row}`;
@@ -583,7 +583,7 @@
     w.innerHTML = `<div class="ask-box cpk-dlg"><div class="cpk-dh"><span><b>${esc(tr('js-color-new'))}</b><small>${esc(tr('js-color-for', { what: o.what || o.title }))}</small></span>
       <span class="seg"><button type="button" data-t="fan"><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><span>${esc(tr('js-color-tab-fan'))}</span></button><button type="button" data-t="field"><svg class="ico" aria-hidden="true"><use href="#i-eyedropper"/></svg><span>${esc(tr('js-color-tab-field'))}</span></button></span>
       <button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn" type="button" data-x>${esc(tr('js-ct-cancel'))}</button><button class="btn btn-primary" type="button" data-ok>${esc(tr('js-color-apply'))}</button></div></div>`;
+      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-ok title="${esc(tr('js-color-apply'))}" aria-label="${esc(tr('js-color-apply'))}"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button></div></div>`;
     const pv = preview(o.title); $('.cpk-near', w).after(pv.el);
     const body = $('.cpk-body', w), near = $('.cpk-near', w);
     const showNear = () => {
@@ -970,7 +970,7 @@
     const manual = st => st.pins.size + st.excl.size + st.moves.size + st.off.size;
     let st = fresh(3), P = null, src = [], ro = null, preview = null;
     const w = document.createElement('div'); w.className = 'ask cfo-wrap'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-cfo-title'));
-    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span><button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div><div class="cfo-body"></div><div class="ask-acts"><button class="btn" type="button" data-x>${esc(tr('js-ct-cancel'))}</button><button class="btn btn-primary" type="button" data-apply></button></div></div>`;
+    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span><button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div><div class="cfo-body"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-apply><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><b class="n" hidden></b></button></div></div>`;
     const bodyEl = $('.cfo-body', w), applyBtn = $('[data-apply]', w);
     const sw = (hex, t) => `<i class="cfo-sw" style="--x:${hex}"${t ? ` title="${esc(t)}"` : ''}></i>`;
     const cname = (hex, raw) => (raw && raw[0] !== '#' ? raw : hex);
@@ -1005,7 +1005,7 @@
         ${P.notes.length ? `<div class="cfo-notes">${P.notes.map(x => `<p class="${x.warn ? 'warn' : 'info'}">${x.warn ? '⚠' : 'ℹ'} ${esc(x.text)}</p>`).join('')}</div>` : ''}
         ${P.lanes.length ? `<div class="cfo-head"><span>${esc(tr('js-cfo-h-now'))}</span><span>${esc(tr('js-cfo-h-act'))}</span><span>${esc(tr('js-cfo-h-after'))}</span></div><div class="cfo-fd"><svg class="cfo-svg" aria-hidden="true"></svg>${lanes}</div><p class="cfo-help">${esc(tr('js-cfo-help'))}</p>`
           : `<div class="cfo-empty"><b>${esc(tr('js-cfo-empty'))}</b><span>${esc(tr('js-cfo-empty-hint'))}</span></div>`}`;
-      applyBtn.textContent = tr('js-cfo-apply') + (P.changes.length ? ' · ' + P.changes.length : ''); applyBtn.disabled = !P.changes.length;
+      const aT = tr('js-cfo-apply') + (P.changes.length ? ' · ' + P.changes.length : ''); applyBtn.title = aT; applyBtn.setAttribute('aria-label', aT); const nB = $('.n', applyBtn); nB.textContent = P.changes.length; nB.hidden = !P.changes.length; applyBtn.disabled = !P.changes.length;
       bodyEl.scrollTop = keep;
       const box = $('.cfo-fd', bodyEl); if (ro) ro.disconnect(); if (!box) return;
       const lines = () => {
@@ -1977,7 +1977,7 @@
     const present = new Set(peAll().map(p => p.email.toLowerCase()));
     const mentioned = new Set([...text.matchAll(RE_MENTION)].filter(m => m[1] === '@').map(m => m[2].replace(/[.,;:!?]+$/, '').toLowerCase()));
     ix.contacts.filter(c => c.email && !present.has(c.email.toLowerCase())).filter(c => mentioned.has(c.name.toLowerCase()) || (c.name.length >= 5 && new RegExp('(?<![\\p{L}])' + c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}])', 'iu').test(text))).slice(0, 4).forEach(c => chips.push({ k: 'person', icon: 'i-users', text: c.name, sub: NT.tPeople, data: c }));
-    [...new Set((text.match(RE_URL) || []).map(u => u.replace(/[.,;:!?]+$/, '')))].filter(u => !LK.links.some(l => l.uri === u)).slice(0, 4).forEach(u => chips.push({ k: 'link', icon: 'i-ext', text: u.replace(/^https?:\/\/(www\.)?/i, ''), sub: NT.tLinks, data: u }));
+    [...new Set((text.match(RE_URL) || []).map(u => u.replace(/[.,;:!?]+$/, '')))].filter(u => !LK.links.some(l => l.uri === u)).slice(0, 4).forEach(u => chips.push({ k: 'link', icon: 'i-link', text: u.replace(/^https?:\/\/(www\.)?/i, ''), sub: NT.tLinks, data: u }));
     const have = new Set(chips2().map(c => c.toLowerCase()));
     const tags = new Set([...text.matchAll(RE_MENTION)].filter(m => m[1] === '#').map(m => m[2].replace(/[.,;:!?]+$/, '')));
     ix.categories.filter(c => c.name.length >= 4 && new RegExp('(?<![\\p{L}#])' + c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}])', 'iu').test(text)).forEach(c => tags.add(c.name));
@@ -2051,7 +2051,7 @@
   const lkSize = n => n == null ? '' : n >= 1048576 ? (n / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
   const lkTitle = l => l.label || l.filename || (l.embedded ? LKT.tAttach + (l.bin_index != null ? ' ' + (l.bin_index + 1) : '') : lkHost(l.uri) || l.uri);
   const lkSub = l => [l.embedded ? LKT.tEmbedded : (l.label || l.filename ? lkHost(l.uri) : l.uri.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')), l.fmt && l.embedded ? l.fmt : '', l.size ? lkSize(l.size) : '', l.kind === 'conference' && l.features && l.features.length ? l.features.map(x => x.toLowerCase()).join(', ') : ''].filter(Boolean).join(' · ');
-  const lkIcon = l => l.embedded || l.kind === 'attach' ? ((l.fmt || '').startsWith('image/') || /\.(jpe?g|png|gif|webp|heic)$/i.test(l.filename || l.uri) ? 'i-image' : 'i-download') : l.kind === 'conference' ? 'i-chat' : 'i-ext';
+  const lkIcon = l => l.embedded || l.kind === 'attach' ? ((l.fmt || '').startsWith('image/') || /\.(jpe?g|png|gif|webp|heic)$/i.test(l.filename || l.uri) ? 'i-image' : 'i-clip') : l.kind === 'conference' ? 'i-chat' : 'i-link';
   const lkMirror = () => { f.links_json.value = LK.links.length || LK.related.length ? JSON.stringify([LK.links.map(l => [l.kind, l.uri, l.label, l.filename, l.keep, !!l.data]), LK.related.map(r => r.uid)]) : ''; };
   function linksInit(links, related) { LK = { links: (links || []).map(l => ({ ...l, keep: l.embedded ? true : false })), related: (related || []).map(r => ({ ...r })) }; lkSel = null; lkMsg.textContent = ''; lkRender(); }
   const lkSync = () => { lkMirror(); lkRender(); refresh(); };
@@ -2306,12 +2306,12 @@
     const isRaw = RR.freq === 'RAW';
     rrBox.insertAdjacentHTML('beforeend', `<div class="rrsegs"><span class="seg" data-w="freq">${[''].concat(RR_FREQS).map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${RR.freq === v}" title="${esc(longs[i])}">${esc(freqs[i])}</button>`).join('')}${isRaw ? `<button type="button" data-v="RAW" aria-pressed="true" title="${esc(RT.tCustom)}">${esc(RT.tCustomShort)}</button>` : ''}</span></div>`);
     $('[data-w=freq]', rrBox).onclick = e => { const b = e.target.closest('button'); if (!b) return; RR.freq = b.dataset.v; if (RR.freq === 'WEEKLY' && !RR.byday.length) RR.byday = [DAYS[rrWd(s0)]]; rrSet(); };
-    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-ruler"/></svg><span>${esc(RT.tInterval)}</span></button><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-cal-x"/></svg><span>${esc(RT.tEnd)}</span></button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
+    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-ellipsis"/></svg><span>${esc(RT.tInterval)}</span></button><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-to-line"/></svg><span>${esc(RT.tEnd)}</span></button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
     if (RR.freq && !isRaw) {
       const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
       const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
       const endLabel = () => RR.end.kind === 'count' ? D.tCount.replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
-      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i"><svg class="ico" aria-hidden="true"><use href="#i-ruler"/></svg><span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e"><svg class="ico" aria-hidden="true"><use href="#i-cal-x"/></svg><span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
+      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i"><svg class="ico" aria-hidden="true"><use href="#i-ellipsis"/></svg><span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e"><svg class="ico" aria-hidden="true"><use href="#i-to-line"/></svg><span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
       $('.rrbottom', rrBox).onclick = e => { const b = e.target.closest('.pillbtn'); if (!b) return;
         if (b.dataset.s === 'i') rrPop(b, [1, 2, 3, 4, 6].map(n => ({ v: n, label: n === 1 ? each : D.tEvery.replace('{n}', n) + ' ' + u })).concat({ v: 'n', label: RT.tN }), RR.interval, v => { if (v === 'n') rrAskNumber(b, RT.tIntQ.replace('{u}', u), RR.interval, n => { RR.interval = n; rrSet(); }); else { RR.interval = +v; rrSet(); } });
         else rrPop(b, [{ v: 'never', label: RT.tNoEnd }, { v: 'count', label: RT.tEndCount + ' …' }, { v: 'until', label: RT.tEndUntil + ' …' }], RR.end.kind, v => { if (v === 'count') rrAskNumber(b, RT.tCountQ, RR.end.count, n => { RR.end = { ...RR.end, kind: 'count', count: n }; rrSet(); }); else if (v === 'until') { rrPicking = true; rrRender(); } else { RR.end = { ...RR.end, kind: 'never' }; rrSet(); } }); };

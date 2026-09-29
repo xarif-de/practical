@@ -529,7 +529,7 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
     };
     match d.map(|x| x.status.as_str()).unwrap_or(if i.cancelled { "CANCELLED" } else { "" }) {
         "CANCELLED" => mark("thumbs-down", l.t("v-cancelled")),
-        "TENTATIVE" => mark("help", l.t("v-tentative")),
+        "TENTATIVE" => mark("thumbs-mid", l.t("v-tentative")),
         _ => {}
     }
     if d.map(|x| x.transp.as_str()) == Some("TRANSPARENT") {

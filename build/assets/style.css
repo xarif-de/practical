@@ -699,6 +699,12 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 /* a symbol beside a label (design round 16): buttons, links, menu rows and segments */
 .btn:not(.icon-btn):has(> .ico), button.link:has(> .ico), summary.link:has(> .ico), .seg button:has(> .ico + span), .more .pop a:has(> .ico), .filter .row a:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; }
 .btn:not(.icon-btn) > .ico, button.link > .ico, summary.link > .ico { width: 16px; height: 16px; }
+/* button rule: symbol + label = no frame, coloured text (blue, red for danger); symbol only = framed button */
+.btn:not(.icon-btn):has(> .ico) { background: none; border-color: transparent; box-shadow: none; color: var(--accent); padding-left: 4px; padding-right: 4px; }
+.btn.danger:not(.icon-btn):has(> .ico) { color: var(--today); }
+.btn:not(.icon-btn):has(> .ico):hover:not(:disabled) { background: color-mix(in srgb, currentColor 8%, transparent); }
+.ed .cardform .lk-join .btn:has(> .ico) { background: none; color: #fff; } /* on the blue join box */
+.btn.icon-btn > .n { position: absolute; top: -6px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--today); color: #fff; font: 600 10.5px/17px var(--font, inherit); text-align: center; } .btn.icon-btn:has(> .n) { position: relative; } /* a count on a symbol-only button (colour optimiser: changes) */
 .filter .row a > .ico { width: 14px; height: 14px; }
 .more .pop a > .ico { color: var(--fg-2); }
 .seg [data-more] { display: inline-flex; align-items: center; gap: 2px; } .seg [data-more] > .ico:last-child { width: 14px; height: 14px; color: var(--fg-2); }
