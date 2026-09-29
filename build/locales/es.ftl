@@ -748,6 +748,7 @@ js-ed-delTask = ¿Eliminar esta tarea?
 js-search-jump = Ir a
 js-search-ev = Eventos
 js-search-ct = Contactos
+js-search-tk = Tareas
 js-search-none = No se ha encontrado nada
 js-ct-del = ¿Eliminar este contacto?
 js-ct-err = Error

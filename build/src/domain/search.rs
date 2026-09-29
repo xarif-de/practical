@@ -27,6 +27,7 @@ pub struct TaskHit {
     pub due: Option<NaiveDate>,
     pub completed: bool,
     pub cal_name: String,
+    pub color: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -147,7 +148,7 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
         }
         for t in tasks::tasks_for(state, &cals, tz).await? {
             if t.summary.to_lowercase().contains(&ql) {
-                task_hits.push(TaskHit { key: t.key(), uid: t.uid.clone(), summary: t.summary.clone(), due: t.due.map(|d| d.date()), completed: t.completed(), cal_name: t.cal_name.clone() });
+                task_hits.push(TaskHit { key: t.key(), uid: t.uid.clone(), summary: t.summary.clone(), due: t.due.map(|d| d.date()), completed: t.completed(), cal_name: t.cal_name.clone(), color: t.color.clone() });
                 if task_hits.len() >= 6 {
                     break;
                 }

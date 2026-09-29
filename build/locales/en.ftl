@@ -748,6 +748,7 @@ js-ed-delTask = Delete this task?
 js-search-jump = Jump to
 js-search-ev = Events
 js-search-ct = Contacts
+js-search-tk = Tasks
 js-search-none = Nothing found
 js-ct-del = Delete this contact?
 js-ct-err = Error

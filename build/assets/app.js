@@ -2551,7 +2551,7 @@
   const q = document.getElementById('q'), box = document.getElementById('sres');
   if (!q) return;
   const lang = document.body.dataset.lang || 'de';
-  const T = trs('js-search-', ['jump', 'ev', 'ct', 'none']);
+  const T = trs('js-search-', ['jump', 'ev', 'ct', 'tk', 'none']);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let t, last = '';
   async function render() {
@@ -2561,10 +2561,13 @@
       if (d.jump) h += `<a class="r jump" href="/calendar?view=${d.jump.view}&date=${d.jump.date}"><span class="ic">⇢</span><b>${T.jump} ${esc(d.jump.label)}</b><small>${d.jump.date}</small></a>`;
       if (d.events.length) h += `<h5>${T.ev}</h5>` + d.events.map(e => `<a class="r" href="/calendar?view=day&date=${e.date}" data-key="${esc(e.key)}"><span class="sw" style="--c:${esc(e.color)}"></span><b>${esc(e.summary)}</b><small>${e.date}${e.time ? ' · ' + e.time : ''} · ${esc(e.cal_name)}</small></a>`).join('');
       if (d.contacts.length) h += `<h5>${T.ct}</h5>` + d.contacts.map(c => `<a class="r" href="/contacts#${esc(c.key)}"><span class="av" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${c.bday ? '<svg class="ico" aria-hidden="true"><use href="#i-cake"/></svg>' : ''}${esc(c.sub)}</small></a>`).join('');
+      // a finished task needs the whole lookback to be in the list
+      if (d.tasks.length) h += `<h5>${T.tk}</h5>` + d.tasks.map(t => `<a class="r${t.completed ? ' done' : ''}" href="/tasks?view=groups${t.completed ? '&back=all' : ''}#${esc(t.key)}"><span class="sw" style="--c:${esc(t.color)}"></span><b>${esc(t.summary)}</b><small>${t.due ? t.due + ' · ' : ''}${esc(t.cal_name)}</small></a>`).join('');
       if (!h) h = `<div class="none">${T.none}</div>`;
       box.innerHTML = h; box.hidden = false;
       // an event hit shows its day in the calendar view on screen (day, week, month, year); from a "More" view or another page, in the day view
       const KEEP = ['day', 'week', 'month', 'planner'];
+      box.querySelectorAll('a.r[href^="/tasks"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalTasks) { e.preventDefault(); window.rusticalTasks.reveal(decodeURIComponent(new URL(a.href).hash.slice(1))); box.hidden = true; } }));
       box.querySelectorAll('a.r[href^="/contacts#"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalContacts) { e.preventDefault(); const k = decodeURIComponent(new URL(a.href).hash.slice(1)); history.replaceState(null, '', '#' + k); window.rusticalContacts.reveal(k); box.hidden = true; } }));
       box.querySelectorAll('a.r[href^="/calendar"]').forEach(a => a.addEventListener('click', e => { if (window.rusticalCal) { e.preventDefault(); const u = new URL(a.href), cur = window.rusticalCal.view(); window.rusticalCal.go(a.dataset.key && KEEP.includes(cur) ? cur : u.searchParams.get('view'), u.searchParams.get('date')); box.hidden = true; } }));
     } catch (_) { box.hidden = true; }
@@ -2829,7 +2832,7 @@
   }
   const main = $('#tkmain'), ed = $('#ed');
   const TODAY = parse(root.dataset.today);
-  let view = root.dataset.view, sort = localStorage.tkSort || 'due', desc = localStorage.tkDesc === '1', cur = null;
+  let view = root.dataset.view, sort = localStorage.tkSort || 'due', desc = localStorage.tkDesc === '1', cur = null, act = null; // cur: the task in the editor; act: the picked one (marked in every view that shows it)
 
   function parse(s) { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); }
   const dt = s => s ? new Date(String(s).replace(' ', 'T')) : null;
@@ -3191,7 +3194,7 @@
       if (e.key === ' ') { e.preventDefault(); const t = list[deckI]; if (t) toggle(key(t)); }
       if (e.key === 'e') { e.preventDefault(); const t = list[deckI]; if (t) open(key(t)); }
     };
-    if (cur) $$(`[data-key="${cur}"]`, main).forEach(el => el.classList.add('sel'));
+    markAct();
     if (deck && view === 'deck' && !document.activeElement.closest('input, select, textarea')) deck.focus();
   }
 
@@ -3202,7 +3205,7 @@
     const holder = e.target.closest('[data-key]');
     if (!holder) return;
     // the table is its own editor; a card cell opens that one card of the editor
-    if (view === 'table') { const cc = e.target.closest('.cardcell'); if (cc) openCard(holder.dataset.key, cc.dataset.card); return; }
+    if (view === 'table') { const cc = e.target.closest('.cardcell'); if (cc) openCard(holder.dataset.key, cc.dataset.card); else { act = holder.dataset.key; markAct(); } return; } // a row click picks
     open(holder.dataset.key);
   });
 
@@ -3235,7 +3238,7 @@
     boxes.forEach(i => { i.checked = !hid.has(i.dataset.cal); i.addEventListener('change', apply); });
     $$('[data-filter]', cf).forEach(a => a.addEventListener('click', e => { e.preventDefault(); boxes.forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); apply(); }));
     // a filter set on the calendar page applies here too; a rule link (?rule=) keeps its page
-    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); reload(); }
+    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); location.href = url() + location.hash; }
   }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
@@ -3267,12 +3270,12 @@
     ed.style.setProperty('--ed-off', c ? Math.round(c.getBoundingClientRect().top - main.getBoundingClientRect().top) + 'px' : '0px');
   }
   function open(k) {
-    cur = k;
+    cur = act = k;
     render();
     load(k);
     fit();
   }
-  function openCard(k, card) { cur = k; held = k; window.rusticalEd.open(k, undefined, false, card); fit(); }
+  function openCard(k, card) { cur = act = k; held = k; markAct(); window.rusticalEd.open(k, undefined, false, card); fit(); }
   function newTask() {
     cur = null; wantNew = true; render(); load(null); fit();
   }
@@ -3290,25 +3293,45 @@
       reload();
     },
     // closing the docked pane falls back to the new-task form; a dialog just goes away
-    closed: () => { cur = null; wantNew = false; held = undefined; render(); fit(); },
+    closed: () => { if (docked()) act = null; cur = null; wantNew = false; held = undefined; render(); fit(); }, // the docked pane falls back to the new-task form: nothing is picked
   };
 
   $('#tk-back').onchange = e => { const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); };
-  $$('#tk-views button').forEach(b => b.onclick = () => {
-    view = b.dataset.tkview;
-    segPress(b);
+  // ---- the picked task: a search hit, a click or a view switch keeps it marked and in view where the view shows it ----
+  function markAct() { $$('.sel[data-key]', main).forEach(el => el.classList.remove('sel')); if (act) $$(`[data-key="${CSS.escape(act)}"]`, main).forEach(el => el.classList.add('sel')); }
+  function deckTo() { if (!act) return; const i = sortView(TASKS).findIndex(t => key(t) === act); if (i >= 0) deckI = i; }
+  function showAct() { // false: this view has no place for it (a history day, a finished task on the deck …)
+    if (!act) return false;
+    if (docked() && held !== act && find(act)) open(act); // the docked pane shows the picked task
+    const el = $(`[data-key="${CSS.escape(act)}"]`, main); if (!el) return false;
+    el.scrollIntoView({ block: 'center' }); return true;
+  }
+  function setView(v) {
+    view = v;
+    segPress($(`#tk-views button[data-tkview="${v}"]`));
     $('#tk-colpick').hidden = view !== 'table';
     history.replaceState(null, '', url());
-    // a pick does not travel between views: the dialog would pop up in the next one
+    // the editor does not travel between views (the dialog would pop up in the next one); the pick does
     cur = null; wantNew = false; held = undefined;
-    render();
-    fit();
-  });
+    deckTo(); render(); fit();
+  }
+  $$('#tk-views button').forEach(b => b.onclick = () => { setView(b.dataset.tkview); showAct(); });
+  async function reveal(k) {
+    act = k;
+    if (!find(k)) await ensureAll();
+    if (!find(k) && root.dataset.back !== 'all') { const u = new URL(url()); u.searchParams.set('back', 'all'); location.href = u + '#' + encodeURIComponent(k); return; } // finished before the lookback: widen it, same view
+    if (!find(k)) { cur = k; load(k); fit(); return; } // hidden by the calendar filter: the editor still shows it
+    deckTo(); render();
+    if (!showAct()) { setView('groups'); showAct(); } // this view cannot show it: the list can
+  }
+  window.rusticalTasks = { reveal };
   addEventListener('popstate', () => location.reload());
 
   // back from a save in the docked pane: show what was saved
   const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
   if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
+  // a link to one task (#key, e.g. a search hit from another page)
+  const hk = decodeURIComponent(location.hash.slice(1)); if (hk) { history.replaceState(null, '', url()); reveal(hk); }
 })();
 
 /* ===== settings: import files, browser push ===== */

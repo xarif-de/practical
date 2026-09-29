@@ -251,7 +251,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .sres .r .ic { font-size: 18px; color: var(--accent); text-align: center; }
 .sres .r b { font-weight: 600; font-size: 14px; } .sres .r small { color: var(--fg-3); font-size: 12px; }
 .sres .jump { background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.sres .none { padding: 10px; color: var(--fg-3); }
+.sres .none { padding: 10px; color: var(--fg-3); } .sres .r.done b { text-decoration: line-through; color: var(--fg-3); }
 .filter { position: relative; }
 .filter .pop { display: block; position: absolute; right: 0; top: 38px; width: 260px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 8px 10px; z-index: 30; }
 /* hover popovers (.filter: topbar filter, user menu, contacts field picker; .more: calendar views) share one
@@ -1290,6 +1290,9 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .tkdl .dd::before { content: ""; position: absolute; left: -17px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #30b46c); }
 .tkdl .ri { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 13.5px; cursor: pointer; }
 .tkdl .ri:hover { color: var(--accent); }
+/* the picked task (app.js act): table as in contacts, bars/chips/entries with an accent ring */
+.tkmain .sheet tr[data-key]:not(.sel):hover td { background: color-mix(in srgb, var(--accent) 5%, var(--bg)); } .tkmain .sheet tr.sel td { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); } .tkmain .sheet tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tktl .bar2.sel { box-shadow: 0 0 0 2px var(--accent); } .tknd .tchip.sel, .tkdl .ri.sel { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 6px; } .tkdl .ri.sel { color: var(--accent); }
 
 /* the docked editor: the same dialog, as the right-hand pane of the groups view (sticky, scrolls on its own like the contacts pane) */
 /* `inset` before `top`: the shorthand after it reset top to auto and the pane scrolled away with the list.

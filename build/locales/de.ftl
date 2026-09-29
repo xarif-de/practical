@@ -748,6 +748,7 @@ js-ed-delTask = Diese Aufgabe löschen?
 js-search-jump = Springe zu
 js-search-ev = Termine
 js-search-ct = Kontakte
+js-search-tk = Aufgaben
 js-search-none = Nichts gefunden
 js-ct-del = Diesen Kontakt löschen?
 js-ct-err = Fehler
