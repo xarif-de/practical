@@ -1135,10 +1135,11 @@
   const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const pad = n => String(n).padStart(2, '0');
-  // date = the picked day, which every view shows as selected; month = the month view's month on screen
-  // (YYYY-MM) once scrolling left the picked day's — scrolling never changes the picked day
-  let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '', month: new URL(location.href).searchParams.get('month') };
-  const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.date; // the date whose month or week is on screen
+  // date = the picked day, which every view shows as selected; month (YYYY-MM) / week (its Monday) = what the
+  // month / week view has on screen once scrolling left the picked day's — scrolling never changes the picked day
+  const q0 = new URL(location.href).searchParams;
+  let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '', month: q0.get('month'), week: q0.get('week') };
+  const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.view === 'week' && state.week ? state.week : state.date; // the date whose month or week is on screen
   root.dataset.date = shown();
   const today = root.dataset.today;
 
@@ -1161,7 +1162,7 @@
   }));
 
   // ---- navigation / fragment loading ----
-  function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.view === 'month' && state.month && state.month !== state.date.slice(0, 7)) u.searchParams.set('month', state.month); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
+  function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.view === 'month' && state.month && state.month !== state.date.slice(0, 7)) u.searchParams.set('month', state.month); if (state.view === 'week' && state.week && state.week !== localIso(weekStart(parse(state.date)))) u.searchParams.set('week', state.week); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
   let loading = null;
   async function load(push = true) {
     const u = url(true);
@@ -1195,8 +1196,12 @@
     state.date = iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
     load();
   }
-  function go(view, date) { if (date || (view && view !== state.view)) state.month = null; if (view) state.view = view; if (date) state.date = date; load(); } // a picked day or another view shows the picked day's month again
-  function pick(date) { state.month = shown().slice(0, 7); state.date = date; load(false); history.replaceState(state, '', url(false).pathname + url(false).search); } // month view: a click picks the day, the month stays
+  function go(view, date) { if (date || (view && view !== state.view)) state.month = state.week = null; if (view) state.view = view; if (date) state.date = date; load(); } // a picked day or another view shows the picked day's month again
+  function pickDay(date) { // a click picks the day; the month or week on screen stays
+    if (state.view === 'month') { state.month = shown().slice(0, 7); state.date = date; load(false); } // the agenda beside the grid shows it
+    else { state.date = date; markPicked(); }
+    history.replaceState(state, '', url(false).pathname + url(false).search); }
+  const markPicked = () => $$('.stream .dayblock', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date));
   // the month grid owns the wheel: one gesture turns exactly one page, however far it goes. A new
   // gesture is told by speed, not by a pause: a trackpad's momentum tail only ever slows down, while
   // a fresh swipe arrives faster than the tail it interrupts — the speed must have fallen below half
@@ -1378,7 +1383,7 @@
       if (focus) focus.classList.remove('focus');
       focus = w; w.classList.add('focus');
       const d = parse(w.dataset.week);
-      if (localIso(weekStart(parse(state.date))) !== w.dataset.week) state.date = w.dataset.week; // a new week starts on its Monday; a day picked elsewhere inside it stays picked
+      state.week = w.dataset.week; // the week on screen; the picked day stays
       const h1 = $('#title', root); if (h1) { h1.textContent = tr('js-week', { w: isoWeek(d), y: isoYear(d) }); document.title = h1.textContent + ' · ' + document.title.split(' · ').slice(1).join(' · '); }
       history.replaceState(state, '', url(false).pathname + url(false).search);
       tlSelect(); heatSync(d);
@@ -1397,7 +1402,7 @@
             return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('') + '</div>'; }).join('');
         wireItems(heat);
       }
-      $$('.hw', heat).forEach(r => r.classList.toggle('focus', r.dataset.week === localIso(weekStart(parse(state.date))))); }
+      $$('.hw', heat).forEach(r => r.classList.toggle('focus', r.dataset.week === state.week)); }
     async function extend(dir) {
       if (busy) return; const bs = blocks(); if (!bs.length) return;
       const edge = dir > 0 ? bs[bs.length - 1] : bs[0];
@@ -1413,7 +1418,7 @@
         // the browser's own scroll anchoring, which a scrollHeight delta would have added a second time
         const anchor = focus && focus.isConnected ? focus : bs[0], y0 = anchor.getBoundingClientRect().top;
         if (dir > 0) stream.append(...fresh); else stream.prepend(...fresh);
-        fresh.forEach(wireItems);
+        fresh.forEach(wireItems); markPicked();
         const over = blocks().length - WK_MAX;
         if (over > 0) (dir > 0 ? blocks().slice(0, over) : blocks().slice(-over)).forEach(b => b.remove());
         box.scrollTop += anchor.getBoundingClientRect().top - y0;
@@ -1427,7 +1432,7 @@
     wkOff = () => { target.removeEventListener('scroll', onScroll); removeEventListener('resize', onScroll); };
     const cal = $('.cal', root), first = (cal && $(`.week[data-week="${cal.dataset.focus}"]`, stream)) || blocks()[0];
     if (first) { const r = first.getBoundingClientRect(); box.scrollTop += r.top - (centreY() - r.height / 2); } // land with the week in focus centred
-    setFocus(pick());
+    markPicked(); setFocus(pick());
   }
   // ---- day ledger: endless in both directions. Picking a day in it must not move it — only a day
   // that arrives some other way (the today button, the orbit picker, the rail) is scrolled to the
@@ -1486,7 +1491,8 @@
     $$('.heat i[data-date], .c[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
     $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }); // picking in the ledger leaves it exactly where it is
     $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); go('day', el.closest('[data-date]').dataset.date); });
-    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pick(el.dataset.date); });
+    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
+    $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .dl') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
     $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
     // the day document's details sit inside the clickable entry, so each of them stops the click

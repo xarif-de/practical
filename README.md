@@ -8,8 +8,8 @@ calendar, contacts and tasks views.
 
 **What it does (phase 1 + 2):** groups and memberships · calendars and address books per
 person or group · app tokens · trash with restore · calendar views Day (ledger + document),
-Week (stream), Month (tiles with continuous multi-day bars; scrolling turns the month, a click on a
-day picks it — the picked day is shared by all views, `?month=YYYY-MM` = month on screen) and the "More" views Year planner,
+Week (stream) and Month (tiles with continuous multi-day bars) — in both, scrolling only moves what is on
+screen (`?week=<Monday>` / `?month=YYYY-MM`) and a click on a day picks it; the picked day (`date`) is shared by all views — and the "More" views Year planner,
 Free weekends, Vacation planner, Countdown wall, Year in numbers · event editor as a card form
 (view mode behind a lock, cards only where data is): reminders on a timeline strip with per-user
 presets (before start, before end, at a time; display, sound or mail; repeats), recurrence painted on a week strip (weekdays, day of month, interval, end, exceptions and extra dates),

@@ -31,6 +31,9 @@ pub struct CalQuery {
     /// month view: the month on screen (`YYYY-MM`) when it is not the one `date` (the picked day) lies in
     #[serde(default)]
     pub month: Option<String>,
+    /// week view: the Monday of the week on screen when it is not the one `date` lies in
+    #[serde(default)]
+    pub week: Option<NaiveDate>,
 }
 
 #[derive(Template, WebTemplate)]
@@ -109,7 +112,7 @@ pub fn view_label(view: &str, l: &L) -> (String, bool) {
 }
 
 /// Renders title + body for a view; the window loaded depends on the view.
-/// `shown` is the month view's month on screen; the other views follow `date`.
+/// `shown` is the month or week view's month / week on screen; the other views follow `date`.
 pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, view: &str, date: NaiveDate, shown: Option<NaiveDate>, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<(String, String)> {
     let l = &vc.l;
     let (y, m) = (date.year(), date.month());
@@ -137,6 +140,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             (l.ta("date-day-title", &[("day", i64::from(date.day()).into()), ("month", l.mon(m).into()), ("year", i64::from(y).into())]), render::day_view(date, vc.today, &inst, l, &names.join(", "), &details, &hol))
         }
         "week" => {
+            let date = shown.unwrap_or(date);
             let (ws, we) = render::week_window(date);
             // the union covers the week stream and the density panel's month grid, whose month is
             // the focus week's — not necessarily the one `date` falls in
@@ -176,7 +180,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         Some(f) => all_cals.iter().filter(|c| f.contains(&format!("{}/{}", c.principal, c.id))).cloned().collect(),
         None => all_cals.clone(),
     };
-    let shown = q.month.as_deref().and_then(|m| NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").ok());
+    let shown = if view == "week" { q.week } else { q.month.as_deref().and_then(|m| NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").ok()) };
     let (title, body) = render_view(&state, &user, &ctx, &view, date, shown, &cals, &vc).await?;
     let (view_label, in_more) = view_label(&view, &vc.l);
     let cals_param = q.cals.clone().unwrap_or_default();
