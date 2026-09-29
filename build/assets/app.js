@@ -1201,7 +1201,7 @@
     if (state.view === 'month') { state.month = shown().slice(0, 7); state.date = date; load(false); } // the agenda beside the grid shows it
     else { state.date = date; markPicked(); }
     history.replaceState(state, '', url(false).pathname + url(false).search); }
-  const markPicked = () => $$('.stream .dayblock', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date));
+  function markPicked() { $$('.stream .dayblock, .planner .c[data-date]', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date)); } // hoisted: wireItems calls it
   // the month grid owns the wheel: one gesture turns exactly one page, however far it goes. A new
   // gesture is told by speed, not by a pause: a trackpad's momentum tail only ever slows down, while
   // a fresh swipe arrives faster than the tail it interrupts — the speed must have fallen below half
@@ -1488,12 +1488,13 @@
     onScroll();
   }
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
-    $$('.heat i[data-date], .c[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
+    $$('.heat i[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
+    $$('.planner .c[data-date]', scope).forEach(el => el.onclick = () => { if (el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the year planner picks the day; the view stays
     $$('.lrow[data-date]', scope).forEach(el => el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }); // picking in the ledger leaves it exactly where it is
-    $$('.day[data-date] .n, .more[data-date]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); go('day', el.closest('[data-date]').dataset.date); });
+    $$('.more[data-date]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); go('day', el.closest('[data-date]').dataset.date); });
     $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
-    $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .dl') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
-    $$('.dayblock .dl', scope).forEach(el => el.onclick = () => go('day', el.closest('[data-date]').dataset.date));
+    $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
+    markPicked();
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
     // the day document's details sit inside the clickable entry, so each of them stops the click
     $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
