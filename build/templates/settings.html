@@ -115,6 +115,7 @@
     <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ ctx.t("calendar-create") }}</a>
+    <a class="cell btnrow" href="#import-calendar">{{ ctx.t("calendar-import") }}</a>
   </div>
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
@@ -186,6 +187,34 @@
       <label class="cell noic"><span>{{ ctx.t("set-comp-journal") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp_journal"><i></i></span></span></label>
     </div>
     <div class="group sp"><button class="cell btnrow" type="submit">{{ ctx.t("create") }}</button></div>
+  </form>
+</section>
+
+<section class="page" id="import-calendar">
+  <a class="back" href="#collections">‹ {{ ctx.t("tab-collections") }}</a>
+  <h2>{{ ctx.t("set-import-calendar") }}</h2>
+  <form id="imp-form" data-default-tz="{{ default_timezone }}" data-default-color="{{ palette[0] }}">
+    <div class="group">
+      <label class="cell btnrow" id="imp-pick"><span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".ics,text/calendar" hidden id="imp-file"></label>
+    </div>
+    <p class="foot" id="imp-info">{{ ctx.t("imp-hint") }}</p>
+    <div id="imp-fields" hidden>
+      <div class="group sp">
+        <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>
+        <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
+        <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ palette[0] }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-title="{{ ctx.t("set-import-calendar") }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
+        <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>
+        <label class="cell noic"><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ default_timezone }}"></span></label>
+      </div>
+      <div class="label">{{ ctx.t("col-components") }}</div>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("set-comp-event") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp" value="VEVENT" checked><i></i></span></span></label>
+        <label class="cell noic"><span>{{ ctx.t("set-comp-todo") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp" value="VTODO"><i></i></span></span></label>
+        <label class="cell noic"><span>{{ ctx.t("set-comp-journal") }}</span><span class="val"><span class="toggle"><input type="checkbox" name="comp" value="VJOURNAL"><i></i></span></span></label>
+      </div>
+      <p class="foot">{{ ctx.t("imp-comp-hint") }}</p>
+      <div class="group sp"><button class="cell btnrow" type="submit" id="imp-go">{{ ctx.t("imp-go") }}</button></div>
+    </div>
   </form>
 </section>
 

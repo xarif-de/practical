@@ -3282,6 +3282,53 @@
     if (r.ok) { const d = await r.json(); sessionStorage.toast = T.done(d.imported); location.reload(); } else toast(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300), true);
     inp.value = '';
   }));
+  // import into a NEW calendar (#import-calendar): the file's calendar-level X-WR-* lines prefill the form
+  // (the ones RustiCal's own IMPORT reads, plus Apple's colour), the types it holds are switched on and
+  // locked; the server creates the calendar and its objects in one transaction
+  const impForm = document.getElementById('imp-form');
+  if (impForm) {
+    const fileIn = document.getElementById('imp-file'), info = document.getElementById('imp-info'), fields = document.getElementById('imp-fields'), el = impForm.elements, go = document.getElementById('imp-go'), goText = go.textContent;
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let buf = null;
+    const read = text => {
+      const lines = text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/), head = [], uids = { VEVENT: new Set(), VTODO: new Set(), VJOURNAL: new Set() };
+      let cur = null, body = false;
+      for (const l of lines) {
+        const u = l.toUpperCase(), b = u.match(/^BEGIN:(VEVENT|VTODO|VJOURNAL|VTIMEZONE)$/);
+        if (b) { body = true; if (b[1] !== 'VTIMEZONE') cur = b[1]; continue; }
+        if (/^END:(VEVENT|VTODO|VJOURNAL)$/.test(u)) { cur = null; continue; }
+        if (!body) head.push(l); else if (cur && /^UID[:;]/.test(u)) uids[cur].add(l.slice(l.indexOf(':') + 1).trim()); // overrides share their series' UID: one object
+      }
+      const prop = n => { const l = head.find(x => x.toUpperCase().startsWith(n + ':') || x.toUpperCase().startsWith(n + ';')); return l ? l.slice(l.indexOf(':') + 1).replace(/\\[nN]/g, '\n').replace(/\\([,;\\])/g, '$1').trim() : ''; };
+      return { name: prop('X-WR-CALNAME'), desc: prop('X-WR-CALDESC'), color: prop('X-WR-CALCOLOR') || prop('X-APPLE-CALENDAR-COLOR'), tz: prop('X-WR-TIMEZONE'), n: { VEVENT: uids.VEVENT.size, VTODO: uids.VTODO.size, VJOURNAL: uids.VJOURNAL.size } };
+    };
+    const hexOf = v => { const m = v.match(/^#?([0-9a-f]{6})([0-9a-f]{2})?$/i); return m ? '#' + m[1].toLowerCase() : (window.colorPicker && window.colorPicker.toHex(v)) || ''; }; // #rrggbbaa (Apple) loses its alpha
+    const count = (k, n) => n === 1 ? tr(`js-imp-${k}1`) : tr(`js-imp-${k}`, { n });
+    fileIn.addEventListener('change', async () => {
+      const f = fileIn.files[0]; if (!f) return;
+      buf = await f.arrayBuffer(); const d = read(new TextDecoder().decode(buf)), taken = [];
+      const found = Object.keys(d.n).filter(k => d.n[k]);
+      document.querySelector('#imp-pick span').textContent = tr('js-imp-other');
+      if (!found.length) { buf = null; fields.hidden = true; info.innerHTML = `${esc(tr('js-imp-file', { file: f.name }))} · <span class="danger">${esc(tr('js-imp-empty'))}</span>`; return; }
+      el.name.value = d.name || f.name.replace(/\.(ics|ical|ifb|icalendar)$/i, ''); if (d.name) taken.push(tr('js-imp-f-name'));
+      el.description.value = d.desc; if (d.desc) taken.push(tr('js-imp-f-desc'));
+      const hex = d.color && hexOf(d.color), btn = impForm.querySelector('.cpk-btn');
+      el.color.value = hex || impForm.dataset.defaultColor; btn.style.setProperty('--c', el.color.value); if (hex) taken.push(tr('js-imp-f-color'));
+      el.timezone.value = d.tz || impForm.dataset.defaultTz; if (d.tz) taken.push(tr('js-imp-f-tz'));
+      impForm.querySelectorAll('input[name=comp]').forEach(c => { const has = found.includes(c.value); c.checked = has; c.disabled = has; c.closest('label').title = has ? tr('js-imp-in-file') : ''; });
+      const parts = [tr('js-imp-file', { file: f.name }), ...[['ev', 'VEVENT'], ['td', 'VTODO'], ['jr', 'VJOURNAL']].filter(([, k]) => d.n[k]).map(([s, k]) => count(s, d.n[k]))];
+      info.textContent = parts.join(' · ') + (taken.length ? ' · ' + tr('js-imp-taken', { what: taken.join(', ') }) : '');
+      fields.hidden = false; el.name.focus(); el.name.select();
+    });
+    impForm.addEventListener('submit', async e => {
+      e.preventDefault(); if (!buf || !impForm.reportValidity()) return;
+      go.disabled = true; go.textContent = tr('js-imp-busy');
+      const q = new URLSearchParams({ owner: el.owner.value, name: el.name.value.trim(), color: el.color.value, description: el.description.value.trim(), timezone: el.timezone.value.trim(), components: [...impForm.querySelectorAll('input[name=comp]')].filter(c => c.checked).map(c => c.value).join(',') });
+      const r = await fetch('/settings/import/calendars?' + q, { method: 'POST', headers: { 'Content-Type': 'text/calendar', 'X-CSRF-Token': csrf }, body: buf });
+      if (r.ok) { const d = await r.json(); sessionStorage.toast = tr('js-imp-done', { title: el.name.value.trim(), count: d.imported }); location.hash = `#cal-${d.owner}-${d.id}`; location.reload(); return; }
+      toast(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300), true); go.disabled = false; go.textContent = goText;
+    });
+  }
   // push
   const en = document.getElementById('push-enable'), dis = document.getElementById('push-disable'), st = document.getElementById('push-status'), list = document.getElementById('push-devices');
   if (!en) return;

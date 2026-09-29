@@ -1328,6 +1328,8 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .set .cell > input[type=text], .set .cell > select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 4px 0; min-width: 0; width: 100%; }
 .set .cell > input[type=text]:focus { outline: none; }
 .set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+/* import calendar: a file without objects says so in the foot */
+.set .foot .danger { color: var(--today); }
 /* vacation › rule: one row per kind (the grid of .cell would beat [hidden]); the title row carries building
    blocks and a live test over the event titles */
 .set .vac-k[hidden] { display: none; }

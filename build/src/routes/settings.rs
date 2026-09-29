@@ -51,7 +51,6 @@ pub struct SettingsPage {
     pub picker_json: String,
     /// `:root { --hol; --fer }` from the user's holiday colours ("" = the theme's)
     pub holiday_css: String,
-    pub calendars_all: Vec<CalInfo>,
     /// the vacation rule as the page edits it: its kind and one value per kind (the other two are
     /// the defaults the page offers when the kind is switched)
     pub vacation_kind: String,
@@ -185,7 +184,6 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         vacation_calendar_unknown: vac_kind == "calendar" && !vac_value.is_empty() && !cals_all.iter().any(|c| format!("{}/{}", c.principal, c.id) == vac_value),
         vacation_calendar: if vac_kind == "calendar" { vac_value } else { String::new() },
         vacation_calendars: cals_all.iter().filter(|c| c.components.is_empty() || c.components.iter().any(|x| x == "VEVENT")).map(|c| (format!("{}/{}", c.principal, c.id), c.displayname.clone())).collect(),
-        calendars_all: cals_all,
         ctx,
     })
 }
@@ -721,6 +719,46 @@ async fn import_calendar(State(state): State<SharedState>, user: Principal, sess
     Ok(axum::Json(Imported { imported: crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await? }))
 }
 
+#[derive(serde::Deserialize)]
+struct NewImportQ {
+    owner: String,
+    name: String,
+    #[serde(default)]
+    color: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    timezone: String,
+    /// "VEVENT,VTODO" — the file's own types are added on the server
+    #[serde(default)]
+    components: String,
+}
+
+#[derive(serde::Serialize)]
+struct ImportedNew {
+    id: String,
+    owner: String,
+    imported: usize,
+}
+
+/// A new calendar from an .ics file: the metadata in the query (the page prefills it from the file's
+/// X-WR-* lines), the raw file as the body.
+async fn import_new_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::extract::Query(q): axum::extract::Query<NewImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
+    csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let comps: Vec<String> = q.components.split(',').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect();
+    let owner = q.owner.clone();
+    let n = NewCalendar {
+        owner: q.owner,
+        name: q.name,
+        color: q.color,
+        description: q.description,
+        components: if comps.is_empty() { vec![] } else { collections::parse_components(&comps) },
+        timezone: if q.timezone.trim().is_empty() { state.config.default_timezone.clone() } else { q.timezone },
+    };
+    let (id, imported) = crate::domain::transfer::import_new_calendar(&state, &user, n, &body).await?;
+    Ok(axum::Json(ImportedNew { id, owner, imported }))
+}
+
 async fn import_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     Ok(axum::Json(Imported { imported: crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await? }))
@@ -758,6 +796,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/task-columns", post(task_columns_save))
         .route("/settings/export/calendars/{owner}/{id}", get(export_calendar))
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
+        .route("/settings/import/calendars", post(import_new_calendar).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
 }

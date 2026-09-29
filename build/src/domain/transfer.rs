@@ -5,12 +5,13 @@
 use crate::domain::collections;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use caldata::component::IcalCalendar;
+use caldata::component::{Component, ComponentMut, IcalCalendar};
 use caldata::generator::Emitter;
+use caldata::parser::ParserOptions;
 use caldata::{IcalParser, VcardParser};
-use rustical_ical::{AddressObject, CalendarObject};
+use rustical_ical::{AddressObject, CalendarObject, CalendarObjectType};
 use rustical_store::auth::Principal;
-use rustical_store::{AddressbookReadStore, AddressbookWriteStore, CalendarReadStore, CalendarWriteStore};
+use rustical_store::{AddressbookReadStore, AddressbookWriteStore, Calendar, CalendarMetadata, CalendarReadStore, CalendarWriteStore};
 
 pub async fn export_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str) -> AppResult<(String, String)> {
     collections::ensure_owner(user, principal)?;
@@ -56,6 +57,73 @@ pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str
     }
     state.calendars.put_objects(principal, cal_id, batch, true).await?;
     Ok(n)
+}
+
+/// The objects of an .ics file for a NEW calendar and the component types it holds. The calendar-level
+/// X-WR-* properties (name, description, colour, zone — the page reads them from the file) are dropped
+/// before the objects are split, as RustiCal's own IMPORT does, so they do not land in every object.
+fn new_calendar_objects(ics: &[u8]) -> AppResult<(Vec<CalendarObject>, Vec<CalendarObjectType>)> {
+    let bad = |e: &dyn std::fmt::Display| AppError::BadRequest(format!("ics: {e}"));
+    let (mut objects, mut found) = (vec![], vec![]);
+    for cal in IcalParser::from_slice(ics) {
+        let mut cal = cal.map_err(|e| bad(&e))?.mutable();
+        for p in ["X-WR-CALNAME", "X-WR-CALDESC", "X-WR-CALCOLOR", "X-WR-TIMEZONE", "X-APPLE-CALENDAR-COLOR"] {
+            cal.remove_property(p);
+        }
+        let cal = cal.build(&ParserOptions::default(), None).map_err(|e| bad(&e))?;
+        for (has, t) in [(!cal.events.is_empty(), CalendarObjectType::Event), (!cal.todos.is_empty(), CalendarObjectType::Todo), (!cal.journals.is_empty(), CalendarObjectType::Journal)] {
+            if has && !found.contains(&t) {
+                found.push(t);
+            }
+        }
+        for obj in cal.into_objects().map_err(|e| bad(&e))? {
+            let id = obj.get_uid().to_string();
+            if !id.is_empty() && !id.contains('/') {
+                objects.push(CalendarObject::from(obj));
+            }
+        }
+    }
+    Ok((objects, found))
+}
+
+/// Creates a calendar from an .ics file in one transaction (RustiCal's `import_calendar`): the
+/// metadata as given, the component types given plus those the file holds. Returns (id, objects).
+pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collections::NewCalendar, ics: &[u8]) -> AppResult<(String, usize)> {
+    collections::ensure_owner(user, &n.owner)?;
+    if n.name.trim().is_empty() {
+        return Err(AppError::BadRequest("name required".into()));
+    }
+    let (objects, found) = new_calendar_objects(ics)?;
+    if objects.is_empty() {
+        return Err(AppError::BadRequest("no calendar objects found".into()));
+    }
+    let mut components = n.components;
+    for t in found {
+        if !components.contains(&t) {
+            components.push(t);
+        }
+    }
+    let count = objects.len();
+    let id = uuid::Uuid::new_v4().to_string();
+    let cal = Calendar {
+        meta: CalendarMetadata {
+            displayname: Some(n.name.trim().to_string()),
+            order: 0,
+            description: Some(n.description.trim().to_string()).filter(|d| !d.is_empty()),
+            color: Some(n.color.trim().to_string()).filter(|c| !c.is_empty()),
+        },
+        principal: n.owner,
+        id: id.clone(),
+        // an unknown zone is left out: RustiCal's own IMPORT asserts on it
+        timezone_id: Some(n.timezone.trim().to_string()).filter(|t| t.parse::<chrono_tz::Tz>().is_ok()),
+        deleted_at: None,
+        synctoken: 0,
+        subscription_url: None,
+        push_topic: uuid::Uuid::new_v4().to_string(),
+        components,
+    };
+    state.calendars.import_calendar(cal, objects, false).await?;
+    Ok((id, count))
 }
 
 pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str, vcf: &[u8]) -> AppResult<usize> {
