@@ -1141,6 +1141,7 @@
   let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '', month: q0.get('month'), week: q0.get('week') };
   const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.view === 'week' && state.week ? state.week : state.date; // the date whose month or week is on screen
   root.dataset.date = shown();
+  let loading = null; // before the filter setup below: a filter kept in localStorage calls load() right away
   const today = root.dataset.today;
 
   // ---- filter (localStorage-persisted set of hidden calendars) ----
@@ -1163,7 +1164,6 @@
 
   // ---- navigation / fragment loading ----
   function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.view === 'month' && state.month && state.month !== state.date.slice(0, 7)) u.searchParams.set('month', state.month); if (state.view === 'week' && state.week && state.week !== localIso(weekStart(parse(state.date)))) u.searchParams.set('week', state.week); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
-  let loading = null;
   async function load(push = true) {
     const u = url(true);
     loading = u;
