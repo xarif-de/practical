@@ -3,7 +3,8 @@
 //!
 //! Matching (`score_doc`): the query is folded (lower case, diacritics off) and split into words;
 //! EVERY word must match some field. A word scores by how it matches — a whole word 1.0, a word
-//! prefix .85, inside a word .6 (3+ letters), a typo (edit distance 1 from 5 letters on, 2 from 8,
+//! prefix .85, run together over word boundaries from a word's start .75 (4+ letters: "dietmarstein" ~
+//! "Dietmar Steinbach"), inside a word .6 (3+ letters), a typo (edit distance 1 from 5 letters on, 2 from 8,
 //! against a word's start; a 4-letter word would match too much: "demo" ~ "devops") .5/.38 — times the field's weight; the document's text score is the
 //! mean over the words plus a bonus when the whole query starts or equals the main field. Typos are
 //! only tried when the exact pass finds fewer than 3 hits in all: "serie" must not bring every "server".
@@ -181,6 +182,9 @@ fn words(s: &str) -> Vec<String> {
 struct Field {
     text: String,
     words: Vec<String>,
+    /// the words run together, and where each starts in it: a query typed without spaces
+    compact: String,
+    starts: Vec<usize>,
     weight: f32,
 }
 
@@ -188,7 +192,14 @@ impl Field {
     fn new(raw: &str, weight: f32) -> Self {
         let text = fold(raw);
         let words = words(&text);
-        Field { text, words, weight }
+        let (mut compact, mut starts) = (String::new(), vec![]);
+        if words.len() > 1 {
+            for w in &words {
+                starts.push(compact.len());
+                compact.push_str(w);
+            }
+        }
+        Field { text, words, compact, starts, weight }
     }
 }
 
@@ -224,6 +235,10 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> f32 {
         return 0.85;
     }
     let n = qc.len();
+    // words typed without the space between them: from a word's start on, past its end
+    if n >= 4 && f.starts.iter().zip(&f.words).any(|(&at, w)| q.len() > w.len() && f.compact[at..].starts_with(q)) {
+        return 0.75;
+    }
     if n >= 3 && f.text.contains(q) {
         return 0.6;
     }
@@ -531,6 +546,9 @@ mod tests {
         assert_eq!(score("zahnarzt weber", "Zahnarzt"), 0.0, "every word must match");
         assert!(score("muller", "Müller") > 0.9, "diacritics fold");
         assert_eq!(score("xy", "Zahnarzt"), 0.0);
+        assert!(score("dietmarstein", "Dietmar Steinbach") > score("steinba", "Dietmar Steinbach") * 0.8, "words run together");
+        assert_eq!(score("marstein", "Dietmar Steinbach"), 0.0, "run together only from a word's start");
+        assert_eq!(score("dietm", "Dietmar Steinbach") > 0.0, true);
         assert!(score("kalnder", "Kalender") > 0.0 && score("kalner", "Kalender") == 0.0, "one edit below 8 letters");
         assert_eq!(score("demo", "devops"), 0.0, "no typos below 5 letters");
         assert_eq!(score("kalner", "Termin Zahnarzt"), 0.0);

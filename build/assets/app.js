@@ -2588,10 +2588,11 @@
   const wordsOf = (v, scoped) => fold(scoped ? v.replace(SCOPE, '') : v).split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 2);
   function hl(text, ws) { // <mark> around what the query's words match (typos are not marked)
     text = String(text ?? ''); if (!ws.length) return esc(text);
-    let f = ''; const map = [];
-    for (let i = 0; i < text.length; i++) for (const x of foldc(text[i].toLowerCase())) { f += x; map.push(i); }
+    let f = '', g = ''; const map = [], gmap = []; // g: letters and digits only, for words typed without spaces
+    for (let i = 0; i < text.length; i++) for (const x of foldc(text[i].toLowerCase())) { f += x; map.push(i); if (/[\p{L}\p{N}]/u.test(x)) { g += x; gmap.push(i); } }
     const on = new Array(text.length).fill(false);
-    for (const w of ws) for (let p = f.indexOf(w); p >= 0; p = f.indexOf(w, p + w.length)) for (let j = p; j < p + w.length; j++) on[map[j]] = true;
+    const mark = (hay, m, w) => { let hit = false; for (let p = hay.indexOf(w); p >= 0; p = hay.indexOf(w, p + w.length)) { hit = true; for (let j = p; j < p + w.length; j++) on[m[j]] = true; } return hit; };
+    for (const w of ws) if (!mark(f, map, w)) mark(g, gmap, w);
     let h = '', open = false;
     for (let i = 0; i < text.length; i++) { if (on[i] !== open) { h += on[i] ? '<mark>' : '</mark>'; open = on[i]; } h += esc(text[i]); }
     return h + (open ? '</mark>' : '');
