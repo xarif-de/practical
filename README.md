@@ -16,7 +16,8 @@ presets (before start, before end, at a time; display, sound or mail; repeats), 
 organizer and attendees as chips (display only, with a jump to the matching address-book entry), links grouped as conference / in this calendar / internet with a join card, embedded files and event/task links, location with coordinates and map actions, status/busy/visibility/
 priority as four tiles whose icon follows the value, links, attachments and conference URIs, an event colour, categories, notes ·
 contacts as letter panels (fields per entry selectable) or an
-inline-editable sheet, a quick-jump rail, and a card editor: view mode with actions (call, SMS,
+inline-editable sheet, sorted by first name (default), last name, birthday (month panels) or e-mail,
+ascending/descending (client-side, `localStorage.ctSort`/`ctDesc`; entries lacking the value last), a quick-jump rail, and a card editor: view mode with actions (call, SMS,
 WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mode behind a lock,
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
 preferred flags), address books with a colour · minimal tasks (VTODO) · universal search (see **Search**) · orbit date

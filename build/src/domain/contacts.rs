@@ -99,6 +99,16 @@ impl Contact {
         let key = if !self.family.is_empty() { &self.family } else { &self.full_name };
         key.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "#".into())
     }
+    /// the page's default order and grouping: given name first (app.js regroups for the other sorts)
+    fn given_or_full(&self) -> &str {
+        if self.given.is_empty() { &self.full_name } else { &self.given }
+    }
+    pub fn given_letter(&self) -> String {
+        self.given_or_full().chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "#".into())
+    }
+    pub fn given_key(&self) -> String {
+        format!("{} {}", self.given_or_full(), self.family).to_lowercase()
+    }
     pub fn sort_key(&self) -> String {
         format!("{} {}", if self.family.is_empty() { &self.full_name } else { &self.family }, self.given).to_lowercase()
     }
@@ -643,6 +653,7 @@ mod tests {
         assert_eq!(c.birthday_label(), "12.03.1984");
         assert_eq!(c.categories, vec!["Familie"]);
         assert_eq!(c.letter(), "L");
+        assert_eq!((c.given_letter().as_str(), c.given_key().as_str()), ("C", "christin lang"));
         assert_eq!(norm_partial("--0312"), "--03-12");
         assert_eq!(fmt_partial("--03-12"), "12.03.");
     }

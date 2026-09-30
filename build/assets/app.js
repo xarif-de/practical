@@ -2841,7 +2841,8 @@
   if (fb) $$('[data-filter]', fb).forEach(a => a.addEventListener('click', e => { e.preventDefault(); $$('input[data-ab]', fb).forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); applyFilter(); })); // as the calendar filter
   // quick-jump rail: scroll the letter's panel (list) or first row (table) to the top of its scroller
   const scrollerOf = el => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if (o === 'auto' || o === 'scroll') return p; } return document.querySelector('.main'); };
-  $$('.ct-rail [data-jump]', wrap).forEach(b => b.onclick = () => {
+  $('.ct-rail', wrap).addEventListener('click', e => { // delegated: the sort rebuilds the buttons
+    const b = e.target.closest('[data-jump]'); if (!b) return;
     const L = CSS.escape(b.dataset.jump);
     const target = wrap.classList.contains('view-table') ? $(`tr[data-letter="${L}"]:not(.hide)`, wrap) : $(`.lpanel[data-letter="${L}"]`, wrap);
     if (!target) return; const sc = scrollerOf(target); const head = sc.classList.contains('main') ? ($('.toolbar') || {}).offsetHeight || 0 : ($('thead', sc) || {}).offsetHeight || 0;
@@ -2858,6 +2859,53 @@
   const railTick = () => { if (!railTick._q) { railTick._q = true; requestAnimationFrame(() => { railTick._q = false; railMark(); }); } };
   $('.main').addEventListener('scroll', railTick); $('.sheetwrap', wrap).addEventListener('scroll', railTick);
   $$('[data-ctview]').forEach(b => b.addEventListener('click', () => setTimeout(railMark, 0)));
+  /* sort field + direction, the same box as on the tasks page. The list regroups (initial letter, or
+     birth month), the table reorders, the rail follows; entries without the value stay at the end. */
+  const SL = trs('js-ctsort-', ['given', 'family', 'bday', 'email', 'none']), TS = trs('js-tk-', ['sort', 'asc', 'desc']);
+  const FIELDS = ['given', 'family', 'bday', 'email'];
+  let sort = FIELDS.includes(localStorage.ctSort) ? localStorage.ctSort : 'given', desc = localStorage.ctDesc === '1';
+  const hesc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const coll = new Intl.Collator(lang, { sensitivity: 'base', numeric: true });
+  const MONTHS = Array.from({ length: 12 }, (_, i) => dfmt(new Date(2000, i, 1), { month: 'long' }));
+  const initial = v => { const c = v.normalize('NFD').charAt(0).toUpperCase(); return /\p{L}/u.test(c) ? c : '#'; };
+  const recs = $$('.panels li[data-key]', wrap).map(li => {
+    const d = li.dataset, name = d.name.trim(), md = d.bday.match(/(\d{2})-(\d{2})$/);
+    return { li, tr: $(`tr[data-key="${CSS.escape(d.key)}"]`, wrap), given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
+  });
+  const groupOf = r => !r[sort] ? '-' : sort === 'bday' ? r.bday.slice(0, 2) : initial(r[sort]);
+  const label = g => g === '-' ? SL.none : sort === 'bday' ? MONTHS[+g - 1] : g;
+  const short = g => g === '-' ? '–' : sort === 'bday' ? MONTHS[+g - 1].slice(0, 3) : g;
+  function resort() {
+    const has = recs.filter(r => r[sort]), none = recs.filter(r => !r[sort]);
+    has.sort((a, b) => coll.compare(a[sort], b[sort]) || coll.compare(a.given, b.given));
+    if (desc) has.reverse();
+    none.sort((a, b) => coll.compare(a.given, b.given));
+    const groups = new Map();
+    for (const r of has.concat(none)) { const g = groupOf(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); }
+    const panels = $('.panels', wrap), tbody = $('.sheet tbody', wrap), ph = $('.placeholder', panels);
+    $$('.lpanel', panels).forEach(p => p.remove());
+    let rail = '';
+    for (const [g, rs] of groups) {
+      const sec = document.createElement('section'); sec.className = 'lpanel'; sec.dataset.letter = g;
+      sec.innerHTML = `<h3>${hesc(label(g))}</h3><ul class="list"></ul>`;
+      const ul = sec.lastElementChild;
+      rs.forEach(r => { ul.appendChild(r.li); if (r.tr) { r.tr.dataset.letter = g; tbody.appendChild(r.tr); } });
+      panels.insertBefore(sec, ph);
+      rail += `<button type="button" data-jump="${hesc(g)}" title="${hesc(label(g))}">${hesc(short(g))}</button>`;
+    }
+    $('.ct-rail', wrap).innerHTML = rail;
+    sortSel.value = sort;
+    sortDir.innerHTML = `<svg class="ico s" aria-hidden="true"><use href="#i-${desc ? 'sort-desc' : 'sort-asc'}"/></svg>`;
+    sortDir.title = desc ? TS.desc : TS.asc; sortDir.setAttribute('aria-label', sortDir.title);
+    applyFilter();
+  }
+  const sortBox = $('#ct-sortbox');
+  sortBox.innerHTML = `<span class="sel" title="${hesc(TS.sort)}"><svg class="ico s" aria-hidden="true"><use href="#i-swap"/></svg><select id="ct-sort" aria-label="${hesc(TS.sort)}">${FIELDS.map(v => `<option value="${v}">${hesc(SL[v])}</option>`).join('')}</select></span><button class="btn icon-btn" id="ct-dir" type="button"></button>`;
+  const sortSel = $('#ct-sort'), sortDir = $('#ct-dir');
+  const resorted = () => { resort(); if (activeKey) reveal(activeKey); };
+  sortSel.onchange = () => { sort = sortSel.value; localStorage.ctSort = sort; resorted(); };
+  sortDir.onclick = () => { desc = !desc; localStorage.ctDesc = desc ? '1' : '0'; resorted(); };
+  resort();
   railMark();
   // ---- contact editor: cards, view/edit mode (lock), per-row actions ----
   const det = $('#detail'), form = $('#ctform'), f = form.elements, D = form.dataset;

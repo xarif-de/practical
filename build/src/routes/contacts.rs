@@ -69,10 +69,11 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         Some(f) => all.iter().filter(|a| f.contains(&format!("{}/{}", a.principal, a.id))).cloned().collect(),
         None => all.clone(),
     };
-    let contacts = contacts::contacts_for(&state, &abs).await?;
+    let mut contacts = contacts::contacts_for(&state, &abs).await?;
+    contacts.sort_by_cached_key(|c| c.given_key());
     let mut by_letter: BTreeMap<String, Vec<Contact>> = BTreeMap::new();
     for c in &contacts {
-        by_letter.entry(c.letter()).or_default().push(c.clone());
+        by_letter.entry(c.given_letter()).or_default().push(c.clone());
     }
     let mut categories: Vec<String> = contacts.iter().flat_map(|c| c.categories.clone()).collect();
     categories.sort();
