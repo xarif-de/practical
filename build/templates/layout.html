@@ -137,7 +137,7 @@
   <div class="usearch"><div class="sfield"><input id="q" type="search" placeholder="{{ ctx.t("search-placeholder") }}" autocomplete="off" spellcheck="false" aria-label="{{ ctx.t("search-placeholder") }}" aria-controls="sres" aria-autocomplete="list"><div class="ghost" id="q-ghost" aria-hidden="true"></div><div class="sres" id="sres" role="listbox" hidden></div></div>
     <div class="filter shelp"><button class="icon-btn" type="button" aria-haspopup="true" title="{{ ctx.t("search-help") }}" aria-label="{{ ctx.t("search-help") }}"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg></button><div class="pop"><h4>{{ ctx.t("search-help") }}</h4><ul>
       <li>{{ ctx.t("search-help-words") }}</li>
-      <li>{{ ctx.t("search-help-scope") }} <code>{{ ctx.t("search-scope-ev") }}:</code> <code>{{ ctx.t("search-scope-ct") }}:</code> <code>{{ ctx.t("search-scope-tk") }}:</code></li>
+      <li>{{ ctx.t("search-help-scope") }} <code>{{ ctx.t("search-scope-ev") }}:</code>, <code>{{ ctx.t("search-scope-ct") }}:</code> {{ ctx.t("search-or") }} <code>{{ ctx.t("search-scope-tk") }}:</code></li>
       <li>{{ ctx.t("search-help-date") }}</li>
       <li>{{ ctx.t("search-help-all") }}</li>
       <li>{{ ctx.t("search-help-hist") }}</li>

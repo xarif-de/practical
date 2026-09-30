@@ -1046,18 +1046,19 @@ js-cfo-failed = Not changed: %n.
 
 # top-bar search: help, history, all results
 search-help = Search help
-search-help-words = Several words narrow it down. Typos, case and accents do not matter.
-search-help-scope = Search one kind only: its word with a colon in front, e.g.
+search-help-words = More terms narrow the search further.
+search-or = or
+search-help-scope = Search one category only:
 search-scope-ev = event
 search-scope-ct = contact
 search-scope-tk = task
 search-help-date = A date like "3/15", "March 2027" or "2027" jumps there.
-search-help-all = The best matches show; Enter shows all.
+search-help-all = The preview shows only the best matches; Enter in the search field shows all.
 search-help-hist = Searches go to the history (Settings → Search); Tab takes the grey suggestion and jumps to its result.
 search-key-focus = search field
 search-key-move = select
 search-key-open = open / all
-search-key-tab = suggestion
+search-key-tab = jump to suggestion
 search-key-esc = close
 set-search = Search
 set-search-off = Do not keep

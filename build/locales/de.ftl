@@ -1046,18 +1046,19 @@ js-cfo-failed = Nicht geändert: %n.
 
 # top-bar search: help, history, all results
 search-help = Hilfe zur Suche
-search-help-words = Mehrere Wörter grenzen ein. Tippfehler, Groß- und Kleinschreibung und Akzente sind egal.
-search-help-scope = Nur in einer Art suchen: das Wort mit Doppelpunkt vorn, etwa
+search-help-words = Mehrere Begriffe grenzen die Suche weiter ein.
+search-or = oder
+search-help-scope = Nur in einer Kategorie suchen:
 search-scope-ev = termin
 search-scope-ct = kontakt
 search-scope-tk = aufgabe
 search-help-date = Ein Datum wie „15.3.“, „März 2027“ oder „2027“ springt dorthin.
-search-help-all = Es erscheinen die passendsten Treffer; Enter zeigt alle.
+search-help-all = Vorschau zeigt nur die passendsten Treffer; Enter im Suchfeld zeigt alle.
 search-help-hist = Gesuchtes merkt sich der Verlauf (Einstellungen → Suche); Tab übernimmt den grauen Vorschlag und springt zu dessen Ergebnis.
 search-key-focus = Suchfeld
 search-key-move = wählen
 search-key-open = öffnen / alle
-search-key-tab = Vorschlag
+search-key-tab = zu Vorschlag springen
 search-key-esc = schließen
 set-search = Suche
 set-search-off = Nicht speichern
