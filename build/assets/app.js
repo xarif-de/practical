@@ -2592,7 +2592,11 @@
     for (let i = 0; i < text.length; i++) for (const x of foldc(text[i].toLowerCase())) { f += x; map.push(i); if (/[\p{L}\p{N}]/u.test(x)) { g += x; gmap.push(i); } }
     const on = new Array(text.length).fill(false);
     const mark = (hay, m, w) => { let hit = false; for (let p = hay.indexOf(w); p >= 0; p = hay.indexOf(w, p + w.length)) { hit = true; for (let j = p; j < p + w.length; j++) on[m[j]] = true; } return hit; };
-    for (const w of ws) if (!mark(f, map, w)) mark(g, gmap, w);
+    // starts of consecutive words ("dietstein"): the server's starts_chain, marking each part
+    const W = []; for (const m of f.matchAll(/[\p{L}\p{N}]+/gu)) W.push({ s: m[0], at: m.index });
+    const chain = (w, k, first) => { const x = W[k]; if (!x) return null; let c = 0; while (c < w.length && c < x.s.length && w[c] === x.s[c]) c++;
+      for (let l = c; l >= 2; l--) { if (l === w.length) { if (!first) return [[x.at, l]]; continue; } const r = chain(w.slice(l), k + 1, false); if (r) return [[x.at, l], ...r]; } return null; };
+    for (const w of ws) if (!mark(f, map, w) && !mark(g, gmap, w) && w.length >= 5) for (let k = 0; k < W.length - 1; k++) { const r = chain(w, k, true); if (r) { r.forEach(([at, l]) => { for (let j = at; j < at + l; j++) on[map[j]] = true; }); break; } }
     let h = '', open = false;
     for (let i = 0; i < text.length; i++) { if (on[i] !== open) { h += on[i] ? '<mark>' : '</mark>'; open = on[i]; } h += esc(text[i]); }
     return h + (open ? '</mark>' : '');

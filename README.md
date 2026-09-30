@@ -186,7 +186,8 @@ Deployed on xarif.de as a second container in the `rustical` pod:
 - **Search** (top bar; `domain::search`, `/api/search`, app.js universal search): events (title, place,
   categories, notes), contacts (name, nickname, organisation, e-mail, category, address, note, phone digits)
   and tasks. Folded (case/diacritics off), every query word must match; per word: whole word > word start >
-  words typed without spaces (from a word's start over a boundary: "dietmarstein") > inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3
+  words typed without spaces (from a word's start over a boundary: "dietmarstein") > starts of consecutive
+  words (5+ letters, parts 2+: "dietstein") > inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3
   hits). Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
   "n events"), openness and due date for tasks. Prefixes `termin:`/`event:`, `kontakt:`/`contact:`,
   `aufgabe:`/`task:` (+ fr/es) narrow to one kind; a date query adds "jump to". Drop-down: ≤ 5 per kind,
