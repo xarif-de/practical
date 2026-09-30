@@ -14,8 +14,10 @@ tests:
       user: "1000:1000"
       entrypoint: ["/rustical-ui"]
       expose: [4001]
-      # alpine (~8 MiB) + static binary (~12 MiB) + CA bundle
-      max_size: 32MiB
+      # alpine + CA bundle + the static binary (stripped, LTO; assets, locales, templates and
+      # region data embedded). Measured 33.6 MiB at v0.9.0 (Forgejo run 75); the limit catches
+      # unexpected growth, not features: raise it with a new measurement.
+      max_size: 40MiB
       labels:
         org.opencontainers.image.source: "https://git.xarif.de/docker/rustical-ui"
 
