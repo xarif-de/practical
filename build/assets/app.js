@@ -2577,7 +2577,7 @@
   if (!q) return;
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = (document.querySelector('meta[name=csrf]') || {}).content || '';
-  const T = trs('js-search-', ['jump', 'ev', 'ct', 'tk', 'none', 'all', 'of', 'hist', 'histRm', 'dlg', 'tabAll', 'close', 'keys', 'only', 'series']);
+  const T = trs('js-search-', ['jump', 'ev', 'ct', 'tk', 'none', 'all', 'of', 'hist', 'histRm', 'dlg', 'tabAll', 'close', 'keys', 'only', 'series', 'why']);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ico = n => `<svg class="ico" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   // the server's fold (domain::search::fold): case and diacritics off, for highlighting and history matches
@@ -2586,20 +2586,30 @@
   const fold = s => [...String(s).toLowerCase()].map(foldc).join('');
   const SCOPE = /^\s*[^\s:]+:\s*/;
   const wordsOf = (v, scoped) => fold(scoped ? v.replace(SCOPE, '') : v).split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 2);
-  function hl(text, ws) { // <mark> around what the query's words match (typos are not marked)
-    text = String(text ?? ''); if (!ws.length) return esc(text);
+  function marksOf(text, ws) { // which characters of `text` the query's words match (typos are not marked)
+    const on = new Array(text.length).fill(false); if (!ws.length) return on;
     let f = '', g = ''; const map = [], gmap = []; // g: letters and digits only, for words typed without spaces
     for (let i = 0; i < text.length; i++) for (const x of foldc(text[i].toLowerCase())) { f += x; map.push(i); if (/[\p{L}\p{N}]/u.test(x)) { g += x; gmap.push(i); } }
-    const on = new Array(text.length).fill(false);
     const mark = (hay, m, w) => { let hit = false; for (let p = hay.indexOf(w); p >= 0; p = hay.indexOf(w, p + w.length)) { hit = true; for (let j = p; j < p + w.length; j++) on[m[j]] = true; } return hit; };
     // starts of consecutive words ("dietstein"): the server's starts_chain, marking each part
     const W = []; for (const m of f.matchAll(/[\p{L}\p{N}]+/gu)) W.push({ s: m[0], at: m.index });
     const chain = (w, k, first) => { const x = W[k]; if (!x) return null; let c = 0; while (c < w.length && c < x.s.length && w[c] === x.s[c]) c++;
       for (let l = c; l >= 2; l--) { if (l === w.length) { if (!first) return [[x.at, l]]; continue; } const r = chain(w.slice(l), k + 1, false); if (r) return [[x.at, l], ...r]; } return null; };
     for (const w of ws) if (!mark(f, map, w) && !mark(g, gmap, w) && w.length >= 5) for (let k = 0; k < W.length - 1; k++) { const r = chain(w, k, true); if (r) { r.forEach(([at, l]) => { for (let j = at; j < at + l; j++) on[map[j]] = true; }); break; } }
+    return on;
+  }
+  function paintMarks(text, on, a = 0, b = text.length) {
     let h = '', open = false;
-    for (let i = 0; i < text.length; i++) { if (on[i] !== open) { h += on[i] ? '<mark>' : '</mark>'; open = on[i]; } h += esc(text[i]); }
+    for (let i = a; i < b; i++) { if (on[i] !== open) { h += on[i] ? '<mark>' : '</mark>'; open = on[i]; } h += esc(text[i]); }
     return h + (open ? '</mark>' : '');
+  }
+  const hl = (text, ws) => { text = String(text ?? ''); return paintMarks(text, marksOf(text, ws)); };
+  // a long text cut to about `max` characters around its first match
+  function snip(text, ws, max = 90) {
+    text = String(text ?? '').replace(/\s+/g, ' ').trim(); const on = marksOf(text, ws);
+    if (text.length <= max) return paintMarks(text, on);
+    const first = Math.max(0, on.indexOf(true)), a = Math.max(0, Math.min(first - 30, text.length - max)), b = Math.min(text.length, a + max);
+    return (a ? '…' : '') + paintMarks(text, on, a, b) + (b < text.length ? '…' : '');
   }
   const day = iso => { const [y, m, d] = iso.split('-').map(Number); return dfmt(new Date(y, m - 1, d), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
 
@@ -2640,6 +2650,8 @@
     } else if (t.kind === 'contact') { if (window.rusticalContacts) { history.replaceState(null, '', '#' + t.key); window.rusticalContacts.reveal(t.key); } else location.href = '/contacts#' + t.key; }
     else if (window.rusticalTasks) window.rusticalTasks.reveal(t.key); else location.href = `/tasks?view=groups${t.done ? '&back=all' : ''}#${encodeURIComponent(t.key)}`;
   }
+  // why a hit was found (the dialog): the matched fields the row does not show anyway
+  const why = (x, ws) => x.why && x.why.length ? `<span class="why">${esc(T.why)} ${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws)}</span>`).join('')}</span>` : '';
   function row(kind, x, ws) {
     if (kind === 'jump') return `<span class="ic">⇢</span><b>${esc(T.jump)} ${esc(x.label)}</b><small>${day(x.date)}</small>`;
     if (kind === 'event') return `<span class="sw" style="--c:${esc(x.color)}"></span><b>${hl(x.summary, ws)}</b><small>${day(x.date)}${x.time ? ' · ' + esc(x.time) : ''} · ${esc(x.cal_name)}${x.count > 1 ? ' · ' + ico('repeat') + esc(tr('js-search-series', { n: x.count })) : ''}</small>`;
@@ -2745,7 +2757,7 @@
       for (const [kind, k, label] of CATS) {
         if ((cat !== 'all' && cat !== kind) || !d[k].length) continue;
         h += `<h5>${esc(label)}<span>${d[k].length < d.totals[k] ? esc(tr('js-search-of', { n: d[k].length, total: d.totals[k] })) : d.totals[k]}</span></h5>`;
-        d[k].forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws), x.completed ? ' done' : ''); });
+        d[k].forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws) + why(x, ws), x.completed ? ' done' : ''); });
       }
       list.innerHTML = h || `<div class="none">${esc(T.none)}</div>`; s = -1;
     }

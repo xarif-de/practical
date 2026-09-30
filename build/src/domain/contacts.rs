@@ -323,11 +323,14 @@ pub struct ContactHit {
     /// `sub` is the birthday: the client puts a cake in front of it
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub bday: bool,
+    /// why the top-bar search found it (its "all results" dialog)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub why: Vec<crate::domain::search::Why>,
 }
 
 impl ContactHit {
     pub fn of(c: &Contact, sub: String) -> Self {
-        ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index(), bday: false }
+        ContactHit { key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id), name: c.full_name.clone(), sub, initials: c.initials(), color_index: c.color_index(), bday: false, why: vec![] }
     }
 }
 

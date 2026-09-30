@@ -183,9 +183,18 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   asks before it drops them. Hints: a picked colour too close to one that cannot move, hard to see on light
   or dark, a calendar colour that changes the other view too. Apply = `POST /api/colors/batch`
   (`colors::apply`: every change, failures counted, rules and prefs written once).
-- **Search** (top bar; `domain::search`, `/api/search`, app.js universal search): events (title, place,
-  categories, notes), contacts (name, nickname, organisation, e-mail, category, address, note, phone digits)
-  and tasks. Folded (case/diacritics off), every query word must match; per word: whole word > word start >
+- **Search** (top bar; `domain::search`, `/api/search`, app.js universal search): every field of events
+  but recurrence and alarms (title, place, categories, people, links, notes, related titles, status/show
+  as/visibility/priority words in every UI language, coordinates, calendar), of contacts (all names,
+  affixes, organisation, job title, e-mail, phone digits, messenger, addresses, web, categories, relations,
+  notes, address book) and of tasks (title, categories, place, links, notes, related, status/priority/
+  progress, coordinates, calendar). Field weights (search.rs, above `index`): what the hit is called 1,
+  what describes it next, connections (people, relations, links) lower, status words and coordinates
+  least; the calendar / address book name .15 and only narrowing ("foobar zahn" yes, "foobar" alone no).
+  A query that is a day (`17.11.`, `17.11.1987`) searches dates instead: occurrences, birthdays (with a
+  year only that year), anniversaries, a contact's other dates, a task's due/start/done day. The dialog
+  says why a hit was found (field + the text around the match, cut on the server).
+  Text: folded (case/diacritics off), every query word must match; per word: whole word > word start >
   words typed without spaces (from a word's start over a boundary: "dietmarstein") > starts of consecutive
   words (5+ letters, parts 2+: "dietstein") > inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3
   hits). Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,

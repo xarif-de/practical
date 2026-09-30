@@ -48,6 +48,17 @@ pub struct Task {
     pub alarms: usize,
     pub links: usize,
     pub created: Option<NaiveDateTime>,
+    /// what only the search needs (domain::search); not sent to the page
+    #[serde(skip)]
+    pub extra: TaskExtra,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TaskExtra {
+    pub links: Vec<events::Link>,
+    pub geo: Option<(f64, f64)>,
+    /// RELATED-TO UIDs
+    pub related: Vec<String>,
 }
 
 impl Task {
@@ -204,6 +215,7 @@ pub async fn tasks_for(state: &AppState, cals: &[CalInfo], tz: chrono_tz::Tz) ->
                 alarms: raw.alarms.len(),
                 links: events::links_of(p).len(),
                 created: stamp_of(p, "CREATED", tz).0,
+                extra: TaskExtra { links: events::links_of(p), geo: geo_of(p), related: events::related_of(p).into_iter().map(|r| r.uid).collect() },
             });
         }
     }

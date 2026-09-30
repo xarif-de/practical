@@ -392,7 +392,7 @@ struct SearchQuery {
 async fn api_search(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<SearchQuery>) -> AppResult<Json<search::SearchResult>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let limit = if q.all.as_deref() == Some("1") { 200 } else { 5 };
-    Ok(Json(search::search(&state, &user, &q.q, vc.today, vc.tz, limit).await?))
+    Ok(Json(search::search(&state, &user, &q.q, vc.today, vc.tz, &ctx.lang, limit).await?))
 }
 
 // ---- search history ----

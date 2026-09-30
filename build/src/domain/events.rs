@@ -166,6 +166,45 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
     Ok(out)
 }
 
+/// What the top-bar search indexes beyond an `Instance` (domain::search): people, links, status words,
+/// GEO and RELATED-TO of the master, per object key ("principal/cal/object").
+#[derive(Debug, Default)]
+pub struct SearchExtra {
+    /// the organizer first, then the attendees
+    pub people: Vec<Person>,
+    pub links: Vec<Link>,
+    pub status: String,
+    pub transp: String,
+    pub class: String,
+    pub priority: Option<i64>,
+    pub geo: Option<(f64, f64)>,
+    /// RELATED-TO UIDs
+    pub related: Vec<String>,
+}
+
+/// One pass over the objects touching [start, end) — the same ones `instances` expands.
+pub async fn search_extras(state: &AppState, cals: &[CalInfo], start: NaiveDate, end: NaiveDate) -> AppResult<std::collections::HashMap<String, SearchExtra>> {
+    let mut out = std::collections::HashMap::new();
+    for cal in cals {
+        if !cal.components.iter().any(|c| c == "VEVENT") {
+            continue;
+        }
+        for (id, obj) in state.calendars.calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) }).await? {
+            let (raw, _) = split_ics(&obj.get_ics());
+            let p = &raw.props;
+            let get = |n: &str| p.iter().find(|l| prop_name(l) == n).map(|l| ical::split_line(l).2.trim().to_ascii_uppercase()).unwrap_or_default();
+            let mut people = persons_of(p, "ORGANIZER");
+            people.extend(persons_of(p, "ATTENDEE"));
+            let geo = p.iter().find(|l| prop_name(l) == "GEO").and_then(|l| { let v = ical::split_line(l).2; let (a, b) = v.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) });
+            out.insert(
+                format!("{}/{}/{id}", cal.principal, cal.id),
+                SearchExtra { people, links: links_of(p), status: get("STATUS"), transp: get("TRANSP"), class: get("CLASS"), priority: get("PRIORITY").parse().ok(), geo, related: related_of(p).into_iter().map(|r| r.uid).collect() },
+            );
+        }
+    }
+    Ok(out)
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct EventDetail {
     pub principal: String,
