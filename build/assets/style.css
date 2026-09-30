@@ -1131,6 +1131,7 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .rrpop .lk-hit { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center; }
 .rrpop .lk-hit .ico { width: 14px; height: 14px; color: var(--fg-2); grid-row: 1 / 3; }
 .rrpop .lk-hit small { color: var(--fg-3); font-size: 11px; grid-column: 2; }
+.rrpop .lk-hit[aria-selected="true"] { background: var(--tile); } /* the event title's templates: the key-chosen one */
 .rrpop .lk-none { padding: 6px 10px; font-size: 12.5px; color: var(--fg-3); }
 /* location: suggestions after a typing pause (the ring counts it down), two map buttons, sync state, map dialog */
 .ed .cardform input:not([type=hidden]) { border-radius: 0; } /* the dialog's rounded inputs would bend the underline at its ends */

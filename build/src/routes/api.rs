@@ -396,6 +396,18 @@ async fn api_search(State(state): State<SharedState>, user: Principal, ctx: crat
     Ok(Json(search::search(&state, &user, &q.q, vc.today, vc.tz, &ctx.lang, limit).await?))
 }
 
+#[derive(Deserialize)]
+struct SuggestQuery {
+    q: String,
+}
+
+/// The event editor's title suggestions for a new event (`search::suggest`): three past events.
+async fn event_suggest(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<SuggestQuery>) -> AppResult<Json<Vec<search::Suggestion>>> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let now = chrono::Utc::now().with_timezone(&vc.tz).naive_local();
+    Ok(Json(search::suggest(&state, &user, &q.q, now, vc.tz, &ctx.lang, 3).await?))
+}
+
 // ---- search history ----
 
 async fn history_get(State(state): State<SharedState>, user: Principal) -> AppResult<Json<Vec<crate::domain::search_history::Entry>>> {
@@ -549,6 +561,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/geo/search", get(geo_search))
         .route("/api/geo/reverse", get(geo_reverse))
         .route("/api/changes", get(changes))
+        .route("/api/events/suggest", get(event_suggest))
         .route("/api/events/{p}/{c}/{id}", get(get_event).put(update_event).delete(delete_event))
         .route("/api/events/{p}/{c}/{id}/attach/{n}", get(event_attachment))
         .route("/api/contacts", post(create_contact))

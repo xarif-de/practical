@@ -230,6 +230,16 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   show at the drop-down's foot (× deletes), recent ones on an empty focus. Settings → Search: retention
   (`xui_user_settings.search_history_days`: 0 = off, 7/30/90 (default)/365 days, -1 = unlimited; ≤ 300
   entries), the list with single deletes, clear all.
+- **Templates** (event editor, new events only; `search::suggest`, `/api/events/suggest`, app.js `tpl*`):
+  typing a title (≥ 2 letters, 200 ms) lists ≤ 3 past events, one per folded title. The title match only
+  has to pass the search's relevance floor (`floor`, tier 1: typos count, a clear match drops them);
+  rank = past occurrences of the title (every event/series with it, no time limit) > match > recency.
+  Corpus: every occurrence up to tomorrow (`Index::past`, built on the first suggestion, dropped with
+  the index; ~0.1 s debug on 3 800 objects). Cancelled events are no template; the newest occurrence's
+  event is. Picking one (click, ↑/↓ + Enter; Esc closes the list only) fills every attribute but the
+  date: day = the dialog's, times/duration/series pattern/absolute reminders move with it; UNTIL,
+  EXDATE/RDATE, attendees' PARTSTAT (→ NEEDS-ACTION), ACKNOWLEDGED stay behind; embedded files are
+  fetched and sent as new ones; a calendar no longer visible falls back to the chosen one.
 - **vCard editing** keeps what it does not model: on update every property outside the managed set
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —

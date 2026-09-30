@@ -535,16 +535,30 @@ fn score_doc(q: &Query, doc: &Doc) -> Match {
     // a partial match counts its words' mean, scaled by the share found and a penalty
     let mut s = if missing == 0 { sum / n as f32 } else { 0.7 * (sum / (n - missing) as f32) * ((n - missing) as f32 / n as f32) };
     if let Some(main) = doc.fields.first() {
-        if main.text == q.phrase {
-            s += 0.25;
-        } else if main.text.starts_with(&q.phrase) {
-            s += 0.15;
-        }
+        s += phrase_bonus(q, main);
         if in_order(&q.phrase, &main.text) {
             s += 0.03;
         }
     }
     Match { score: s, hits, partial: missing > 0 }
+}
+
+/// The whole query equal to (.25) or the start of (.15) the main field.
+fn phrase_bonus(q: &Query, main: &Field) -> f32 {
+    if main.text == q.phrase { 0.25 } else if main.text.starts_with(&q.phrase) { 0.15 } else { 0.0 }
+}
+
+/// `score_doc` over one field (a title): every word must match it.
+fn field_score(q: &Query, f: &Field) -> f32 {
+    let mut sum = 0.0;
+    for (w, wc) in q.words.iter().zip(&q.chars) {
+        let (s, _, _) = word_score(w, wc, f, q.tier);
+        if s == 0.0 {
+            return 0.0;
+        }
+        sum += s;
+    }
+    if q.words.is_empty() { 0.0 } else { f.weight * sum / q.words.len() as f32 + phrase_bonus(q, f) }
 }
 
 /// The date match of a document for a date query (score 0 = none): the best-weighted date on that day.
@@ -669,6 +683,9 @@ pub struct Index {
     events: Vec<EvDoc>,
     contacts: Vec<CtDoc>,
     tasks: Vec<TkDoc>,
+    /// every past occurrence, the title the only field (`suggest`): built on the first suggestion,
+    /// dropped with the index
+    past: tokio::sync::OnceCell<Vec<EvDoc>>,
 }
 
 /// One corpus per user, rebuilt when the fingerprint moves (see the module comment).
@@ -853,7 +870,7 @@ async fn index(state: &AppState, user: &Principal, today: NaiveDate, tz: chrono_
         let open = t.open();
         tks.push(TkDoc { hit: TaskHit { key: t.key(), uid: t.uid.clone(), summary: t.summary.clone(), due: t.due.map(|d| d.date()), completed: t.completed(), cal_name: t.cal_name.clone(), color: t.color.clone(), why: vec![] }, open, doc: Doc { fields, dates, ..Default::default() } });
     }
-    let ix = Arc::new(Index { stamp, built: Instant::now(), events: evs, contacts: cts, tasks: tks });
+    let ix = Arc::new(Index { stamp, built: Instant::now(), events: evs, contacts: cts, tasks: tks, past: Default::default() });
     let mut m = state.search_index.0.lock().unwrap();
     m.retain(|_, v| v.built.elapsed().as_secs() < 1800); // idle users do not keep a corpus
     m.insert(user.id.clone(), ix.clone());
@@ -918,13 +935,19 @@ fn gather(ix: &Index, mode: &Mode, scope: Option<&'static str>) -> Vec<(u8, usiz
 /// a title, ≥ .85) drop what is far below them; a vague best (a typo, letters left out) keeps nearly
 /// everything, since that is all there is. Many clear hits raise the floor a little more.
 fn cutoff(all: &mut Vec<(u8, usize, Match)>) {
-    let top = all.iter().map(|x| x.2.score).fold(0.0, f32::max);
-    let clear = all.iter().filter(|x| x.2.score >= 0.7 * top).count();
+    let min = floor(&all.iter().map(|x| x.2.score).collect::<Vec<_>>());
+    all.retain(|x| x.2.score >= min);
+}
+
+/// The lowest score `cutoff` keeps among `scores`.
+fn floor(scores: &[f32]) -> f32 {
+    let top = scores.iter().copied().fold(0.0, f32::max);
+    let clear = scores.iter().filter(|&&s| s >= 0.7 * top).count();
     let mut r = if top >= 0.85 { 0.5 } else if top >= 0.6 { 0.35 } else { 0.15 };
     if clear >= 10 {
         r += 0.1;
     }
-    all.retain(|x| x.2.score >= r * top);
+    r * top
 }
 
 fn rank(ix: &Index, all: Vec<(u8, usize, Match)>, mode: &Mode, q: &Query, today: NaiveDate, limit: usize, res: &mut SearchResult) {
@@ -989,6 +1012,88 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
     }
     rank(&ix, all, &Mode::Text(&query), &query, today, limit, &mut res);
     Ok(res)
+}
+
+/// A past event offered as the template of a new one while its title is typed (`suggest`).
+#[derive(Debug, serde::Serialize)]
+pub struct Suggestion {
+    /// the event whose attributes the new one takes: the title's most recent past occurrence
+    pub key: String,
+    pub summary: String,
+    /// past occurrences of the title (every event and series with it, within the corpus' 2 years back)
+    pub count: usize,
+    pub last: NaiveDate,
+    pub time: String,
+    pub color: String,
+    pub cal_name: String,
+}
+
+/// Up to `limit` past events whose title matches `q`, one per title (folded words). The title match
+/// only has to pass the relevance floor of `search` (`floor`: a clear match drops the typos); among
+/// what passes, the title used most often ranks first, then the closer match, then the more recent.
+/// Cancelled events and events without a past occurrence are no template.
+pub async fn suggest(state: &AppState, user: &Principal, q: &str, now: NaiveDateTime, tz: chrono_tz::Tz, lang: &str, limit: usize) -> AppResult<Vec<Suggestion>> {
+    let mut query = Query::new(q);
+    if query.phrase.chars().count() < 2 {
+        return Ok(vec![]);
+    }
+    query.tier = 1; // typos and letters left out count in a title (weight 1)
+    let ix = index(state, user, now.date(), tz, lang).await?;
+    let past = ix.past.get_or_try_init(|| past_events(state, user, now.date(), tz)).await?;
+    Ok(suggestions(past, &query, now, limit))
+}
+
+/// Every occurrence up to tomorrow, one document per event or series with its title as the only
+/// field. Unlike the search corpus it reaches back without a limit: a title used a lot years ago
+/// is still a good template.
+async fn past_events(state: &AppState, user: &Principal, today: NaiveDate, tz: chrono_tz::Tz) -> AppResult<Vec<EvDoc>> {
+    let t0 = Instant::now();
+    let cals = events::visible_calendars(state, user, None).await?;
+    let (from, to) = (NaiveDate::from_ymd_opt(1900, 1, 1).unwrap(), today + Duration::days(1));
+    let mut by_key: HashMap<String, usize> = HashMap::new();
+    let mut evs: Vec<EvDoc> = vec![];
+    let inst = events::instances(state, &cals, from, to, tz).await?;
+    let n = inst.len();
+    for i in inst {
+        let k = i.key();
+        let at = *by_key.entry(k.clone()).or_insert_with(|| {
+            let doc = Doc { fields: vec![Field::new("title", &i.summary, 1.0)], ..Default::default() };
+            evs.push(EvDoc { key: k, uid: i.uid.clone(), summary: i.summary.clone(), color: i.color.clone(), cal_name: i.cal_name.clone(), cancelled: i.cancelled, occ: vec![], doc });
+            evs.len() - 1
+        });
+        evs[at].occ.push((i.start, i.time_label())); // `instances` is sorted by start
+    }
+    tracing::debug!(occurrences = n, events = evs.len(), ms = t0.elapsed().as_millis() as u64, "past events for suggestions");
+    Ok(evs)
+}
+
+fn suggestions(events: &[EvDoc], q: &Query, now: NaiveDateTime, limit: usize) -> Vec<Suggestion> {
+    // folded title → (past occurrences, score, index of the event with the latest one, that occurrence)
+    let mut groups: HashMap<String, (usize, f32, usize, &(NaiveDateTime, String))> = HashMap::new();
+    for (i, e) in events.iter().enumerate().filter(|(_, e)| !e.cancelled) {
+        let past = e.occ.partition_point(|o| o.0 < now); // `occ` is sorted
+        let (Some(last), Some(title)) = (past.checked_sub(1).map(|p| &e.occ[p]), e.doc.fields.first()) else { continue };
+        let score = field_score(q, title);
+        if score == 0.0 {
+            continue;
+        }
+        let g = groups.entry(title.words.join(" ")).or_insert((0, score, i, last));
+        g.0 += past;
+        g.1 = g.1.max(score); // "Zahnarzt" and "Zahnarzt!" share the group, not the phrase bonus
+        if last.0 > g.3.0 {
+            (g.2, g.3) = (i, last);
+        }
+    }
+    let min = floor(&groups.values().map(|g| g.1).collect::<Vec<_>>());
+    let mut v: Vec<_> = groups.into_values().filter(|g| g.1 >= min).collect();
+    v.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.total_cmp(&a.1)).then(b.3.0.cmp(&a.3.0)));
+    v.into_iter()
+        .take(limit)
+        .map(|(count, _, i, last)| {
+            let e = &events[i];
+            Suggestion { key: e.key.clone(), summary: e.summary.clone(), count, last: last.0.date(), time: last.1.clone(), color: e.color.clone(), cal_name: e.cal_name.clone() }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1075,5 +1180,45 @@ mod tests {
         assert_eq!(score("demo", "devops"), 0.0, "no typos below 5 letters");
         assert_eq!(score("kalner", "Termin Zahnarzt"), 0.0);
         assert!(score("0171 234", "x") == 0.0 && score_doc(&Query::new("234"), &Doc { digits: vec!["01712345".into()], ..doc("Anna") }).score > 0.0, "digits match phone numbers");
+    }
+
+    fn ev(title: &str, days_ago: &[i64], cancelled: bool) -> EvDoc {
+        let now = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap().and_hms_opt(12, 0, 0).unwrap();
+        let mut occ: Vec<(NaiveDateTime, String)> = days_ago.iter().map(|d| (now - Duration::days(*d), format!("t{d}"))).collect();
+        occ.sort();
+        EvDoc { key: format!("k/{title}/{}", days_ago.first().unwrap_or(&0)), uid: String::new(), summary: title.into(), color: String::new(), cal_name: String::new(), cancelled, occ, doc: Doc { fields: vec![Field::new("title", title, 1.0)], ..Default::default() } }
+    }
+
+    fn suggest_titles(evs: &[EvDoc], q: &str) -> Vec<(String, usize)> {
+        let now = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap().and_hms_opt(12, 0, 0).unwrap();
+        let mut query = Query::new(q);
+        query.tier = 1;
+        suggestions(evs, &query, now, 3).into_iter().map(|s| (s.summary, s.count)).collect()
+    }
+
+    #[test]
+    fn suggestions_rank_by_frequency_before_the_exact_title() {
+        let evs = vec![
+            ev("Zahnarzt", &[40], false),
+            ev("Zahnarzt Kontrolle", &[10, 100, 200], false),
+            ev("zahnarzt kontrolle", &[300], false), // same title, another event: counted together
+            ev("Zahnarztpraxis", &[5, 6], false),
+            ev("Zahnreinigung", &[1, 2, 3, 4, 5], false), // no match for "zahnarzt"
+            ev("Zahnarzt Notdienst", &[-3], false),     // only in the future: no template
+            ev("Zahnarzt abgesagt", &[1, 2, 3, 4, 5, 6], true), // cancelled
+        ];
+        assert_eq!(suggest_titles(&evs, "zahnarzt"), vec![("Zahnarzt Kontrolle".into(), 4), ("Zahnarztpraxis".into(), 2), ("Zahnarzt".into(), 1)]);
+    }
+
+    #[test]
+    fn suggestions_take_the_latest_occurrence_and_drop_typos_beside_clear_matches() {
+        let evs = vec![ev("Yoga", &[30], false), ev("Yoga", &[2, 9], false), ev("Yogo Kurs", &[1, 2, 3, 4], false), ev("Kalender pflegen", &[7], false)];
+        let now = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap().and_hms_opt(12, 0, 0).unwrap();
+        let mut q = Query::new("yoga");
+        q.tier = 1;
+        let s = suggestions(&evs, &q, now, 3);
+        assert_eq!(s.len(), 1, "a typo (.5) falls below a whole word's floor");
+        assert_eq!((s[0].count, s[0].key.as_str(), s[0].time.as_str()), (3, "k/Yoga/2", "t2"));
+        assert_eq!(suggest_titles(&evs, "kalnder"), vec![("Kalender pflegen".into(), 1)], "a typo alone is still offered");
     }
 }
