@@ -43,6 +43,20 @@ pub struct PageCtx {
 }
 
 impl PageCtx {
+    /// AGPL §13: every user of this network service is offered its source.
+    pub fn source_url(&self) -> &'static str {
+        env!("CARGO_PKG_REPOSITORY")
+    }
+    pub fn version(&self) -> &'static str {
+        env!("CARGO_PKG_VERSION")
+    }
+    /// the RustiCal release this build embeds (crates and the `rustical` binary)
+    pub fn rustical_version(&self) -> &'static str {
+        env!("RUSTICAL_TAG")
+    }
+    pub fn rustical_source_url(&self) -> String {
+        format!("https://github.com/lennart-k/rustical/tree/v{}", env!("RUSTICAL_TAG"))
+    }
     pub fn t(&self, key: &str) -> String {
         self.i18n.t(&self.lang, key)
     }

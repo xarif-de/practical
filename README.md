@@ -29,7 +29,10 @@ It never talks to RustiCal over HTTP for data. It opens **RustiCal's own SQLite 
 RustiCal's store crates (`rustical_store_sqlite`, git dependency pinned to the RustiCal release)
 and keeps its own state in `xui_*` tables of the same file, so one backup covers everything.
 
-Deployed on xarif.de as a second container in the `rustical` pod:
+**One image, both programs:** the image also carries RustiCal's own binary, unmodified
+(`/usr/local/bin/rustical`, copied from its official image at the crates' tag), so the pod's two
+containers run the same image — `rustical serve` and `rustical-ui serve` — and the CalDAV server
+and the UI built on its crates are always one release. Deployed on xarif.de in the `rustical` pod:
 [kubernetes/rustical 🌐](https://git.xarif.de/kubernetes/rustical) → <https://plan.xarif.de>.
 
 ## Contents
@@ -40,6 +43,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
 - [The RustiCal version contract](#the-rustical-version-contract)
 - [Local development](#local-development)
 - [Repository layout](#repository-layout)
+- [License](#license)
 
 ## How it works
 
@@ -345,13 +349,17 @@ rustical-ui --version
 
 ## The RustiCal version contract
 
-The five `rustical_*` crates in `build/Cargo.toml` pin **one** git tag; `build.rs` refuses a
-mix and exports it as `RUSTICAL_TAG`. That tag must equal the tag of the rustical image the
-UI runs next to — the crates carry RustiCal's schema expectations. The deployment repo's
-tool check runs `check-rustical-image` with the rendered rustical image reference, so a
-Renovate bump of the rustical image alone turns that repo red until this repo has been
-bumped to the same tag (Renovate groups the five crates) and published. Order: bump here →
-image published → bump the rustical image there → Renovate re-pins this image's digest.
+The five `rustical_*` crates in `build/Cargo.toml` pin **one** git tag (`build.rs` refuses a mix and
+exports it as `RUSTICAL_TAG`), and `build/Dockerfile` copies RustiCal's binary from
+`ghcr.io/lennart-k/rustical:<the same tag>` — the crates carry RustiCal's schema expectations, the
+binary is the server that migrates that schema. Three guards keep them one release: `build.rs`
+compares the Dockerfile's tag with the crates' on every local build (the Docker context has no
+Dockerfile), the image test `rustical-binary-is-the-crates-release` compares
+`rustical --version` with `rustical-ui --version`, and one Renovate group (`renovate.json`,
+matched by dependency name — for a git dependency the package name is the repository URL) moves
+all six in one PR. The deployment repo only checks that both containers run the same image
+(`same_as`). `check-rustical-image <ref>` still compares a RustiCal image reference with the
+crates' tag, for a deployment that runs RustiCal's own image.
 
 ## Local development
 
@@ -384,3 +392,12 @@ plus single SVGs copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT
 Iconoir (MIT), Bootstrap Icons (MIT), Material Design Icons (Apache-2.0) and Material Symbols
 (Apache-2.0); `i-al-*` are drawn from Lucide `log-in`/`log-out`. `i-sort` dims one arrow via
 `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`.
+
+## License
+
+AGPL-3.0-or-later (`LICENSE`; a copy in `build/LICENSE` goes into the image at
+`/usr/share/licenses/rustical-ui/LICENSE`, a test keeps both equal). rustical-ui links RustiCal's
+crates, which are AGPL-3.0-or-later themselves, and runs as a network service: §13 is met by the
+"Source code" link in the user menu and on the login page, next to both versions. The image
+redistributes RustiCal's binary unmodified; its source is
+<https://github.com/lennart-k/rustical> at the tag the UI shows (and `rustical --version` prints).

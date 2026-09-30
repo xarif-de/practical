@@ -155,6 +155,9 @@
     <div class="pop">
       <h4>{{ ctx.user_id() }}</h4>
       <a class="row-link" href="/settings#prefs">{{ ctx.t("nav-settings") }}</a>
+      {# AGPL-3.0 §13: the source of this service, offered to everyone who uses it #}
+      <a class="row-link" href="{{ ctx.source_url() }}" target="_blank" rel="noopener">{{ ctx.t("source-code") }}</a>
+      <p class="muted small src-note">rustical-ui {{ ctx.version() }} · <a href="{{ ctx.rustical_source_url() }}" target="_blank" rel="noopener">RustiCal {{ ctx.rustical_version() }}</a> · AGPL-3.0</p>
       <form method="post" action="/logout" class="row-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button type="submit" class="btn"><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg><span>{{ ctx.t("logout") }}</span></button></form>
     </div>
   </div>

@@ -1,10 +1,10 @@
 # Test specification for docker/rustical-ui.
 #
-# The image is a minimal Alpine with the static binary and a CA bundle. Tests assert structural facts
-# (user, entrypoint, port, files, the binary answers) and the ONE contract the
-# deployment depends on: the compiled-in rustical crate tag is reported and
-# `check-rustical-image` rejects a mismatching image reference. Never a version
-# Renovate bumps.
+# The image is a minimal Alpine with two static binaries (rustical-ui and RustiCal's own,
+# unmodified) and a CA bundle. Tests assert structural facts (user, entrypoint, port, files,
+# the binaries answer) and the ONE contract the deployment depends on: RustiCal's binary is
+# the release the UI's rustical crates are (both containers of the pod run this image).
+# Never a version Renovate bumps.
 #
 # Full spec reference: https://git.xarif.de/base/dagger-modules/src/branch/main/docs/docker-testing.md
 
@@ -15,9 +15,11 @@ tests:
       entrypoint: ["/rustical-ui"]
       expose: [4001]
       # alpine + CA bundle + the static binary (stripped, LTO; assets, locales, templates and
-      # region data embedded). Measured 33.6 MiB at v0.9.0 (Forgejo run 75); the limit catches
-      # unexpected growth, not features: raise it with a new measurement.
-      max_size: 40MiB
+      # region data embedded) + RustiCal's binary. Measured 33.6 MiB at v0.9.0 without RustiCal
+      # (Forgejo run 75); RustiCal 0.16.4's binary is 35.3 MiB (36 972 208 bytes, its amd64
+      # image) → ~69 MiB. The limit catches unexpected growth, not features: raise it with a
+      # new measurement.
+      max_size: 80MiB
       labels:
         org.opencontainers.image.source: "https://git.xarif.de/docker/rustical-ui"
 
@@ -46,11 +48,26 @@ tests:
           expect:
             - "MISMATCH"
 
+  - name: rustical-binary-is-the-crates-release
+    # The CalDAV server and the UI built on its crates must be ONE release: the pod runs both
+    # from this image, and nothing downstream checks it any more.
+    timeout: 90s
+    steps:
+      - run:
+          - sh -c 'r=$(/usr/local/bin/rustical --version | cut -d" " -f2); u=$(/rustical-ui --version | sed -n "s/.*rustical crates v\([0-9.]*\).*/\1/p"); echo "rustical=$r crates=$u"; [ -n "$r" ] && [ "$r" = "$u" ] && echo SAME-RELEASE'
+        output:
+          expect:
+            - "SAME-RELEASE"
+
   - name: runtime-files
     timeout: 90s
     steps:
       - files:
           - path: /rustical-ui
+            type: file
+          - path: /usr/local/bin/rustical
+            type: file
+          - path: /usr/share/licenses/rustical-ui/LICENSE
             type: file
           - path: /etc/ssl/certs/ca-certificates.crt
             type: file

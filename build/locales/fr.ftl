@@ -4,6 +4,7 @@ nav-contacts = Contacts
 nav-tasks = Tâches
 nav-history = Modifications
 nav-settings = Réglages
+source-code = Code source (AGPL-3.0)
 logout = Se déconnecter
 scheme-toggle = Changer de thème
 search-placeholder = Rechercher : événements, contacts, tâches, date, …

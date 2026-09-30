@@ -213,4 +213,12 @@ mod tests {
         assert_eq!(check_rustical_image("ghcr.io/lennart-k/rustical:0.0.1@sha256:abc"), 1);
         assert_eq!(check_rustical_image("ghcr.io/lennart-k/rustical@sha256:abc"), 2);
     }
+
+    /// The image carries build/LICENSE (the Docker context is build/); the repository's own is
+    /// ../LICENSE. One AGPL-3.0 text, two places: they must not drift apart.
+    #[test]
+    fn the_image_license_is_the_repository_license() {
+        assert_eq!(include_str!("../LICENSE"), include_str!("../../LICENSE"));
+        assert!(include_str!("../LICENSE").contains("GNU AFFERO GENERAL PUBLIC LICENSE"));
+    }
 }
