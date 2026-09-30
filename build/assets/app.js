@@ -2594,8 +2594,13 @@
     // starts of consecutive words ("dietstein"): the server's starts_chain, marking each part
     const W = []; for (const m of f.matchAll(/[\p{L}\p{N}]+/gu)) W.push({ s: m[0], at: m.index });
     const chain = (w, k, first) => { const x = W[k]; if (!x) return null; let c = 0; while (c < w.length && c < x.s.length && w[c] === x.s[c]) c++;
-      for (let l = c; l >= 2; l--) { if (l === w.length) { if (!first) return [[x.at, l]]; continue; } const r = chain(w.slice(l), k + 1, false); if (r) return [[x.at, l], ...r]; } return null; };
-    for (const w of ws) if (!mark(f, map, w) && !mark(g, gmap, w) && w.length >= 5) for (let k = 0; k < W.length - 1; k++) { const r = chain(w, k, true); if (r) { r.forEach(([at, l]) => { for (let j = at; j < at + l; j++) on[map[j]] = true; }); break; } }
+      for (let l = c; l >= 2; l--) { if (l === w.length) { if (!first && l >= 3) return [[x.at, l]]; continue; } const r = chain(w.slice(l), k + 1, false); if (r) return [[x.at, l], ...r]; } return null; };
+    // letters left out ("chrstinbach"): the server's gaps_span — in order from a word's start, over at most twice the word
+    const gaps = w => { let best = null, pos = 0; const gs = W.map(x => { const at = pos; pos += x.s.length; return at; });
+      for (const st of gs) { if (g[st] !== w[0]) continue; const hit = []; let i = st; for (const ch of w) { while (i < g.length && g[i] !== ch) i++; if (i >= g.length) break; hit.push(i++); }
+        if (hit.length === w.length && hit[hit.length - 1] - st < 2 * w.length && (!best || hit[hit.length - 1] - st < best[best.length - 1] - best[0])) best = hit; }
+      if (best) best.forEach(j => { on[gmap[j]] = true; }); return !!best; };
+    for (const w of ws) { if (mark(f, map, w) || mark(g, gmap, w)) continue; let done = false; if (w.length >= 5) for (let k = 0; k < W.length - 1 && !done; k++) { const r = chain(w, k, true); if (r) { r.forEach(([at, l]) => { for (let j = at; j < at + l; j++) on[map[j]] = true; }); done = true; } } if (!done && w.length >= 6) gaps(w); }
     return on;
   }
   function paintMarks(text, on, a = 0, b = text.length) {
@@ -2656,8 +2661,9 @@
   const why = (x, ws) => x.why && x.why.length ? `<span class="why"><b>${esc(T.why)}</b>${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws.concat(typos(x)))} <i>(${esc(w.hits.map(h => (h.k === 'date' ? '' : '„' + h.w + '“ ') + how(h)).join(', '))})</i></span>`).join('')}</span>` : '';
   // the drop-down's short form: only what the row does not show — a field it hides, a typo
   const whySm = x => {
-    const v = (x.why || []).filter(w => (!w.shown || w.hits.some(h => h.k === 'typo')) && !w.hits.some(h => h.k === 'date'))
-      .map(w => { const t = w.hits.find(h => h.k === 'typo'); return esc(tr('js-search-f-' + w.f)) + (t ? ' ≈ ' + esc(t.m) : ''); });
+    const loose = h => h.k === 'typo' || h.k === 'gaps';
+    const v = (x.why || []).filter(w => (!w.shown || w.hits.some(loose)) && !w.hits.some(h => h.k === 'date'))
+      .map(w => { const t = w.hits.find(h => h.k === 'typo'); return esc(tr('js-search-f-' + w.f)) + (t ? ' ≈ ' + esc(t.m) : w.hits.some(loose) ? ' ≈' : ''); });
     return v.length ? `<span class="why sm">${ico('info')}${v.join(' · ')}</span>` : '';
   };
   function row(kind, x, ws) {

@@ -1115,6 +1115,7 @@ js-search-k-prefix = word start
 js-search-k-joined = written together
 js-search-k-chain = word starts
 js-search-k-inside = inside a word
+js-search-k-gaps = letters left out
 js-search-k-typo = like "%m"
 js-search-k-phone = digits
 js-search-k-date = date

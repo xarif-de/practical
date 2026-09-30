@@ -198,9 +198,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   shows all of it, the drop-down only what its row hides (a hidden field, a typo). Ties go to the hit whose
   title/name holds all the query's letters in order.
   Text: folded (case/diacritics off), every query word must match; per word: whole word > word start >
-  words typed without spaces (from a word's start over a boundary: "dietmarstein") > starts of consecutive
-  words (5+ letters, parts 2+: "dietstein") > inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3
-  hits). Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
+  words typed without spaces (from a word's start over a boundary, 2+ letters of the next word:
+  "dietmarstein") > starts of consecutive words (5+ letters, parts 2+, the last 3+: "dietstein") > inside a word >
+  typo (OSA distance 1 from 5 letters, 2 from 8; fields weighing ≥ .5) > letters left out (6+ letters in
+  order from a word's start over ≤ twice their length: "chrstinbach"; fields weighing ≥ .8: titles,
+  names, organisation). The fuzzy kinds run only when the exact pass finds nothing. Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
   "n events"), openness and due date for tasks. Prefixes `termin:`/`event:`, `kontakt:`/`contact:`,
   `aufgabe:`/`task:` (+ fr/es) narrow to one kind; a date query adds "jump to". Drop-down: ≤ 5 per kind,
   ≤ 10 in all, split by each kind's share of the matches; "All results" / Enter opens a dialog with ≤ 200 per

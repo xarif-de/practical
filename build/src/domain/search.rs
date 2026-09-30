@@ -7,8 +7,9 @@
 //! "Dietmar Steinbach"), starts of consecutive words .65 (5+ letters, each part 2+: "dietstein"),
 //! inside a word .6 (3+ letters), a typo (edit distance 1 from 5 letters on, 2 from 8,
 //! against a word's start; a 4-letter word would match too much: "demo" ~ "devops") .5/.38 — times the field's weight; the document's text score is the
-//! mean over the words plus a bonus when the whole query starts or equals the main field. Typos are
-//! only tried when the exact pass finds fewer than 3 hits in all: "serie" must not bring every "server".
+//! mean over the words plus a bonus when the whole query starts or equals the main field. Fuzzy kinds
+//! (typos, letters left out) are only tried when the exact pass finds nothing: "christina" must not
+//! bring every "Christin", "serie" every "server".
 //! Ranking adds per kind: events the nearness of the next (else the last) occurrence, upcoming
 //! weighing more than past; tasks being open and a near due date.
 //!
@@ -235,11 +236,9 @@ impl Field {
         let text = fold(text);
         let words = words(&text);
         let (mut compact, mut starts) = (String::new(), vec![]);
-        if words.len() > 1 {
-            for w in &words {
-                starts.push(compact.len());
-                compact.push_str(w);
-            }
+        for w in &words {
+            starts.push(compact.len());
+            compact.push_str(w);
         }
         Field { code, shown: false, narrow: false, raw: raw.trim().to_string(), text, words, compact, starts, weight }
     }
@@ -320,12 +319,13 @@ fn osa(a: &[char], b: &[char]) -> usize {
     d[n][m]
 }
 
-/// `q` = a start (2+ letters) of `ws[0]`, then of `ws[1]` … (`first`: at least two words must take part).
+/// `q` = a start (2+ letters) of `ws[0]`, then of `ws[1]` … (`first`: at least two words must take part;
+/// the last part 3+ letters: "urlab" is a typo of "urlaub", not "URLaubs-ABrechnung").
 fn starts_chain(q: &str, ws: &[String], first: bool) -> bool {
     let Some(w) = ws.first() else { return false };
     let common = q.chars().zip(w.chars()).take_while(|(a, b)| a == b).map(|(a, _)| a.len_utf8()).sum::<usize>();
     // the part taken from this word: 2+ letters, as many as match; the rest must start the next word
-    (2..=common).rev().filter(|&l| q.is_char_boundary(l)).any(|l| if l == q.len() { !first } else { starts_chain(&q[l..], &ws[1..], false) })
+    (2..=common).rev().filter(|&l| q.is_char_boundary(l)).any(|l| if l == q.len() { !first && l >= 3 } else { starts_chain(&q[l..], &ws[1..], false) })
 }
 
 /// How a query word matched a field, best first.
@@ -337,6 +337,7 @@ enum Kind {
     Chain,
     Inside,
     Typo,
+    Gaps,
     Phone,
     Date,
 }
@@ -350,6 +351,7 @@ impl Kind {
             Kind::Chain => "chain",
             Kind::Inside => "inside",
             Kind::Typo => "typo",
+            Kind::Gaps => "gaps",
             Kind::Phone => "phone",
             Kind::Date => "date",
         }
@@ -366,7 +368,8 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Optio
     }
     let n = qc.len();
     // words typed without the space between them: from a word's start on, past its end
-    if n >= 4 && f.starts.iter().zip(&f.words).any(|(&at, w)| q.len() > w.len() && f.compact[at..].starts_with(q)) {
+    // (2+ letters of the next word: "christina" is not "Christin A…")
+    if n >= 4 && f.starts.iter().zip(&f.words).any(|(&at, w)| q.len() >= w.len() + 2 && f.compact[at..].starts_with(q)) {
         return (0.75, Kind::Joined, None);
     }
     // starts of consecutive words run together ("dietstein" ~ "Dietmar Steinbach")
@@ -376,7 +379,9 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Optio
     if n >= 3 && f.text.contains(q) {
         return (0.6, Kind::Inside, None);
     }
-    if fuzzy && n >= 5 {
+    // the fuzzy kinds only where a loose match still says something: long, unimportant texts (a
+    // note, a partner, a link) contain almost any letters — there only exact kinds count
+    if fuzzy && n >= 5 && f.weight >= TYPO_MIN_WEIGHT {
         // a typo: against the word's start of about the query's length ("kalnder" ~ "kalender")
         let max = if n < 8 { 1 } else { 2 };
         let (mut best, mut like) = (usize::MAX, None);
@@ -402,7 +407,52 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Optio
             return (if best <= 1 { 0.5 } else { 0.38 }, Kind::Typo, like.cloned());
         }
     }
+    // letters left out ("chrstinbach" ~ "Christin Steinbach"): the query's letters in order from a
+    // word's start, over at most twice its length; the denser, the better
+    if fuzzy && n >= 6 && f.weight >= GAPS_MIN_WEIGHT {
+        if let Some(span) = gaps_span(qc, f) {
+            return (0.2 + 0.16 * n as f32 / span as f32, Kind::Gaps, None); // .28–.36: below a two-edit typo
+        }
+    }
     (0.0, Kind::Word, None)
+}
+
+/// fields where typos count (place, categories, people, e-mail … — not notes, relations, links, status)
+const TYPO_MIN_WEIGHT: f32 = 0.5;
+/// fields where letters may be left out (titles, names, organisation)
+const GAPS_MIN_WEIGHT: f32 = 0.8;
+
+/// The shortest stretch of `f`'s words run together, from a word's start, holding `q`'s letters in
+/// order — if it is at most twice as long as `q`.
+fn gaps_span(q: &[char], f: &Field) -> Option<usize> {
+    let c: Vec<char> = f.compact.chars().collect();
+    let mut best: Option<usize> = None;
+    let mut starts = f.starts.iter().map(|&b| f.compact[..b].chars().count());
+    for s in starts.by_ref() {
+        if c.get(s) != q.first() {
+            continue;
+        }
+        let (mut i, mut end) = (s, None);
+        for (k, ch) in q.iter().enumerate() {
+            while i < c.len() && c[i] != *ch {
+                i += 1;
+            }
+            if i == c.len() {
+                break;
+            }
+            if k + 1 == q.len() {
+                end = Some(i);
+            }
+            i += 1;
+        }
+        if let Some(e) = end {
+            let span = e - s + 1;
+            if span <= 2 * q.len() && best.is_none_or(|b| span < b) {
+                best = Some(span);
+            }
+        }
+    }
+    best
 }
 
 /// All of `q`'s letters and digits in `text` in order, gaps allowed ("chrstinb" in "Christin Steinbach")
@@ -869,7 +919,7 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
     }
     query.fuzzy = false;
     rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
-    if res.totals.events + res.totals.contacts + res.totals.tasks < 3 {
+    if res.totals.events + res.totals.contacts + res.totals.tasks == 0 {
         query.fuzzy = true;
         rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
     }
@@ -927,6 +977,7 @@ mod tests {
         assert!(chain > 0.0 && chain < score("dietmarstein", "Dietmar Steinbach"), "starts of consecutive words: {chain}");
         assert!(score("chrstein", "Christin Steinbach") > 0.0);
         assert_eq!(strict("dstein", "Dietmar Steinbach"), 0.0, "a part needs 2 letters");
+        assert_eq!(strict("urlab", "Urlaubs-Abrechnung"), 0.0, "the last part needs 3 letters");
         assert_eq!(strict("dietbach", "Dietmar Steinbach"), 0.0, "no skipped word, starts only");
         let d = Doc { fields: vec![Field::new("t", "Zahnarzt", 1.0), Field::collection("Familie")], ..Default::default() };
         assert!(score_doc(&Query::new("familie zahn"), &d).score > 0.0 && score_doc(&Query::new("familie"), &d).score == 0.0, "a collection name only narrows");
@@ -938,9 +989,18 @@ mod tests {
         let c = crop(&long, &["abgesagt"]);
         assert!(c.contains("abgesagt") && c.starts_with('…') && c.ends_with('…') && c.chars().count() <= 122, "{c}");
         assert!(score("chrstinb", "Christin Steinbach") > score("chrstinb", "Christine Ackermann"), "letters in order break the tie");
+        assert!(score("chrstinbach", "Christin Steinbach") > 0.0, "letters left out");
+        assert!(score("chrstinb", "Christin Steinbach") > score("chrstinb", "Christian Berger"), "a typo of a whole word beats letters left out");
+        assert_eq!(strict("christina", "Christin Altersvorsorge"), 0.0, "one letter of the next word is no joined match");
+        assert_eq!(score("chrstinbach", "Christine Ackermann"), 0.0);
+        let note = Doc { fields: vec![Field::new("t", "Einkauf", 1.0), Field::new("note", "Christin Steinbach kommt", 0.4)], ..Default::default() };
+        assert_eq!(score_doc(&Query::new("chrstinbach"), &note).score, 0.0, "no fuzzy kinds in a note");
+        assert_eq!(score_doc(&Query::new("zugesagt"), &Doc { fields: vec![Field::new("t", "x", 1.0), Field::new("note", "abgesagt", 0.4)], ..Default::default() }).score, 0.0, "no typos in a note");
         let m = score_doc(&Query::new("chrstinb"), &doc("Christin Steinbach"));
         assert_eq!((m.hits[0].kind, m.hits[0].typo.as_deref()), (Kind::Typo, Some("christin")));
-        assert!(score("kalnder", "Kalender") > 0.0 && score("kalner", "Kalender") == 0.0, "one edit below 8 letters");
+        assert!(score("kalnder", "Kalender") > 0.0, "one edit below 8 letters");
+        let m = score_doc(&Query::new("kalner"), &doc("Kalender"));
+        assert!(m.score > 0.0 && m.hits[0].kind == Kind::Gaps, "two edits on 6 letters are no typo, but letters left out");
         assert_eq!(score("demo", "devops"), 0.0, "no typos below 5 letters");
         assert_eq!(score("kalner", "Termin Zahnarzt"), 0.0);
         assert!(score("0171 234", "x") == 0.0 && score_doc(&Query::new("234"), &Doc { digits: vec!["01712345".into()], ..doc("Anna") }).score > 0.0, "digits match phone numbers");

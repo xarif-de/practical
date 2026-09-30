@@ -1118,6 +1118,7 @@ js-search-k-prefix = début de mot
 js-search-k-joined = écrit attaché
 js-search-k-chain = débuts de mots
 js-search-k-inside = dans un mot
+js-search-k-gaps = lettres omises
 js-search-k-typo = proche de « %m »
 js-search-k-phone = chiffres
 js-search-k-date = date

@@ -1115,6 +1115,7 @@ js-search-k-prefix = Wortanfang
 js-search-k-joined = zusammengeschrieben
 js-search-k-chain = Wortanfänge
 js-search-k-inside = im Wort
+js-search-k-gaps = Buchstaben mit Lücken
 js-search-k-typo = ähnlich wie „%m“
 js-search-k-phone = Ziffern
 js-search-k-date = Datum
