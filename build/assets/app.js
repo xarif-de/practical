@@ -2616,6 +2616,12 @@
     const first = Math.max(0, on.indexOf(true)), a = Math.max(0, Math.min(first - 30, text.length - max)), b = Math.min(text.length, a + max);
     return (a ? '…' : '') + paintMarks(text, on, a, b) + (b < text.length ? '…' : '');
   }
+  /* scrolling a list moves its rows under a resting pointer: every row it passes would repaint its hover
+     tint and move the pick — measured as nearly all the paint work while scrolling. While a list scrolls
+     its rows ignore the pointer (`.scrolling`), 150 ms after the last scroll they react again. */
+  function calmScroll(list) { let t; list.addEventListener('scroll', () => { list.classList.add('scrolling'); clearTimeout(t); t = setTimeout(() => list.classList.remove('scrolling'), 150); }, { passive: true }); }
+  // the pick moves between two rows only; the keyboard's pick scrolls it into view, the pointer's does not
+  function movePick(list, i, scroll) { const old = $('.r.on', list); if (old) old.classList.remove('on'); const el = $(`[data-i="${i}"]`, list); if (el) { el.classList.add('on'); if (scroll) el.scrollIntoView({ block: 'nearest' }); } }
   const day = iso => { const [y, m, d] = iso.split('-').map(Number); return dfmt(new Date(y, m - 1, d), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
 
   // ---- fetching: debounced, the stale request aborted, answers kept 30 s for back-typing ----
@@ -2686,7 +2692,8 @@
 
   // ---- the drop-down ----
   let items = [], sel = -1, last = null, data = null;
-  const setSel = i => { sel = i; $$('[data-i]', box).forEach(el => el.classList.toggle('on', +el.dataset.i === sel)); const el = $(`[data-i="${sel}"]`, box); if (el) el.scrollIntoView({ block: 'nearest' }); };
+  const setSel = (i, scroll = true) => { sel = i; movePick(box, i, scroll); };
+  calmScroll(box);
   function draw() {
     const v = q.value, d = data, ws = d ? wordsOf(v, d.scope) : [];
     items = []; let h = '', allSum = null;
@@ -2741,7 +2748,7 @@
     const x = e.target.closest('[data-hdel]'); if (x) { e.preventDefault(); e.stopPropagation(); await forget(+x.dataset.hdel); draw(); return; }
     const a = e.target.closest('[data-i]'); if (!a) return; e.preventDefault(); pick(items[+a.dataset.i], q.value);
   });
-  box.addEventListener('mousemove', e => { const a = e.target.closest('[data-i]'); if (a && +a.dataset.i !== sel) setSel(+a.dataset.i); });
+  box.addEventListener('mousemove', e => { const a = e.target.closest('[data-i]'); if (a && +a.dataset.i !== sel) setSel(+a.dataset.i, false); });
   q.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (box.hidden) { refresh(); return; } e.preventDefault(); const n = items.length; if (n) setSel(e.key === 'ArrowDown' ? (sel + 1) % n : (sel <= 0 ? n : sel) - 1); }
     else if (e.key === 'Enter') { e.preventDefault(); if (sel >= 0) pick(items[sel], q.value); else if (q.value.trim()) { record(q.value); openAll(q.value); } }
@@ -2763,7 +2770,8 @@
     const inp = $('input', w), tabs = $('.sd-tabs', w), list = $('.sd-list', w);
     let d = null, cat = 'all', its = [], s = -1, t2, c2 = null;
     inp.value = v;
-    const mark = i => { s = i; $$('[data-i]', list).forEach(el => el.classList.toggle('on', +el.dataset.i === s)); const el = $(`[data-i="${s}"]`, list); if (el) el.scrollIntoView({ block: 'nearest' }); };
+    const mark = (i, scroll = true) => { s = i; movePick(list, i, scroll); };
+    calmScroll(list);
     function paint() {
       if (!d) return; const ws = wordsOf(inp.value, d.scope); its = []; let h = '';
       const add = (it, inner, cls = '') => { its.push(it); return `<a class="r${cls}" href="${esc(it.href)}" data-i="${its.length - 1}" role="option">${inner}</a>`; };
@@ -2794,7 +2802,7 @@
     tabs.addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b || b.disabled) return; cat = b.dataset.cat; paint(); inp.focus(); });
     list.addEventListener('mousedown', e => e.preventDefault());
     list.addEventListener('click', e => { const a = e.target.closest('[data-i]'); if (!a) return; e.preventDefault(); choose(its[+a.dataset.i]); });
-    list.addEventListener('mousemove', e => { const a = e.target.closest('[data-i]'); if (a && +a.dataset.i !== s) mark(+a.dataset.i); });
+    list.addEventListener('mousemove', e => { const a = e.target.closest('[data-i]'); if (a && +a.dataset.i !== s) mark(+a.dataset.i, false); });
     w.addEventListener('click', e => { if (e.target === w || e.target.closest('[data-x]')) end(); });
     inp.focus(); inp.select(); load();
   }
