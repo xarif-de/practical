@@ -238,8 +238,16 @@
 
   // ---- view: line map ---------------------------------------------------------------------------
   const Map_ = (() => {
-    const PPD = { 7: 150, 30: 38, 90: 13 }, ROWH = 58, LY = 40;
+    const PPD = { 7: 150, 30: 38, 90: 13 }, ROWH = 64, LY = 38; // LY + 22 = the stop's number, inside the row
     let zoom = +localStorage.hxZoom || 30, openId = null, host = null;
+    // pixels per day: the zoom's minimum, stretched so the days fill the window's width
+    let ppd = 38;
+    const fit = () => {
+      const sc = host && $('[data-m="map"]', host);
+      const lw = sc ? parseFloat(getComputedStyle(sc).getPropertyValue('--lw')) || 210 : 210;
+      const avail = sc ? sc.clientWidth - lw - 40 - 2 : 0;
+      ppd = Math.max(PPD[zoom], avail / zoom);
+    };
     if (!PPD[zoom]) zoom = 30;
     const shape = (act, hollow, big) => {
       const c = `var(--hx-${act})`, f = hollow ? 'var(--bg)' : c, s = `fill="${f}" stroke="${c}" stroke-width="2"`, k = big ? 1.25 : 1;
@@ -271,7 +279,7 @@
       const out = [...map.values()];
       for (const r of out) {
         let last = -99;
-        for (const s of r.stops) { s.x = Math.max((s.c.t - start) / 864e5 * PPD[zoom], last + 16); last = s.x; }
+        for (const s of r.stops) { s.x = Math.max((s.c.t - start) / 864e5 * ppd, last + 16); last = s.x; }
         r.alive = r.bulk ? r.bulk.items.some(i => (els[i.el] || {}).exists) : (els[r.el] || {}).exists;
       }
       return out.sort((a, b) => b.stops[b.stops.length - 1].c.id - a.stops[a.stops.length - 1].c.id);
@@ -287,7 +295,7 @@
       // undo arcs: from the undo stop back to the change it undid (or off the left edge)
       let arcs = '';
       for (const s of r.stops) if (s.c.reverts) {
-        const x1 = s.x, x2 = stopX.has(s.c.reverts) ? stopX.get(s.c.reverts) : -30, h = Math.min(34, 12 + Math.abs(x1 - x2) / 5);
+        const x1 = s.x, x2 = stopX.has(s.c.reverts) ? stopX.get(s.c.reverts) : -30, h = Math.min(28, 12 + Math.abs(x1 - x2) / 5); // the arc's top stays inside the row
         arcs += `<path d="M${x1} ${LY - 8} C${x1} ${LY - 8 - h}, ${x2} ${LY - 8 - h}, ${x2} ${LY - 9}" class="hxg-arc" marker-end="url(#hxg-ah)"/>`;
       }
       // stops closer than a label's width share one label on the first of them ("#16–18")
@@ -308,11 +316,11 @@
     function axis(start, W) {
       let t = '';
       for (let d = 0; d <= zoom; d++) {
-        const day = new Date(start.getTime() + d * 864e5), x = d * PPD[zoom], mon = day.getDate() === 1, wk = day.getDay() === 1;
+        const day = new Date(start.getTime() + d * 864e5), x = d * ppd, mon = day.getDate() === 1, wk = day.getDay() === 1;
         const lab = zoom === 7 ? `${fmtWd.format(day)} ${day.getDate()}.${day.getMonth() + 1}.` : zoom === 30 ? (wk || mon ? `${day.getDate()}.${day.getMonth() + 1}.` : '') : (mon ? fmtMonthL.format(day) : wk ? `${day.getDate()}.` : '');
         if (d < zoom) t += `<line x1="${x}" x2="${x}" y1="${mon ? 14 : 22}" y2="30" class="hxg-tick${mon ? ' mon' : ''}"/>${lab ? `<text x="${x + 3}" y="${mon && zoom === 90 ? 12 : 20}" class="hxg-lab${mon ? ' mon' : ''}">${esc(lab)}</text>` : ''}`;
       }
-      const nx = (now() - start) / 864e5 * PPD[zoom];
+      const nx = (now() - start) / 864e5 * ppd;
       return `<svg width="${W}" height="30" class="hxg-axis">${t}<line x1="${nx}" x2="${nx}" y1="4" y2="30" class="hxg-nowl"/><text x="${nx - 4}" y="10" text-anchor="end" class="hxg-now">${esc(S('now'))}</text></svg>`;
     }
     const legend = () => `<div class="hxg-legend">${ACTS.map(a => `<span><svg width="16" height="16" viewBox="-8 -8 16 16">${shape(a, false)}</svg>${esc(actWord(a))}</span>`).join('')}
@@ -322,6 +330,7 @@
       host = h;
       h.innerHTML = `${legend()}<div class="hxg-scroll" data-m="map"></div><div class="hxg-pop" data-m="pop" hidden></div><div class="hx-foot" data-m="foot"></div>`;
       $('[data-m="map"]', h).addEventListener('scroll', () => { if (openId) pop(); });
+      let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host === h) render(false); }, 150); });
       render(true);
     }
     const M = n => $(`[data-m="${n}"]`, host);
@@ -330,12 +339,17 @@
       const lst = list();
       const end = new Date(dayKey(now())); end.setDate(end.getDate() + 1);
       const start = new Date(end.getTime() - zoom * 864e5);
-      const rs = rows(lst, start), shown = new Set(rs.flatMap(r => r.stops.map(s => s.c.id)));
+      fit();
+      let rs = rows(lst, start);
+      // stops of one moment push each other past "now": make room for them inside the width
+      const over = Math.max(0, ...rs.flatMap(r => r.stops.map(s => s.x + 30))) - zoom * ppd;
+      if (over > 0 && ppd > PPD[zoom]) { ppd = Math.max(PPD[zoom], ppd - over / zoom); rs = rows(lst, start); }
+      const shown = new Set(rs.flatMap(r => r.stops.map(s => s.c.id)));
       const stopX = new Map(rs.flatMap(r => r.stops.map(s => [s.c.id, s.x])));
       // stops of one moment push each other right, past "now": the map grows with them
-      const W = Math.max(zoom * PPD[zoom], ...[...stopX.values()].map(x => x + 30));
+      const W = Math.max(zoom * ppd, ...[...stopX.values()].map(x => x + 30));
       for (const b of R('zoom').children) b.setAttribute('aria-pressed', +b.dataset.zoom === zoom);
-      const nx = (now() - start) / 864e5 * PPD[zoom];
+      const nx = (now() - start) / 864e5 * ppd;
       const sc = M('map'), keep = sc.scrollLeft;
       sc.innerHTML = rs.length ? `<div class="hxg-in" style="--w:${W}px">
         <svg width="0" height="0" style="position:absolute"><defs><marker id="hxg-ah" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" fill="var(--hx-undo)"/></marker></defs></svg>
