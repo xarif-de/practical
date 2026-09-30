@@ -12,6 +12,7 @@ jobs:
     uses: base/dagger-modules/.forgejo/workflows/dagger-call.yml@main
     with:
       dagger-function: publish-image
-      dagger-args: --source=build --tests=tests/tests.yaml
+      # release tags build the size/speed-optimised `dist` profile (build/Cargo.toml); main the fast one
+      dagger-args: --source=build --tests=tests/tests.yaml ${{ startsWith(github.ref, 'refs/tags/v') && '--build-arg=CARGO_PROFILE=dist' || '' }}
     secrets:
       registry-password: ${{ secrets.REGISTRY_TOKEN }}

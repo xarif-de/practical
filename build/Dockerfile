@@ -9,12 +9,15 @@ FROM rust:1.98-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
 
+# release (every build) or dist (release tags: CI passes --build-arg=CARGO_PROFILE=dist);
+# see the two profiles in Cargo.toml
+ARG CARGO_PROFILE=release
 # Dependency layer: RustiCal's crates come as git dependencies, so this layer
 # (a few minutes) only rebuilds when Cargo.toml/Cargo.lock change.
 COPY Cargo.toml Cargo.lock build.rs ./
 RUN mkdir -p src assets locales templates \
  && echo 'fn main() {}' > src/main.rs \
- && cargo build --release --locked \
+ && cargo build --profile "$CARGO_PROFILE" --locked \
  && rm -rf src
 
 COPY src ./src
@@ -23,8 +26,8 @@ COPY locales ./locales
 COPY templates ./templates
 COPY askama.toml ./
 RUN touch src/main.rs build.rs \
- && cargo build --release --locked \
- && cp target/release/rustical-ui /rustical-ui
+ && cargo build --profile "$CARGO_PROFILE" --locked \
+ && cp "target/$CARGO_PROFILE/rustical-ui" /rustical-ui
 
 # renovate: datasource=docker packageName=alpine
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6

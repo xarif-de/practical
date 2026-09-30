@@ -65,8 +65,20 @@ vtimezones-rs = "0.3"
 fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
 
+# Every build (branches, main — what runs on plan.xarif.de): thin LTO and parallel codegen.
+# Measured 2026-10-01 (native arm64, 14 cores): app-only rebuild 50 s vs 162 s and a full build
+# 129 s vs 261 s against `dist`, for a binary of 26.5 MB instead of 20.9 MB. The UI waits on
+# SQLite and the network, not on the CPU; the build time is paid on every push, twice (Forgejo
+# and the gitlab.com mirror).
 [profile.release]
 strip = true
+lto = "thin"
+codegen-units = 16
+opt-level = 3
+
+# Release tags only (CI passes --build-arg=CARGO_PROFILE=dist on `v*` tags): the whole program
+# optimised as one unit — smallest, fastest binary, single-threaded link.
+[profile.dist]
+inherits = "release"
 lto = true
 codegen-units = 1
-opt-level = 3
