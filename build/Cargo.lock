@@ -3225,8 +3225,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_dav"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "async-trait",
  "axum",
@@ -3254,8 +3254,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_dav_push"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "async-trait",
  "axum",
@@ -3280,8 +3280,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_ical"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "axum",
  "caldata",
@@ -3300,8 +3300,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_oidc"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "async-trait",
  "axum",
@@ -3317,8 +3317,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_store"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3348,8 +3348,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_store_sqlite"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "async-trait",
  "caldata",
@@ -3375,8 +3375,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_xml"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "http",
  "quick-xml",
@@ -5152,8 +5152,8 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xml_derive"
-version = "0.16.2"
-source = "git+https://github.com/lennart-k/rustical?tag=v0.16.2#15ab8024368010677d6169ca18af968b9d03ea1c"
+version = "0.16.4"
+source = "git+https://github.com/lennart-k/rustical?tag=v0.16.4#5d33f90b035577bfcf38fdf2415d936144337a1d"
 dependencies = [
  "darling",
  "heck",

@@ -19,11 +19,11 @@ path = "src/main.rs"
 # --- RustiCal itself: the ONLY way we touch its SQLite store. Tag == the
 # rustical image tag deployed in kubernetes/rustical (build.rs exports it;
 # `rustical-ui check-rustical-image <ref>` and the deployment tool_check compare).
-rustical_store = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
-rustical_store_sqlite = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
-rustical_ical = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
-rustical_oidc = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
-rustical_dav_push = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.2" }
+rustical_store = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.4" }
+rustical_store_sqlite = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.4" }
+rustical_ical = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.4" }
+rustical_oidc = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.4" }
+rustical_dav_push = { git = "https://github.com/lennart-k/rustical", tag = "v0.16.4" }
 # --- in RustiCal's graph (same versions as its workspace)
 caldata = { version = "0.17", features = ["chrono-tz"] }
 axum = "0.8"

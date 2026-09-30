@@ -735,6 +735,8 @@ impl Show<'_> {
         let s = vals.join("\n");
         if s.chars().count() > 1200 { format!("{}…", s.chars().take(1200).collect::<String>()) } else { s }
     }
+    /// `value_in` without titles (the tests' shorthand)
+    #[cfg(test)]
     pub fn value(&self, key: &str, raw: &str, colls: &(dyn Fn(&str) -> String + Sync)) -> String {
         self.value_in(key, raw, colls, &[])
     }
