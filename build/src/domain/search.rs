@@ -7,9 +7,11 @@
 //! "Dietmar Steinbach"), starts of consecutive words .65 (5+ letters, each part 2+: "dietstein"),
 //! inside a word .6 (3+ letters), a typo (edit distance 1 from 5 letters on, 2 from 8,
 //! against a word's start; a 4-letter word would match too much: "demo" ~ "devops") .5/.38 — times the field's weight; the document's text score is the
-//! mean over the words plus a bonus when the whole query starts or equals the main field. Fuzzy kinds
-//! (typos, letters left out) are only tried when the exact pass finds nothing: "christina" must not
-//! bring every "Christin", "serie" every "server".
+//! mean over the words plus a bonus when the whole query starts or equals the main field.
+//! Tiers (`search`): exact kinds first; while no clear hit (≥ .85) and fewer than 3 above the floor,
+//! loosen — typos/letters left out in the fields that carry them, then everywhere with up to half the
+//! words missing (dropped again when some document has every word). The floor (`cutoff`) is relative to
+//! the best: clear best hits drop what is far below them, a vague best keeps nearly everything.
 //! Ranking adds per kind: events the nearness of the next (else the last) occurrence, upcoming
 //! weighing more than past; tasks being open and a near due date.
 //!
@@ -359,7 +361,7 @@ impl Kind {
 }
 
 /// How well one query word matches a field (0 = not at all), how, and for a typo the field's word.
-fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Option<String>) {
+fn word_score(q: &str, qc: &[char], f: &Field, tier: u8) -> (f32, Kind, Option<String>) {
     if f.words.iter().any(|w| w == q) {
         return (1.0, Kind::Word, None);
     }
@@ -381,11 +383,15 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Optio
     }
     // the fuzzy kinds only where a loose match still says something: long, unimportant texts (a
     // note, a partner, a link) contain almost any letters — there only exact kinds count
-    if fuzzy && n >= 5 && f.weight >= TYPO_MIN_WEIGHT {
+    if tier >= 1 && n >= 5 && (tier >= 2 || f.weight >= TYPO_MIN_WEIGHT) {
         // a typo: against the word's start of about the query's length ("kalnder" ~ "kalender")
         let max = if n < 8 { 1 } else { 2 };
         let (mut best, mut like) = (usize::MAX, None);
         for w in &f.words {
+            // a typo keeps the first letter ("zugesagt" is no typo of "abgesagt") — and that skips most words cheaply
+            if !w.starts_with(qc[0]) || w.len() + 1 < q.len() {
+                continue;
+            }
             let wc: Vec<char> = w.chars().collect();
             if wc.len() + 1 < n {
                 continue;
@@ -409,7 +415,7 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Optio
     }
     // letters left out ("chrstinbach" ~ "Christin Steinbach"): the query's letters in order from a
     // word's start, over at most twice its length; the denser, the better
-    if fuzzy && n >= 6 && f.weight >= GAPS_MIN_WEIGHT {
+    if tier >= 1 && n >= 6 && (tier >= 2 || f.weight >= GAPS_MIN_WEIGHT) {
         if let Some(span) = gaps_span(qc, f) {
             return (0.2 + 0.16 * n as f32 / span as f32, Kind::Gaps, None); // .28–.36: below a two-edit typo
         }
@@ -466,6 +472,8 @@ fn in_order(q: &str, text: &str) -> bool {
 struct Match {
     score: f32,
     hits: Vec<Hit>,
+    /// some query words matched nothing (the loosest tier)
+    partial: bool,
 }
 
 #[derive(Debug)]
@@ -491,11 +499,11 @@ fn score_doc(q: &Query, doc: &Doc) -> Match {
     if q.words.is_empty() {
         return Match::default();
     }
-    let (mut sum, mut real, mut hits) = (0.0, false, Vec::with_capacity(q.words.len()));
+    let (mut sum, mut real, mut hits, mut missing) = (0.0, false, Vec::with_capacity(q.words.len()), 0usize);
     for (wi, (w, wc)) in q.words.iter().zip(&q.chars).enumerate() {
         let mut best = (0.0f32, Place::Phone, Kind::Word, None);
         for (i, f) in doc.fields.iter().enumerate() {
-            let (s, k, m) = word_score(w, wc, f, q.fuzzy);
+            let (s, k, m) = word_score(w, wc, f, q.tier);
             let s = f.weight * s;
             if s > best.0 {
                 best = (s, Place::Field(i), k, m);
@@ -506,6 +514,11 @@ fn score_doc(q: &Query, doc: &Doc) -> Match {
             best = (0.85, Place::Phone, Kind::Phone, None);
         }
         if best.0 == 0.0 {
+            // the loosest tier lets up to half of several words go missing
+            if q.tier >= 2 && q.words.len() >= 2 {
+                missing += 1;
+                continue;
+            }
             return Match::default();
         }
         real |= match best.1 { Place::Field(i) => !doc.fields[i].narrow, _ => true };
@@ -515,7 +528,12 @@ fn score_doc(q: &Query, doc: &Doc) -> Match {
     if !real {
         return Match::default(); // only the calendar's / address book's name: that would be all of it
     }
-    let mut s = sum / q.words.len() as f32;
+    let n = q.words.len();
+    if missing * 2 > n {
+        return Match::default();
+    }
+    // a partial match counts its words' mean, scaled by the share found and a penalty
+    let mut s = if missing == 0 { sum / n as f32 } else { 0.7 * (sum / (n - missing) as f32) * ((n - missing) as f32 / n as f32) };
     if let Some(main) = doc.fields.first() {
         if main.text == q.phrase {
             s += 0.25;
@@ -526,7 +544,7 @@ fn score_doc(q: &Query, doc: &Doc) -> Match {
             s += 0.03;
         }
     }
-    Match { score: s, hits }
+    Match { score: s, hits, partial: missing > 0 }
 }
 
 /// The date match of a document for a date query (score 0 = none): the best-weighted date on that day.
@@ -593,8 +611,9 @@ struct Query {
     phrase: String,
     words: Vec<String>,
     chars: Vec<Vec<char>>,
-    /// also match typos
-    fuzzy: bool,
+    /// how loose: 0 exact kinds only; 1 + typos/letters left out in the fields that carry them;
+    /// 2 + those in every field, and half the words may be missing (see `search`)
+    tier: u8,
 }
 
 impl Query {
@@ -602,7 +621,7 @@ impl Query {
         let phrase = fold(raw.trim());
         let words = words(&phrase);
         let chars = words.iter().map(|w| w.chars().collect()).collect();
-        Query { phrase, words, chars, fuzzy: true }
+        Query { phrase, words, chars, tier: 1 }
     }
 }
 
@@ -862,44 +881,79 @@ impl Mode<'_> {
     }
 }
 
-/// The matching documents ranked (`bonus` adds a kind's own points), the first `limit` with their reasons.
-fn best<'a, D>(docs: &'a [D], doc: impl Fn(&D) -> &Doc, bonus: impl Fn(&D, &Match) -> f32, mode: &Mode, q: &Query, limit: usize) -> (usize, Vec<(&'a D, Match, Vec<Why>)>) {
-    let mut v: Vec<(f32, &D, Match)> = docs.iter().filter_map(|d| { let m = mode.score(doc(d)); (m.score > 0.0).then(|| (100.0 * m.score + bonus(d, &m), d, m)) }).collect();
+/// One category's kept matches ranked (`bonus` adds the kind's own points), the first `limit` with their reasons.
+fn best<'a, D>(docs: &'a [D], kept: Vec<(usize, Match)>, doc: impl Fn(&D) -> &Doc, bonus: impl Fn(&D, &Match) -> f32, q: &Query, limit: usize) -> (usize, Vec<(&'a D, Match, Vec<Why>)>) {
+    let mut v: Vec<(f32, &D, Match)> = kept.into_iter().map(|(i, m)| (100.0 * m.score + bonus(&docs[i], &m), &docs[i], m)).collect();
     let total = v.len();
     v.sort_by(|a, b| b.0.total_cmp(&a.0));
     v.truncate(limit);
     (total, v.into_iter().map(|(_, d, m)| { let w = reasons(doc(d), &m, q); (d, m, w) }).collect())
 }
 
-fn rank(ix: &Index, mode: &Mode, q: &Query, scope: Option<&'static str>, today: NaiveDate, limit: usize, res: &mut SearchResult) {
+/// Every matching document of the wanted categories: (category 0 events / 1 contacts / 2 tasks, index, match).
+fn gather(ix: &Index, mode: &Mode, scope: Option<&'static str>) -> Vec<(u8, usize, Match)> {
     let want = |k: &str| scope.is_none_or(|s| s == k);
+    let mut out = vec![];
+    let mut add = |cat: u8, docs: &mut dyn Iterator<Item = &Doc>| {
+        for (i, d) in docs.enumerate() {
+            let m = mode.score(d);
+            if m.score > 0.0 {
+                out.push((cat, i, m));
+            }
+        }
+    };
     if want("event") {
-        // the occurrence shown: the next one (a date query: the next one on that day), else the last
-        let occ = |e: &EvDoc| {
-            let on = |o: &&(NaiveDateTime, String)| match mode { Mode::Date(p) => DateField::of("", o.0.date(), 0.0).hits(*p), _ => true };
-            e.occ.iter().filter(on).find(|o| o.0.date() >= today).or(e.occ.iter().filter(on).last()).cloned().unwrap_or_default()
-        };
-        let (total, hits) = best(&ix.events, |e| &e.doc, |e, _| 30.0 * near(occ(e).0.date(), today, 60.0, 30.0) - if e.cancelled { 8.0 } else { 0.0 }, mode, q, limit);
-        res.totals.events = total;
-        res.events = hits
-            .into_iter()
-            .map(|(e, _, mut why)| {
-                why.iter_mut().filter(|w| w.f == "date").for_each(|w| w.shown = true); // the row shows the occurrence's day
-                let (start, time) = occ(e);
-                EventHit { key: e.key.clone(), uid: e.uid.clone(), summary: e.summary.clone(), date: start.date(), time, color: e.color.clone(), cal_name: e.cal_name.clone(), count: e.occ.len(), why }
-            })
-            .collect();
+        add(0, &mut ix.events.iter().map(|e| &e.doc));
     }
     if want("contact") {
-        let (total, hits) = best(&ix.contacts, |c| &c.doc, |_, _| 0.0, mode, q, limit);
-        res.totals.contacts = total;
-        res.contacts = hits.into_iter().map(|(c, _, why)| ContactHit { why, ..c.hit.clone() }).collect();
+        add(1, &mut ix.contacts.iter().map(|c| &c.doc));
     }
     if want("task") {
-        let (total, hits) = best(&ix.tasks, |k| &k.doc, |k, _| if k.open { 12.0 + k.hit.due.map_or(0.0, |d| 8.0 * near(d, today, 30.0, 30.0)) } else { 0.0 }, mode, q, limit);
-        res.totals.tasks = total;
-        res.tasks = hits.into_iter().map(|(k, _, why)| TaskHit { why, ..k.hit.clone() }).collect();
+        add(2, &mut ix.tasks.iter().map(|t| &t.doc));
     }
+    out
+}
+
+/// The relevance floor, relative to the best match: clear best hits (a whole word or a word's start in
+/// a title, ≥ .85) drop what is far below them; a vague best (a typo, letters left out) keeps nearly
+/// everything, since that is all there is. Many clear hits raise the floor a little more.
+fn cutoff(all: &mut Vec<(u8, usize, Match)>) {
+    let top = all.iter().map(|x| x.2.score).fold(0.0, f32::max);
+    let clear = all.iter().filter(|x| x.2.score >= 0.7 * top).count();
+    let mut r = if top >= 0.85 { 0.5 } else if top >= 0.6 { 0.35 } else { 0.15 };
+    if clear >= 10 {
+        r += 0.1;
+    }
+    all.retain(|x| x.2.score >= r * top);
+}
+
+fn rank(ix: &Index, all: Vec<(u8, usize, Match)>, mode: &Mode, q: &Query, today: NaiveDate, limit: usize, res: &mut SearchResult) {
+    let mut by: [Vec<(usize, Match)>; 3] = Default::default();
+    for (cat, i, m) in all {
+        by[cat as usize].push((i, m));
+    }
+    let [evs, cts, tks] = by;
+    // the occurrence shown: the next one (a date query: the next one on that day), else the last
+    let occ = |e: &EvDoc| {
+        let on = |o: &&(NaiveDateTime, String)| match mode { Mode::Date(p) => DateField::of("", o.0.date(), 0.0).hits(*p), _ => true };
+        e.occ.iter().filter(on).find(|o| o.0.date() >= today).or(e.occ.iter().filter(on).last()).cloned().unwrap_or_default()
+    };
+    let (total, hits) = best(&ix.events, evs, |e| &e.doc, |e, _| 30.0 * near(occ(e).0.date(), today, 60.0, 30.0) - if e.cancelled { 8.0 } else { 0.0 }, q, limit);
+    res.totals.events = total;
+    res.events = hits
+        .into_iter()
+        .map(|(e, _, mut why)| {
+            why.iter_mut().filter(|w| w.f == "date").for_each(|w| w.shown = true); // the row shows the occurrence's day
+            let (start, time) = occ(e);
+            EventHit { key: e.key.clone(), uid: e.uid.clone(), summary: e.summary.clone(), date: start.date(), time, color: e.color.clone(), cal_name: e.cal_name.clone(), count: e.occ.len(), why }
+        })
+        .collect();
+    let (total, hits) = best(&ix.contacts, cts, |c| &c.doc, |_, _| 0.0, q, limit);
+    res.totals.contacts = total;
+    res.contacts = hits.into_iter().map(|(c, _, why)| ContactHit { why, ..c.hit.clone() }).collect();
+    let (total, hits) = best(&ix.tasks, tks, |k| &k.doc, |k, _| if k.open { 12.0 + k.hit.due.map_or(0.0, |d| 8.0 * near(d, today, 30.0, 30.0)) } else { 0.0 }, q, limit);
+    res.totals.tasks = total;
+    res.tasks = hits.into_iter().map(|(k, _, why)| TaskHit { why, ..k.hit.clone() }).collect();
 }
 
 /// `limit`: hits per category (the drop-down asks for 5, the "all results" dialog for 200); every hit
@@ -914,15 +968,26 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
     }
     let ix = index(state, user, today, tz, lang).await?;
     if let Some((y, Some(m), Some(d))) = date_parts(rest) {
-        rank(&ix, &Mode::Date((y, m, d)), &query, scope, today, limit, &mut res);
+        let mode = Mode::Date((y, m, d));
+        let all = gather(&ix, &mode, scope);
+        rank(&ix, all, &mode, &query, today, limit, &mut res);
         return Ok(res);
     }
-    query.fuzzy = false;
-    rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
-    if res.totals.events + res.totals.contacts + res.totals.tasks == 0 {
-        query.fuzzy = true;
-        rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
+    // loosen step by step while there is no clear hit and fewer than 3 are left above the floor
+    let mut all = vec![];
+    for tier in 0..=2 {
+        query.tier = tier;
+        all = gather(&ix, &Mode::Text(&query), scope);
+        if all.iter().any(|x| !x.2.partial) {
+            all.retain(|x| !x.2.partial); // documents with every word make those with half of them moot
+        }
+        cutoff(&mut all);
+        let top = all.iter().map(|x| x.2.score).fold(0.0, f32::max);
+        if all.len() >= 3 || top >= 0.85 {
+            break;
+        }
     }
+    rank(&ix, all, &Mode::Text(&query), &query, today, limit, &mut res);
     Ok(res)
 }
 
@@ -959,7 +1024,7 @@ mod tests {
     }
     /// the exact pass only (typos are the fallback)
     fn strict(q: &str, text: &str) -> f32 {
-        score_doc(&Query { fuzzy: false, ..Query::new(q) }, &doc(text)).score
+        score_doc(&Query { tier: 0, ..Query::new(q) }, &doc(text)).score
     }
 
     #[test]
@@ -978,6 +1043,12 @@ mod tests {
         assert!(score("chrstein", "Christin Steinbach") > 0.0);
         assert_eq!(strict("dstein", "Dietmar Steinbach"), 0.0, "a part needs 2 letters");
         assert_eq!(strict("urlab", "Urlaubs-Abrechnung"), 0.0, "the last part needs 3 letters");
+        let loose = |q: &str, d: &Doc| score_doc(&Query { tier: 2, ..Query::new(q) }, d).score;
+        assert!(loose("zahnarzt weber", &doc("Zahnarzt")) > 0.0 && score("zahnarzt weber", "Zahnarzt") == 0.0, "the loosest tier lets half the words go missing");
+        assert_eq!(loose("zahnarzt weber meier", &doc("Zahnarzt")), 0.0, "but not more than half");
+        let note = Doc { fields: vec![Field::new("t", "x", 1.0), Field::new("note", "abgesagt", 0.4)], ..Default::default() };
+        assert!(loose("abgesagx", &note) > 0.0, "the loosest tier allows typos everywhere");
+        assert_eq!(loose("zugesagt", &note), 0.0, "a typo keeps the first letter");
         assert_eq!(strict("dietbach", "Dietmar Steinbach"), 0.0, "no skipped word, starts only");
         let d = Doc { fields: vec![Field::new("t", "Zahnarzt", 1.0), Field::collection("Familie")], ..Default::default() };
         assert!(score_doc(&Query::new("familie zahn"), &d).score > 0.0 && score_doc(&Query::new("familie"), &d).score == 0.0, "a collection name only narrows");

@@ -202,7 +202,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   "dietmarstein") > starts of consecutive words (5+ letters, parts 2+, the last 3+: "dietstein") > inside a word >
   typo (OSA distance 1 from 5 letters, 2 from 8; fields weighing ≥ .5) > letters left out (6+ letters in
   order from a word's start over ≤ twice their length: "chrstinbach"; fields weighing ≥ .8: titles,
-  names, organisation). The fuzzy kinds run only when the exact pass finds nothing. Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
+  names, organisation). Tiers: exact kinds first; while there is no clear hit (≥ .85) and fewer
+  than 3 above the floor, loosen — typos (keeping the first letter) and letters left out where allowed,
+  then in every field with up to half the words missing (moot when some document has every word). The
+  floor is relative to the best hit: clear best → drop below 50 % (60 % with ≥ 10 clear hits), typo-level
+  best → keep down to 15 %. Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
   "n events"), openness and due date for tasks. Prefixes `termin:`/`event:`, `kontakt:`/`contact:`,
   `aufgabe:`/`task:` (+ fr/es) narrow to one kind; a date query adds "jump to". Drop-down: ≤ 5 per kind,
   ≤ 10 in all, split by each kind's share of the matches; "All results" / Enter opens a dialog with ≤ 200 per
