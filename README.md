@@ -78,6 +78,12 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   are JavaScript. The page header stays put: the app frame is the viewport, `.main` scrolls, the
   toolbar sticks under the topbar, scrollbars are hidden everywhere. Per-view CSS/JS budget stays
   below 60 KB gzip (one shared `style.css` + `app.js`).
+- **First paint**: `app.js` sits in `<head>` with `defer blocking="render"`, so a page is painted only
+  once app.js has drawn it (task views, sort boxes); the browser keeps the old page meanwhile —
+  no empty frame (Chromium; others ignore the attribute). **Tasks** are parsed once per calendar and
+  synctoken (`tasks::TaskCache`), caught up via `sync_changes` (dev copy: /tasks 0.93 s → 35 ms,
+  task categories 0.65 s → 8 ms, debug build). The lookback persists per browser (cookie `tk_back`;
+  a URL `back=` wins).
 - **Event editing** keeps what it does not model, too: the stored master VEVENT is split into the
   lines the editor writes (`MANAGED`) and everything else (STATUS, CLASS, ATTACH, COLOR, X-…, RFC 9073
   components), which is copied verbatim on every save; each VALARM keeps its position so its unmodelled

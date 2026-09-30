@@ -8,6 +8,7 @@
 <title>{% block title %}{{ ctx.t("app-name") }}{% endblock %}</title>
 <link rel="icon" href="/assets/icon.svg">
 <link rel="stylesheet" href="/assets/style.css?v={{ ctx.asset_v }}">
+<script src="/assets/app.js?v={{ ctx.asset_v }}" defer blocking="render"></script>{# render-blocking: the first paint already shows what app.js draws (task views, sort boxes …), no empty page in between; defer still runs it after parsing #}
 <script>(function(){const h=document.documentElement,m=matchMedia("(prefers-color-scheme: dark)"),f=()=>{if(h.dataset.prefScheme==="auto")h.dataset.scheme=m.matches?"dark":"light";};f();m.addEventListener("change",f);try{localStorage.removeItem("scheme");}catch(e){}})();</script>{# "auto" follows the system, also while the page is open; the old per-browser choice (localStorage) is gone #}
 {% block head %}{% endblock %}
 </head>
@@ -170,7 +171,6 @@
 </nav>
 {% endif %}
 </div>
-<script src="/assets/app.js?v={{ ctx.asset_v }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

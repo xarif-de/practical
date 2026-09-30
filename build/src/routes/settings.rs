@@ -78,7 +78,7 @@ async fn vacation_rule(state: &SharedState, user: &Principal, p: &Prefs) -> AppR
         return Ok((if matches!(r.kind.as_str(), "calendar" | "title") { r.kind } else { "category".into() }, r.value));
     }
     let v = r.value.trim();
-    if let Some((name, _)) = events::category_counts(state, user, "event").await?.into_iter().find(|(c, _)| c.to_lowercase() == v.to_lowercase()) {
+    if let Some((name, _)) = events::category_counts(state, user, "event", chrono_tz::UTC).await?.into_iter().find(|(c, _)| c.to_lowercase() == v.to_lowercase()) {
         return Ok(("category".into(), name));
     }
     Ok(("title".into(), if v.is_empty() { String::new() } else { format!(r"\b{}\b", regex::escape(v)) }))

@@ -30,6 +30,8 @@ pub struct AppState {
     pub geo: crate::domain::geo::Geo,
     /// the top-bar search's per-user corpus (`domain::search`)
     pub search_index: crate::domain::search::IndexCache,
+    /// parsed tasks per calendar and synctoken (`domain::tasks::tasks_for`)
+    pub task_cache: crate::domain::tasks::TaskCache,
     pub vapid: Option<VapidKeypair>,
     pub started_at: chrono::DateTime<chrono::Utc>,
 }

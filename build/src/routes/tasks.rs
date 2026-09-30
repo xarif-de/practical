@@ -128,10 +128,16 @@ fn in_lookback(t: &Task, today: NaiveDate, days: Option<i64>) -> bool {
     }
 }
 
-async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<TaskQuery>) -> AppResult<TasksPage> {
+/// The lookback last picked in this browser (app.js sets the `tk_back` cookie on a change), so the
+/// page reached from the navigation keeps it; a `back` in the URL wins, a search hit's `back=all` too.
+fn back_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers.get_all(axum::http::header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).find_map(|c| c.trim().strip_prefix("tk_back=").map(str::to_string))
+}
+
+async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, headers: axum::http::HeaderMap, Query(q): Query<TaskQuery>) -> AppResult<TasksPage> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let view = one_of(q.view.as_ref(), VIEWS, "groups");
-    let back = one_of(q.back.as_ref(), LOOKBACKS, "month");
+    let back = one_of(q.back.as_ref().or(back_cookie(&headers).as_ref()), LOOKBACKS, "month");
     let all_cals = events::visible_calendars(&state, &user, None).await?;
     let calendars: Vec<CalInfo> = all_cals.iter().filter(|c| c.components.iter().any(|x| x == "VTODO")).cloned().collect();
     let picked = pick_calendars(&all_cals, q.cals.as_deref());
@@ -220,6 +226,14 @@ pub fn router() -> Router<SharedState> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lookback_cookie_is_found_among_others() {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert(axum::http::header::COOKIE, "id=abc; tk_back=year; x=1".parse().unwrap());
+        assert_eq!(back_cookie(&h).as_deref(), Some("year"));
+        assert_eq!(back_cookie(&axum::http::HeaderMap::new()), None);
+    }
 
     #[test]
     fn every_column_has_a_label_and_the_defaults_exist() {

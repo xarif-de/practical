@@ -145,6 +145,7 @@ async fn serve() -> Result<(), String> {
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
         geo: Default::default(),
         search_index: Default::default(),
+        task_cache: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),
         db,

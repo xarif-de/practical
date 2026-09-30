@@ -3575,7 +3575,7 @@
     closed: () => { if (docked()) act = null; cur = null; wantNew = false; held = undefined; render(); fit(); }, // the docked pane falls back to the new-task form: nothing is picked
   };
 
-  $('#tk-back').onchange = e => { const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); };
+  $('#tk-back').onchange = e => { document.cookie = `tk_back=${e.target.value}; path=/tasks; max-age=31536000; SameSite=Lax`; const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); }; // the cookie: the page reached from the navigation keeps the choice (routes/tasks.rs)
   // ---- the picked task: a search hit, a click or a view switch keeps it marked and in view where the view shows it ----
   function markAct() { $$('.sel[data-key]', main).forEach(el => el.classList.remove('sel')); if (act) $$(`[data-key="${CSS.escape(act)}"]`, main).forEach(el => el.classList.add('sel')); }
   function deckTo() { if (!act) return; const i = sortView(TASKS).findIndex(t => key(t) === act); if (i >= 0) deckI = i; }

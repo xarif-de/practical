@@ -179,47 +179,110 @@ fn stamp_of(props: &[String], name: &str, tz: chrono_tz::Tz) -> (Option<NaiveDat
     }
 }
 
+/// One VTODO object as a list row. The calendar's name and colour are filled in by `tasks_for`
+/// (they change without the synctoken moving); `color` here is the task's own COLOR, maybe empty.
+fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: chrono_tz::Tz) -> Option<Task> {
+    let CalendarInnerData::Todo(t, _) = obj.get_inner().get_inner() else { return None };
+    let (raw, _) = events::split_component(&obj.get_ics(), "VTODO");
+    let p = &raw.props;
+    let (start, start_all_day) = stamp_of(p, "DTSTART", tz);
+    let (due, due_all_day) = stamp_of(p, "DUE", tz);
+    Some(Task {
+        principal: principal.to_string(),
+        cal_id: cal_id.to_string(),
+        cal_name: String::new(),
+        color: text_of(p, "COLOR"),
+        uid: obj.get_uid().to_string(),
+        object_id: id,
+        summary: ical::text(t, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
+        description: text_of(p, "DESCRIPTION"),
+        location: text_of(p, "LOCATION"),
+        start,
+        start_all_day,
+        due,
+        due_all_day,
+        status: status_of(p),
+        percent: num_of(p, "PERCENT-COMPLETE"),
+        completed_at: completed_of(p, tz),
+        priority: num_of(p, "PRIORITY").unwrap_or(0).clamp(0, 9) as u8,
+        class: class_of(p),
+        categories: cats_of(p),
+        alarms: raw.alarms.len(),
+        links: events::links_of(p).len(),
+        created: stamp_of(p, "CREATED", tz).0,
+        extra: TaskExtra { links: events::links_of(p), geo: geo_of(p), related: events::related_of(p).into_iter().map(|r| r.uid).collect() },
+    })
+}
+
+/// The parsed tasks of each calendar at a synctoken, so a page load does not parse every object
+/// again: a task calendar usually holds the events too (dev copy: 3 811 objects for 946 tasks,
+/// ≈ 0.9 s per /tasks in a debug build). A moved token is caught up through the store's change
+/// log (`sync_changes`), so an edit re-parses only what changed.
+#[derive(Default)]
+pub struct TaskCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<CalTasks>>>);
+
+pub struct CalTasks {
+    token: i64,
+    tz: chrono_tz::Tz,
+    /// object id → task
+    tasks: std::collections::HashMap<String, Task>,
+}
+
+async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppResult<std::sync::Arc<CalTasks>> {
+    let k = (cal.principal.clone(), cal.id.clone());
+    let cached = state.task_cache.0.lock().unwrap().get(&k).cloned().filter(|c| c.tz == tz);
+    if let Some(c) = &cached
+        && c.token == cal.synctoken
+    {
+        return Ok(c.clone());
+    }
+    let fresh = match cached {
+        Some(c) => {
+            let (changed, deleted, token) = state.calendars.sync_changes(&cal.principal, &cal.id, c.token).await?;
+            let mut tasks = c.tasks.clone();
+            for id in deleted {
+                tasks.remove(&id);
+            }
+            for (id, obj) in changed {
+                tasks.remove(&id);
+                if let Some(t) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                    tasks.insert(id, t);
+                }
+            }
+            CalTasks { token, tz, tasks }
+        }
+        None => {
+            // the token first: a write racing the read is then caught up next time, never lost
+            let token = state.calendars.get_calendar(&cal.principal, &cal.id, false).await?.synctoken;
+            let objects = state.calendars.get_objects(&cal.principal, &cal.id).await?;
+            let tasks = objects.into_iter().filter_map(|(id, obj)| task_of(&cal.principal, &cal.id, id.clone(), &obj, tz).map(|t| (id, t))).collect();
+            CalTasks { token, tz, tasks }
+        }
+    };
+    let fresh = std::sync::Arc::new(fresh);
+    let mut m = state.task_cache.0.lock().unwrap();
+    if m.get(&k).is_none_or(|c| c.tz != tz || c.token <= fresh.token) {
+        m.insert(k, fresh.clone());
+    }
+    Ok(fresh)
+}
+
 pub async fn tasks_for(state: &AppState, cals: &[CalInfo], tz: chrono_tz::Tz) -> AppResult<Vec<Task>> {
     let mut out = vec![];
     for cal in cals {
         if !cal.components.iter().any(|c| c == "VTODO") {
             continue;
         }
-        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-            let CalendarInnerData::Todo(t, _) = obj.get_inner().get_inner() else { continue };
-            let (raw, _) = events::split_component(&obj.get_ics(), "VTODO");
-            let p = &raw.props;
-            let own_color = text_of(p, "COLOR");
-            let (start, start_all_day) = stamp_of(p, "DTSTART", tz);
-            let (due, due_all_day) = stamp_of(p, "DUE", tz);
-            out.push(Task {
-                principal: cal.principal.clone(),
-                cal_id: cal.id.clone(),
-                cal_name: cal.displayname.clone(),
-                color: if events::valid_color(&own_color) { own_color } else { cal.color.clone() },
-                uid: obj.get_uid().to_string(),
-                object_id: id,
-                summary: ical::text(t, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
-                description: text_of(p, "DESCRIPTION"),
-                location: text_of(p, "LOCATION"),
-                start,
-                start_all_day,
-                due,
-                due_all_day,
-                status: status_of(p),
-                percent: num_of(p, "PERCENT-COMPLETE"),
-                completed_at: completed_of(p, tz),
-                priority: num_of(p, "PRIORITY").unwrap_or(0).clamp(0, 9) as u8,
-                class: class_of(p),
-                categories: cats_of(p),
-                alarms: raw.alarms.len(),
-                links: events::links_of(p).len(),
-                created: stamp_of(p, "CREATED", tz).0,
-                extra: TaskExtra { links: events::links_of(p), geo: geo_of(p), related: events::related_of(p).into_iter().map(|r| r.uid).collect() },
-            });
+        for t in cal_tasks(state, cal, tz).await?.tasks.values() {
+            let mut t = t.clone();
+            t.cal_name = cal.displayname.clone();
+            if !events::valid_color(&t.color) {
+                t.color = cal.color.clone();
+            }
+            out.push(t);
         }
     }
-    out.sort_by(|a, b| a.completed().cmp(&b.completed()).then(a.due.is_none().cmp(&b.due.is_none())).then(a.due.cmp(&b.due)).then(a.summary.cmp(&b.summary)));
+    out.sort_by(|a, b| a.completed().cmp(&b.completed()).then(a.due.is_none().cmp(&b.due.is_none())).then(a.due.cmp(&b.due)).then(a.summary.cmp(&b.summary)).then(a.object_id.cmp(&b.object_id)));
     Ok(out)
 }
 

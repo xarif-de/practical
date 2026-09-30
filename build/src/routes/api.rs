@@ -110,9 +110,10 @@ fn scope_of(q: &ScopeQ) -> &str {
 }
 
 /// Every category of the visible calendars with its count, plus rule-only categories (count 0).
-async fn categories(State(state): State<SharedState>, user: Principal, Query(q): Query<ScopeQ>) -> AppResult<Json<Vec<CategoryInfo>>> {
+async fn categories(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<ScopeQ>) -> AppResult<Json<Vec<CategoryInfo>>> {
+    let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let rules = crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?;
-    let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user, scope_of(&q)).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
+    let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user, scope_of(&q), vc.tz).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
     for name in rules.keys() {
         if !out.iter().any(|c| &c.name == name) {
             out.push(CategoryInfo { name: name.clone(), count: 0, rule: true });
@@ -243,7 +244,7 @@ async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate:
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
     let contacts = contacts::contacts_for(&state, &abs).await?.into_iter().map(|c| MentionContact { name: c.full_name.clone(), email: c.primary_email(), key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id) }).filter(|c| !c.name.trim().is_empty()).collect();
-    let categories = events::category_counts(&state, &user, scope_of(&q)).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
+    let categories = events::category_counts(&state, &user, scope_of(&q), vc.tz).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
     let cals = events::visible_calendars(&state, &user, None).await?;
     let mut seen = std::collections::HashSet::new();
     let events = events::instances(&state, &cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();

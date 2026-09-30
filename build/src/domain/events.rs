@@ -431,19 +431,26 @@ pub(crate) fn related_lines(list: &[Related]) -> Vec<String> {
 /// CATEGORIES across every visible calendar (events and tasks), most used first. Values a
 /// client stamps on every object ("Come From :com.appgenix.bizcal") are not categories and are hidden.
 /// `scope` picks the component the counts come from: "task" counts VTODOs, anything else VEVENTs.
-/// A category rule belongs to one of the two, so its category list must too.
-pub async fn category_counts(state: &AppState, user: &Principal, scope: &str) -> AppResult<Vec<(String, usize)>> {
+/// A category rule belongs to one of the two, so its category list must too. Tasks come from the
+/// task cache (`tasks::tasks_for`, hence `tz`); events are scanned.
+pub async fn category_counts(state: &AppState, user: &Principal, scope: &str, tz: chrono_tz::Tz) -> AppResult<Vec<(String, usize)>> {
     let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let tasks = scope == "task";
-    for cal in visible_calendars(state, user, None).await? {
-        for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-            let cats = match (obj.get_inner().get_inner(), tasks) {
-                (CalendarInnerData::Event(ev, _), false) => ical::list(ev, "CATEGORIES"),
-                (CalendarInnerData::Todo(t, _), true) => ical::list(t, "CATEGORIES"),
-                _ => vec![],
-            };
-            for c in cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty() && !c.starts_with("Come From :")) {
-                *counts.entry(c).or_default() += 1;
+    let mut count = |cats: Vec<String>| {
+        for c in cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty() && !c.starts_with("Come From :")) {
+            *counts.entry(c).or_default() += 1;
+        }
+    };
+    let cals = visible_calendars(state, user, None).await?;
+    if scope == "task" {
+        for t in crate::domain::tasks::tasks_for(state, &cals, tz).await? {
+            count(t.categories);
+        }
+    } else {
+        for cal in cals {
+            for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+                if let CalendarInnerData::Event(ev, _) = obj.get_inner().get_inner() {
+                    count(ical::list(ev, "CATEGORIES"));
+                }
             }
         }
     }
