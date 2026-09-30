@@ -6,6 +6,16 @@ on:
   push:
     branches: [main, master]
     tags:     ['v*']
+    # Publish only when something that ends up in the image changed. The build is
+    # not bit-reproducible (seen on the former gitlab.com pipeline: a README-only
+    # commit pushed a fresh digest → a Renovate digest-bump PR → an auto-merge →
+    # a pod roll for a typo).
+    # Forgejo applies `paths` to branch pushes only: a tag push always matches
+    # (modules/actions/workflows.go, v15.0.9), so releases are unaffected.
+    paths:
+      - 'build/**'
+      - 'tests/**'
+      - '.forgejo/workflows/docker-publish.yml'
   workflow_dispatch:
 jobs:
   publish-image:
@@ -16,3 +26,8 @@ jobs:
       dagger-args: --source=build --tests=tests/tests.yaml ${{ startsWith(github.ref, 'refs/tags/v') && '--build-arg=CARGO_PROFILE=dist' || '' }}
     secrets:
       registry-password: ${{ secrets.REGISTRY_TOKEN }}
+      # The same image also goes to registry.gitlab.com/xarif/<owner>/<repo>,
+      # which is what the cluster pulls (docker org secrets: a gitlab.com group
+      # deploy token with write_registry).
+      mirror-registry-username: ${{ secrets.MIRROR_REGISTRY_USERNAME }}
+      mirror-registry-password: ${{ secrets.MIRROR_REGISTRY_TOKEN }}

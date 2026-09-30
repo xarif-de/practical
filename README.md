@@ -382,10 +382,10 @@ takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset 
 ## Repository layout
 
 Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `templates/`,
-`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml`, the two Forgejo
-workflows and `.gitlab-ci.yml` from `base/dagger-ci-basics`. Image:
-`registry.gitlab.com/xarif/docker/rustical-ui:main` (built on Forgejo, pulled from the
-gitlab.com mirror like every xarif image).
+`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml` and the two Forgejo
+workflows from `base/dagger-ci-basics`. Image:
+`registry.gitlab.com/xarif/docker/rustical-ui:main` (built and pushed by Forgejo Actions,
+pulled from the gitlab.com registry like every xarif image).
 
 **Icons** (`templates/layout.html`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
 plus single SVGs copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT),
