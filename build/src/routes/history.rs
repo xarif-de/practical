@@ -82,7 +82,20 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
             }
             let mut shown: Vec<&(String, String, String)> = it.attrs.iter().filter(|(k, _, _)| k != "UID" && (c.tech || !ht::is_tech(k))).collect();
             shown.sort_by_key(|(k, _, _)| (ORDER.iter().position(|o| o == k).unwrap_or(ORDER.len()), k.clone()));
-            let attrs: Vec<Value> = shown.into_iter().map(|(k, from, to)| json!([k, show.label(k), show.value(k, from, &coll_name), show.value(k, to, &coll_name)])).collect();
+            // an alarm's text that only repeats the title is left out (the editor writes the title there)
+            let sums: Vec<String> = it.attrs.iter().filter(|a| a.0 == "SUMMARY").flat_map(|a| [a.1.clone(), a.2.clone()]).map(|r| crate::domain::ical::unescape(ht::split_value(&r).1)).collect();
+            let titles: Vec<&str> = std::iter::once(it.title.as_str()).chain(sums.iter().map(String::as_str)).collect();
+            let attrs: Vec<Value> = shown
+                .into_iter()
+                .map(|(k, from, to)| {
+                    let (mut f, mut t) = (show.value_in(k, from, &coll_name, &titles), show.value_in(k, to, &coll_name, &titles));
+                    // two versions must never read the same: then show them as written
+                    if f == t && from != to {
+                        (f, t) = (show.raw(from), show.raw(to));
+                    }
+                    json!([k, show.label(k), f, t])
+                })
+                .collect();
             items.push(json!({ "el": el, "kind": it.kind, "act": it.act, "coll": coll, "title": it.title, "attrs": attrs }));
         }
         changes.push(json!({
@@ -147,11 +160,11 @@ fn plan_json(state: &SharedState, lang: &str, tz: chrono_tz::Tz, colls: &HashMap
         "warns": p.warns.iter().map(|w| json!({
             "kind": w.kind, "title": w.title, "by": w.by, "ids": w.ids,
             "label": w.key.as_deref().map(|k| show.label(k)),
-            "cur": w.key.as_deref().zip(w.cur.as_deref()).map(|(k, v)| show.value(k, v, &name)),
-            "old": w.key.as_deref().zip(w.old.as_deref()).map(|(k, v)| show.value(k, v, &name)),
+            "cur": w.key.as_deref().zip(w.cur.as_deref()).map(|(k, v)| show.value_in(k, v, &name, &[w.title.as_str()])),
+            "old": w.key.as_deref().zip(w.old.as_deref()).map(|(k, v)| show.value_in(k, v, &name, &[w.title.as_str()])),
         })).collect::<Vec<_>>(),
         "skips": p.skips,
-        "now": p.now.iter().map(|(el, k, v)| json!([el, k, if k.is_empty() { String::new() } else { show.value(k, v, &name) }])).collect::<Vec<_>>(),
+        "now": p.now.iter().map(|(el, k, v, title)| json!([el, k, if k.is_empty() { String::new() } else { show.value_in(k, v, &name, &[title.as_str()]) }])).collect::<Vec<_>>(),
     })
 }
 

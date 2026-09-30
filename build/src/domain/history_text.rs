@@ -39,6 +39,7 @@ pub fn is_tech(key: &str) -> bool {
     matches!(key, "DTSTAMP" | "LAST-MODIFIED" | "SEQUENCE" | "CREATED" | "ACKNOWLEDGED" | "REV" | "PRODID")
         || key.starts_with("X-MOZ-")
         || key.starts_with("X-APPLE-")
+        || key.starts_with("X-MICROSOFT-")
 }
 
 /// Lines an override is compared without: they change on every write of the series.
@@ -191,12 +192,23 @@ pub fn attrs(store: Store, text: &str) -> BTreeMap<String, String> {
     let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new();
     match store {
         Store::Ab => {
-            for l in events::unfold(text) {
-                let n = vcard_name(&l);
-                if l.is_empty() || matches!(n.as_str(), "BEGIN" | "END" | "VERSION" | "UID") {
+            let lines = events::unfold(text);
+            let group = |l: &str| prop_name(l).rsplit_once('.').map(|(g, _)| g.to_string());
+            // Apple writes a custom label as `itemN.X-ABLabel` next to `itemN.TEL`: it is part of that value
+            let labels: BTreeMap<String, String> = lines.iter().filter(|l| vcard_name(l) == "X-ABLABEL").filter_map(|l| Some((group(l)?, split_value(rest(l)).1.to_string()))).collect();
+            for l in &lines {
+                let n = vcard_name(l);
+                if l.is_empty() || matches!(n.as_str(), "BEGIN" | "END" | "VERSION" | "UID" | "X-ABLABEL") {
                     continue;
                 }
-                m.entry(n).or_default().push(shorten(rest(&l)));
+                let r = match group(l).and_then(|g| labels.get(&g)) {
+                    Some(lab) => {
+                        let (p, v) = split_value(rest(l));
+                        format!("{p};X-HX-LABEL=\"{}\":{v}", lab.replace('"', "'"))
+                    }
+                    None => rest(l).to_string(),
+                };
+                m.entry(n).or_default().push(shorten(&r));
             }
         }
         Store::Cal => {
@@ -293,11 +305,28 @@ pub fn revert(store: Store, current: &str, before: &str, keys: &[String]) -> Str
         Store::Ab => {
             let cur = events::unfold(current);
             let old = events::unfold(before);
+            let group = |l: &str| prop_name(l).rsplit_once('.').map(|(g, _)| g.to_string());
             let mut out: Vec<String> = cur.clone();
+            // a grouped value's Apple label (`itemN.X-ABLabel`) goes and comes with it; the old
+            // lines get fresh group names, so they cannot take over a label of the current text
+            let mut next = out.iter().chain(old.iter()).filter_map(|l| group(l)).filter_map(|g| g.trim_start_matches(|c: char| !c.is_ascii_digit()).parse::<u32>().ok()).max().unwrap_or(0) + 1;
             for k in keys {
                 let pos = out.iter().position(|l| &vcard_name(l) == k);
-                out.retain(|l| &vcard_name(l) != k);
-                let add: Vec<String> = old.iter().filter(|l| &vcard_name(l) == k).cloned().collect();
+                let gone: Vec<String> = out.iter().filter(|l| &vcard_name(l) == k).filter_map(|l| group(l)).collect();
+                out.retain(|l| &vcard_name(l) != k && !(vcard_name(l) == "X-ABLABEL" && group(l).is_some_and(|g| gone.contains(&g))));
+                let mut add: Vec<String> = vec![];
+                for l in old.iter().filter(|l| &vcard_name(l) == k) {
+                    match group(l) {
+                        Some(g) => {
+                            let fresh = format!("item{next}");
+                            next += 1;
+                            let rename = |x: &str| format!("{fresh}{}", &x[g.len()..]);
+                            add.push(rename(l));
+                            add.extend(old.iter().filter(|x| vcard_name(x) == "X-ABLABEL" && group(x).as_deref() == Some(g.as_str())).map(|x| rename(x)));
+                        }
+                        None => add.push(l.clone()),
+                    }
+                }
                 let at = pos.unwrap_or_else(|| out.iter().rposition(|l| prop_name(l) == "END").unwrap_or(out.len())).min(out.len());
                 out.splice(at..at, add);
             }
@@ -485,52 +514,194 @@ impl Show<'_> {
         }
         out
     }
+    fn tr(&self, key: &str, fallback: &str) -> String {
+        let s = (self.t)(key);
+        if s == key { fallback.to_string() } else { s }
+    }
+    /// A code value (STATUS, PARTSTAT, ROLE, …) through `hx-v-<code>`, else as written.
+    fn code(&self, v: &str) -> String {
+        let v = v.trim();
+        self.tr(&format!("hx-v-{}", v.to_ascii_lowercase()), v)
+    }
+    /// TYPE of a vCard line (and an Apple label of its group, folded in by `attrs`), readable.
+    fn kind_of(&self, params: &str) -> Option<String> {
+        let mut out: Vec<String> = vec![];
+        if let Some(l) = param(params, "X-HX-LABEL") {
+            out.push(l.trim_start_matches("_$!<").trim_end_matches(">!$_").to_string());
+        }
+        for t in param(params, "TYPE").into_iter().flat_map(|t| t.split(',')) {
+            let t = t.trim().to_ascii_lowercase();
+            if !t.is_empty() && t != "internet" && t != "pref" && t != "voice" {
+                out.push(self.tr(&format!("hx-t-{t}"), &t));
+            }
+        }
+        if param(params, "PREF").is_some() || param(params, "TYPE").is_some_and(|t| t.to_ascii_lowercase().contains("pref")) {
+            out.push((self.t)("hx-t-pref"));
+        }
+        (!out.is_empty()).then(|| out.join(", "))
+    }
+    /// A person line (ATTENDEE/ORGANIZER; vCard RELATED): name, address, and what the invitation says.
+    fn person(&self, key: &str, params: &str, v: &str) -> String {
+        let addr = v.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:");
+        let mut out = match param(params, "CN") {
+            Some(cn) if !addr.is_empty() && !cn.eq_ignore_ascii_case(addr) => format!("{cn} <{addr}>"),
+            Some(cn) => cn.to_string(),
+            None => addr.to_string(),
+        };
+        let mut marks = vec![];
+        if key == "ATTENDEE" {
+            if let Some(ps) = param(params, "PARTSTAT") {
+                marks.push(self.code(ps));
+            }
+            if let Some(r) = param(params, "ROLE").filter(|r| !r.eq_ignore_ascii_case("REQ-PARTICIPANT")) {
+                marks.push(self.code(r));
+            }
+            if let Some(c) = param(params, "CUTYPE").filter(|c| !c.eq_ignore_ascii_case("INDIVIDUAL")) {
+                marks.push(self.code(c));
+            }
+        }
+        if !marks.is_empty() {
+            out = format!("{out} ({})", marks.join(", "));
+        }
+        out
+    }
     /// One line (`;PARAMS:value`) of `key`, readable.
     fn line(&self, key: &str, line: &str) -> String {
         let (params, v) = split_value(line);
         let text = || ical::unescape(v).trim().to_string();
         let parts = || v.split(';').map(|x| ical::unescape(x).trim().to_string()).filter(|x| !x.is_empty()).collect::<Vec<_>>();
+        let typed = |s: String| match self.kind_of(params) {
+            Some(k) => format!("{s} ({k})"),
+            None => s,
+        };
         match key {
-            "DTSTART" | "DTEND" | "DUE" | "COMPLETED" | "RECURRENCE-ID" | "ACKNOWLEDGED" | "X-MOZ-LASTACK" => self.when(params, v),
-            "EXDATE" | "RDATE" => v.split(',').map(|x| self.when(params, x)).collect::<Vec<_>>().join(", "),
+            "DTSTART" | "DTEND" | "DUE" | "COMPLETED" | "RECURRENCE-ID" | "ACKNOWLEDGED" | "X-MOZ-LASTACK" | "CREATED" | "LAST-MODIFIED" | "DTSTAMP" => self.when(params, v),
+            "EXDATE" | "RDATE" => v.split(',').map(|x| self.when(params, x)).collect::<Vec<_>>().join("\n"),
             "BDAY" | "ANNIVERSARY" | "DEATHDATE" => crate::domain::contacts::fmt_partial(v),
+            "X-ABDATE" => typed(crate::domain::contacts::fmt_partial(v)),
             "RRULE" => self.rrule(v),
             "DURATION" => self.amount(self.dur(v).1),
-            "ATTENDEE" | "ORGANIZER" => param(params, "CN").map(str::to_string).unwrap_or_else(|| v.trim_start_matches("mailto:").trim_start_matches("MAILTO:").to_string()),
-            "CATEGORIES" => ical::split_list(v).join(", "),
-            "ADR" | "N" | "ORG" => {
-                let mut p = parts();
-                if key == "N" {
-                    p.reverse();
-                }
-                p.join(if key == "ADR" { ", " } else { " " })
+            "ATTENDEE" | "ORGANIZER" => self.person(key, params, v),
+            "RELATED" | "X-ABRELATEDNAMES" => typed(text().trim_start_matches("urn:uuid:").to_string()),
+            "CATEGORIES" | "RESOURCES" | "NICKNAME" => ical::split_list(v).join("\n"),
+            "ADR" => typed(parts().join(", ")),
+            "N" => {
+                // family;given;additional;prefix;suffix → prefix given additional family suffix
+                let f: Vec<String> = v.split(';').map(|x| ical::unescape(x).trim().to_string()).collect();
+                let at = |i: usize| f.get(i).cloned().unwrap_or_default();
+                [at(3), at(1), at(2), at(0), at(4)].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" ")
             }
+            "ORG" => parts().join(" · "),
+            "GEO" => v.replace(';', ", "),
             "PRIORITY" => match v.trim().parse::<u8>() {
-                Ok(1..=4) => (self.t)("hx-prio-high"),
+                Ok(1..=4) => format!("{} ({})", (self.t)("hx-prio-high"), v.trim()),
                 Ok(5) => (self.t)("hx-prio-mid"),
-                Ok(6..=9) => (self.t)("hx-prio-low"),
-                _ => "–".into(),
+                Ok(6..=9) => format!("{} ({})", (self.t)("hx-prio-low"), v.trim()),
+                _ => (self.t)("hx-prio-none"),
             },
             "PERCENT-COMPLETE" => format!("{} %", v.trim()),
-            "STATUS" | "CLASS" | "TRANSP" => {
-                let k = format!("hx-v-{}", v.trim().to_ascii_lowercase());
-                let s = (self.t)(&k);
-                if s == k { text() } else { s }
-            }
-            "ATTACH" => param(params, "FILENAME").or(param(params, "X-FILENAME")).map(str::to_string).unwrap_or_else(|| if v == "…" { (self.t)("hx-file") } else { text() }),
-            "PHOTO" | "LOGO" | "SOUND" => (self.t)("hx-file"),
-            "TEL" | "EMAIL" | "URL" | "IMPP" => {
-                let ty = param(params, "TYPE").map(|t| t.to_ascii_lowercase());
-                match ty {
-                    Some(t) if !t.is_empty() => format!("{} ({})", text(), t.replace(',', ", ")),
-                    _ => text(),
+            "STATUS" | "CLASS" | "TRANSP" | "ACTION" | "PROXIMITY" | "KIND" | "GENDER" => self.code(v),
+            "ATTACH" | "IMAGE" | "SOUND" | "PHOTO" | "LOGO" => {
+                let name = param(params, "FILENAME").or(param(params, "X-FILENAME")).map(str::to_string);
+                let binary = v == "…" || v.starts_with("data:");
+                match (name, binary) {
+                    (Some(n), _) => n,
+                    (None, true) => match param(params, "FMTTYPE") {
+                        Some(t) => format!("{} ({t})", (self.t)("hx-file")),
+                        None => (self.t)("hx-file"),
+                    },
+                    (None, false) => text(),
                 }
+            }
+            "CONFERENCE" => match param(params, "LABEL") {
+                Some(l) => format!("{l}: {}", text()),
+                None => text(),
+            },
+            "RELATED-TO" => {
+                let rel = param(params, "RELTYPE").unwrap_or("PARENT");
+                format!("{}: {}", self.code(rel), text())
+            }
+            "TEL" => typed(text().trim_start_matches("tel:").to_string()),
+            "EMAIL" | "URL" | "X-SOCIALPROFILE" => typed(text().trim_start_matches("mailto:").to_string()),
+            "IMPP" => {
+                let svc = param(params, "X-SERVICE-TYPE").map(str::to_string);
+                let s = text();
+                typed(match svc {
+                    Some(x) => format!("{x}: {s}"),
+                    None => s,
+                })
+            }
+            // formatted copies of the note: their text without markup
+            "X-ALT-DESC" | "STYLED-DESCRIPTION" => {
+                let t = text();
+                let mut out = String::new();
+                let mut tag = false;
+                for c in t.chars() {
+                    match c {
+                        '<' => tag = true,
+                        '>' => tag = false,
+                        c if !tag => out.push(c),
+                        _ => {}
+                    }
+                }
+                out.trim().to_string()
             }
             _ => text(),
         }
     }
-    /// A recorded value of `key` (see `attrs`), readable; "" stays "".
-    pub fn value(&self, key: &str, raw: &str, colls: &(dyn Fn(&str) -> String + Sync)) -> String {
+    /// One alarm block (lines of `BEGIN:VALARM` … `END:VALARM`): when, how, and the rest of it.
+    fn alarm(&self, block: &str, titles: &[&str]) -> (i64, String) {
+        let lines: Vec<&str> = block.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        let get = |n: &str| lines.iter().find(|l| prop_name(l) == n).map(|l| split_value(rest(l)));
+        let all = |n: &str| lines.iter().filter(|l| prop_name(l) == n).map(|l| split_value(rest(l))).collect::<Vec<_>>();
+        let (when, order) = match get("TRIGGER") {
+            Some((p, v)) if v.len() >= 15 && v.contains('T') && !v.starts_with(['-', '+', 'P']) || param(p, "VALUE").is_some_and(|x| x.eq_ignore_ascii_case("DATE-TIME")) => (self.when(p, v), i64::MIN),
+            Some((p, v)) => {
+                let (neg, m) = self.dur(v);
+                let s = self.offset(v);
+                let end = param(p, "RELATED").is_some_and(|r| r.eq_ignore_ascii_case("END"));
+                (if end { format!("{s} ({})", (self.t)("hx-al-end")) } else { s }, if neg { m } else { -m })
+            }
+            None => ((self.t)("hx-alarm"), 0),
+        };
+        let mut out = vec![when];
+        let action = get("ACTION").map(|(_, v)| v.trim()).unwrap_or("DISPLAY");
+        out.push(self.tr(&format!("hx-v-action-{}", action.to_ascii_lowercase()), action));
+        let to: Vec<String> = all("ATTENDEE").iter().map(|(p, v)| self.person("ORGANIZER", p, v)).collect();
+        if !to.is_empty() {
+            out.push((self.t)("hx-al-to").replace("%who", &to.join(", ")));
+        }
+        for n in ["SUMMARY", "DESCRIPTION"] {
+            if let Some((_, v)) = get(n) {
+                let t = ical::unescape(v).trim().to_string();
+                if !t.is_empty() && !titles.contains(&t.as_str()) {
+                    out.push(format!("„{t}“"));
+                }
+            }
+        }
+        if let Some((_, r)) = get("REPEAT") {
+            let every = get("DURATION").map(|(_, d)| self.amount(self.dur(d).1)).unwrap_or_default();
+            out.push((self.t)("hx-al-repeat").replace("%n", r.trim()).replace("%every", &every));
+        }
+        for (p, v) in all("ATTACH") {
+            out.push(self.line("ATTACH", &format!("{p}:{v}")));
+        }
+        if let Some((_, v)) = get("PROXIMITY") {
+            out.push(self.tr(&format!("hx-v-prox-{}", v.trim().to_ascii_lowercase()), v.trim()));
+        }
+        // anything else of the alarm (X-…, UID, RELATED-TO): named, so a change of it shows
+        for l in &lines {
+            let n = prop_name(l);
+            if !matches!(n.as_str(), "BEGIN" | "END" | "TRIGGER" | "ACTION" | "ATTENDEE" | "SUMMARY" | "DESCRIPTION" | "REPEAT" | "DURATION" | "ATTACH" | "PROXIMITY" | "UID" | "X-WR-ALARMUID") {
+                out.push(format!("{n}: {}", ical::unescape(split_value(rest(l)).1)));
+            }
+        }
+        (order, out.join(" · "))
+    }
+    /// A recorded value of `key` (see `attrs`), readable; "" stays "". Several values (lines,
+    /// alarms, attendees, list items) come one per line, so the page can show which ones changed.
+    /// `titles`: the element's titles, which an alarm's text only repeats.
+    pub fn value_in(&self, key: &str, raw: &str, colls: &(dyn Fn(&str) -> String + Sync), titles: &[&str]) -> String {
         if raw.is_empty() {
             return String::new();
         }
@@ -538,31 +709,39 @@ impl Show<'_> {
             return colls(raw);
         }
         if key == "VALARM" {
-            // one entry per alarm: its trigger
-            return raw.split("BEGIN:VALARM").filter(|b| !b.trim().is_empty()).map(|b| {
-                b.lines().find(|l| prop_name(l) == "TRIGGER").map(|l| {
-                    let (p, v) = split_value(rest(l));
-                    if v.len() >= 15 && v.contains('T') && !v.starts_with(['-', '+', 'P']) { self.when(p, v) } else {
-                        let s = self.offset(v);
-                        if param(p, "RELATED").is_some_and(|r| r.eq_ignore_ascii_case("END")) { format!("{s} ({})", (self.t)("hx-al-end")) } else { s }
-                    }
-                }).unwrap_or_else(|| (self.t)("hx-alarm"))
-            }).collect::<Vec<_>>().join(", ");
+            let mut al: Vec<(i64, String)> = raw.split("BEGIN:VALARM").filter(|b| !b.trim().is_empty()).map(|b| self.alarm(b, titles)).collect();
+            al.sort();
+            return al.into_iter().map(|a| a.1).collect::<Vec<_>>().join("\n");
         }
         if key.starts_with("RECURRENCE-ID:") {
-            // an override: its start and title
+            // an override: its start, end, title, place, status — what makes it differ from the series
             let lines: Vec<&str> = raw.lines().collect();
-            let get = |n: &str| lines.iter().find(|l| prop_name(l) == n).map(|l| rest(l));
-            let start = get("DTSTART").map(|r| self.line("DTSTART", r)).unwrap_or_default();
-            let sum = get("SUMMARY").map(|r| self.line("SUMMARY", r)).unwrap_or_default();
-            return [start, sum].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+            let mut out = vec![];
+            for n in ["DTSTART", "DTEND", "SUMMARY", "LOCATION", "STATUS", "DESCRIPTION"] {
+                if let Some(l) = lines.iter().find(|l| prop_name(l) == n) {
+                    let v = self.line(n, rest(l));
+                    if !v.is_empty() {
+                        out.push(if n == "DTSTART" || n == "SUMMARY" { v } else { format!("{}: {v}", self.label(n)) });
+                    }
+                }
+            }
+            return out.join(" · ");
         }
-        if key.starts_with('V') && raw.starts_with("BEGIN:") {
-            return (self.t)("hx-component");
+        if raw.starts_with("BEGIN:") {
+            // another sub-component (VLOCATION, PARTICIPANT, …): its lines
+            return raw.lines().filter(|l| !matches!(prop_name(l).as_str(), "BEGIN" | "END" | "UID")).map(|l| format!("{}: {}", prop_name(l), ical::unescape(split_value(rest(l)).1))).collect::<Vec<_>>().join(" · ");
         }
         let vals: Vec<String> = raw.split('\n').map(|l| self.line(key, l)).filter(|s| !s.is_empty()).collect();
-        let s = vals.join(if matches!(key, "DESCRIPTION" | "NOTE") { "\n" } else { ", " });
-        if s.chars().count() > 600 { format!("{}…", s.chars().take(600).collect::<String>()) } else { s }
+        let s = vals.join("\n");
+        if s.chars().count() > 1200 { format!("{}…", s.chars().take(1200).collect::<String>()) } else { s }
+    }
+    pub fn value(&self, key: &str, raw: &str, colls: &(dyn Fn(&str) -> String + Sync)) -> String {
+        self.value_in(key, raw, colls, &[])
+    }
+    /// The recorded value as written (parameters included), for when the readable ones of two
+    /// different versions read the same (a changed parameter the reading leaves out).
+    pub fn raw(&self, raw: &str) -> String {
+        raw.lines().map(|l| ical::unescape(l.trim_start_matches(':'))).collect::<Vec<_>>().join("\n")
     }
     /// The label of an attribute key.
     pub fn label(&self, key: &str) -> String {
@@ -572,9 +751,7 @@ impl Show<'_> {
         if let Some(r) = key.strip_prefix("RECURRENCE-ID:") {
             return (self.t)("hx-a-override").replace("%date", &self.when("", r));
         }
-        let k = format!("hx-a-{}", key.to_ascii_lowercase());
-        let s = (self.t)(&k);
-        if s == k { key.to_string() } else { s }
+        self.tr(&format!("hx-a-{}", key.to_ascii_lowercase()), key)
     }
 }
 
@@ -658,7 +835,7 @@ mod tests {
         let a = attrs(Store::Ab, &after);
         assert_eq!(a["TEL"], ";TYPE=cell:+49 160 2");
         let out = revert(Store::Ab, &current, v, &["TEL".into()]);
-        assert!(out.contains("item1.TEL;TYPE=cell:+49 170 1") && out.contains("NOTE:neu") && out.contains("REV:"), "{out}");
+        assert!(out.contains(".TEL;TYPE=cell:+49 170 1") && out.contains("NOTE:neu") && out.contains("REV:"), "{out}");
     }
 
     #[test]
@@ -670,16 +847,107 @@ mod tests {
             "hx-rr-weekly" => "wöchentlich".into(),
             "hx-rr-until" => "bis %date".into(),
             "dow-3" => "Mi".into(),
+            "hx-v-action-display" => "Anzeige".into(),
+            "hx-v-accepted" => "zugesagt".into(),
             other => other.to_string(),
         };
         let s = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
         let none = |x: &str| x.to_string();
         assert_eq!(s.value("DTSTART", ";TZID=Europe/Berlin:20261006T100000", &none), "Di 6.10.2026 10:00");
         assert_eq!(s.value("DTSTART", ":20261006T080000Z", &none), "Di 6.10.2026 10:00");
-        assert_eq!(s.value("VALARM", "BEGIN:VALARM\nACTION:DISPLAY\nTRIGGER:-PT1H\nEND:VALARM", &none), "1 Std. vorher");
+        assert_eq!(s.value("VALARM", "BEGIN:VALARM\nACTION:DISPLAY\nTRIGGER:-PT1H\nEND:VALARM", &none), "1 Std. vorher · Anzeige");
         assert_eq!(s.value("RRULE", ":FREQ=WEEKLY;BYDAY=WE;UNTIL=20261216T225900Z", &none), "wöchentlich, Mi, bis Mi 16.12.2026 23:59");
-        assert_eq!(s.value("ATTENDEE", ";CN=Anna:mailto:a@x\n;CN=Ben:mailto:b@x", &none), "Anna, Ben");
+        assert_eq!(s.value("ATTENDEE", ";CN=Anna:mailto:a@x\n;CN=Ben;PARTSTAT=ACCEPTED:mailto:b@x", &none), "Anna <a@x>\nBen <b@x> (zugesagt)");
         assert_eq!(device(Some("-//Apple Inc.//iOS 26.0//EN")).as_deref(), Some("Apple iOS"));
         assert_eq!(device(Some("-//Acme Corp//Planner 3//EN")).as_deref(), Some("Acme Corp Planner 3"));
+    }
+
+    /// Every attribute a version can differ in reads differently before and after: each property
+    /// the full demo event carries is edited once (alarm kind, trigger, attendee answer, …) and the
+    /// changed attribute must show both a label of its own and two different readable values.
+    #[test]
+    fn every_edit_of_the_full_event_reads_differently() {
+        let i18n = crate::i18n::I18n::load();
+        let t = |k: &str| i18n.t("de", k);
+        let show = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
+        let none = |x: &str| x.to_string();
+        let base = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/demo-event-full.ics")).unwrap().replace("\r\n", "\n");
+        let a = attrs(Store::Cal, &base);
+        // every attribute has a label of its own (technical ones included, X- ones of other apps may not)
+        for k in a.keys() {
+            let l = show.label(k);
+            assert!(l != *k || k.starts_with("X-") || k.starts_with("RECURRENCE-ID:"), "no label for {k}");
+            assert!(!show.value(k, &a[k], &none).is_empty() || a[k].is_empty(), "no value for {k}");
+        }
+        let edits: &[(&str, &str)] = &[
+            ("ACTION:DISPLAY\nTRIGGER:-PT15M", "ACTION:AUDIO\nTRIGGER:-PT15M"),
+            ("ACTION:DISPLAY\nTRIGGER:-PT15M", "ACTION:EMAIL\nTRIGGER:-PT15M"),
+            ("TRIGGER:-PT15M", "TRIGGER:-PT20M"),
+            ("REPEAT:2", "REPEAT:3"),
+            ("PROXIMITY:DEPART", "PROXIMITY:ARRIVE"),
+            ("PARTSTAT=ACCEPTED;RSVP=TRUE;CUTYPE=INDIVIDUAL", "PARTSTAT=DECLINED;RSVP=TRUE;CUTYPE=INDIVIDUAL"),
+            ("ROLE=OPT-PARTICIPANT", "ROLE=REQ-PARTICIPANT"),
+            ("LABEL=Videocall", "LABEL=Telefon"),
+            ("RELTYPE=PARENT", "RELTYPE=SIBLING"),
+            ("GEO:51.050407;13.737262", "GEO:51.1;13.8"),
+            ("EXDATE;TZID=Europe/Berlin:20261006T190000", "EXDATE;TZID=Europe/Berlin:20261013T190000"),
+            ("RESOURCES:Beamer,Flipchart", "RESOURCES:Beamer"),
+            ("CONTACT:Kasse", "CONTACT:Abendkasse"),
+            ("URL:https://www.kulturpalast", "URL:https://www.semperoper"),
+            ("ATTACH:https://example.org/programm.pdf", "ATTACH:https://example.org/programm-2.pdf"),
+            ("COLOR:tomato", "COLOR:red"),
+            ("CLASS:PRIVATE", "CLASS:CONFIDENTIAL"),
+            ("TRANSP:OPAQUE", "TRANSP:TRANSPARENT"),
+            ("STATUS:CONFIRMED", "STATUS:CANCELLED"),
+            ("PRIORITY:5", "PRIORITY:1"),
+        ];
+        for (from, to) in edits {
+            assert!(base.contains(from), "fixture lacks {from:?}");
+            let b = attrs(Store::Cal, &base.replacen(from, to, 1));
+            let d: Vec<_> = diff(&a, &b).into_iter().filter(|(k, _, _)| !k.starts_with("X-OLD-")).collect();
+            assert!(!d.is_empty(), "{from:?}: no difference found");
+            for (k, x, y) in d {
+                assert_ne!(show.value_in(&k, &x, &none, &["Demo"]), show.value_in(&k, &y, &none, &["Demo"]), "{from:?} → {to:?}: {k} reads the same");
+            }
+        }
+    }
+
+    #[test]
+    fn every_edit_of_a_contact_reads_differently() {
+        let i18n = crate::i18n::I18n::load();
+        let t = |k: &str| i18n.t("de", k);
+        let show = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
+        let none = |x: &str| x.to_string();
+        let v = "BEGIN:VCARD\nVERSION:3.0\nUID:c1\nN:Weber;Jana;;Dr.;\nFN:Dr. Jana Weber\nitem1.TEL;TYPE=CELL:+49 170 1\nitem1.X-ABLabel:Dienst\nEMAIL;TYPE=HOME:jana@example.org\nADR;TYPE=HOME:;;Lindenweg 7;Zwickau;;08056;DE\nBDAY:1988-03-14\nitem2.X-ABDATE:2010-06-01\nitem2.X-ABLabel:_$!<Anniversary>!$_\nRELATED;TYPE=spouse:Max\nIMPP;X-SERVICE-TYPE=Signal:signal:+49170\nORG:Praxis;Empfang\nNOTE:alt\nEND:VCARD\n";
+        let a = attrs(Store::Ab, v);
+        for k in a.keys() {
+            assert_ne!(show.label(k), *k, "no label for {k}");
+        }
+        assert_eq!(show.value("TEL", &a["TEL"], &none), "+49 170 1 (Dienst, mobil)");
+        let edits: &[(&str, &str)] = &[
+            ("TYPE=CELL:+49 170 1", "TYPE=WORK:+49 170 1"),
+            ("X-ABLabel:Dienst", "X-ABLabel:Privat"),
+            ("TYPE=HOME:jana", "TYPE=WORK:jana"),
+            ("Lindenweg 7", "Lindenweg 9"),
+            ("N:Weber;Jana;;Dr.;", "N:Weber;Jana;;Prof.;"),
+            ("BDAY:1988-03-14", "BDAY:1988-03-15"),
+            ("X-ABDATE:2010-06-01", "X-ABDATE:2011-06-01"),
+            ("TYPE=spouse", "TYPE=child"),
+            ("X-SERVICE-TYPE=Signal", "X-SERVICE-TYPE=Threema"),
+            ("ORG:Praxis;Empfang", "ORG:Praxis;Labor"),
+        ];
+        for (from, to) in edits {
+            assert!(v.contains(from), "fixture lacks {from:?}");
+            let b = attrs(Store::Ab, &v.replacen(from, to, 1));
+            let d = diff(&a, &b);
+            assert!(!d.is_empty(), "{from:?}: no difference found");
+            for (k, x, y) in d {
+                assert_ne!(show.value(&k, &x, &none), show.value(&k, &y, &none), "{from:?} → {to:?}: {k} reads the same");
+            }
+        }
+        // the label travels with its number when that is undone
+        let after = v.replace("item1.TEL;TYPE=CELL:+49 170 1\nitem1.X-ABLabel:Dienst\n", "");
+        let back = revert(Store::Ab, &after, v, &["TEL".into()]);
+        assert_eq!(attrs(Store::Ab, &back)["TEL"], a["TEL"], "{back}");
     }
 }

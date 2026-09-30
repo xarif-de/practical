@@ -89,8 +89,19 @@
     const it = c.items[0];
     return it.attrs.map(([k, label, from, to]) => ({ k: label, key: k, from, to, act: it.act }));
   };
+  // several values (one per line: alarms, attendees, numbers …): which went, which came, which stayed
+  const lines = v => v ? v.split('\n') : [];
+  const lineDiff = (from, to) => {
+    const a = lines(from), b = lines(to), gone = a.filter(x => !b.includes(x)), came = b.filter(x => !a.includes(x)), kept = a.filter(x => b.includes(x));
+    return {
+      inline: [...gone.map(x => `<del>${esc(x)}</del>`), ...came.map(x => `<ins>${esc(x)}</ins>`), ...kept.map(x => `<span class="hx-kept">${esc(x)}</span>`)].join(''),
+      before: a.map(x => b.includes(x) ? `<span class="hx-kept">${esc(x)}</span>` : `<del>${esc(x)}</del>`).join('') || `<span class="muted">${esc(S('empty'))}</span>`,
+      after: b.map(x => a.includes(x) ? `<span class="hx-kept">${esc(x)}</span>` : `<ins>${esc(x)}</ins>`).join('') || `<span class="muted">${esc(S('empty'))}</span>`,
+    };
+  };
+  const multi = r => (r.from || '').includes('\n') || (r.to || '').includes('\n');
   const diff = (c, max) => `<div class="hx-diff">` + diffRows(c, max).map(r => r.more ? `<div class="hx-dr"><span class="k"></span><span class="hx-dv muted">${esc(tr('more', { n: r.more }))}</span></div>` :
-    `<div class="hx-dr"><span class="k">${esc(r.k)}</span><span class="hx-dv">${r.act === 'update' || r.act === 'move' ? `${r.from ? `<del>${esc(r.from)}</del>` : `<span class="muted">${esc(S('empty'))}</span>`}<span class="ar">→</span>${r.to ? `<ins>${esc(r.to)}</ins>` : `<span class="muted">${esc(S('empty'))}</span>`}`
+    `<div class="hx-dr"><span class="k">${esc(r.k)}</span><span class="hx-dv${multi(r) ? ' hx-lines' : ''}">${(r.act === 'update' || r.act === 'move') && multi(r) ? lineDiff(r.from, r.to).inline : r.act === 'update' || r.act === 'move' ? `${r.from ? `<del>${esc(r.from)}</del>` : `<span class="muted">${esc(S('empty'))}</span>`}<span class="ar">→</span>${r.to ? `<ins>${esc(r.to)}</ins>` : `<span class="muted">${esc(S('empty'))}</span>`}`
       : r.act === 'delete' ? (r.from ? `<del>${esc(r.from)}</del>` : `<span class="muted">${esc(actWord('delete'))}</span>`) : (r.to ? `<ins>${esc(r.to)}</ins>` : `<span class="muted">${esc(actWord(r.act))}</span>`)}</span></div>`).join('') + '</div>';
   const statusTag = c => {
     const own = c.reverts ? `<span class="hx-st rev">${ico('i-restore')}${tr('st-reverts', { ref: ref(c.reverts) })}</span>` : '';
@@ -404,7 +415,11 @@
         const cur = !e.exists ? null : k === 'X-HX-COLL' ? coll(e.coll).name : p && nowOf(it.el, k) === undefined ? to : nowOf(it.el, k);
         const cls = cur === null ? 'hxc-vg' : cur === undefined || cur === to ? 'hxc-vn' : 'hxc-vx';
         const txt = cur === null ? esc(actWord('delete')) : cur === undefined ? '<span class="muted">…</span>' : cur === to ? `<span class="muted">${esc(S('same-as-after'))}</span>` : esc(cur || S('empty'));
-        return `<tr><th>${esc(label)}</th><td class="hxc-vb">${from ? `<del>${esc(from)}</del>` : `<span class="muted">${esc(S('empty'))}</span>`}</td><td class="hxc-va">${to ? `<ins>${esc(to)}</ins>` : `<span class="muted">${esc(S('empty'))}</span>`}</td><td class="${cls}">${txt}</td></tr>`;
+        const ld = (from || '').includes('\n') || (to || '').includes('\n') ? lineDiff(from, to) : null;
+        // a cell stays a table cell: the one-per-line values get a box of their own
+        const before = ld ? `<div class="hx-lines">${ld.before}</div>` : from ? `<del>${esc(from)}</del>` : `<span class="muted">${esc(S('empty'))}</span>`;
+        const after = ld ? `<div class="hx-lines">${ld.after}</div>` : to ? `<ins>${esc(to)}</ins>` : `<span class="muted">${esc(S('empty'))}</span>`;
+        return `<tr><th>${esc(label)}</th><td class="hxc-vb">${before}</td><td class="hxc-va">${after}</td><td class="${cls}">${txt}</td></tr>`;
       }).join('')}</tbody></table>`;
     }
     function preview(c, p) {

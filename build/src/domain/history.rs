@@ -529,8 +529,8 @@ enum Op {
 }
 
 pub struct Plan {
-    /// (element, key, value now) of the attributes the change edited; the element gone: key ""
-    pub now: Vec<(String, String, String)>,
+    /// (element, key, value now, title) of the attributes the change edited; the element gone: key ""
+    pub now: Vec<(String, String, String, String)>,
     pub ok: bool,
     /// the undo is blocked for this reason (nothing it could do)
     pub why: Option<&'static str>,
@@ -618,7 +618,7 @@ pub async fn plan(state: &AppState, user: &Principal, c: &Change, all: &[Change]
             }
             _ => {
                 let Some(now) = now else {
-                    nows.push((it.el(), String::new(), String::new()));
+                    nows.push((it.el(), String::new(), String::new(), it.title.clone()));
                     skips.push(skip("gone", gone_by()));
                     continue;
                 };
@@ -631,7 +631,7 @@ pub async fn plan(state: &AppState, user: &Principal, c: &Change, all: &[Change]
                 let mut keys = vec![];
                 for (k, old, new) in ht::diff(&b, &a) {
                     let cur = n.get(&k).cloned().unwrap_or_default();
-                    nows.push((it.el(), k.clone(), cur.clone()));
+                    nows.push((it.el(), k.clone(), cur.clone(), it.title.clone()));
                     if cur == old || ht::is_tech(&k) && !c.tech {
                         continue;
                     }

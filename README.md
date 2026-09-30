@@ -243,7 +243,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   change (`reverts`, the undone one gets `undone_by`): an edit puts back only the attributes it touched
   (3-way: a value changed later → warning, needs confirm, then overwritten); undoing a create deletes
   and makes later changes `inactive_by` it (undoing that undo reactivates them); a delete restores from
-  the stored version (also after RustiCal's trash purge). Visible/undoable: collections of the user and
+  the stored version (also after RustiCal's trash purge). Values read like the editor (`history_text::Show`): an alarm = when · kind (display/sound/e-mail) · recipients · own text · repeat · sound · proximity; an attendee = name <address> (answer, role, type); vCard values with TYPE and Apple label; several values one per line, the page marks which went/came/stayed; two versions that read the same are shown as written (tests edit every property of the full demo event and a contact). Visible/undoable: collections of the user and
   their groups. Views: line map (default; one line per element, stops = changes, undo arcs) and list
   with details (before/after/today, undo preview, the element's history, day ruler). Kept
   `HISTORY_RETENTION_DAYS` (purge hourly with the trash purger).
