@@ -2689,7 +2689,7 @@
   const setSel = i => { sel = i; $$('[data-i]', box).forEach(el => el.classList.toggle('on', +el.dataset.i === sel)); const el = $(`[data-i="${sel}"]`, box); if (el) el.scrollIntoView({ block: 'nearest' }); };
   function draw() {
     const v = q.value, d = data, ws = d ? wordsOf(v, d.scope) : [];
-    items = []; let h = '';
+    items = []; let h = '', allSum = null;
     const add = (it, inner, cls = '') => { items.push(it); return `<a class="r${cls}" href="${esc(it.href || '#')}" data-i="${items.length - 1}" role="option">${inner}</a>`; };
     if (d && v.trim()) {
       if (d.scope) { const c = CATS.find(c => c[0] === d.scope); h += `<div class="sscope">${ico('filter')}${esc(tr('js-search-only', { what: c[2] }))}</div>`; }
@@ -2701,14 +2701,16 @@
         d[k].slice(0, n[k]).forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + whySm(x), x.completed ? ' done' : ''); });
       }
       const sum = CATS.reduce((a, [, k]) => a + tot[k], 0);
-      if (CATS.some(([, k]) => n[k] < tot[k])) h += add({ all: true }, `<span class="ic">${ico('list')}</span><b>${esc(T.all)} (${sum})</b><small>Enter</small>`, ' more');
       if (!sum && !d.jump) h += `<div class="none">${esc(T.none)}</div>`;
+      allSum = sum;
     }
     const hs = histFor(v).slice(0, v.trim() ? 3 : 6);
     if (hs.length) {
       h += `<h5>${esc(T.hist)}</h5>`;
       hs.forEach(e => { h += add({ hist: e }, `<span class="ic">${ico('history')}</span><b>${hl(e.q, wordsOf(v))}</b><small>${e.target ? esc(e.target.label || '') : ''}</small><button type="button" class="hx" data-hdel="${e.id}" title="${esc(T.histRm)}" aria-label="${esc(T.histRm)}">${ico('x')}</button>`, ' hist'); });
     }
+    // always there with a query, pinned to the foot: the dialog also says why each hit was found
+    if (allSum !== null) h += add({ all: true }, `<span class="ic">${ico('list')}</span><b>${esc(T.all)} (${allSum})</b><small>Enter</small>`, ' more');
     box.innerHTML = h; box.hidden = !h; sel = -1;
     drawGhost();
   }

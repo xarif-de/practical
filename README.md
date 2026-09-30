@@ -209,7 +209,7 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   best → keep down to 15 %. Ranking adds the nearness of the next (else last) occurrence for events (one hit per series,
   "n events"), openness and due date for tasks. Prefixes `termin:`/`event:`, `kontakt:`/`contact:`,
   `aufgabe:`/`task:` (+ fr/es) narrow to one kind; a date query adds "jump to". Drop-down: ≤ 5 per kind,
-  ≤ 10 in all, split by each kind's share of the matches; "All results" / Enter opens a dialog with ≤ 200 per
+  ≤ 10 in all, split by each kind's share of the matches; "Details / All results" (always there with a query, pinned to the drop-down's foot) / Enter opens a dialog with ≤ 200 per
   kind and kind tabs; ↑↓ Enter Esc, `/` and Ctrl/⌘ K focus, <mark> on matches; an info button explains it.
   A pick keeps the view on screen where it can show the hit: calendar day/week/month/year (else the day
   view), contacts list/table (else the list; `/contacts#key` always opens the list), tasks
