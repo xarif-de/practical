@@ -2650,8 +2650,16 @@
     } else if (t.kind === 'contact') { if (window.rusticalContacts) { history.replaceState(null, '', '#' + t.key); window.rusticalContacts.reveal(t.key); } else location.href = '/contacts#' + t.key; }
     else if (window.rusticalTasks) window.rusticalTasks.reveal(t.key); else location.href = `/tasks?view=groups${t.done ? '&back=all' : ''}#${encodeURIComponent(t.key)}`;
   }
-  // why a hit was found (the dialog): the matched fields the row does not show anyway
-  const why = (x, ws) => x.why && x.why.length ? `<span class="why">${esc(T.why)} ${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws)}</span>`).join('')}</span>` : '';
+  // why a hit was found (domain::search Why): per field its text around the match and how each word matched
+  const how = h => h.k === 'typo' ? tr('js-search-k-typo', { m: h.m }) : tr('js-search-k-' + h.k);
+  const typos = x => (x.why || []).flatMap(w => w.hits.filter(h => h.m).map(h => fold(h.m)));
+  const why = (x, ws) => x.why && x.why.length ? `<span class="why"><b>${esc(T.why)}</b>${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws.concat(typos(x)))} <i>(${esc(w.hits.map(h => (h.k === 'date' ? '' : '„' + h.w + '“ ') + how(h)).join(', '))})</i></span>`).join('')}</span>` : '';
+  // the drop-down's short form: only what the row does not show — a field it hides, a typo
+  const whySm = x => {
+    const v = (x.why || []).filter(w => (!w.shown || w.hits.some(h => h.k === 'typo')) && !w.hits.some(h => h.k === 'date'))
+      .map(w => { const t = w.hits.find(h => h.k === 'typo'); return esc(tr('js-search-f-' + w.f)) + (t ? ' ≈ ' + esc(t.m) : ''); });
+    return v.length ? `<span class="why sm">${ico('info')}${v.join(' · ')}</span>` : '';
+  };
   function row(kind, x, ws) {
     if (kind === 'jump') return `<span class="ic">⇢</span><b>${esc(T.jump)} ${esc(x.label)}</b><small>${day(x.date)}</small>`;
     if (kind === 'event') return `<span class="sw" style="--c:${esc(x.color)}"></span><b>${hl(x.summary, ws)}</b><small>${day(x.date)}${x.time ? ' · ' + esc(x.time) : ''} · ${esc(x.cal_name)}${x.count > 1 ? ' · ' + ico('repeat') + esc(tr('js-search-series', { n: x.count })) : ''}</small>`;
@@ -2684,7 +2692,7 @@
       for (const [kind, k, label] of CATS) {
         if (!n[k]) continue;
         h += `<h5>${esc(label)}<span>${n[k] < tot[k] ? esc(tr('js-search-of', { n: n[k], total: tot[k] })) : tot[k]}</span></h5>`;
-        d[k].slice(0, n[k]).forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws), x.completed ? ' done' : ''); });
+        d[k].slice(0, n[k]).forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + whySm(x), x.completed ? ' done' : ''); });
       }
       const sum = CATS.reduce((a, [, k]) => a + tot[k], 0);
       if (CATS.some(([, k]) => n[k] < tot[k])) h += add({ all: true }, `<span class="ic">${ico('list')}</span><b>${esc(T.all)} (${sum})</b><small>Enter</small>`, ' more');
@@ -2757,7 +2765,7 @@
       for (const [kind, k, label] of CATS) {
         if ((cat !== 'all' && cat !== kind) || !d[k].length) continue;
         h += `<h5>${esc(label)}<span>${d[k].length < d.totals[k] ? esc(tr('js-search-of', { n: d[k].length, total: d.totals[k] })) : d.totals[k]}</span></h5>`;
-        d[k].forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws) + why(x, ws), x.completed ? ' done' : ''); });
+        d[k].forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + why(x, ws), x.completed ? ' done' : ''); });
       }
       list.innerHTML = h || `<div class="none">${esc(T.none)}</div>`; s = -1;
     }

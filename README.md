@@ -192,8 +192,11 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   what describes it next, connections (people, relations, links) lower, status words and coordinates
   least; the calendar / address book name .15 and only narrowing ("foobar zahn" yes, "foobar" alone no).
   A query that is a day (`17.11.`, `17.11.1987`) searches dates instead: occurrences, birthdays (with a
-  year only that year), anniversaries, a contact's other dates, a task's due/start/done day. The dialog
-  says why a hit was found (field + the text around the match, cut on the server).
+  year only that year), anniversaries, a contact's other dates, a task's due/start/done day. Every hit says
+  why it was found (per field: the text around the match, cut on the server, and how each word matched —
+  whole word, word start, written together, word starts, inside, like "x" (typo), digits, date); the dialog
+  shows all of it, the drop-down only what its row hides (a hidden field, a typo). Ties go to the hit whose
+  title/name holds all the query's letters in order.
   Text: folded (case/diacritics off), every query word must match; per word: whole word > word start >
   words typed without spaces (from a word's start over a boundary: "dietmarstein") > starts of consecutive
   words (5+ letters, parts 2+: "dietstein") > inside a word > typo (OSA distance 1 from 5 letters, 2 from 8, tried only when the exact pass finds < 3

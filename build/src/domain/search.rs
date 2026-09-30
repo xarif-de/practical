@@ -63,11 +63,24 @@ pub struct TaskHit {
     pub why: Vec<Why>,
 }
 
-/// Why a hit was found (the "all results" dialog only): a field (code, the client names it) and its text.
+/// Why a hit was found: a field (code, the client names it), its text around the match, whether the
+/// row shows that field anyway, and how each query word matched in it.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Why {
     pub f: &'static str,
     pub s: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shown: bool,
+    pub hits: Vec<WhyHit>,
+}
+
+/// One query word's match: the word, the kind (`Kind::code`) and, for a typo, the word it resembles.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WhyHit {
+    pub w: String,
+    pub k: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub m: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -315,30 +328,58 @@ fn starts_chain(q: &str, ws: &[String], first: bool) -> bool {
     (2..=common).rev().filter(|&l| q.is_char_boundary(l)).any(|l| if l == q.len() { !first } else { starts_chain(&q[l..], &ws[1..], false) })
 }
 
-/// How well one query word matches a field (0 = not at all).
-fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> f32 {
+/// How a query word matched a field, best first.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Kind {
+    Word,
+    Prefix,
+    Joined,
+    Chain,
+    Inside,
+    Typo,
+    Phone,
+    Date,
+}
+
+impl Kind {
+    fn code(self) -> &'static str {
+        match self {
+            Kind::Word => "word",
+            Kind::Prefix => "prefix",
+            Kind::Joined => "joined",
+            Kind::Chain => "chain",
+            Kind::Inside => "inside",
+            Kind::Typo => "typo",
+            Kind::Phone => "phone",
+            Kind::Date => "date",
+        }
+    }
+}
+
+/// How well one query word matches a field (0 = not at all), how, and for a typo the field's word.
+fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> (f32, Kind, Option<String>) {
     if f.words.iter().any(|w| w == q) {
-        return 1.0;
+        return (1.0, Kind::Word, None);
     }
     if f.words.iter().any(|w| w.starts_with(q)) {
-        return 0.85;
+        return (0.85, Kind::Prefix, None);
     }
     let n = qc.len();
     // words typed without the space between them: from a word's start on, past its end
     if n >= 4 && f.starts.iter().zip(&f.words).any(|(&at, w)| q.len() > w.len() && f.compact[at..].starts_with(q)) {
-        return 0.75;
+        return (0.75, Kind::Joined, None);
     }
     // starts of consecutive words run together ("dietstein" ~ "Dietmar Steinbach")
     if n >= 5 && f.words.len() > 1 && (0..f.words.len() - 1).any(|k| starts_chain(q, &f.words[k..], true)) {
-        return 0.65;
+        return (0.65, Kind::Chain, None);
     }
     if n >= 3 && f.text.contains(q) {
-        return 0.6;
+        return (0.6, Kind::Inside, None);
     }
     if fuzzy && n >= 5 {
         // a typo: against the word's start of about the query's length ("kalnder" ~ "kalender")
         let max = if n < 8 { 1 } else { 2 };
-        let mut best = usize::MAX;
+        let (mut best, mut like) = (usize::MAX, None);
         for w in &f.words {
             let wc: Vec<char> = w.chars().collect();
             if wc.len() + 1 < n {
@@ -348,50 +389,81 @@ fn word_score(q: &str, qc: &[char], f: &Field, fuzzy: bool) -> f32 {
                 if len == 0 || len > wc.len() {
                     continue;
                 }
-                best = best.min(osa(qc, &wc[..len]));
+                let d = osa(qc, &wc[..len]);
+                if d < best {
+                    (best, like) = (d, Some(w));
+                }
             }
             if best == 0 {
                 break;
             }
         }
         if best <= max {
-            return if best <= 1 { 0.5 } else { 0.38 };
+            return (if best <= 1 { 0.5 } else { 0.38 }, Kind::Typo, like.cloned());
         }
     }
-    0.0
+    (0.0, Kind::Word, None)
 }
 
-/// bit of `score_doc`'s mask for a phone number
-const PHONE: u64 = 1 << 63;
+/// All of `q`'s letters and digits in `text` in order, gaps allowed ("chrstinb" in "Christin Steinbach")
+fn in_order(q: &str, text: &str) -> bool {
+    let mut t = text.chars();
+    q.chars().filter(|c| c.is_alphanumeric()).all(|c| t.any(|x| x == c))
+}
 
-/// The text score of a document (0 = no match): every query word must match some field. The mask
-/// has a bit per field that gave a word its best match (bit 63: a phone number).
-fn score_doc(q: &Query, doc: &Doc) -> (f32, u64) {
+/// A document's match: its score and, per query word, where and how it matched.
+#[derive(Debug, Default)]
+struct Match {
+    score: f32,
+    hits: Vec<Hit>,
+}
+
+#[derive(Debug)]
+struct Hit {
+    at: Place,
+    kind: Kind,
+    /// index into `Query::words`; `usize::MAX` = the whole query (a date)
+    word: usize,
+    typo: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Place {
+    Field(usize),
+    Date(usize),
+    Phone,
+}
+
+/// The text match of a document (score 0 = none): every query word must match some field; a field
+/// that only narrows (a collection's name) cannot carry a match alone. Ties go to the document whose
+/// main text holds all the query's letters in order.
+fn score_doc(q: &Query, doc: &Doc) -> Match {
     if q.words.is_empty() {
-        return (0.0, 0);
+        return Match::default();
     }
-    let (mut sum, mut mask, mut real) = (0.0, 0u64, false);
-    for (w, wc) in q.words.iter().zip(&q.chars) {
-        let (mut best, mut at) = (0.0f32, 0u64);
+    let (mut sum, mut real, mut hits) = (0.0, false, Vec::with_capacity(q.words.len()));
+    for (wi, (w, wc)) in q.words.iter().zip(&q.chars).enumerate() {
+        let mut best = (0.0f32, Place::Phone, Kind::Word, None);
         for (i, f) in doc.fields.iter().enumerate() {
-            let s = f.weight * word_score(w, wc, f, q.fuzzy);
-            if s > best {
-                (best, at) = (s, 1 << i.min(62));
+            let (s, k, m) = word_score(w, wc, f, q.fuzzy);
+            let s = f.weight * s;
+            if s > best.0 {
+                best = (s, Place::Field(i), k, m);
             }
         }
         // a phone number: the query's digits inside the number's digits (a number is an identifier)
-        if best < 0.85 && w.len() >= 3 && w.chars().all(|c| c.is_ascii_digit()) && doc.digits.iter().any(|d| d.contains(w.as_str())) {
-            (best, at) = (0.85, PHONE);
+        if best.0 < 0.85 && w.len() >= 3 && w.chars().all(|c| c.is_ascii_digit()) && doc.digits.iter().any(|d| d.contains(w.as_str())) {
+            best = (0.85, Place::Phone, Kind::Phone, None);
         }
-        if best == 0.0 {
-            return (0.0, 0);
+        if best.0 == 0.0 {
+            return Match::default();
         }
-        real |= at == PHONE || !doc.fields[at.trailing_zeros() as usize].narrow;
-        sum += best;
-        mask |= at;
+        real |= match best.1 { Place::Field(i) => !doc.fields[i].narrow, _ => true };
+        sum += best.0;
+        hits.push(Hit { at: best.1, kind: best.2, word: wi, typo: best.3 });
     }
     if !real {
-        return (0.0, 0); // only the calendar's / address book's name: that would be all of it
+        return Match::default(); // only the calendar's / address book's name: that would be all of it
     }
     let mut s = sum / q.words.len() as f32;
     if let Some(main) = doc.fields.first() {
@@ -400,27 +472,29 @@ fn score_doc(q: &Query, doc: &Doc) -> (f32, u64) {
         } else if main.text.starts_with(&q.phrase) {
             s += 0.15;
         }
-    }
-    (s, mask)
-}
-
-/// The date score of a document for a date query (0 = no match), and the codes/texts it matched.
-fn score_dates(pat: (Option<i32>, u32, u32), doc: &Doc) -> (f32, Vec<Why>) {
-    let mut best = 0.0f32;
-    let mut why = vec![];
-    for d in doc.dates.iter().filter(|d| d.hits(pat)) {
-        // a birthday with the queried year is that person's, one without is only the same day
-        let s = d.weight * if pat.0.is_some() && d.y == pat.0 { 1.0 } else { 0.9 };
-        best = best.max(s);
-        if !why.iter().any(|w: &Why| w.f == d.code) {
-            why.push(Why { f: d.code, s: d.raw.clone() });
+        if in_order(&q.phrase, &main.text) {
+            s += 0.03;
         }
     }
-    (best, why)
+    Match { score: s, hits }
 }
 
-/// About 120 characters of `raw` around the first place a query word matches it (all of it when short).
-fn crop(raw: &str, q: &Query) -> String {
+/// The date match of a document for a date query (score 0 = none): the best-weighted date on that day.
+fn score_dates(pat: (Option<i32>, u32, u32), doc: &Doc) -> Match {
+    let mut m = Match::default();
+    for (i, d) in doc.dates.iter().enumerate().filter(|(_, d)| d.hits(pat)) {
+        // a birthday with the queried year is that person's, one without is only the same day
+        let s = d.weight * if pat.0.is_some() && d.y == pat.0 { 1.0 } else { 0.9 };
+        m.score = m.score.max(s);
+        if !m.hits.iter().any(|h| matches!(h.at, Place::Date(j) if doc.dates[j].code == d.code)) {
+            m.hits.push(Hit { at: Place::Date(i), kind: Kind::Date, word: usize::MAX, typo: None });
+        }
+    }
+    m
+}
+
+/// About 120 characters of `raw` around the first place one of `words` matches it (all of it when short).
+fn crop(raw: &str, words: &[&str]) -> String {
     const MAX: usize = 120;
     let chars: Vec<char> = raw.chars().collect();
     if chars.len() <= MAX {
@@ -434,19 +508,35 @@ fn crop(raw: &str, q: &Query) -> String {
             from.push(i);
         }
     }
-    let at = q.words.iter().filter_map(|w| folded.find(w.as_str())).min().map(|b| from[folded[..b].chars().count()]).unwrap_or(0);
+    let at = words.iter().filter_map(|w| folded.find(w)).min().map(|b| from[folded[..b].chars().count()]).unwrap_or(0);
     let a = at.saturating_sub(40).min(chars.len() - MAX);
     let b = a + MAX;
     format!("{}{}{}", if a > 0 { "…" } else { "" }, chars[a..b].iter().collect::<String>(), if b < chars.len() { "…" } else { "" })
 }
 
-/// "Why found" for a text match: the matched fields the hit does not show anyway.
-fn reasons(doc: &Doc, mask: u64, q: &Query) -> Vec<Why> {
-    let mut v: Vec<Why> = doc.fields.iter().enumerate().filter(|(i, f)| mask & (1 << (*i).min(62)) != 0 && !f.shown && !f.raw.is_empty()).map(|(_, f)| Why { f: f.code, s: crop(&f.raw, q) }).collect();
-    if mask & PHONE != 0 {
-        v.push(Why { f: "phone", s: doc.phones.clone() });
+/// Why a hit was found: its matches grouped by field, in the order of the query's words.
+fn reasons(doc: &Doc, m: &Match, q: &Query) -> Vec<Why> {
+    let mut out: Vec<(Place, Why)> = vec![];
+    for h in &m.hits {
+        let w = if h.word == usize::MAX { q.phrase.clone() } else { q.words[h.word].clone() };
+        let hit = WhyHit { w, k: h.kind.code(), m: h.typo.clone() };
+        if let Some((_, why)) = out.iter_mut().find(|(p, _)| *p == h.at) {
+            why.hits.push(hit);
+            continue;
+        }
+        let why = match h.at {
+            Place::Field(i) => {
+                let f = &doc.fields[i];
+                let mut words: Vec<&str> = q.words.iter().map(String::as_str).collect();
+                words.extend(m.hits.iter().filter_map(|x| x.typo.as_deref()));
+                Why { f: f.code, s: crop(&f.raw, &words), shown: f.shown, hits: vec![hit] }
+            }
+            Place::Date(i) => Why { f: doc.dates[i].code, s: doc.dates[i].raw.clone(), shown: false, hits: vec![hit] },
+            Place::Phone => Why { f: "phone", s: doc.phones.clone(), shown: false, hits: vec![hit] },
+        };
+        out.push((h.at, why));
     }
-    v
+    out.into_iter().map(|(_, w)| w).collect()
 }
 
 struct Query {
@@ -707,12 +797,6 @@ fn near(d: NaiveDate, today: NaiveDate, future_days: f32, past_days: f32) -> f32
     if n >= 0.0 { (-n / future_days).exp() } else { 0.7 * (n / past_days).exp() }
 }
 
-fn top<T>(mut v: Vec<(f32, T)>, limit: usize) -> (usize, Vec<T>) {
-    let total = v.len();
-    v.sort_by(|a, b| b.0.total_cmp(&a.0));
-    (total, v.into_iter().take(limit).map(|x| x.1).collect())
-}
-
 /// How a document is matched: by its text, or — for a query that is a day (and month) — by its dates.
 enum Mode<'a> {
     Text(&'a Query),
@@ -720,59 +804,56 @@ enum Mode<'a> {
 }
 
 impl Mode<'_> {
-    /// (score 0..~1.25, why) — `why` only when asked for (the dialog)
-    fn score(&self, doc: &Doc, why: bool) -> (f32, Vec<Why>) {
+    fn score(&self, doc: &Doc) -> Match {
         match self {
-            Mode::Text(q) => {
-                let (s, mask) = score_doc(q, doc);
-                (s, if why && s > 0.0 { reasons(doc, mask, q) } else { vec![] })
-            }
-            Mode::Date(p) => {
-                let (s, w) = score_dates(*p, doc);
-                (s, if why { w } else { vec![] })
-            }
+            Mode::Text(q) => score_doc(q, doc),
+            Mode::Date(p) => score_dates(*p, doc),
         }
     }
 }
 
-fn rank(ix: &Index, mode: &Mode, scope: Option<&'static str>, today: NaiveDate, limit: usize, res: &mut SearchResult) {
+/// The matching documents ranked (`bonus` adds a kind's own points), the first `limit` with their reasons.
+fn best<'a, D>(docs: &'a [D], doc: impl Fn(&D) -> &Doc, bonus: impl Fn(&D, &Match) -> f32, mode: &Mode, q: &Query, limit: usize) -> (usize, Vec<(&'a D, Match, Vec<Why>)>) {
+    let mut v: Vec<(f32, &D, Match)> = docs.iter().filter_map(|d| { let m = mode.score(doc(d)); (m.score > 0.0).then(|| (100.0 * m.score + bonus(d, &m), d, m)) }).collect();
+    let total = v.len();
+    v.sort_by(|a, b| b.0.total_cmp(&a.0));
+    v.truncate(limit);
+    (total, v.into_iter().map(|(_, d, m)| { let w = reasons(doc(d), &m, q); (d, m, w) }).collect())
+}
+
+fn rank(ix: &Index, mode: &Mode, q: &Query, scope: Option<&'static str>, today: NaiveDate, limit: usize, res: &mut SearchResult) {
     let want = |k: &str| scope.is_none_or(|s| s == k);
-    let why = limit > 5;
     if want("event") {
-        let mut v = vec![];
-        for e in &ix.events {
-            let (t, mut w) = mode.score(&e.doc, why);
-            if t == 0.0 {
-                continue;
-            }
-            w.retain(|x| x.f != "date"); // the row shows the occurrence's date
-            // the occurrence shown: the next one (a date query: the next one on that day), else the last
+        // the occurrence shown: the next one (a date query: the next one on that day), else the last
+        let occ = |e: &EvDoc| {
             let on = |o: &&(NaiveDateTime, String)| match mode { Mode::Date(p) => DateField::of("", o.0.date(), 0.0).hits(*p), _ => true };
-            let (start, time) = e.occ.iter().filter(on).find(|o| o.0.date() >= today).or(e.occ.iter().filter(on).last()).cloned().unwrap_or_default();
-            let s = 100.0 * t + 30.0 * near(start.date(), today, 60.0, 30.0) - if e.cancelled { 8.0 } else { 0.0 };
-            v.push((s, EventHit { key: e.key.clone(), uid: e.uid.clone(), summary: e.summary.clone(), date: start.date(), time, color: e.color.clone(), cal_name: e.cal_name.clone(), count: e.occ.len(), why: w }));
-        }
-        (res.totals.events, res.events) = top(v, limit);
-    }
-    if want("contact") {
-        let v = ix.contacts.iter().filter_map(|c| { let (t, w) = mode.score(&c.doc, why); (t > 0.0).then(|| (100.0 * t, ContactHit { why: w, ..c.hit.clone() })) }).collect();
-        (res.totals.contacts, res.contacts) = top(v, limit);
-    }
-    if want("task") {
-        let v = ix
-            .tasks
-            .iter()
-            .filter_map(|k| {
-                let (t, w) = mode.score(&k.doc, why);
-                (t > 0.0).then(|| (100.0 * t + if k.open { 12.0 + k.hit.due.map_or(0.0, |d| 8.0 * near(d, today, 30.0, 30.0)) } else { 0.0 }, TaskHit { why: w, ..k.hit.clone() }))
+            e.occ.iter().filter(on).find(|o| o.0.date() >= today).or(e.occ.iter().filter(on).last()).cloned().unwrap_or_default()
+        };
+        let (total, hits) = best(&ix.events, |e| &e.doc, |e, _| 30.0 * near(occ(e).0.date(), today, 60.0, 30.0) - if e.cancelled { 8.0 } else { 0.0 }, mode, q, limit);
+        res.totals.events = total;
+        res.events = hits
+            .into_iter()
+            .map(|(e, _, mut why)| {
+                why.iter_mut().filter(|w| w.f == "date").for_each(|w| w.shown = true); // the row shows the occurrence's day
+                let (start, time) = occ(e);
+                EventHit { key: e.key.clone(), uid: e.uid.clone(), summary: e.summary.clone(), date: start.date(), time, color: e.color.clone(), cal_name: e.cal_name.clone(), count: e.occ.len(), why }
             })
             .collect();
-        (res.totals.tasks, res.tasks) = top(v, limit);
+    }
+    if want("contact") {
+        let (total, hits) = best(&ix.contacts, |c| &c.doc, |_, _| 0.0, mode, q, limit);
+        res.totals.contacts = total;
+        res.contacts = hits.into_iter().map(|(c, _, why)| ContactHit { why, ..c.hit.clone() }).collect();
+    }
+    if want("task") {
+        let (total, hits) = best(&ix.tasks, |k| &k.doc, |k, _| if k.open { 12.0 + k.hit.due.map_or(0.0, |d| 8.0 * near(d, today, 30.0, 30.0)) } else { 0.0 }, mode, q, limit);
+        res.totals.tasks = total;
+        res.tasks = hits.into_iter().map(|(k, _, why)| TaskHit { why, ..k.hit.clone() }).collect();
     }
 }
 
-/// `limit`: hits per category (the drop-down asks for 5, the "all results" dialog for 200, which
-/// also gets the reasons). A query that is a day (`17.11.`, `17.11.1987`) searches the dates.
+/// `limit`: hits per category (the drop-down asks for 5, the "all results" dialog for 200); every hit
+/// carries why it was found. A query that is a day (`17.11.`, `17.11.1987`) searches the dates.
 pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDate, tz: chrono_tz::Tz, lang: &str, limit: usize) -> AppResult<SearchResult> {
     let (scope, rest) = split_scope(q);
     let jump = if scope.is_none() { parse_date_query(rest, today) } else { None };
@@ -783,14 +864,14 @@ pub async fn search(state: &AppState, user: &Principal, q: &str, today: NaiveDat
     }
     let ix = index(state, user, today, tz, lang).await?;
     if let Some((y, Some(m), Some(d))) = date_parts(rest) {
-        rank(&ix, &Mode::Date((y, m, d)), scope, today, limit, &mut res);
+        rank(&ix, &Mode::Date((y, m, d)), &query, scope, today, limit, &mut res);
         return Ok(res);
     }
     query.fuzzy = false;
-    rank(&ix, &Mode::Text(&query), scope, today, limit, &mut res);
+    rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
     if res.totals.events + res.totals.contacts + res.totals.tasks < 3 {
         query.fuzzy = true;
-        rank(&ix, &Mode::Text(&query), scope, today, limit, &mut res);
+        rank(&ix, &Mode::Text(&query), &query, scope, today, limit, &mut res);
     }
     Ok(res)
 }
@@ -824,11 +905,11 @@ mod tests {
         Doc { fields: vec![Field::new("t", text, 1.0)], ..Default::default() }
     }
     fn score(q: &str, text: &str) -> f32 {
-        score_doc(&Query::new(q), &doc(text)).0
+        score_doc(&Query::new(q), &doc(text)).score
     }
     /// the exact pass only (typos are the fallback)
     fn strict(q: &str, text: &str) -> f32 {
-        score_doc(&Query { fuzzy: false, ..Query::new(q) }, &doc(text)).0
+        score_doc(&Query { fuzzy: false, ..Query::new(q) }, &doc(text)).score
     }
 
     #[test]
@@ -848,17 +929,20 @@ mod tests {
         assert_eq!(strict("dstein", "Dietmar Steinbach"), 0.0, "a part needs 2 letters");
         assert_eq!(strict("dietbach", "Dietmar Steinbach"), 0.0, "no skipped word, starts only");
         let d = Doc { fields: vec![Field::new("t", "Zahnarzt", 1.0), Field::collection("Familie")], ..Default::default() };
-        assert!(score_doc(&Query::new("familie zahn"), &d).0 > 0.0 && score_doc(&Query::new("familie"), &d).0 == 0.0, "a collection name only narrows");
+        assert!(score_doc(&Query::new("familie zahn"), &d).score > 0.0 && score_doc(&Query::new("familie"), &d).score == 0.0, "a collection name only narrows");
         let bday = DateField::vcard("bday", "1987-11-17", 0.95).unwrap();
         assert!(bday.hits((Some(1987), 11, 17)) && bday.hits((None, 11, 17)) && !bday.hits((Some(1988), 11, 17)));
         assert!(DateField::vcard("bday", "--11-17", 1.0).unwrap().hits((Some(2030), 11, 17)), "a date without a year");
         assert_eq!(date_parts("17.11.1987"), Some((Some(1987), Some(11), Some(17))));
         let long = format!("{} Zahnarzt abgesagt {}", "x".repeat(300), "y".repeat(300));
-        let c = crop(&long, &Query::new("abgesagt"));
+        let c = crop(&long, &["abgesagt"]);
         assert!(c.contains("abgesagt") && c.starts_with('…') && c.ends_with('…') && c.chars().count() <= 122, "{c}");
+        assert!(score("chrstinb", "Christin Steinbach") > score("chrstinb", "Christine Ackermann"), "letters in order break the tie");
+        let m = score_doc(&Query::new("chrstinb"), &doc("Christin Steinbach"));
+        assert_eq!((m.hits[0].kind, m.hits[0].typo.as_deref()), (Kind::Typo, Some("christin")));
         assert!(score("kalnder", "Kalender") > 0.0 && score("kalner", "Kalender") == 0.0, "one edit below 8 letters");
         assert_eq!(score("demo", "devops"), 0.0, "no typos below 5 letters");
         assert_eq!(score("kalner", "Termin Zahnarzt"), 0.0);
-        assert!(score("0171 234", "x") == 0.0 && score_doc(&Query::new("234"), &Doc { digits: vec!["01712345".into()], ..doc("Anna") }).0 > 0.0, "digits match phone numbers");
+        assert!(score("0171 234", "x") == 0.0 && score_doc(&Query::new("234"), &Doc { digits: vec!["01712345".into()], ..doc("Anna") }).score > 0.0, "digits match phone numbers");
     }
 }
