@@ -6,6 +6,8 @@ use crate::csrf;
 use crate::domain::contacts::{self, Contact, ContactInput};
 use crate::domain::events::{self, EventDetail, EventInput};
 use crate::domain::geo;
+use crate::domain::history::{self, Actor};
+use crate::domain::history_text::Store;
 use crate::domain::prefs;
 use crate::domain::search;
 use crate::domain::tasks::{self, TaskDetail, TaskInput};
@@ -74,7 +76,12 @@ pub struct Created {
 pub async fn create_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Json(input): Json<EventInput>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
-    Ok(Json(Created { id: events::create_event(&state, &user, input, vc.tz).await? }))
+    let (p, c) = (input.principal.clone(), input.cal_id.clone());
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    let id = events::create_event(&state, &user, input, vc.tz).await?;
+    g.object(Store::Cal, &p, &c, &id);
+    g.commit().await;
+    Ok(Json(Created { id }))
 }
 
 async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
@@ -162,10 +169,14 @@ async fn color_category(State(state): State<SharedState>, user: Principal, sessi
     let keys = colors::category_objects(&state, &user, scope, &c.name, &c.from).await?;
     if c.apply {
         let to = c.to.trim().to_lowercase();
+        // all of them are one change in the history
+        let mut g = history::begin(&state, Actor { label: Some(format!("colors:{}", c.name)), ..Actor::ui(&user) }).await;
         for k in &keys {
             let [p, cal, id] = k.splitn(3, '/').collect::<Vec<_>>()[..] else { continue };
+            g.object(Store::Cal, p, cal, id);
             colors::set_object_color(&state, &user, p, cal, id, &to).await?;
         }
+        g.commit().await;
     }
     Ok(Json(Count { count: keys.len() }))
 }
@@ -187,7 +198,14 @@ async fn colors_batch(State(state): State<SharedState>, user: Principal, session
     if b.changes.len() > 5000 {
         return Err(AppError::BadRequest("too many changes".into()));
     }
+    let mut g = history::begin(&state, Actor { label: Some("colors:".into()), ..Actor::ui(&user) }).await;
+    for ch in &b.changes {
+        if let ("event" | "task", [p, cal, id]) = (ch.kind.as_str(), ch.key.split('/').collect::<Vec<_>>().as_slice()) {
+            g.object(Store::Cal, p, cal, id);
+        }
+    }
     let (count, failed) = crate::domain::colors::apply(&state, &user, &b.changes).await?;
+    g.commit().await;
     Ok(Json(BatchDone { count, failed }))
 }
 
@@ -201,7 +219,12 @@ async fn color_put(State(state): State<SharedState>, user: Principal, session: S
     match (kind.as_str(), parts.as_slice()) {
         ("calendar", [p, id]) => colors::set_calendar_color(&state, &user, p, id, &color).await?,
         ("addressbook", [p, id]) => crate::domain::collections::set_addressbook_color_checked(&state, &user, p, id, &color).await?,
-        ("event" | "task", [p, cal, id]) => colors::set_object_color(&state, &user, p, cal, id, &color).await?,
+        ("event" | "task", [p, cal, id]) => {
+            let mut g = history::begin(&state, Actor::ui(&user)).await;
+            g.object(Store::Cal, p, cal, id);
+            colors::set_object_color(&state, &user, p, cal, id, &color).await?;
+            g.commit().await;
+        }
         _ => return Err(AppError::BadRequest("unknown colour target".into())),
     }
     Ok(axum::http::StatusCode::NO_CONTENT)
@@ -274,20 +297,30 @@ struct EventUpdate {
 async fn update_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<EventUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Cal, &p, &c, &id);
     if u.input.principal != p || u.input.cal_id != c {
-        // moving to another calendar = create there, delete here
+        // moving to another calendar = create there, delete here (one change: a move)
+        let (tp, tc) = (u.input.principal.clone(), u.input.cal_id.clone());
         let target = u.input.clone();
-        let new_id = events::create_event(&state, &user, target, vc.tz).await?;
+        let uid = state.calendars.get_object(&p, &c, &id, false).await?.get_uid().to_string();
+        let new_id = events::create_event_as(&state, &user, target, vc.tz, Some(&uid)).await?;
+        g.object(Store::Cal, &tp, &tc, &new_id);
         events::delete_event(&state, &user, &p, &c, &id).await?;
+        g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
     events::update_event(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?;
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 
 async fn delete_event(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Cal, &p, &c, &id);
     events::delete_event(&state, &user, &p, &c, &id).await?;
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 
@@ -305,7 +338,12 @@ async fn contact_vcf(State(state): State<SharedState>, user: Principal, Path((p,
 
 async fn create_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
-    Ok(Json(Created { id: contacts::create_contact(&state, &user, input).await? }))
+    let (p, a) = (input.principal.clone(), input.ab_id.clone());
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    let id = contacts::create_contact(&state, &user, input).await?;
+    g.object(Store::Ab, &p, &a, &id);
+    g.commit().await;
+    Ok(Json(Created { id }))
 }
 
 #[derive(Deserialize)]
@@ -318,18 +356,29 @@ struct ContactUpdate {
 
 async fn update_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>, Json(u): Json<ContactUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Ab, &p, &a, &id);
     if u.input.principal != p || u.input.ab_id != a {
-        let new_id = contacts::create_contact(&state, &user, u.input).await?;
+        let (tp, ta) = (u.input.principal.clone(), u.input.ab_id.clone());
+        let old = rustical_store::AddressbookReadStore::get_object(&*state.addressbooks, &p, &a, &id, false).await?;
+        let uid = contacts::parse_vcf(old.get_vcf())?.get_uid().unwrap_or(&id).to_string();
+        let new_id = contacts::create_contact_as(&state, &user, u.input, Some(&uid)).await?;
+        g.object(Store::Ab, &tp, &ta, &new_id);
         contacts::delete_contact(&state, &user, &p, &a, &id).await?;
+        g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
     contacts::update_contact(&state, &user, &id, u.input, u.etag.as_deref()).await?;
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 
 async fn delete_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Ab, &p, &a, &id);
     contacts::delete_contact(&state, &user, &p, &a, &id).await?;
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 
@@ -338,7 +387,12 @@ async fn delete_contact(State(state): State<SharedState>, user: Principal, sessi
 async fn create_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Json(input): Json<TaskInput>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
-    Ok(Json(Created { id: tasks::create_task(&state, &user, input, vc.tz).await? }))
+    let (p, c) = (input.principal.clone(), input.cal_id.clone());
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    let id = tasks::create_task(&state, &user, input, vc.tz).await?;
+    g.object(Store::Cal, &p, &c, &id);
+    g.commit().await;
+    Ok(Json(Created { id }))
 }
 
 async fn get_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<TaskDetail>> {
@@ -362,6 +416,8 @@ struct TaskUpdate {
 async fn update_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<TaskUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Cal, &p, &c, &id);
     match u.completed {
         Some(done) => tasks::set_completed(&state, &user, &p, &c, &id, done, vc.tz).await?,
         None => {
@@ -371,12 +427,16 @@ async fn update_task(State(state): State<SharedState>, user: Principal, ctx: cra
             tasks::update_task(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?
         }
     }
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 
 async fn delete_task(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Cal, &p, &c, &id);
     tasks::delete_task(&state, &user, &p, &c, &id).await?;
+    g.commit().await;
     Ok(Json(Created { id }))
 }
 

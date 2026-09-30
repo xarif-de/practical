@@ -5,6 +5,8 @@ pub mod contacts;
 pub mod events;
 pub mod geo;
 pub mod groups;
+pub mod history;
+pub mod history_text;
 pub mod holidays;
 pub mod ical;
 pub mod prefs;

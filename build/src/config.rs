@@ -23,6 +23,8 @@ pub struct Config {
     pub logout_url: String,
     /// Days a deleted group stays restorable (D6).
     pub trash_retention_days: u32,
+    /// Days a change stays in the change history (and can be undone).
+    pub history_retention_days: u32,
     /// PEM (PKCS#8) private key for Web Push (D12); None = push disabled.
     pub vapid_private_key_pem: Option<String>,
     /// `mailto:` or https contact for the VAPID JWT `sub` claim.
@@ -94,6 +96,9 @@ impl Config {
         let trash_retention_days: u32 = var_or("TRASH_RETENTION_DAYS", "90")
             .parse()
             .map_err(|e| format!("RUSTICAL_UI__TRASH_RETENTION_DAYS: {e}"))?;
+        let history_retention_days: u32 = var_or("HISTORY_RETENTION_DAYS", "90")
+            .parse()
+            .map_err(|e| format!("RUSTICAL_UI__HISTORY_RETENTION_DAYS: {e}"))?;
         if var("DEV_LOGIN").is_some() && var("DEV_ASSETS_DIR").is_none() {
             return Err("RUSTICAL_UI__DEV_LOGIN is only honoured together with RUSTICAL_UI__DEV_ASSETS_DIR (development)".into());
         }
@@ -110,6 +115,7 @@ impl Config {
             allow_password_login,
             logout_url: var_or("LOGOUT_URL", ""),
             trash_retention_days,
+            history_retention_days,
             vapid_private_key_pem: var("VAPID_PRIVATE_KEY_PEM").map(|v| v.replace("\\n", "\n")),
             vapid_subject: var_or("VAPID_SUBJECT", "mailto:admin@example.org"),
             holidays_country: var_or("HOLIDAYS_COUNTRY", "DE"),

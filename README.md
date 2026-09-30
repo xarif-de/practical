@@ -22,7 +22,7 @@ WhatsApp, mail, maps, chat, jump to a related contact, vCard download), edit mod
 the full vCard field set (structured addresses, URLs, messengers, relationships, extra dates,
 preferred flags), address books with a colour · minimal tasks (VTODO) · universal search (see **Search**) · orbit date
 picker · public/school holidays for 204 countries (OpenHolidays → Nager.Date) · vacation-day counting ·
-browser push reminders (VAPID) · `.ics`/`.vcf` export and import · live updates over SSE · German,
+browser push reminders (VAPID) · `.ics`/`.vcf` export and import · change history with undo (see **Change history**) · live updates over SSE · German,
 English, French and Spanish.
 
 It never talks to RustiCal over HTTP for data. It opens **RustiCal's own SQLite file** through
@@ -230,6 +230,23 @@ Deployed on xarif.de as a second container in the `rustical` pod:
   show at the drop-down's foot (× deletes), recent ones on an empty focus. Settings → Search: retention
   (`xui_user_settings.search_history_days`: 0 = off, 7/30/90 (default)/365 days, -1 = unlimited; ≤ 300
   entries), the list with single deletes, clear all.
+- **Change history** (`/history`; `domain::history`, `domain::history_text`, `routes::history`, assets
+  `history.js`/`history.css`, tables `xui_history_*`): every closed change of an event, task or contact.
+  RustiCal keeps no old versions and its change log names no content or author, so rustical-ui keeps its
+  own: `heads` = last version seen per object, `blobs` = content-addressed versions, `cursors` = log read
+  per collection (first sight = baseline, no change; dev copy 4 263 objects, 4.2 MB). Attribution: a UI
+  request runs between `history::begin` and `Guard::commit` (one lock with the 2 s poller, which ingests
+  first on each tick) → one change per save/import/bulk recolour; what else moved is a DAV change, one
+  per object, device = PRODID of the new version; delete+create of one UID = move (the UI's move keeps
+  the UID, as CalDAV MOVE does). Diff = attributes (master property name; VALARM/overrides as blocks;
+  ACKNOWLEDGED/DTSTAMP/SEQUENCE/X-MOZ-/X-APPLE- = technical, hidden by default). Undo is itself a
+  change (`reverts`, the undone one gets `undone_by`): an edit puts back only the attributes it touched
+  (3-way: a value changed later → warning, needs confirm, then overwritten); undoing a create deletes
+  and makes later changes `inactive_by` it (undoing that undo reactivates them); a delete restores from
+  the stored version (also after RustiCal's trash purge). Visible/undoable: collections of the user and
+  their groups. Views: line map (default; one line per element, stops = changes, undo arcs) and list
+  with details (before/after/today, undo preview, the element's history, day ruler). Kept
+  `HISTORY_RETENTION_DAYS` (purge hourly with the trash purger).
 - **Templates** (event editor, new events only; `search::suggest`, `/api/events/suggest`, app.js `tpl*`):
   typing a title (≥ 2 letters, 200 ms) lists ≤ 3 past events, one per folded title. The title match only
   has to pass the search's relevance floor (`floor`, tier 1: typos count, a clear match drops them);
@@ -309,6 +326,7 @@ RustiCal reads every `RUSTICAL_*` variable as its own configuration and rejects 
 | `ALLOW_PASSWORD_LOGIN` | `false` | offer RustiCal password login |
 | `LOGOUT_URL` | – | IdP logout URL; `{url}` = URL-encoded `PUBLIC_URL` |
 | `TRASH_RETENTION_DAYS` | `90` | grace period for deleted groups; RustiCal's `maintenance.trash_retention_days` must be ≥ this |
+| `HISTORY_RETENTION_DAYS` | `90` | how long the change history keeps changes (and can undo them) |
 | `SESSION_HOURS` | `12` | session inactivity limit |
 | `VAPID_PRIVATE_KEY_PEM`, `VAPID_SUBJECT` | – | Web Push reminders (`gen-vapid` creates a key); unset = push off |
 | `HOLIDAYS_COUNTRY`, `HOLIDAYS_SUBDIVISION`, `HOLIDAYS_ENABLED` | `DE`, –, `true` | holiday region until a user picks one; `false` = no holiday requests |

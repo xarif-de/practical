@@ -135,6 +135,24 @@ CREATE TABLE xui_holidays (
         "CREATE TABLE xui_search_history (id INTEGER PRIMARY KEY AUTOINCREMENT, principal TEXT NOT NULL, q TEXT NOT NULL, q_norm TEXT NOT NULL, target_json TEXT, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, uses INTEGER NOT NULL DEFAULT 1, UNIQUE (principal, q_norm));
          ALTER TABLE xui_user_settings ADD COLUMN search_history_days INTEGER;",
     ),
+    (
+        13,
+        // the change history (domain::history): changes with their items, the versions before/after as
+        // content-addressed blobs, the last version seen of every object and how far each collection's
+        // change log is read
+        "CREATE TABLE xui_history_blobs (hash TEXT PRIMARY KEY, body TEXT NOT NULL);
+         CREATE TABLE xui_history_changes (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, src TEXT NOT NULL, who TEXT, device TEXT, label TEXT,
+             reverts INTEGER, undone_by INTEGER, inactive_by INTEGER, tech INTEGER NOT NULL DEFAULT 0);
+         CREATE INDEX xui_history_changes_at ON xui_history_changes (at);
+         CREATE TABLE xui_history_items (change_id INTEGER NOT NULL, idx INTEGER NOT NULL, store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL,
+             object_id TEXT NOT NULL, uid TEXT NOT NULL, kind TEXT NOT NULL, act TEXT NOT NULL, from_principal TEXT, from_coll TEXT, from_object TEXT,
+             before_hash TEXT, after_hash TEXT, title TEXT NOT NULL, attrs TEXT NOT NULL, PRIMARY KEY (change_id, idx));
+         CREATE INDEX xui_history_items_uid ON xui_history_items (store, uid);
+         CREATE TABLE xui_history_heads (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, object_id TEXT NOT NULL, uid TEXT NOT NULL, hash TEXT NOT NULL,
+             PRIMARY KEY (store, principal, coll, object_id));
+         CREATE INDEX xui_history_heads_uid ON xui_history_heads (store, principal, coll, uid);
+         CREATE TABLE xui_history_cursors (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, synctoken INTEGER NOT NULL, PRIMARY KEY (store, principal, coll));",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

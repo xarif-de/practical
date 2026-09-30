@@ -32,6 +32,8 @@ pub struct AppState {
     pub search_index: crate::domain::search::IndexCache,
     /// parsed tasks per calendar and synctoken (`domain::tasks::tasks_for`)
     pub task_cache: crate::domain::tasks::TaskCache,
+    /// the change history's lock between UI writes and the DAV poll (`domain::history`)
+    pub history: crate::domain::history::Hist,
     pub vapid: Option<VapidKeypair>,
     pub started_at: chrono::DateTime<chrono::Utc>,
 }

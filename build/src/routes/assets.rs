@@ -1,4 +1,4 @@
-//! Static assets compiled into the binary (six files; no rust-embed needed).
+//! Static assets compiled into the binary (eight files; no rust-embed needed).
 //! Development (`RUSTICAL_UI__DEV_ASSETS_DIR`): read from that directory on every request, uncached.
 
 use crate::state::SharedState;
@@ -18,6 +18,9 @@ struct Asset {
 const ASSETS: &[Asset] = &[
     Asset { name: "style.css", mime: "text/css; charset=utf-8", body: include_bytes!("../../assets/style.css") },
     Asset { name: "app.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/app.js") },
+    // the change history page only (templates/history.html)
+    Asset { name: "history.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/history.js") },
+    Asset { name: "history.css", mime: "text/css; charset=utf-8", body: include_bytes!("../../assets/history.css") },
     Asset { name: "sw.js", mime: "text/javascript; charset=utf-8", body: include_bytes!("../../assets/sw.js") },
     Asset { name: "icon.svg", mime: "image/svg+xml", body: include_bytes!("../../assets/icon.svg") },
     // Leaflet 1.9.4 (BSD-2), vendored; fetched by the browser only when the map dialog opens

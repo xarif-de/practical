@@ -1283,14 +1283,25 @@ fn user_tz(input: &EventInput, default: chrono_tz::Tz) -> chrono_tz::Tz {
 }
 
 pub async fn create_event(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz) -> AppResult<String> {
+    create_event_as(state, user, input, default_tz, None).await
+}
+
+/// `keep_uid`: a move to another calendar keeps the event's UID (as a CalDAV MOVE does), so
+/// clients and the change history see the same event; a live object with it there gets a new one.
+pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz, keep_uid: Option<&str>) -> AppResult<String> {
     collections::ensure_owner(user, &input.principal)?;
     let tz = user_tz(&input, default_tz);
-    let uid = uuid::Uuid::new_v4().to_string();
+    let keep = match keep_uid {
+        Some(u) if state.calendars.get_object(&input.principal, &input.cal_id, u, false).await.is_err() => Some(u.to_string()),
+        _ => None,
+    };
+    let uid = keep.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let lines = build_vevent(&uid, 0, &input, tz, None)?;
     let ics = assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, vec![lines], &[]);
     let obj = CalendarObject::import(&ics, None)?;
     let object_id = uid.clone();
-    state.calendars.put_object(&input.principal, &input.cal_id, &object_id, obj, false).await?;
+    // overwrite only replaces a trashed copy of a kept UID (a move there and back)
+    state.calendars.put_object(&input.principal, &input.cal_id, &object_id, obj, keep.is_some()).await?;
     Ok(object_id)
 }
 

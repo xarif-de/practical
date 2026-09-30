@@ -6,6 +6,8 @@ use crate::ctx::{PageCtx, set_flash};
 use crate::domain::collections::{self, AbInfo, CalInfo, NewCalendar, Owner, PALETTE};
 use crate::domain::events;
 use crate::domain::groups::{self, GroupInfo, RemoveOutcome, TrashedGroup};
+use crate::domain::history::{self, Actor};
+use crate::domain::history_text::Store;
 use crate::domain::holidays::{self, Region};
 use crate::domain::prefs::{self, Prefs};
 use crate::domain::tokens;
@@ -721,7 +723,11 @@ struct Imported {
 /// Raw .ics body (app.js reads the chosen file and POSTs it — no multipart dependency).
 async fn import_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
-    Ok(axum::Json(Imported { imported: crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await? }))
+    let mut g = history::begin(&state, Actor::import(&user, "")).await;
+    g.coll(Store::Cal, &owner, &id);
+    let imported = crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await?;
+    g.commit().await;
+    Ok(axum::Json(Imported { imported }))
 }
 
 #[derive(serde::Deserialize)]
@@ -760,7 +766,10 @@ async fn import_new_calendar(State(state): State<SharedState>, user: Principal, 
         components: if comps.is_empty() { vec![] } else { collections::parse_components(&comps) },
         timezone: if q.timezone.trim().is_empty() { state.config.default_timezone.clone() } else { q.timezone },
     };
+    let mut g = history::begin(&state, Actor::import(&user, n.name.trim())).await;
     let (id, imported) = crate::domain::transfer::import_new_calendar(&state, &user, n, &body).await?;
+    g.coll(Store::Cal, &owner, &id);
+    g.commit().await;
     Ok(axum::Json(ImportedNew { id, owner, imported }))
 }
 
@@ -776,13 +785,20 @@ struct NewAbImportQ {
 /// A new address book from a .vcf file: the metadata in the query, the raw file as the body.
 async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::extract::Query(q): axum::extract::Query<NewAbImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let mut g = history::begin(&state, Actor::import(&user, q.name.trim())).await;
     let (id, imported) = crate::domain::transfer::import_new_addressbook(&state, &user, &q.owner, &q.name, q.color.trim(), &q.description, &body).await?;
+    g.coll(Store::Ab, &q.owner, &id);
+    g.commit().await;
     Ok(axum::Json(ImportedNew { id, owner: q.owner, imported }))
 }
 
 async fn import_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
-    Ok(axum::Json(Imported { imported: crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await? }))
+    let mut g = history::begin(&state, Actor::import(&user, "")).await;
+    g.coll(Store::Ab, &owner, &id);
+    let imported = crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await?;
+    g.commit().await;
+    Ok(axum::Json(Imported { imported }))
 }
 
 pub fn router() -> Router<SharedState> {

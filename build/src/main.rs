@@ -94,6 +94,7 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .merge(routes::calendar::router())
         .merge(routes::contacts::router())
         .merge(routes::tasks::router())
+        .merge(routes::history::router())
         .merge(routes::settings::router())
         .merge(routes::api::router())
         .route_layer(axum::middleware::from_fn(auth::require_user));
@@ -146,6 +147,7 @@ async fn serve() -> Result<(), String> {
         geo: Default::default(),
         search_index: Default::default(),
         task_cache: Default::default(),
+        history: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),
         db,

@@ -15,6 +15,8 @@ pub fn spawn_change_poller(state: SharedState) {
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
+            // the change history first: a page reloading on the SSE event below then finds it recorded
+            crate::domain::history::poll(&state).await;
             for (kind, table) in [("calendar", "calendars"), ("addressbook", "addressbooks")] {
                 let rows = match match table {
                     "calendars" => sqlx::query("SELECT principal, id, synctoken FROM calendars").fetch_all(&state.db).await,
@@ -46,6 +48,11 @@ pub fn spawn_trash_purger(state: SharedState) {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
         loop {
             tick.tick().await;
+            match crate::domain::history::purge(&state).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("history purge: {n} change(s) past the retention"),
+                Err(e) => tracing::error!("history purge: {e}"),
+            }
             match crate::domain::groups::purge_expired(&state).await {
                 Ok(0) => {}
                 Ok(n) => tracing::info!("trash purge: {n} group(s) deleted"),
