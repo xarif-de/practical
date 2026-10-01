@@ -12,21 +12,23 @@ WORKDIR /src
 # release (every build) or dist (release tags: CI passes --build-arg=CARGO_PROFILE=dist);
 # see the two profiles in Cargo.toml
 ARG CARGO_PROFILE=release
-# Dependency layer: RustiCal's crates come as git dependencies, so this layer
-# (a few minutes) only rebuilds when Cargo.toml/Cargo.lock change.
-COPY Cargo.toml Cargo.lock build.rs ./
-RUN mkdir -p src assets locales templates \
- && echo 'fn main() {}' > src/main.rs \
- && cargo build --profile "$CARGO_PROFILE" --locked \
- && rm -rf src
-
+# Cached build (base/dagger-modules docs/rust-functions.md): cargo's registry and
+# this repo's target/ live in BuildKit cache mounts that persist in the dagger
+# engine, so cargo's fingerprints skip every crate whose inputs did not change.
+# Replaces a dummy-main.rs dependency layer, which rebuilt ALL dependencies on
+# every Cargo.lock change, i.e. on every Renovate bump. Measured on arm64,
+# 2026-10-01: cold 550 s, one-line source change 349 s (only this crate +
+# LTO). The binary is copied out in the same RUN: a cache mount is not part of
+# the layer.
+COPY Cargo.toml Cargo.lock build.rs askama.toml ./
 COPY src ./src
 COPY assets ./assets
 COPY locales ./locales
 COPY templates ./templates
-COPY askama.toml ./
-RUN touch src/main.rs build.rs \
- && cargo build --profile "$CARGO_PROFILE" --locked \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=rustical-ui-target,target=/src/target,sharing=locked \
+    cargo build --profile "$CARGO_PROFILE" --locked \
  && cp "target/$CARGO_PROFILE/rustical-ui" /rustical-ui
 
 # renovate: datasource=docker packageName=alpine

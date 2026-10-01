@@ -382,8 +382,11 @@ takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset 
 ## Repository layout
 
 Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `templates/`,
-`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml` and the two Forgejo
-workflows from `base/dagger-ci-basics`. Image:
+`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml` and three Forgejo
+workflows: `docker-build`/`docker-publish` from `base/dagger-ci-basics`, and `rust-verify`
+(cargo-deny on every push, `verify-rust` in `base/dagger-modules`). The Dockerfile keeps cargo's
+registry and `target/` in BuildKit cache mounts, so a build recompiles only what changed
+(`base/dagger-modules` docs/rust-functions.md). Image:
 `registry.gitlab.com/xarif/docker/rustical-ui:main` (built and pushed by Forgejo Actions,
 pulled from the gitlab.com registry like every xarif image).
 

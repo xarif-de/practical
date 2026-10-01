@@ -31,9 +31,9 @@ echo "Image available as: $IMAGE_NAME"
 
 [tasks.deny]
 description = "Supply-chain gate for the Rust source in build/: cargo-deny (RustSec advisories + banned crate versions + source allowlist)"
-# Config: build/deny.toml. cargo-deny comes from the host dotfiles (mise global), not from this
-# repo; the shared dagger pipeline is untouched — this gate is developer-side, run it before
-# publishing an image and after every dependency bump.
+# Config: build/deny.toml. cargo-deny comes from the host dotfiles (mise global). The same three
+# checks gate CI on every push (.forgejo/workflows/rust-verify.yml → dagger verify-rust); this
+# task is the local shortcut.
 run = """
 if ! command -v cargo-deny >/dev/null 2>&1; then
   echo "cargo-deny not found — install it: mise install (global) or brew install cargo-deny" >&2

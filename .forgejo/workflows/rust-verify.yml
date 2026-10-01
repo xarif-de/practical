@@ -1,0 +1,19 @@
+# Blueprint: https://git.xarif.de/base/dagger-ci-basics
+# Reusable workflow: https://git.xarif.de/base/dagger-modules
+
+# Supply-chain gate (cargo-deny: RustSec advisories, banned versions, source
+# allowlist) over build/Cargo.lock, config build/deny.toml. A separate workflow
+# so a finding fails in minutes instead of after the image build, and so it runs
+# on every push — including Renovate's, which is what brings new lockfiles.
+name: rust-verify
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+jobs:
+  verify-rust:
+    uses: base/dagger-modules/.forgejo/workflows/dagger-call.yml@main
+    with:
+      dagger-function: verify-rust
+      dagger-args: --source=build
