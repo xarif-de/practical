@@ -19,7 +19,10 @@ ARG CARGO_PROFILE=release
 # every Cargo.lock change, i.e. on every Renovate bump. Measured on arm64,
 # 2026-10-01: cold 550 s, one-line source change 349 s (only this crate +
 # LTO). The binary is copied out in the same RUN: a cache mount is not part of
-# the layer.
+# the layer. The `touch` forces this crate to rebuild every time: cargo judges
+# path crates by mtime alone, and a tree with OLDER mtimes than the cache (a
+# copied tree, rsync -a) is otherwise served the previous binary — reproduced
+# on ai/panelist 2026-10-01. Dependencies live in the registry and stay cached.
 COPY Cargo.toml Cargo.lock build.rs askama.toml ./
 COPY src ./src
 COPY assets ./assets
@@ -28,7 +31,8 @@ COPY templates ./templates
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=rustical-ui-target,target=/src/target,sharing=locked \
-    cargo build --profile "$CARGO_PROFILE" --locked \
+    find . -path ./target -prune -o -type f -exec touch {} + \
+ && cargo build --profile "$CARGO_PROFILE" --locked \
  && cp "target/$CARGO_PROFILE/rustical-ui" /rustical-ui
 
 # renovate: datasource=docker packageName=alpine
