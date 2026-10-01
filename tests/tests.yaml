@@ -59,6 +59,53 @@ tests:
           expect:
             - "SAME-RELEASE"
 
+  - name: ui-runs-against-a-rustical-migrated-database
+    # The pairing itself, as the pod runs it: RustiCal's own binary creates and migrates a
+    # fresh store and writes a principal + app token; rustical-ui then starts against that
+    # file (refuses a non-RustiCal schema, applies its xui_* migrations) and serves pages
+    # whose queries read RustiCal's tables through the rustical_* crates. Proven to go red:
+    # renaming calendars.displayname in the store turns /settings and /history into HTTP 500
+    # (2026-10-01). Binds are IPv4 loopback: the test sandbox need not have IPv6.
+    timeout: 180s
+    steps:
+      - env:
+          RUSTICAL_DATA_STORE__SQLITE__DB_URL: /tmp/it/db.sqlite3
+          RUSTICAL_HTTP__BIND: 127.0.0.1:4000
+          NO_COLOR: "1"
+        run:
+          - |
+            set -u
+            mkdir -p /tmp/it && cd /tmp/it
+            fail() { echo "FAIL $*"; echo "--- rustical"; cat rustical.log; echo "--- ui"; cat ui.log; exit 1; }
+            /usr/local/bin/rustical principals create probe -n IntegrationProbe >/dev/null || fail "principal create"
+            tok=$(/usr/local/bin/rustical principals app-token create --name it probe) || fail "app-token create"
+            /usr/local/bin/rustical serve >rustical.log 2>&1 &
+            srv=$!
+            # RUSTICAL_UI__* only on this process: rustical rejects every unknown
+            # RUSTICAL_* variable ("unknown field: found `ui`"), as in the deployment.
+            RUSTICAL_UI__DB_PATH=/tmp/it/db.sqlite3 RUSTICAL_UI__RUSTICAL_URL=http://127.0.0.1:4000 \
+              RUSTICAL_UI__BIND=127.0.0.1:4001 RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true \
+              /rustical-ui serve >ui.log 2>&1 &
+            ui=$!
+            i=0
+            until [ "$(wget -qO- http://127.0.0.1:4001/healthz 2>/dev/null)" = ok ]; do
+              kill -0 "$ui" 2>/dev/null || fail "rustical-ui exited"
+              i=$((i+1)); [ "$i" -lt 90 ] || fail "healthz not ok after 90 s"
+              sleep 1
+            done
+            auth="Authorization: Basic $(printf 'probe:%s' "$tok" | base64 | tr -d '\n')"
+            for p in /settings /calendar /tasks /contacts /history; do
+              wget -qO page --header "$auth" "http://127.0.0.1:4001$p" || fail "GET $p"
+            done
+            wget -qO page --header "$auth" http://127.0.0.1:4001/settings && grep -q IntegrationProbe page || fail "principal not read back"
+            bad="Authorization: Basic $(printf 'probe:wrong' | base64)"
+            if wget -qO page --header "$bad" http://127.0.0.1:4001/settings 2>/dev/null; then fail "wrong token accepted"; fi
+            kill "$ui" "$srv" 2>/dev/null
+            echo INTEGRATION-OK
+        output:
+          expect:
+            - "INTEGRATION-OK"
+
   - name: runtime-files
     timeout: 90s
     steps:
