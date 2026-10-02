@@ -16,9 +16,9 @@ ARG CARGO_PROFILE=release
 # this repo's target/ live in BuildKit cache mounts that persist in the dagger
 # engine, so cargo's fingerprints skip every crate whose inputs did not change.
 # Replaces a dummy-main.rs dependency layer, which rebuilt ALL dependencies on
-# every Cargo.lock change, i.e. on every Renovate bump. Measured on arm64,
-# 2026-10-01: cold 550 s, one-line source change 349 s (only this crate +
-# LTO). The binary is copied out in the same RUN: a cache mount is not part of
+# every Cargo.lock change, i.e. on every Renovate bump. Measured on arm64 (8
+# CPUs, `release` profile, 2026-10-02): cold 290 s, a CSS change 115 s (only
+# this crate). The binary is copied out in the same RUN: a cache mount is not part of
 # the layer. The `touch` forces this crate to rebuild every time: cargo judges
 # path crates by mtime alone, and a tree with OLDER mtimes than the cache (a
 # copied tree, rsync -a) is otherwise served the previous binary — reproduced

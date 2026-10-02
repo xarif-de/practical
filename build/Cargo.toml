@@ -65,14 +65,17 @@ vtimezones-rs = "0.3"
 fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
 
-# Every build (branches, main — what runs on plan.xarif.de): thin LTO and parallel codegen.
-# Measured 2026-10-01 (native arm64, 14 cores): app-only rebuild 50 s vs 162 s and a full build
-# 129 s vs 261 s against `dist`, for a binary of 26.5 MB instead of 20.9 MB. The UI waits on
-# SQLite and the network, not on the CPU; the build time is paid on every push, twice (Forgejo
-# and the gitlab.com mirror).
+# Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, parallel codegen.
+# `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
+# capped at 8 CPUs like the CI dind, rust 1.99, one run each), rebuild after a CSS change / cold:
+#   lto = "thin"  249 s / 371 s, 26.7 MB    lto = false  115 s / 290 s, 25.8 MB
+#   lto = "off"    93 s / 220 s, 26.3 MB
+# Cross-crate thin LTO cost ~60 % of every rebuild and made the binary no smaller; the UI waits on
+# SQLite and the network, not on the CPU. `false` over `off`: the smallest of the three for 22 s.
+# (Also measured, not taken: mold −6 %, incremental −28 % with thin LTO, codegen-units=256 slower.)
 [profile.release]
 strip = true
-lto = "thin"
+lto = false
 codegen-units = 16
 opt-level = 3
 
