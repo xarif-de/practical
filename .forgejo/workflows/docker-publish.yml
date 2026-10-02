@@ -1,17 +1,21 @@
 # Blueprint: https://git.xarif.de/base/dagger-ci-basics
 # Reusable workflow: https://git.xarif.de/base/dagger-modules
 
+# main → :main/:latest with the fast `release` profile. Release tags are
+# docker-release.yml, a separate workflow on purpose: Forgejo 15.0.9 expands a
+# reusable workflow server-side WITHOUT a git context (jobparser.Parse gets no
+# WithGitContext, services/actions/notifier_helper.go), so `${{ github.ref }}`
+# in `with:` is empty — the former `startsWith(github.ref, 'refs/tags/v') && …`
+# silently dropped the dist build arg and v0.9.1 shipped the release profile.
+# The trigger is the one switch that is evaluated reliably.
 name: docker-publish
 on:
   push:
     branches: [main, master]
-    tags:     ['v*']
     # Publish only when something that ends up in the image changed. The build is
     # not bit-reproducible (seen on the former gitlab.com pipeline: a README-only
     # commit pushed a fresh digest → a Renovate digest-bump PR → an auto-merge →
     # a pod roll for a typo).
-    # Forgejo applies `paths` to branch pushes only: a tag push always matches
-    # (modules/actions/workflows.go, v15.0.9), so releases are unaffected.
     paths:
       - 'build/**'
       - 'tests/**'
@@ -22,8 +26,7 @@ jobs:
     uses: base/dagger-modules/.forgejo/workflows/dagger-call.yml@main
     with:
       dagger-function: publish-image
-      # release tags build the size/speed-optimised `dist` profile (build/Cargo.toml); main the fast one
-      dagger-args: --source=build --tests=tests/tests.yaml ${{ startsWith(github.ref, 'refs/tags/v') && '--build-arg=CARGO_PROFILE=dist' || '' }}
+      dagger-args: --source=build --tests=tests/tests.yaml
     secrets:
       registry-password: ${{ secrets.REGISTRY_TOKEN }}
       # The same image also goes to registry.gitlab.com/xarif/<owner>/<repo>,
