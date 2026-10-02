@@ -366,7 +366,7 @@ crates' tag, for a deployment that runs RustiCal's own image.
 ```bash
 mise run dev-db                # COPY of the production DB → ~/.cache/rustical-ui-dev (cluster read-only), test password
 mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
-mise run test                  # cargo test (rust-toolchain.toml → 1.98)
+mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version)
 mise run deny                  # cargo-deny: advisories, bans, sources
 mise run pipeline              # the CI image build + tests/tests.yaml, loaded into docker
 ```
