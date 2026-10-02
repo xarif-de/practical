@@ -435,6 +435,21 @@
   // user menu: click toggles (hover works via CSS, touch needs the click)
   $$('.filter > button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.parentElement.classList.toggle('open'); }));
   document.addEventListener('click', e => { if (!e.target.closest('.filter')) $$('.filter.open').forEach(f => f.classList.remove('open')); });
+  // keep every hover/click popover inside the screen. Its CSS anchor (right: 0, or -60px on a phone) is
+  // right for some toolbar positions only: the contacts column picker sits at the left of a wrapped
+  // toolbar row at 390px (ran 148px off the left edge) and at the right at 600px. Measured while hidden
+  // too — visibility keeps the layout — so a closed popover never widens the page.
+  const fitPop = pop => {
+    pop.style.translate = '';
+    const r = pop.getBoundingClientRect();
+    if (!r.width) return;
+    let dx = Math.min(0, innerWidth - 8 - r.right);
+    if (r.left + dx < 8) dx = 8 - r.left;
+    if (dx) pop.style.translate = dx + 'px 0';
+  };
+  const fitPops = () => $$('.filter > .pop, .more > .pop').forEach(fitPop);
+  fitPops(); addEventListener('resize', fitPops);
+  $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));
 
   // "/" focuses the search
   const q = $('#q');

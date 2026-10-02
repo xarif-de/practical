@@ -299,7 +299,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .filter label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 14px; }
 .filter label:hover { background: var(--tile); } .filter label small { margin-left: auto; color: var(--fg-3); }
 .filter .row { display: flex; gap: 12px; padding: 8px 6px 2px; font-size: 12px; color: var(--accent); }
-@media (max-width: 720px) { .usearch { max-width: none; } .usearch input { padding-left: 30px; } .filter .pop { right: -60px; } }
+@media (max-width: 720px) { .usearch { max-width: none; } .usearch input { padding-left: 30px; } .filter .pop { right: -60px; } .filter.user .pop { right: 0; } } /* the user menu sits at the right edge: shifted like the others it ran 44px past a 390px screen, and even hidden (visibility) it widened every page by that much (app.js fitPop then keeps every popover on screen) */
 
 /* timelines */
 .tl { display: none; }
@@ -374,7 +374,7 @@ html[data-scheme=dark] .ev.allday.c2{background:color-mix(in srgb,var(--c2) 28%,
 .dayblock.today .dl b { color: var(--today); }
 .dayblock ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; } .dayblock li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: center; } .dayblock li.none span { color: var(--fg-3); }
 .dayblock time { color: var(--fg-2); font-variant-numeric: tabular-nums; font-size: 13px; } .dayblock .ev { font-size: 14px; padding: 4px 8px; }
-@media (max-width: 899px) { .cal.v-week { grid-template-columns: 1fr; } .heat { display: none; } }
+@media (max-width: 899px) { .cal.v-week { grid-template-columns: 1fr; } .heat, .cal.v-week .heat { display: none; } } /* `.cal.v-week .heat` (display:grid, sticky) outranks a bare `.heat`: the density panel stuck over the week list on a phone */
 
 /* birthdays */
 .cal.v-bday { grid-template-columns: 1fr 280px; }
@@ -617,7 +617,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .list li { cursor: pointer; } .list li.on { box-shadow: inset 0 0 0 1.5px var(--accent); } .list li:not(.on):hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 28%, transparent); }
 .contacts .sheet tr[data-key]:not(.on):hover td { background: color-mix(in srgb, var(--accent) 5%, var(--bg)); } .contacts .sheet tr.on td { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); } .contacts .sheet tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); } /* the picked contact (app.js activeKey): hover faint, picked blue, as in the calendar */
 .list li.hide, .lpanel.hide, .sheet tr.hide { display: none; }
-@media (max-width: 1099px) { .contacts { grid-template-areas: "cols" "list"; grid-template-columns: 1fr; } .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; } }
+@media (max-width: 1099px) { .contacts { grid-template-areas: "cols" "list"; grid-template-columns: 1fr; } .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; align-self: stretch; max-height: none; } } /* both undo desktop-pane rules on the full-screen editor (measured on a 844px-high phone, Chrome 154): `align-self: start` (`.contacts .detail`) now also applies to fixed boxes and shrank it to its content (576px, the list showing below), and the pane's max-height alone would still cap it at 657px */
 
 /* ---- Aufgaben ---- */
 .done summary { cursor: pointer; color: var(--fg-2); font-size: 13px; margin: 6px 0; }
