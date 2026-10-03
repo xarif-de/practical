@@ -387,6 +387,9 @@ Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `te
 CI is one `dagger call … ci` (`base/dagger-modules` docs/ci.md), which `.forgejo/workflows/ci.yml`
 only triggers. Every push runs cargo-deny and builds + tests the image; `main` publishes with the
 `release` profile (skipped when the build inputs are unchanged), `v*` tags with the `dist` profile.
+Deployment follows from the push: Renovate pins the new `:main` digest in `kubernetes/rustical`
+(PR, CI, auto-merge, up to 2 h after the publish), ArgoCD syncs it from the gitlab.com mirror, and the
+pod restarts with both containers on the one new image.
 The Dockerfile keeps cargo's
 registry and `target/` in BuildKit cache mounts, so a build recompiles only what changed
 (`base/dagger-modules` docs/rust-functions.md). Image:
