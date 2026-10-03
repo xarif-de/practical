@@ -9,7 +9,7 @@ FROM rust:1.99-alpine@sha256:a96ea6d18d4062e38f16cfbadd8b4541d622f2527dd0a5eca1f
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
 
-# release (every build) or dist (release tags: CI passes --build-arg=CARGO_PROFILE=dist);
+# release (every build) or dist (release tags: dagger-ci.yaml release-build-args);
 # see the two profiles in Cargo.toml
 ARG CARGO_PROFILE=release
 # Cached build (base/dagger-modules docs/rust-functions.md): cargo's registry and

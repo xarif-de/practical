@@ -368,7 +368,8 @@ mise run dev-db                # COPY of the production DB → ~/.cache/rustical
 mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
 mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version)
 mise run deny                  # cargo-deny: advisories, bans, sources
-mise run pipeline              # the CI image build + tests/tests.yaml, loaded into docker
+mise run pipeline              # the CI pipeline locally (cargo-deny + image build + tests), never publishes
+mise run image                 # the image, loaded into docker as xarif-rustical-ui
 ```
 
 `mise run dev` is the edit-and-see loop: `watchexec` rebuilds and restarts on every change under
@@ -382,11 +383,11 @@ takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset 
 ## Repository layout
 
 Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `templates/`,
-`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml` and four Forgejo
-workflows: `docker-build`/`docker-publish` from `base/dagger-ci-basics` (branches; `main` publishes
-with the `release` profile), `docker-release` (`v*` tags, the `dist` profile — a separate workflow
-because Forgejo 15.0.9 evaluates `${{ github.ref }}` in a reusable workflow's `with:` as empty), and
-`rust-verify` (cargo-deny on every push, `verify-rust` in `base/dagger-modules`). The Dockerfile keeps cargo's
+`assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml`, and `dagger-ci.yaml`: the whole
+CI is one `dagger call … ci` (`base/dagger-modules` docs/ci.md), which `.forgejo/workflows/ci.yml`
+only triggers. Every push runs cargo-deny and builds + tests the image; `main` publishes with the
+`release` profile (skipped when the build inputs are unchanged), `v*` tags with the `dist` profile.
+The Dockerfile keeps cargo's
 registry and `target/` in BuildKit cache mounts, so a build recompiles only what changed
 (`base/dagger-modules` docs/rust-functions.md). Image:
 `registry.gitlab.com/xarif/docker/rustical-ui:main` (built and pushed by Forgejo Actions,

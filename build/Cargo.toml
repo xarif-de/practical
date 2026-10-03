@@ -79,7 +79,7 @@ lto = false
 codegen-units = 16
 opt-level = 3
 
-# Release tags only (CI passes --build-arg=CARGO_PROFILE=dist on `v*` tags): the whole program
+# Release tags only (dagger-ci.yaml release-build-args: CARGO_PROFILE=dist on `v*` tags): the whole program
 # optimised as one unit — smallest, fastest binary, single-threaded link.
 [profile.dist]
 inherits = "release"

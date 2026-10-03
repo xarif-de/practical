@@ -1,0 +1,11 @@
+# What CI runs: `dagger call -m git.xarif.de/base/dagger-modules.git@main ci`
+# (base/dagger-modules docs/ci.md). Locally the same call builds and tests only.
+image:
+  source: build
+  tests: tests/tests.yaml
+  publish:
+    # v* tags: the size-optimised whole-program profile (build/Cargo.toml).
+    # main keeps the fast `release` profile.
+    release-build-args: [CARGO_PROFILE=dist]
+rust:
+  source: build

@@ -1,0 +1,10 @@
+# The whole pipeline is `dagger call … ci` (base/dagger-modules docs/ci.md),
+# configured by dagger-ci.yaml. Forgejo only triggers it.
+name: ci
+on:
+  push: { branches: ['**'], tags: ['v*'] }
+  workflow_dispatch:
+jobs:
+  ci:
+    uses: base/dagger-modules/.forgejo/workflows/dagger-ci.yml@main
+    secrets: inherit

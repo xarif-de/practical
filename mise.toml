@@ -2,37 +2,24 @@
 # Reusable workflow: https://git.xarif.de/base/dagger-modules
 
 [tasks.pipeline]
-description = "Build and test the image, then load it into the local Docker engine"
+description = "The CI pipeline, locally: cargo-deny + image build + tests/tests.yaml (dagger-ci.yaml); never publishes"
+run = "DAGGER_NO_NAG=1 dagger call -m git.xarif.de/base/dagger-modules.git@main ci"
+
+[tasks.image]
+description = "Build the image (native platform) and load it into the local Docker engine as xarif-rustical-ui"
 run = """
 export DAGGER_NO_NAG=1
-DIR_NAME="$(basename "$PWD")"
-IMAGE_NAME="${IMAGE_NAME:-xarif-${DIR_NAME}}"
-TARBALL="/tmp/${DIR_NAME}-$$.tar"
-# Cleanup via a trap, NOT as the last line of this script. `rm` succeeds even
-# when the build failed, so as the final command its exit code became the task's
-# and `mise run pipeline` reported SUCCESS on a red build -- measured 2026-08-31
-# in docker/paperless-precision-ocr, where dagger printed "1/45 tests failed"
-# and the task still exited 0. This task is the gate in front of every push, so
-# it may never be the thing that swallows the failure. A trap fires on every
-# exit path and leaves the exit status alone.
-trap 'rm -f "$TARBALL"' EXIT
-dagger call \
-  -m git.xarif.de/base/dagger-modules.git@main \
-  build-image \
-  --source=build \
-  --root=. \
-  --tests=tests/tests.yaml \
-  --platform=linux/amd64 \
-  export --path="$TARBALL" && \
-IMAGE_ID=$(docker load -i "$TARBALL" | sed 's/Loaded image.*: //') && \
-docker tag "$IMAGE_ID" "$IMAGE_NAME" && \
-echo "Image available as: $IMAGE_NAME"
+TARBALL="/tmp/rustical-ui-$$.tar"
+trap 'rm -f "$TARBALL"' EXIT   # a trap, not a last line: it must not mask a failed build
+dagger call -m git.xarif.de/base/dagger-modules.git@main build-image --source=build export --path="$TARBALL" &&
+docker tag "$(docker load -i "$TARBALL" | sed 's/Loaded image.*: //')" xarif-rustical-ui &&
+echo "Image available as: xarif-rustical-ui"
 """
 
 [tasks.deny]
 description = "Supply-chain gate for the Rust source in build/: cargo-deny (RustSec advisories + banned crate versions + source allowlist)"
 # Config: build/deny.toml. cargo-deny comes from the host dotfiles (mise global). The same three
-# checks gate CI on every push (.forgejo/workflows/rust-verify.yml → dagger verify-rust); this
+# checks gate CI on every push (dagger-ci.yaml `rust` → verify-rust); this
 # task is the local shortcut.
 run = """
 if ! command -v cargo-deny >/dev/null 2>&1; then
