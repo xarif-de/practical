@@ -1,6 +1,6 @@
 [package]
 name = "practical"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2024"
 rust-version = "1.98"
 description = "Web UI next to RustiCal: groups, collections, app tokens, calendar and contacts views on RustiCal's own SQLite store"

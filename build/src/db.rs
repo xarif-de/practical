@@ -12,8 +12,8 @@ pub async fn open(db_path: &str) -> Result<SqlitePool, sqlx::Error> {
     rustical_store_sqlite::create_db_pool(&format!("sqlite://{db_path}"), false).await
 }
 
-/// (version, sql) — append-only; never change what a shipped entry does. (The table prefix
-/// went xui_ → practical_ on 2026-10-05; existing databases were renamed once, by hand.)
+/// (version, sql) — append-only; never change what a shipped entry does. (2026-10-05, applied to
+/// existing databases once by hand: table prefix xui_ → practical_; column user_settings.presets_json dropped.)
 const MIGRATIONS: &[(i64, &str)] = &[
     (
         1,
@@ -37,7 +37,6 @@ CREATE TABLE practical_user_settings (
     holiday_subdivision TEXT,
     vacation_days INTEGER,
     vacation_rule_json TEXT,
-    presets_json TEXT, -- unused since the event presets were removed (category rules replace them); kept for existing databases
     contact_columns_json TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
