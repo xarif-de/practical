@@ -221,6 +221,9 @@ impl VacationRule {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

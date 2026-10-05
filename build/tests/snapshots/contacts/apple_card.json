@@ -1,0 +1,83 @@
+{
+  "ab_color": "#ff2d55",
+  "ab_id": "a",
+  "ab_name": "Freunde",
+  "additional": "Maria",
+  "addresses": [
+    {
+      "city": "Dresden",
+      "code": "01067",
+      "country": "Deutschland",
+      "kind": "home",
+      "pref": true,
+      "region": "Sachsen",
+      "street": "Postfach 1, Hinterhaus, Hauptstr. 1"
+    }
+  ],
+  "anniversary": "--06-12",
+  "birthday": "1984-03-12",
+  "categories": [
+    "Familie",
+    "Arbeit"
+  ],
+  "dates": [
+    {
+      "date": "2010-06-12",
+      "label": "Hochzeit"
+    }
+  ],
+  "department": "Forschung",
+  "emails": [
+    {
+      "kind": "home",
+      "pref": true,
+      "value": "erika@example.org"
+    },
+    {
+      "kind": "work",
+      "pref": false,
+      "value": "e.muster@acme.example"
+    }
+  ],
+  "etag": "etag",
+  "family": "Muster",
+  "full_name": "Dr. Erika Muster",
+  "given": "Erika",
+  "impp": [
+    {
+      "kind": "Signal",
+      "pref": false,
+      "value": "+49 151 1"
+    }
+  ],
+  "is_group": true,
+  "nickname": "Eri",
+  "note": "Zeile\nzwei",
+  "object_id": "obj",
+  "org": "ACME, Inc.",
+  "phones": [
+    {
+      "kind": "cell",
+      "pref": true,
+      "value": "+49 151 1"
+    },
+    {
+      "kind": "home",
+      "pref": false,
+      "value": "+49 351 2"
+    }
+  ],
+  "prefix": "Dr.",
+  "principal": "p",
+  "related": [],
+  "suffix": "jun.",
+  "title": "Leiterin",
+  "uid": "erika",
+  "urls": [
+    {
+      "kind": "",
+      "pref": true,
+      "value": "https://example.org"
+    }
+  ]
+}

@@ -838,3 +838,6 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/import/addressbooks", post(import_new_addressbook).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
 }
+
+#[cfg(test)]
+mod pinned;

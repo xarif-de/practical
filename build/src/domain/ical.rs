@@ -161,6 +161,9 @@ pub fn to_utc(dt: NaiveDateTime, tz: chrono_tz::Tz) -> chrono::DateTime<chrono::
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

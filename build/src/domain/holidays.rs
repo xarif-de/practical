@@ -838,6 +838,9 @@ pub async fn subdivisions(state: &AppState, country: &str, lang: &str) -> AppRes
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

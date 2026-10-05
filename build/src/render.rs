@@ -663,6 +663,9 @@ pub fn month_view(view_date: NaiveDate, picked: NaiveDate, today: NaiveDate, ins
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

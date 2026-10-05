@@ -12,6 +12,10 @@ mod render;
 mod routes;
 mod state;
 mod tasks;
+#[cfg(test)]
+mod testkit;
+#[cfg(test)]
+mod it;
 
 use axum::Router;
 use axum::routing::get;

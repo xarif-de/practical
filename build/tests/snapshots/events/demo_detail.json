@@ -1,0 +1,224 @@
+{
+  "alarms": [
+    {
+      "acknowledged": null,
+      "action": "DISPLAY",
+      "at": null,
+      "attach": "",
+      "attendees": [],
+      "description": "In 15 Minuten geht es los",
+      "duration_minutes": 0,
+      "idx": 0,
+      "minutes": 15,
+      "proximity": "",
+      "related_end": false,
+      "repeat": 0,
+      "summary": ""
+    },
+    {
+      "acknowledged": "2026-09-15T19:00:00",
+      "action": "DISPLAY",
+      "at": null,
+      "attach": "",
+      "attendees": [],
+      "description": "Morgen Kulturpalast",
+      "duration_minutes": 10,
+      "idx": 1,
+      "minutes": 1440,
+      "proximity": "",
+      "related_end": false,
+      "repeat": 2,
+      "summary": ""
+    },
+    {
+      "acknowledged": null,
+      "action": "AUDIO",
+      "at": null,
+      "attach": "https://example.org/ping.au",
+      "attendees": [],
+      "description": "",
+      "duration_minutes": 0,
+      "idx": 2,
+      "minutes": 5,
+      "proximity": "",
+      "related_end": true,
+      "repeat": 0,
+      "summary": ""
+    },
+    {
+      "acknowledged": null,
+      "action": "EMAIL",
+      "at": "2026-09-21T20:00:00",
+      "attach": "",
+      "attendees": [
+        "thomas@example.org"
+      ],
+      "description": "Morgen Abend im Kulturpalast.",
+      "duration_minutes": 0,
+      "idx": 3,
+      "minutes": 0,
+      "proximity": "",
+      "related_end": false,
+      "repeat": 0,
+      "summary": "Erinnerung: Demo-Termin"
+    },
+    {
+      "acknowledged": null,
+      "action": "DISPLAY",
+      "at": null,
+      "attach": "",
+      "attendees": [],
+      "description": "Bald aufbrechen",
+      "duration_minutes": 0,
+      "idx": 4,
+      "minutes": 60,
+      "proximity": "DEPART",
+      "related_end": false,
+      "repeat": 0,
+      "summary": ""
+    }
+  ],
+  "all_day": false,
+  "attendees": [
+    {
+      "cutype": "INDIVIDUAL",
+      "email": "erika@example.org",
+      "extra": [
+        [
+          "RSVP",
+          "TRUE"
+        ]
+      ],
+      "name": "Erika Musterfrau",
+      "role": "REQ-PARTICIPANT",
+      "status": "ACCEPTED"
+    },
+    {
+      "cutype": "",
+      "email": "max@example.org",
+      "extra": [
+        [
+          "RSVP",
+          "TRUE"
+        ]
+      ],
+      "name": "Max Mustermann",
+      "role": "OPT-PARTICIPANT",
+      "status": "NEEDS-ACTION"
+    },
+    {
+      "cutype": "RESOURCE",
+      "email": "beamer2@example.org",
+      "extra": [],
+      "name": "Beamer 2",
+      "role": "",
+      "status": "ACCEPTED"
+    }
+  ],
+  "cal_id": "<cal>",
+  "categories": [
+    "Familie",
+    "Kultur",
+    "Demo"
+  ],
+  "class": "PRIVATE",
+  "color": "tomato",
+  "description": "Zeilen mit Umbruch\nund Sonderzeichen, Komma; Semikolon.\nZweiter Absatz.",
+  "end": "2026-09-22T21:30:00",
+  "etag": "<etag>",
+  "exdates": [
+    "2026-10-06T19:00:00"
+  ],
+  "geo": [
+    51.050407,
+    13.737262
+  ],
+  "has_overrides": true,
+  "links": [
+    {
+      "bin_index": null,
+      "embedded": false,
+      "extra": [],
+      "features": [],
+      "filename": "",
+      "fmt": "",
+      "keep": false,
+      "kind": "url",
+      "label": "",
+      "size": null,
+      "uri": "https://www.kulturpalast-dresden.de/"
+    },
+    {
+      "bin_index": null,
+      "embedded": false,
+      "extra": [],
+      "features": [
+        "AUDIO",
+        "VIDEO"
+      ],
+      "filename": "",
+      "fmt": "",
+      "keep": false,
+      "kind": "conference",
+      "label": "Videocall",
+      "size": null,
+      "uri": "https://meet.example.org/demo"
+    },
+    {
+      "bin_index": null,
+      "embedded": false,
+      "extra": [],
+      "features": [],
+      "filename": "",
+      "fmt": "",
+      "keep": false,
+      "kind": "attach",
+      "label": "",
+      "size": null,
+      "uri": "https://example.org/programm.pdf"
+    },
+    {
+      "bin_index": 0,
+      "embedded": true,
+      "extra": [],
+      "features": [],
+      "filename": "",
+      "fmt": "text/plain",
+      "keep": true,
+      "kind": "attach",
+      "label": "",
+      "size": 11,
+      "uri": ""
+    }
+  ],
+  "location": "Kulturpalast, Schloßstraße 2, 01067 Dresden",
+  "object_id": "demo",
+  "organizer": {
+    "cutype": "",
+    "email": "thomas@example.org",
+    "extra": [],
+    "name": "Thomas Steinbach",
+    "role": "",
+    "status": ""
+  },
+  "principal": "alice",
+  "priority": 5,
+  "rdates": [
+    "2026-10-10T19:00:00"
+  ],
+  "related": [
+    {
+      "extra": [],
+      "reltype": "PARENT",
+      "uid": "parent-event@xarif.de"
+    }
+  ],
+  "rrule": "FREQ=WEEKLY;BYDAY=TU;COUNT=6",
+  "rrule_until": null,
+  "start": "2026-09-22T19:00:00",
+  "status": "CONFIRMED",
+  "summary": "Demo-Termin: alle Eigenschaften",
+  "timezone": "Europe/Berlin",
+  "transp": "OPAQUE",
+  "uid": "demo-event-full@xarif.de"
+}

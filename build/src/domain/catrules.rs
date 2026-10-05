@@ -192,6 +192,9 @@ pub async fn delete(db: &SqlitePool, principal: &str, scope: &str, category: &st
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -258,6 +258,9 @@ pub fn with_color(ics: &str, color: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

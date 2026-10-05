@@ -188,3 +188,6 @@ pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &
     }
     Ok(n)
 }
+
+#[cfg(test)]
+mod pinned;
