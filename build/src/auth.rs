@@ -173,9 +173,11 @@ pub async fn post_logout(State(state): State<SharedState>, session: Session, For
     Ok(Redirect::to("/login?manual=1").into_response())
 }
 
+/// A local path to return to after login, else /calendar. Browsers read `\` as `/` and drop
+/// tab/CR/LF inside a URL, so `/\evil.example` or `/<TAB>/evil.example` would leave the site.
 pub fn safe_redirect(r: Option<&str>) -> String {
     match r {
-        Some(p) if p.starts_with('/') && !p.starts_with("//") && !p.starts_with("/login") => p.to_string(),
+        Some(p) if p.starts_with('/') && !p.starts_with("//") && !p.starts_with("/login") && !p.contains(['\\', '\t', '\n', '\r']) => p.to_string(),
         _ => "/calendar".to_string(),
     }
 }
@@ -201,4 +203,18 @@ pub async fn require_user(request: Request, next: Next) -> Response {
         return Redirect::to(&format!("/login?redirect_uri={}", urlenc(&path))).into_response();
     }
     (StatusCode::UNAUTHORIZED, "login required").into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::safe_redirect;
+
+    #[test]
+    fn redirect_stays_on_this_site() {
+        assert_eq!(safe_redirect(Some("/tasks?view=board#x")), "/tasks?view=board#x");
+        for bad in ["//evil.example", "/\\evil.example", "/\t/evil.example", "/\n/evil.example", "https://evil.example", "/login?r=/x", "evil"] {
+            assert_eq!(safe_redirect(Some(bad)), "/calendar", "{bad:?}");
+        }
+        assert_eq!(safe_redirect(None), "/calendar");
+    }
 }
