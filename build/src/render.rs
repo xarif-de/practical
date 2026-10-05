@@ -112,6 +112,16 @@ pub fn script_json(json: String) -> String {
     json.replace('<', "\\u003c")
 }
 
+/// Whether a URI from the data may become an `href`: a `javascript:` or `vbscript:` link runs
+/// script in the page, `data:` shows foreign markup. Every other scheme (http(s), mailto, tel,
+/// geo, a conference app's own) and a relative reference stays a link. The URL parser drops tab
+/// and newline anywhere and C0 controls and spaces around the URL before it reads the scheme, so
+/// those are not counted here either. app.js `lkSafe` applies the same rule.
+pub fn safe_href(uri: &str) -> bool {
+    let s: String = uri.chars().filter(|c| !c.is_ascii_control() && *c != ' ').take(11).collect::<String>().to_ascii_lowercase();
+    !["javascript:", "vbscript:", "data:"].iter().any(|p| s.starts_with(p))
+}
+
 pub fn e(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
@@ -564,7 +574,9 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
             let label = if !k.label.is_empty() { k.label.clone() } else if !k.filename.is_empty() { k.filename.clone() } else if !k.uri.is_empty() { short_uri(&k.uri) } else { l.t("v-attachment").to_string() };
             // an embedded file has no URI of its own — it is served from the event
             let href = if k.embedded { format!("/api/events/{}/{}/{}/attach/{}", i.principal, i.cal_id, i.object_id, k.bin_index.unwrap_or(n)) } else { k.uri.clone() };
-            let _ = write!(v, "<a class=\"lk\" href=\"{}\" target=\"_blank\" rel=\"noopener\" title=\"{}\">{}{}</a>", e(&href), e(&href), ico(icon), e(&label));
+            // a script URI keeps its row and title, but is no link
+            let href_attr = if safe_href(&href) { format!(" href=\"{}\"", e(&href)) } else { String::new() };
+            let _ = write!(v, "<a class=\"lk\"{href_attr} target=\"_blank\" rel=\"noopener\" title=\"{}\">{}{}</a>", e(&href), ico(icon), e(&label));
         }
         row(ico("ext"), v, "");
     }
@@ -660,6 +672,53 @@ mod tests {
         assert!(!j.contains('<'));
         let back: serde_json::Value = serde_json::from_str(&j).unwrap();
         assert_eq!(back["title"], "</script><script>alert(1)</script>");
+    }
+
+    #[test]
+    fn script_uris_are_no_hrefs() {
+        for ok in ["https://example.org/a?b=1&c=2", "http://x", "mailto:a@b.de", "tel:+4912345", "geo:50.1,8.6", "zoommtg://zoom.us/join?confno=1", "sip:a@b", "relative/path", "", "Javascript-guide.html"] {
+            assert!(safe_href(ok), "{ok}");
+        }
+        for bad in ["javascript:alert(1)", "JavaScript:alert(1)", " javascript:alert(1)", "\u{1}javascript:x", "java\tscript:x", "jav\nascript:x", "vbscript:msgbox(1)", "data:text/html,<script>alert(1)</script>", "DATA:text/html;base64,PHNjcmlwdD4="] {
+            assert!(!safe_href(bad), "{bad:?}");
+        }
+    }
+
+    /// Every text of an event comes from any CalDAV client or a shared group calendar: each view
+    /// prints it as text, and a script URI among its links is no link.
+    #[test]
+    fn foreign_event_data_stays_text() {
+        use crate::domain::events::Link;
+        let x = "<img src=x onerror=alert(1)>\"'&";
+        let d = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap();
+        let i = Instance {
+            principal: "p".into(), cal_id: "c".into(), cal_name: x.into(), color: "#112233".into(), object_id: "o\"><xss>.ics".into(), uid: x.into(),
+            summary: x.into(), location: x.into(), description: x.into(), start: d.and_hms_opt(9, 0, 0).unwrap(), end: d.and_hms_opt(10, 0, 0).unwrap(),
+            all_day: false, recurring: false, categories: vec![x.into()], alarm_minutes: None, alarms: vec![], is_group: true, cancelled: false,
+        };
+        let link = |uri: &str| Link { kind: "url".into(), uri: uri.into(), label: x.into(), ..Default::default() };
+        let det = EventDetail {
+            principal: "p".into(), cal_id: "c".into(), object_id: i.object_id.clone(), uid: x.into(), summary: x.into(), location: x.into(), description: x.into(),
+            start: i.start, end: i.end, all_day: false, rrule: None, rrule_until: None, exdates: vec![], rdates: vec![], organizer: None, attendees: vec![], alarms: vec![],
+            categories: vec![x.into()], status: String::new(), transp: String::new(), class: String::new(), priority: None, color: String::new(), geo: None,
+            links: vec![link("javascript:alert(1)"), link(" JAVA\tSCRIPT:alert(1)"), link("data:text/html,<script>alert(1)</script>"), link("https://example.org/?a=1&b=2")],
+            related: vec![], etag: String::new(), has_overrides: false, timezone: String::new(),
+        };
+        let l = L::new("de", crate::i18n::I18n::load());
+        let details = HashMap::from([(i.key(), det)]);
+        let insts = [i];
+        for html in [month_view(d, d, d, &insts, &l, d, &HashMap::new()), week_view(d, d, &insts, &l, &HashMap::new()), day_view(d, d, &insts, &l, x, &details, &HashMap::new())] {
+            assert!(!html.contains("<img") && !html.contains("<xss") && !html.contains("<script"), "{html}");
+            for (at, _) in html.match_indices("href=\"") {
+                let v = &html[at + 6..];
+                assert!(v.starts_with('/') || v.starts_with('#') || v.starts_with("https://example.org/"), "{}", &v[..v.len().min(40)]);
+            }
+        }
+        let day = day_view(d, d, &insts, &l, x, &details, &HashMap::new());
+        assert!(day.contains("&lt;img src=x onerror=alert(1)&gt;&quot;&#39;&amp;"));
+        // the three script links are kept as rows without href, the web link stays one
+        assert_eq!(day.matches("<a class=\"lk\" target=").count(), 3);
+        assert!(day.contains("<a class=\"lk\" href=\"https://example.org/?a=1&amp;b=2\" target=\"_blank\""));
     }
 
     #[test]

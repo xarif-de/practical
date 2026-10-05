@@ -2081,6 +2081,9 @@
   const CONF_HOSTS = [[/(^|\.)zoom\.us$/, 'Zoom'], [/teams\.(microsoft|live)\.com$/, 'Microsoft Teams'], [/^meet\.google\.com$/, 'Google Meet'], [/jit\.?si/, 'Jitsi'], [/webex\.com$/, 'Webex'], [/bigbluebutton|(^|\.)bbb\./, 'BigBlueButton']];
   const ATTACH_EXT = /\.(pdf|jpe?g|png|gif|webp|heic|docx?|xlsx?|pptx?|odt|ods|zip|ics|txt)(\?.*)?$/i;
   const lkHost = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+  // a link from the data may be opened unless it runs script (javascript:, vbscript:) or shows foreign markup (data:);
+  // the URL parser ignores tab/newline anywhere and controls/spaces around it (render.rs `safe_href`, same rule)
+  const lkSafe = u => !/^(javascript|vbscript|data):/i.test(String(u).replace(/[\u0000-\u0020\u007f]/g, ''));
   const lkProvider = u => { const h = lkHost(u); const p = CONF_HOSTS.find(([re]) => re.test(h)); return p ? p[1] : ''; };
   const lkKind = u => /^tel:/i.test(u) ? 'conference' : lkProvider(u) ? 'conference' : ATTACH_EXT.test((() => { try { return new URL(u).pathname; } catch { return u; } })()) ? 'attach' : 'url';
   const lkSize = n => n == null ? '' : n >= 1048576 ? (n / 1048576).toLocaleString(lang, { maximumFractionDigits: 1 }) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
@@ -2137,7 +2140,7 @@
   const lkRenderRowsOnly = () => { const d = lkDetail.innerHTML; lkRender(); lkDetail.innerHTML = d; };
   lkDetail.addEventListener('click', e => { const k = e.target.closest('[data-lk-kind]'); if (k && lkSel != null) { LK.links[lkSel].kind = k.dataset.lkKind; if (k.dataset.lkKind === 'conference' && !(LK.links[lkSel].features || []).length) LK.links[lkSel].features = ['AUDIO', 'VIDEO']; lkSync(); } });
   LKC.addEventListener('click', e => { const b = e.target.closest('[data-lact]'); if (!b) return; const a = b.dataset.lact, i = +b.dataset.i;
-    if (a === 'open') window.open(LK.links[i].uri, '_blank', 'noopener');
+    if (a === 'open') { if (lkSafe(LK.links[i].uri)) window.open(LK.links[i].uri, '_blank', 'noopener'); }
     else if (a === 'copy') navigator.clipboard.writeText(LK.links[i].uri).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); });
     else if (a === 'download') window.open(`/api/events/${f.key.value}/attach/${LK.links[i].bin_index}`, '_blank', 'noopener');
     else if (a === 'edit') { lkSel = lkSel === i ? null : i; lkRender(); }
