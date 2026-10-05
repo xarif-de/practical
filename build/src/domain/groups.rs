@@ -350,6 +350,9 @@ pub async fn purge_expired(state: &AppState) -> AppResult<usize> {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::slugify;
 

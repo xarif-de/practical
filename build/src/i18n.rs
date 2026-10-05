@@ -139,6 +139,9 @@ pub fn negotiate(accept_language: Option<&str>, default: &str) -> String {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

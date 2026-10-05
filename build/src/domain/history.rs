@@ -712,3 +712,6 @@ pub async fn undo(state: &AppState, user: &Principal, id: i64, confirmed: bool) 
         None => Err(AppError::Conflict("the undo changed nothing".into())),
     }
 }
+
+#[cfg(test)]
+mod pinned;

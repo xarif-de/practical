@@ -1097,6 +1097,9 @@ fn suggestions(events: &[EvDoc], q: &Query, now: NaiveDateTime, limit: usize) ->
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

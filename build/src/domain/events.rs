@@ -1365,6 +1365,9 @@ pub async fn month_density(state: &AppState, cals: &[CalInfo], year: i32, tz: ch
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Datelike;

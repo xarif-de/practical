@@ -776,6 +776,9 @@ pub fn device(prodid: Option<&str>) -> Option<String> {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

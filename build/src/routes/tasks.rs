@@ -225,6 +225,9 @@ pub fn router() -> Router<SharedState> {
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

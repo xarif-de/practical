@@ -1,0 +1,642 @@
+=== de "zahn" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<privat>/zahnarzt",
+      "uid": "zahnarzt",
+      "summary": "Zahnarzt Dr. Weiß",
+      "date": "2026-10-16",
+      "time": "08:30",
+      "color": "tomato",
+      "cal_name": "Privat",
+      "count": 1,
+      "why": [
+        {
+          "f": "title",
+          "s": "Zahnarzt Dr. Weiß",
+          "shown": true,
+          "hits": [
+            {
+              "w": "zahn",
+              "k": "prefix"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "zahnartz" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<privat>/zahnarzt",
+      "uid": "zahnarzt",
+      "summary": "Zahnarzt Dr. Weiß",
+      "date": "2026-10-16",
+      "time": "08:30",
+      "color": "tomato",
+      "cal_name": "Privat",
+      "count": 1,
+      "why": [
+        {
+          "f": "title",
+          "s": "Zahnarzt Dr. Weiß",
+          "shown": true,
+          "hits": [
+            {
+              "w": "zahnartz",
+              "k": "typo",
+              "m": "zahnarzt"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "quartal review" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<arbeit>/review",
+      "uid": "review",
+      "summary": "Quartalsreview",
+      "date": "2026-10-14",
+      "time": "14:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 1,
+      "why": [
+        {
+          "f": "title",
+          "s": "Quartalsreview",
+          "shown": true,
+          "hits": [
+            {
+              "w": "quartal",
+              "k": "prefix"
+            },
+            {
+              "w": "review",
+              "k": "inside"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "raum 4.12" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<arbeit>/review",
+      "uid": "review",
+      "summary": "Quartalsreview",
+      "date": "2026-10-14",
+      "time": "14:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 1,
+      "why": [
+        {
+          "f": "location",
+          "s": "Raum 4.12, Hauptgebäude",
+          "hits": [
+            {
+              "w": "raum",
+              "k": "word"
+            },
+            {
+              "w": "4",
+              "k": "word"
+            },
+            {
+              "w": "12",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "anna" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<arbeit>/review",
+      "uid": "review",
+      "summary": "Quartalsreview",
+      "date": "2026-10-14",
+      "time": "14:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 1,
+      "why": [
+        {
+          "f": "person",
+          "s": "Bob Muster, Anna Schmidt",
+          "hits": [
+            {
+              "w": "anna",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [
+    {
+      "key": "alice/<freunde>/anna",
+      "name": "Anna Schmidt",
+      "sub": "02.04.1985",
+      "initials": "AS",
+      "color_index": 1,
+      "bday": true,
+      "why": [
+        {
+          "f": "name",
+          "s": "Anna Schmidt",
+          "shown": true,
+          "hits": [
+            {
+              "w": "anna",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 1,
+    "tasks": 0
+  }
+}
+=== de "kontakt: anna" limit 5
+{
+  "jump": null,
+  "scope": "contact",
+  "events": [],
+  "contacts": [
+    {
+      "key": "alice/<freunde>/anna",
+      "name": "Anna Schmidt",
+      "sub": "02.04.1985",
+      "initials": "AS",
+      "color_index": 1,
+      "bday": true,
+      "why": [
+        {
+          "f": "name",
+          "s": "Anna Schmidt",
+          "shown": true,
+          "hits": [
+            {
+              "w": "anna",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [],
+  "totals": {
+    "events": 0,
+    "contacts": 1,
+    "tasks": 0
+  }
+}
+=== de "termin: anna" limit 5
+{
+  "jump": null,
+  "scope": "event",
+  "events": [
+    {
+      "key": "alice/<arbeit>/review",
+      "uid": "review",
+      "summary": "Quartalsreview",
+      "date": "2026-10-14",
+      "time": "14:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 1,
+      "why": [
+        {
+          "f": "person",
+          "s": "Bob Muster, Anna Schmidt",
+          "hits": [
+            {
+              "w": "anna",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "steuer" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [],
+  "contacts": [],
+  "tasks": [
+    {
+      "key": "alice/<aufgaben>/steuer",
+      "uid": "steuer",
+      "summary": "Steuererklärung",
+      "due": "2026-10-15",
+      "completed": false,
+      "cal_name": "Aufgaben",
+      "color": "#ff9f0a",
+      "why": [
+        {
+          "f": "title",
+          "s": "Steuererklärung",
+          "shown": true,
+          "hits": [
+            {
+              "w": "steuer",
+              "k": "prefix"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "events": 0,
+    "contacts": 0,
+    "tasks": 1
+  }
+}
+=== de "familie" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "group.familie/<familie>/treffen",
+      "uid": "treffen",
+      "summary": "Familientreffen",
+      "date": "2026-10-18",
+      "time": "",
+      "color": "#af52de",
+      "cal_name": "Familienkalender",
+      "count": 1,
+      "why": [
+        {
+          "f": "title",
+          "s": "Familientreffen",
+          "shown": true,
+          "hits": [
+            {
+              "w": "familie",
+              "k": "prefix"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [
+    {
+      "key": "alice/<freunde>/anna",
+      "name": "Anna Schmidt",
+      "sub": "02.04.1985",
+      "initials": "AS",
+      "color_index": 1,
+      "bday": true,
+      "why": [
+        {
+          "f": "cats",
+          "s": "Familie",
+          "hits": [
+            {
+              "w": "familie",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 1,
+    "tasks": 0
+  }
+}
+=== de "acme" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [],
+  "contacts": [
+    {
+      "key": "alice/<freunde>/acme",
+      "name": "ACME GmbH",
+      "sub": "ACME GmbH",
+      "initials": "AG",
+      "color_index": 5,
+      "why": [
+        {
+          "f": "name",
+          "s": "ACME GmbH",
+          "shown": true,
+          "hits": [
+            {
+              "w": "acme",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [],
+  "totals": {
+    "events": 0,
+    "contacts": 1,
+    "tasks": 0
+  }
+}
+=== de "2.4." limit 5
+{
+  "jump": {
+    "date": "2026-04-02",
+    "label": "02.04.2026",
+    "view": "day"
+  },
+  "scope": null,
+  "events": [],
+  "contacts": [
+    {
+      "key": "alice/<freunde>/anna",
+      "name": "Anna Schmidt",
+      "sub": "02.04.1985",
+      "initials": "AS",
+      "color_index": 1,
+      "bday": true,
+      "why": [
+        {
+          "f": "bday",
+          "s": "02.04.1985",
+          "hits": [
+            {
+              "w": "2.4.",
+              "k": "date"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [],
+  "totals": {
+    "events": 0,
+    "contacts": 1,
+    "tasks": 0
+  }
+}
+=== de "14.10.2026" limit 5
+{
+  "jump": {
+    "date": "2026-10-14",
+    "label": "14.10.2026",
+    "view": "day"
+  },
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<arbeit>/standup",
+      "uid": "standup",
+      "summary": "Standup",
+      "date": "2026-10-14",
+      "time": "09:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 110,
+      "why": [
+        {
+          "f": "date",
+          "s": "14.10.2026",
+          "shown": true,
+          "hits": [
+            {
+              "w": "14.10.2026",
+              "k": "date"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "alice/<arbeit>/review",
+      "uid": "review",
+      "summary": "Quartalsreview",
+      "date": "2026-10-14",
+      "time": "14:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 1,
+      "why": [
+        {
+          "f": "date",
+          "s": "14.10.2026",
+          "shown": true,
+          "hits": [
+            {
+              "w": "14.10.2026",
+              "k": "date"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "alice/<privat>/utc",
+      "uid": "utc",
+      "summary": "Abendessen",
+      "date": "2026-10-14",
+      "time": "20:00",
+      "color": "#30b46c",
+      "cal_name": "Privat",
+      "count": 1,
+      "why": [
+        {
+          "f": "date",
+          "s": "14.10.2026",
+          "shown": true,
+          "hits": [
+            {
+              "w": "14.10.2026",
+              "k": "date"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 3,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "standup" limit 1
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<arbeit>/standup",
+      "uid": "standup",
+      "summary": "Standup",
+      "date": "2026-10-14",
+      "time": "09:00",
+      "color": "#0a84ff",
+      "cal_name": "Arbeit",
+      "count": 110,
+      "why": [
+        {
+          "f": "title",
+          "s": "Standup",
+          "shown": true,
+          "hits": [
+            {
+              "w": "standup",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "e" limit 200
+{
+  "jump": null,
+  "scope": null,
+  "events": [],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 0,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== en "urlaub" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [
+    {
+      "key": "alice/<privat>/urlaub",
+      "uid": "urlaub",
+      "summary": "Urlaub Ostsee",
+      "date": "2026-10-26",
+      "time": "",
+      "color": "#30b46c",
+      "cal_name": "Privat",
+      "count": 1,
+      "why": [
+        {
+          "f": "title",
+          "s": "Urlaub Ostsee",
+          "shown": true,
+          "hits": [
+            {
+              "w": "urlaub",
+              "k": "word"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 1,
+    "contacts": 0,
+    "tasks": 0
+  }
+}
+=== de "x" limit 5
+{
+  "jump": null,
+  "scope": null,
+  "events": [],
+  "contacts": [],
+  "tasks": [],
+  "totals": {
+    "events": 0,
+    "contacts": 0,
+    "tasks": 0
+  }
+}

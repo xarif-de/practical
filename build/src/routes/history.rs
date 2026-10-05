@@ -209,3 +209,6 @@ pub fn router() -> Router<SharedState> {
         .route("/api/history/{id}/plan", get(api_plan))
         .route("/api/history/{id}/undo", post(api_undo))
 }
+
+#[cfg(test)]
+mod pinned;

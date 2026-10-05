@@ -631,6 +631,9 @@ pub async fn delete_task(state: &AppState, user: &Principal, principal: &str, ca
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

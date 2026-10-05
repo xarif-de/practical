@@ -598,6 +598,9 @@ pub async fn delete_contact(state: &AppState, user: &Principal, principal: &str,
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -210,6 +210,9 @@ pub async fn reverse(state: &AppState, lat: f64, lon: f64, lang: &str, home: &st
 }
 
 #[cfg(test)]
+mod pinned;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
