@@ -84,6 +84,7 @@ pub fn config(db_path: &str) -> Config {
         session_hours: 12,
         dev_assets_dir: None,
         dev_login: None,
+        dev_now: None,
     }
 }
 

@@ -236,9 +236,8 @@ fn safe_redirect_and_urlenc() {
     assert_eq!(safe_redirect(Some("/login")), "/calendar");
     assert_eq!(safe_redirect(Some("/loginx")), "/calendar");
     assert_eq!(safe_redirect(Some("calendar")), "/calendar");
-    // BUG?: a backslash after the slash passes the guard; browsers read "/\evil.example.org" as
-    // "//evil.example.org" (an open redirect). Pinned as it is today.
-    assert_eq!(safe_redirect(Some("/\\evil.example.org")), "/\\evil.example.org");
+    // browsers read "/\evil.example.org" as "//evil.example.org": refused since 36c9ca6
+    assert_eq!(safe_redirect(Some("/\\evil.example.org")), "/calendar");
     assert_eq!(urlenc("/calendar?view=week&date=2026-10-14"), "%2Fcalendar%3Fview%3Dweek%26date%3D2026-10-14");
     assert_eq!(urlenc("a b+ä"), "a+b%2B%C3%A4");
     assert_eq!(urlenc(""), "");
