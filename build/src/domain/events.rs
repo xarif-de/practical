@@ -1257,7 +1257,7 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
 
 fn assemble(vtimezone: Option<String>, vevents: Vec<Vec<String>>, extra_blocks: &[String]) -> String {
     let mut out = String::new();
-    out.push_str("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//rustical-ui//DE\r\nCALSCALE:GREGORIAN\r\n");
+    out.push_str("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\n");
     if let Some(v) = vtimezone {
         out.push_str(v.trim_end());
         out.push_str("\r\n");

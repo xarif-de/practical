@@ -1,4 +1,4 @@
-/* rustical-ui style — design system from the round-10 prototype (base + Fusion B theme + round-6 chrome), prototype-only bits removed, app-specific parts appended at the end. */
+/* PractiCal style — design system from the round-10 prototype (base + Fusion B theme + round-6 chrome), prototype-only bits removed, app-specific parts appended at the end. */
 /* base.css — layout & components shared by all variants. Themes override the custom properties
    and may add structural tweaks. Mobile-first, CSS grid, no framework. */
 :root {

@@ -1,4 +1,4 @@
-//! Development only (`RUSTICAL_UI__DEV_ASSETS_DIR`, never set in production): `/dev/reload` is an
+//! Development only (`PRACTICAL__DEV_ASSETS_DIR`, never set in production): `/dev/reload` is an
 //! SSE stream that sends `boot` (this process' start time) once and `reload` whenever an asset file
 //! changed (tasks::spawn_dev_asset_watcher). app.js reloads the page on a changed boot id — i.e.
 //! after watchexec rebuilt and restarted the server — and on every `reload`.

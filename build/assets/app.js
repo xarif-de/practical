@@ -1,4 +1,4 @@
-/* rustical-ui — shared behaviour (vanilla ES2020, no framework). */
+/* PractiCal — shared behaviour (vanilla ES2020, no framework). */
 /* i18n: the page ships its js-* strings (layout.html, from locales/*.ftl; placeholders %name);
    month and weekday names and date formats come from Intl in the page's locale */
 (function () {
@@ -465,7 +465,7 @@
     connect();
   }
 
-  window.rusticalUi = { csrf, $, $$ };
+  window.practical = { csrf, $, $$ };
 })();
 
 /* ===== colour picker (round 13): one picker for every colour in the app. The popover offers the colours

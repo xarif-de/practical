@@ -1,3 +1,3 @@
 # Keep the 2 GB target dir out of the repo tree: dagger uploads the whole build/ context.
 [build]
-target-dir = "/Users/thomass/.cache/rustical-ui-target"
+target-dir = "/Users/thomass/.cache/practical-target"

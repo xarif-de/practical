@@ -29,7 +29,7 @@ use tracing::{info, warn};
 pub const RUSTICAL_TAG: &str = env!("RUSTICAL_TAG");
 
 fn print_version() {
-    println!("rustical-ui {} (rustical crates v{RUSTICAL_TAG})", env!("CARGO_PKG_VERSION"));
+    println!("practical {} (rustical crates v{RUSTICAL_TAG})", env!("CARGO_PKG_VERSION"));
 }
 
 /// `check-rustical-image ghcr.io/lennart-k/rustical:0.16.2@sha256:…` → exit 0 iff
@@ -43,10 +43,10 @@ fn check_rustical_image(reference: &str) -> i32 {
         return 2;
     }
     if tag == RUSTICAL_TAG {
-        println!("OK: rustical image tag {tag} == rustical-ui crate tag {RUSTICAL_TAG}");
+        println!("OK: rustical image tag {tag} == practical crate tag {RUSTICAL_TAG}");
         0
     } else {
-        eprintln!("MISMATCH: rustical image tag {tag} != rustical-ui crate tag {RUSTICAL_TAG} — bump docker/rustical-ui to the same tag and publish before rolling this image");
+        eprintln!("MISMATCH: rustical image tag {tag} != practical crate tag {RUSTICAL_TAG} — bump docker/practical to the same tag and publish before rolling this image");
         1
     }
 }
@@ -84,7 +84,7 @@ async fn healthz(axum::extract::State(state): axum::extract::State<SharedState>)
 fn build_router(state: &SharedState) -> Result<Router, String> {
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("rustical_ui_session")
+        .with_name("practical_session")
         .with_secure(state.config.cookie_secure())
         .with_same_site(SameSite::Lax)
         .with_http_only(true)
@@ -118,7 +118,7 @@ async fn serve() -> Result<(), String> {
     let config = Config::from_env()?;
     if config.rustical_url.is_empty() {
         // development only: no rustical process next to us (a copy of the DB)
-        warn!("RUSTICAL_UI__RUSTICAL_URL is empty — not waiting for rustical (development mode)");
+        warn!("PRACTICAL__RUSTICAL_URL is empty — not waiting for rustical (development mode)");
     } else {
         wait_for_rustical(&config.rustical_url).await;
     }
@@ -161,7 +161,7 @@ async fn serve() -> Result<(), String> {
     domain::push::spawn_reminder_loop(state.clone());
 
     let listener = tokio::net::TcpListener::bind(&state.config.bind).await.map_err(|e| format!("bind {}: {e}", state.config.bind))?;
-    info!("rustical-ui {} serving on http://{} (public {})", env!("CARGO_PKG_VERSION"), state.config.bind, state.config.public_url);
+    info!("practical {} serving on http://{} (public {})", env!("CARGO_PKG_VERSION"), state.config.bind, state.config.public_url);
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
@@ -177,7 +177,7 @@ async fn main() {
         Some("--version" | "version") => print_version(),
         Some("check-rustical-image") => {
             let Some(r) = args.get(2) else {
-                eprintln!("usage: rustical-ui check-rustical-image <image-ref>");
+                eprintln!("usage: practical check-rustical-image <image-ref>");
                 std::process::exit(2);
             };
             std::process::exit(check_rustical_image(r));

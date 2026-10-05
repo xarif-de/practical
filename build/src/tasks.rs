@@ -62,7 +62,7 @@ pub fn spawn_trash_purger(state: SharedState) {
     });
 }
 
-/// Development only (`RUSTICAL_UI__DEV_ASSETS_DIR`): polls the assets directory's mtimes every 300 ms
+/// Development only (`PRACTICAL__DEV_ASSETS_DIR`): polls the assets directory's mtimes every 300 ms
 /// and broadcasts on `dev_reload` when anything changed — the browser then reloads (`/dev/reload`).
 pub fn spawn_dev_asset_watcher(state: SharedState) {
     let Some(dir) = state.config.dev_assets_dir.clone() else { return };

@@ -260,7 +260,7 @@ struct CldrCheck {
 /// bodiless 304); fetch and apply its names only when it is newer than the ones in use.
 async fn check_cldr(state: &AppState) -> AppResult<()> {
     let last: CldrCheck = cache_aged(state, "", "", 0, "cldr-check").await?.and_then(|(j, _)| serde_json::from_str(&j).ok()).unwrap_or_default();
-    let mut req = state.http.get(CLDR_LATEST).header("Accept", "application/vnd.github+json").header("User-Agent", "rustical-ui").timeout(TIMEOUT);
+    let mut req = state.http.get(CLDR_LATEST).header("Accept", "application/vnd.github+json").header("User-Agent", "PractiCal").timeout(TIMEOUT);
     if !last.etag.is_empty() {
         req = req.header("If-None-Match", &last.etag);
     }
@@ -308,7 +308,7 @@ async fn check_cldr(state: &AppState) -> AppResult<()> {
 }
 
 async fn get_text(state: &AppState, url: &str) -> Result<String, String> {
-    let r = state.http.get(url).header("User-Agent", "rustical-ui").timeout(Duration::from_secs(60)).send().await.map_err(|e| format!("{url}: {e}"))?;
+    let r = state.http.get(url).header("User-Agent", "PractiCal").timeout(Duration::from_secs(60)).send().await.map_err(|e| format!("{url}: {e}"))?;
     if !r.status().is_success() {
         return Err(format!("{url}: HTTP {}", r.status()));
     }

@@ -488,7 +488,7 @@ pub fn build_vcf(uid: &str, i: &ContactInput, preserved: &[String]) -> AppResult
     let mut l = vec![
         "BEGIN:VCARD".to_string(),
         "VERSION:3.0".to_string(),
-        "PRODID:-//xarif.de//rustical-ui//DE".to_string(),
+        "PRODID:-//xarif.de//PractiCal//DE".to_string(),
         format!("UID:{uid}"),
         format!("FN:{}", ical::escape(&full)),
         format!("N:{};{};{};{};{}", ical::escape(family), ical::escape(given), ical::escape(i.additional.trim()), ical::escape(i.prefix.trim()), ical::escape(i.suffix.trim())),

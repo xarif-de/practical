@@ -1,4 +1,4 @@
-/* rustical-ui service worker: Web Push reminders (plan D12). */
+/* PractiCal service worker: Web Push reminders (plan D12). */
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {

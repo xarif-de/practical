@@ -17,7 +17,7 @@ pub async fn export_calendar(state: &AppState, user: &Principal, principal: &str
     collections::ensure_owner(user, principal)?;
     let cal = state.calendars.get_calendar(principal, cal_id, false).await?;
     let objects = state.calendars.get_objects(principal, cal_id).await?;
-    let ical = IcalCalendar::from_objects("-//xarif.de//rustical-ui//DE".to_string(), objects.into_iter().map(|(_, o)| o.into()).collect(), vec![]);
+    let ical = IcalCalendar::from_objects("-//xarif.de//PractiCal//DE".to_string(), objects.into_iter().map(|(_, o)| o.into()).collect(), vec![]);
     let name = cal.meta.displayname.clone().unwrap_or_else(|| cal_id.to_string());
     Ok((name, ical.generate()))
 }

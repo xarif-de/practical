@@ -1,4 +1,4 @@
-//! Configuration from environment variables `RUSTICAL_UI__<KEY>`.
+//! Configuration from environment variables `PRACTICAL__<KEY>`.
 //! Plain std::env on purpose (no figment/clap): ~15 keys, all strings.
 
 use std::env;
@@ -56,7 +56,7 @@ pub struct OidcSettings {
 }
 
 fn var(key: &str) -> Option<String> {
-    env::var(format!("RUSTICAL_UI__{key}")).ok().filter(|v| !v.is_empty())
+    env::var(format!("PRACTICAL__{key}")).ok().filter(|v| !v.is_empty())
 }
 
 fn var_or(key: &str, default: &str) -> String {
@@ -68,7 +68,7 @@ fn var_bool(key: &str, default: bool) -> Result<bool, String> {
         None => Ok(default),
         Some("true" | "1" | "yes") => Ok(true),
         Some("false" | "0" | "no") => Ok(false),
-        Some(other) => Err(format!("RUSTICAL_UI__{key}: expected true/false, got {other:?}")),
+        Some(other) => Err(format!("PRACTICAL__{key}: expected true/false, got {other:?}")),
     }
 }
 
@@ -80,7 +80,7 @@ impl Config {
             Some(issuer) => Some(OidcSettings {
                 name: var_or("OIDC__NAME", "SSO"),
                 issuer,
-                client_id: var("OIDC__CLIENT_ID").ok_or("RUSTICAL_UI__OIDC__CLIENT_ID missing")?,
+                client_id: var("OIDC__CLIENT_ID").ok_or("PRACTICAL__OIDC__CLIENT_ID missing")?,
                 client_secret: var("OIDC__CLIENT_SECRET"),
                 scopes: var_or("OIDC__SCOPES", "openid profile groups")
                     .split_whitespace()
@@ -91,24 +91,24 @@ impl Config {
         };
         let allow_password_login = var_bool("ALLOW_PASSWORD_LOGIN", false)?;
         if oidc.is_none() && !allow_password_login {
-            return Err("no login method: set RUSTICAL_UI__OIDC__ISSUER or RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true".into());
+            return Err("no login method: set PRACTICAL__OIDC__ISSUER or PRACTICAL__ALLOW_PASSWORD_LOGIN=true".into());
         }
         let trash_retention_days: u32 = var_or("TRASH_RETENTION_DAYS", "90")
             .parse()
-            .map_err(|e| format!("RUSTICAL_UI__TRASH_RETENTION_DAYS: {e}"))?;
+            .map_err(|e| format!("PRACTICAL__TRASH_RETENTION_DAYS: {e}"))?;
         let history_retention_days: u32 = var_or("HISTORY_RETENTION_DAYS", "90")
             .parse()
-            .map_err(|e| format!("RUSTICAL_UI__HISTORY_RETENTION_DAYS: {e}"))?;
+            .map_err(|e| format!("PRACTICAL__HISTORY_RETENTION_DAYS: {e}"))?;
         if var("DEV_LOGIN").is_some() && var("DEV_ASSETS_DIR").is_none() {
-            return Err("RUSTICAL_UI__DEV_LOGIN is only honoured together with RUSTICAL_UI__DEV_ASSETS_DIR (development)".into());
+            return Err("PRACTICAL__DEV_LOGIN is only honoured together with PRACTICAL__DEV_ASSETS_DIR (development)".into());
         }
         let session_hours: i64 = var_or("SESSION_HOURS", "12")
             .parse()
-            .map_err(|e| format!("RUSTICAL_UI__SESSION_HOURS: {e}"))?;
+            .map_err(|e| format!("PRACTICAL__SESSION_HOURS: {e}"))?;
         Ok(Self {
             bind: var_or("BIND", "[::]:4001"),
             db_path: var_or("DB_PATH", "/var/lib/rustical/db.sqlite3"),
-            rustical_url: env::var("RUSTICAL_UI__RUSTICAL_URL").unwrap_or_else(|_| "http://127.0.0.1:4000".into()).trim_end_matches('/').to_string(),
+            rustical_url: env::var("PRACTICAL__RUSTICAL_URL").unwrap_or_else(|_| "http://127.0.0.1:4000".into()).trim_end_matches('/').to_string(),
             public_dav_url: var_or("PUBLIC_DAV_URL", "https://dav.example.org").trim_end_matches('/').to_string(),
             public_url,
             oidc,

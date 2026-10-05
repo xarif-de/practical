@@ -1,5 +1,5 @@
 //! Static assets compiled into the binary (eight files; no rust-embed needed).
-//! Development (`RUSTICAL_UI__DEV_ASSETS_DIR`): read from that directory on every request, uncached.
+//! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached.
 
 use crate::state::SharedState;
 use axum::Router;

@@ -1,6 +1,6 @@
-# Test specification for docker/rustical-ui.
+# Test specification for docker/practical.
 #
-# The image is a minimal Alpine with two static binaries (rustical-ui and RustiCal's own,
+# The image is a minimal Alpine with two static binaries (PractiCal and RustiCal's own,
 # unmodified) and a CA bundle. Tests assert structural facts (user, entrypoint, port, files,
 # the binaries answer) and the ONE contract the deployment depends on: RustiCal's binary is
 # the release the UI's rustical crates are (both containers of the pod run this image).
@@ -12,7 +12,7 @@ tests:
   - name: image-metadata
     inspect:
       user: "1000:1000"
-      entrypoint: ["/rustical-ui"]
+      entrypoint: ["/practical"]
       expose: [4001]
       # alpine + CA bundle + the static binary (stripped, LTO; assets, locales, templates and
       # region data embedded) + RustiCal's binary. Measured 33.6 MiB at v0.9.0 without RustiCal
@@ -21,16 +21,16 @@ tests:
       # new measurement.
       max_size: 80MiB
       labels:
-        org.opencontainers.image.source: "https://git.xarif.de/docker/rustical-ui"
+        org.opencontainers.image.source: "https://git.xarif.de/docker/practical"
 
   - name: binary-reports-versions
     timeout: 90s
     steps:
       - run:
-          - /rustical-ui --version
+          - /practical --version
         output:
           expect:
-            - "rustical-ui "
+            - "practical "
             - "rustical crates v"
 
   - name: rustical-image-check-rejects-mismatch
@@ -40,7 +40,7 @@ tests:
     timeout: 90s
     steps:
       - run:
-          - cmd: /rustical-ui check-rustical-image ghcr.io/lennart-k/rustical:0.0.0-not-the-tag@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          - cmd: /practical check-rustical-image ghcr.io/lennart-k/rustical:0.0.0-not-the-tag@sha256:0000000000000000000000000000000000000000000000000000000000000000
             expect_failure: true
         output:
           allow:
@@ -54,14 +54,14 @@ tests:
     timeout: 90s
     steps:
       - run:
-          - sh -c 'r=$(/usr/local/bin/rustical --version | cut -d" " -f2); u=$(/rustical-ui --version | sed -n "s/.*rustical crates v\([0-9.]*\).*/\1/p"); echo "rustical=$r crates=$u"; [ -n "$r" ] && [ "$r" = "$u" ] && echo SAME-RELEASE'
+          - sh -c 'r=$(/usr/local/bin/rustical --version | cut -d" " -f2); u=$(/practical --version | sed -n "s/.*rustical crates v\([0-9.]*\).*/\1/p"); echo "rustical=$r crates=$u"; [ -n "$r" ] && [ "$r" = "$u" ] && echo SAME-RELEASE'
         output:
           expect:
             - "SAME-RELEASE"
 
   - name: ui-runs-against-a-rustical-migrated-database
     # The pairing itself, as the pod runs it: RustiCal's own binary creates and migrates a
-    # fresh store and writes a principal + app token; rustical-ui then starts against that
+    # fresh store and writes a principal + app token; PractiCal then starts against that
     # file (refuses a non-RustiCal schema, applies its xui_* migrations) and serves pages
     # whose queries read RustiCal's tables through the rustical_* crates. Proven to go red:
     # renaming calendars.displayname in the store turns /settings and /history into HTTP 500
@@ -81,15 +81,14 @@ tests:
             tok=$(/usr/local/bin/rustical principals app-token create --name it probe) || fail "app-token create"
             /usr/local/bin/rustical serve >rustical.log 2>&1 &
             srv=$!
-            # RUSTICAL_UI__* only on this process: rustical rejects every unknown
-            # RUSTICAL_* variable ("unknown field: found `ui`"), as in the deployment.
-            RUSTICAL_UI__DB_PATH=/tmp/it/db.sqlite3 RUSTICAL_UI__RUSTICAL_URL=http://127.0.0.1:4000 \
-              RUSTICAL_UI__BIND=127.0.0.1:4001 RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true \
-              /rustical-ui serve >ui.log 2>&1 &
+            # PRACTICAL__* on this process only, as in the deployment.
+            PRACTICAL__DB_PATH=/tmp/it/db.sqlite3 PRACTICAL__RUSTICAL_URL=http://127.0.0.1:4000 \
+              PRACTICAL__BIND=127.0.0.1:4001 PRACTICAL__ALLOW_PASSWORD_LOGIN=true \
+              /practical serve >ui.log 2>&1 &
             ui=$!
             i=0
             until [ "$(wget -qO- http://127.0.0.1:4001/healthz 2>/dev/null)" = ok ]; do
-              kill -0 "$ui" 2>/dev/null || fail "rustical-ui exited"
+              kill -0 "$ui" 2>/dev/null || fail "practical exited"
               i=$((i+1)); [ "$i" -lt 90 ] || fail "healthz not ok after 90 s"
               sleep 1
             done
@@ -110,11 +109,11 @@ tests:
     timeout: 90s
     steps:
       - files:
-          - path: /rustical-ui
+          - path: /practical
             type: file
           - path: /usr/local/bin/rustical
             type: file
-          - path: /usr/share/licenses/rustical-ui/LICENSE
+          - path: /usr/share/licenses/practical/LICENSE
             type: file
           - path: /etc/ssl/certs/ca-certificates.crt
             type: file

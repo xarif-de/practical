@@ -765,7 +765,7 @@ pub fn device(prodid: Option<&str>) -> Option<String> {
         ("davx5", "DAVx⁵"), ("bitfire", "DAVx⁵"), ("jtx", "jtx Board"), ("thunderbird", "Thunderbird"), ("mozilla", "Thunderbird"),
         ("evolution", "Evolution"), ("outlook", "Outlook"), ("microsoft", "Outlook"), ("google", "Google"), ("tasks.org", "Tasks.org"),
         ("ios", "Apple iOS"), ("iphone", "Apple iOS"), ("macos", "Apple macOS"), ("mac os", "Apple macOS"), ("apple", "Apple"),
-        ("nextcloud", "Nextcloud"), ("sabre", "SabreDAV"), ("rustical-ui", "rustical-ui"), ("fossify", "Fossify"), ("etar", "Etar"),
+        ("nextcloud", "Nextcloud"), ("sabre", "SabreDAV"), ("rustical-ui", "PractiCal"), ("practical", "PractiCal"), ("fossify", "Fossify"), ("etar", "Etar"),
     ];
     if let Some((_, n)) = known.iter().find(|(k, _)| l.contains(k)) {
         return Some((*n).to_string());

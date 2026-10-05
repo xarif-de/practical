@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 
 const PHOTON: &str = "https://photon.komoot.io";
 const NOMINATIM: &str = "https://nominatim.openstreetmap.org";
-const USER_AGENT: &str = concat!("rustical-ui/", env!("CARGO_PKG_VERSION"), " (+https://git.xarif.de/docker/rustical-ui)");
+const USER_AGENT: &str = concat!("PractiCal/", env!("CARGO_PKG_VERSION"), " (+https://git.xarif.de/docker/practical)");
 const CACHE_MAX: usize = 1000;
 const CACHE_TTL: Duration = Duration::from_secs(7 * 24 * 3600);
 

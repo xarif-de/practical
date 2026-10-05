@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{{ title }} · {{ ctx.t("nav-calendar") }}{% endblock %}
+{% block title %}{{ title }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
 <div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}"><svg class="ico" aria-hidden="true"><use href="#i-filter"/></svg></button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
 {% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}

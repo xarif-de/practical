@@ -15,7 +15,7 @@ LANGS = ["de", "en", "fr", "es"]
 RAW = f"https://raw.githubusercontent.com/unicode-org/cldr/{CLDR}/common"
 
 def get(url, js=False):
-    req = urllib.request.Request(url, headers={"Accept": "application/json" if js else "*/*", "User-Agent": "rustical-ui gen_regions"})
+    req = urllib.request.Request(url, headers={"Accept": "application/json" if js else "*/*", "User-Agent": "PractiCal gen_regions"})
     with urllib.request.urlopen(req, timeout=60) as r:
         data = r.read()
     return json.loads(data) if js else data

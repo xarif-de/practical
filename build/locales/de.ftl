@@ -1,4 +1,4 @@
-app-name = Kalender
+app-name = PractiCal
 nav-calendar = Kalender
 nav-contacts = Kontakte
 nav-tasks = Aufgaben

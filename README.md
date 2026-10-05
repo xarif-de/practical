@@ -1,4 +1,4 @@
-# rustical-ui
+# PractiCal
 
 **The web UI next to [RustiCal](https://github.com/lennart-k/rustical).** RustiCal is a
 CalDAV/CardDAV server with a minimal frontend and no admin API. This sidecar adds what a
@@ -31,7 +31,7 @@ and keeps its own state in `xui_*` tables of the same file, so one backup covers
 
 **One image, both programs:** the image also carries RustiCal's own binary, unmodified
 (`/usr/local/bin/rustical`, copied from its official image at the crates' tag), so the pod's two
-containers run the same image — `rustical serve` and `rustical-ui serve` — and the CalDAV server
+containers run the same image — `rustical serve` and `practical serve` — and the CalDAV server
 and the UI built on its crates are always one release. Deployed on xarif.de in the `rustical` pod:
 [kubernetes/rustical 🌐](https://git.xarif.de/kubernetes/rustical) → <https://plan.xarif.de>.
 
@@ -47,8 +47,8 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
 
 ## How it works
 
-- **One database, two processes.** RustiCal and rustical-ui run in the same pod as the same
-  uid and share the WAL-mode SQLite file. rustical-ui waits for RustiCal's `/ping` before it
+- **One database, two processes.** RustiCal and PractiCal run in the same pod as the same
+  uid and share the WAL-mode SQLite file. PractiCal waits for RustiCal's `/ping` before it
   opens the file (RustiCal runs its schema migrations at start) and never runs those
   migrations itself. Its own tables live under the `xui_` prefix with their own
   `xui_migrations` ledger — never `_sqlx_migrations`, which would make RustiCal abort on an
@@ -236,7 +236,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   entries), the list with single deletes, clear all.
 - **Change history** (`/history`; `domain::history`, `domain::history_text`, `routes::history`, assets
   `history.js`/`history.css`, tables `xui_history_*`): every closed change of an event, task or contact.
-  RustiCal keeps no old versions and its change log names no content or author, so rustical-ui keeps its
+  RustiCal keeps no old versions and its change log names no content or author, so PractiCal keeps its
   own: `heads` = last version seen per object, `blobs` = content-addressed versions, `cursors` = log read
   per collection (first sight = baseline, no change; dev copy 4 263 objects, 4.2 MB). Attribution: a UI
   request runs between `history::begin` and `Guard::commit` (one lock with the 2 s poller, which ingests
@@ -316,8 +316,8 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
 
 ## Configuration
 
-Environment variables `RUSTICAL_UI__<KEY>`. Keep them on the rustical-ui container only:
-RustiCal reads every `RUSTICAL_*` variable as its own configuration and rejects unknown keys.
+Environment variables `PRACTICAL__<KEY>`, set on the PractiCal container only. Before v0.10.0 the
+prefix was `RUSTICAL_UI__`, which RustiCal parsed as its own (unknown, rejected) `ui` section.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -339,10 +339,10 @@ RustiCal reads every `RUSTICAL_*` variable as its own configuration and rejects 
 ## Commands
 
 ```text
-rustical-ui serve                          # default
-rustical-ui check-rustical-image <ref>     # exit 0 iff the image tag == the compiled rustical crate tag
-rustical-ui gen-vapid                      # print a fresh VAPID private key (PEM) + public key
-rustical-ui --version
+practical serve                            # default
+practical check-rustical-image <ref>       # exit 0 iff the image tag == the compiled rustical crate tag
+practical gen-vapid                        # print a fresh VAPID private key (PEM) + public key
+practical --version
 ```
 
 `/healthz` answers 200 once the database is reachable.
@@ -355,7 +355,7 @@ exports it as `RUSTICAL_TAG`), and `build/Dockerfile` copies RustiCal's binary f
 binary is the server that migrates that schema. Three guards keep them one release: `build.rs`
 compares the Dockerfile's tag with the crates' on every local build (the Docker context has no
 Dockerfile), the image test `rustical-binary-is-the-crates-release` compares
-`rustical --version` with `rustical-ui --version`, and one Renovate group (`renovate.json`,
+`rustical --version` with `practical --version`, and one Renovate group (`renovate.json`,
 matched by dependency name — for a git dependency the package name is the repository URL) moves
 all six in one PR. The deployment repo only checks that both containers run the same image
 (`same_as`). `check-rustical-image <ref>` still compares a RustiCal image reference with the
@@ -364,19 +364,19 @@ crates' tag, for a deployment that runs RustiCal's own image.
 ## Local development
 
 ```bash
-mise run dev-db                # COPY of the production DB → ~/.cache/rustical-ui-dev (cluster read-only), test password
+mise run dev-db                # COPY of the production DB → ~/.cache/practical-dev (cluster read-only), test password
 mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
 mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version)
 mise run deny                  # cargo-deny: advisories, bans, sources
 mise run pipeline              # the CI pipeline locally (cargo-deny + image build + tests), never publishes
-mise run image                 # the image, loaded into docker as xarif-rustical-ui
+mise run image                 # the image, loaded into docker as xarif-practical
 ```
 
 `mise run dev` is the edit-and-see loop: `watchexec` rebuilds and restarts on every change under
-`src/`, `templates/` and `locales/` (an incremental debug build takes ~3 s); `RUSTICAL_UI__DEV_ASSETS_DIR`
+`src/`, `templates/` and `locales/` (an incremental debug build takes ~3 s); `PRACTICAL__DEV_ASSETS_DIR`
 makes the server read `assets/*` from disk on every request (uncached) and mounts `/dev/reload`, an
 SSE stream the page listens to (`body[data-dev]`): a new process boot id or an asset change reloads
-the open tab, and `RUSTICAL_UI__DEV_LOGIN` signs `DEV_USER` back in after the restart (sessions are in
+the open tab, and `PRACTICAL__DEV_LOGIN` signs `DEV_USER` back in after the restart (sessions are in
 memory), so nothing needs a manual refresh or login. Never point `DB` at a live RustiCal file — `dev-db`
 takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset in production.
 
@@ -393,7 +393,7 @@ pod restarts with both containers on the one new image.
 The Dockerfile keeps cargo's
 registry and `target/` in BuildKit cache mounts, so a build recompiles only what changed
 (`base/dagger-modules` docs/rust-functions.md). Image:
-`registry.gitlab.com/xarif/docker/rustical-ui:main` (built and pushed by Forgejo Actions,
+`registry.gitlab.com/xarif/docker/practical:main` (built and pushed by Forgejo Actions,
 pulled from the gitlab.com registry like every xarif image).
 
 **Icons** (`templates/layout.html`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
@@ -405,7 +405,7 @@ Iconoir (MIT), Bootstrap Icons (MIT), Material Design Icons (Apache-2.0) and Mat
 ## License
 
 AGPL-3.0-or-later (`LICENSE`; a copy in `build/LICENSE` goes into the image at
-`/usr/share/licenses/rustical-ui/LICENSE`, a test keeps both equal). rustical-ui links RustiCal's
+`/usr/share/licenses/practical/LICENSE`, a test keeps both equal). PractiCal links RustiCal's
 crates, which are AGPL-3.0-or-later themselves, and runs as a network service: §13 is met by the
 "Source code" link in the user menu and on the login page, next to both versions. The image
 redistributes RustiCal's binary unmodified; its source is

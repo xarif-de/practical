@@ -1,6 +1,6 @@
 BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//xarif.de//rustical-ui demo//DE
+PRODID:-//xarif.de//PractiCal demo//DE
 CALSCALE:GREGORIAN
 BEGIN:VTIMEZONE
 TZID:Europe/Berlin

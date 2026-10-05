@@ -6,14 +6,14 @@ description = "The CI pipeline, locally: cargo-deny + image build + tests/tests.
 run = "DAGGER_NO_NAG=1 dagger call -m git.xarif.de/base/dagger-modules.git@main ci --source=."
 
 [tasks.image]
-description = "Build the image (native platform) and load it into the local Docker engine as xarif-rustical-ui"
+description = "Build the image (native platform) and load it into the local Docker engine as xarif-practical"
 run = """
 export DAGGER_NO_NAG=1
-TARBALL="/tmp/rustical-ui-$$.tar"
+TARBALL="/tmp/practical-$$.tar"
 trap 'rm -f "$TARBALL"' EXIT   # a trap, not a last line: it must not mask a failed build
 dagger call -m git.xarif.de/base/dagger-modules.git@main build-image --source=build export --path="$TARBALL" &&
-docker tag "$(docker load -i "$TARBALL" | sed 's/Loaded image.*: //')" xarif-rustical-ui &&
-echo "Image available as: xarif-rustical-ui"
+docker tag "$(docker load -i "$TARBALL" | sed 's/Loaded image.*: //')" xarif-practical &&
+echo "Image available as: xarif-practical"
 """
 
 [tasks.deny]
@@ -39,14 +39,14 @@ cd build && export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-
 [tasks.dev]
 description = "Feedback loop: watchexec rebuilds+restarts on src/templates/locales edits (~3-10 s), CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db`"
 run = '''
-DB="${DB:-$HOME/.cache/rustical-ui-dev/db.sqlite3}"
+DB="${DB:-$HOME/.cache/practical-dev/db.sqlite3}"
 [ -f "$DB" ] || { echo "no DB copy at $DB — run: mise run dev-db" >&2; exit 1; }
 cd build
 export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
-export RUSTICAL_UI__RUSTICAL_URL= RUSTICAL_UI__DB_PATH="$DB" RUSTICAL_UI__ALLOW_PASSWORD_LOGIN=true \
-  RUSTICAL_UI__PUBLIC_URL=http://localhost:4001 RUSTICAL_UI__BIND=127.0.0.1:4001 \
-  RUSTICAL_UI__DEV_ASSETS_DIR="$PWD/assets" RUSTICAL_UI__HOLIDAYS_SUBDIVISION=DE-SN \
-  RUSTICAL_UI__PUBLIC_DAV_URL=https://dav.example.org RUSTICAL_UI__DEV_LOGIN="${DEV_USER:-thomass}"
+export PRACTICAL__RUSTICAL_URL= PRACTICAL__DB_PATH="$DB" PRACTICAL__ALLOW_PASSWORD_LOGIN=true \
+  PRACTICAL__PUBLIC_URL=http://localhost:4001 PRACTICAL__BIND=127.0.0.1:4001 \
+  PRACTICAL__DEV_ASSETS_DIR="$PWD/assets" PRACTICAL__HOLIDAYS_SUBDIVISION=DE-SN \
+  PRACTICAL__PUBLIC_DAV_URL=https://dav.example.org PRACTICAL__DEV_LOGIN="${DEV_USER:-thomass}"
 if command -v watchexec >/dev/null 2>&1; then
   exec watchexec --restart --watch src --watch templates --watch locales --watch Cargo.toml --watch build.rs -- cargo run -- serve
 fi
@@ -58,7 +58,7 @@ exec cargo run -- serve
 description = "Fresh COPY of the production DB for `mise run dev` (cluster stays read-only: VACUUM INTO in the backup sidecar); sets password 'devpass' for DEV_USER (default thomass)"
 run = '''
 set -e
-DEST="$HOME/.cache/rustical-ui-dev/db.sqlite3"; mkdir -p "$(dirname "$DEST")"
+DEST="$HOME/.cache/practical-dev/db.sqlite3"; mkdir -p "$(dirname "$DEST")"
 POD="$(kubectl get pod -n rustical -l app=rustical -o jsonpath='{.items[0].metadata.name}')"
 kubectl exec -n rustical "$POD" -c sqlite-backup -- sqlite3 /var/lib/rustical/db.sqlite3 "VACUUM INTO '/tmp/dev-copy.db'"
 kubectl cp -n rustical -c sqlite-backup "$POD:/tmp/dev-copy.db" "$DEST" >/dev/null
