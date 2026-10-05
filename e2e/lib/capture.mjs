@@ -1,0 +1,117 @@
+// One captured UI state = <OUT>/<project>/<name>.png + .dom.html.gz (normalised outerHTML) +
+// .style.json.gz (computed-style digest of every rendered element). compare.mjs diffs two OUT dirs.
+import fs from 'node:fs';
+import path from 'node:path';
+import zlib from 'node:zlib';
+import { OUT } from './env.mjs';
+import { settle } from './test.mjs';
+
+// the visual properties digested per element (and per ::before/::after with content)
+export const STYLE_PROPS = [
+  'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'box-sizing',
+  'width', 'height', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border-top', 'border-right', 'border-bottom', 'border-left', 'border-radius', 'outline',
+  'color', 'background-color', 'background-image', 'box-shadow', 'opacity', 'visibility', 'transform', 'filter',
+  'font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-align', 'text-decoration-line',
+  'text-transform', 'white-space', 'overflow-x', 'overflow-y', 'text-overflow',
+  'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'gap', 'grid-template-columns', 'grid-template-rows',
+  'fill', 'stroke', 'cursor', 'pointer-events', 'content',
+];
+
+/** In the page: normalised DOM + style digest. */
+function dump(props) {
+  const UUID = /\b(?!5eed0000-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+  const hash = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16); };
+  // ---- DOM: live form values as attributes, volatile values masked, big constant blocks hashed
+  const clone = document.documentElement.cloneNode(true);
+  const live = document.querySelectorAll('input,textarea,select');
+  const copies = clone.querySelectorAll('input,textarea,select');
+  live.forEach((el, i) => {
+    const c = copies[i];
+    if (!c) return;
+    if (el.type === 'checkbox' || el.type === 'radio') c.setAttribute('data-e2e-checked', String(el.checked));
+    else c.setAttribute('data-e2e-value', el.value);
+  });
+  clone.querySelectorAll('#e2e-freeze').forEach(e => e.remove());
+  clone.querySelectorAll('meta[name=csrf]').forEach(e => e.setAttribute('content', '<csrf>'));
+  clone.querySelectorAll('input[name=csrf]').forEach(e => { e.setAttribute('value', '<csrf>'); e.setAttribute('data-e2e-value', '<csrf>'); });
+  for (const sel of ['svg.sprite', 'script#i18n']) clone.querySelectorAll(sel).forEach(e => { e.innerHTML = `<!-- e2e: content hash ${hash(e.innerHTML)} -->`; });
+  let html = '<!doctype html>\n' + clone.outerHTML;
+  html = html.replace(/([?&])v=[0-9a-zA-Z_-]+/g, '$1v=<v>').replace(UUID, '<uuid>').replace(/></g, '>\n<');
+  // ---- style digest: tag path (nth-of-type) → props + box
+  const out = {};
+  const pathOf = el => {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      let i = 1;
+      for (let s = e.previousElementSibling; s; s = s.previousElementSibling) if (s.tagName === e.tagName) i++;
+      parts.unshift(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}:${i}`);
+    }
+    return parts.join('>');
+  };
+  const pick = cs => props.map(p => cs.getPropertyValue(p));
+  const r2 = v => Math.round(v * 100) / 100;
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.id === 'e2e-freeze' || el.closest('svg.sprite')) continue;
+    const rects = el.getClientRects();
+    if (!rects.length) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden') continue;
+    const b = el.getBoundingClientRect();
+    const k = pathOf(el);
+    out[k] = { s: pick(cs), b: [r2(b.x + scrollX), r2(b.y + scrollY), r2(b.width), r2(b.height)] };
+    for (const pe of ['::before', '::after']) {
+      const ps = getComputedStyle(el, pe);
+      if (ps.content && ps.content !== 'none' && ps.content !== 'normal') out[k + pe] = { s: pick(ps) };
+    }
+  }
+  // the scroll positions of scrolled boxes change what a screenshot shows
+  const scroll = {};
+  for (const el of document.querySelectorAll('*')) if (el.scrollTop || el.scrollLeft) scroll[pathOf(el)] = [Math.round(el.scrollLeft), Math.round(el.scrollTop)];
+  return { html, style: { props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out } };
+}
+
+async function stableShot(page, name, opts) {
+  // the screenshot is taken until two agree: a late repaint must not land in the baseline
+  let png = await page.screenshot(opts);
+  for (let i = 0; i < 5; i++) {
+    const again = await page.screenshot(opts);
+    if (again.equals(png)) return png;
+    png = again;
+    await settle(page);
+  }
+  throw new Error(`${name}: screenshot did not stabilise`);
+}
+
+/** Captures the current state as `name` (file-safe) for the running project. The page scrolls inside
+ *  `main.main` (not the document): `segments` more screenshots `<name>~sN.png` follow its content down
+ *  (0 for endless lists whose length depends on scrolling). The pointer stays where the test left it. */
+export async function capture(page, testInfo, name, { fullPage = true, mask = [], segments = 3 } = {}) {
+  await settle(page);
+  const dir = path.join(OUT, testInfo.project.name);
+  fs.mkdirSync(dir, { recursive: true });
+  const base = path.join(dir, name);
+  const shotOpts = { fullPage, animations: 'disabled', caret: 'hide', scale: 'device', mask, maskColor: '#ff00ff' };
+  const png = await stableShot(page, name, shotOpts);
+  fs.writeFileSync(base + '.png', png);
+  const { html, style } = await page.evaluate(dump, STYLE_PROPS);
+  fs.writeFileSync(base + '.dom.html.gz', zlib.gzipSync(html, { level: 9 }));
+  fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(JSON.stringify(style), { level: 9 }));
+  const main = page.locator('main.main');
+  if (segments > 0 && (await main.count()) === 1) {
+    const start = await main.evaluate(m => m.scrollTop);
+    for (let i = 1; i <= segments; i++) {
+      const more = await main.evaluate(m => {
+        if (m.scrollTop + m.clientHeight >= m.scrollHeight - 2) return false;
+        m.scrollTop += m.clientHeight;
+        return true;
+      });
+      if (!more) break;
+      await settle(page);
+      fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts));
+    }
+    await main.evaluate((m, t) => { m.scrollTop = t; }, start);
+    await settle(page);
+  }
+}

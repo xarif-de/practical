@@ -1,0 +1,16 @@
+{
+  "name": "practical-e2e",
+  "private": true,
+  "type": "module",
+  "description": "PractiCal end-to-end safety net: functional suite + visual/DOM/style baselines (see README.md, mise e2e-* tasks)",
+  "scripts": {
+    "functional": "playwright test",
+    "baseline": "./baseline.sh",
+    "compare": "node compare.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "pixelmatch": "7.2.0",
+    "pngjs": "7.0.0"
+  }
+}

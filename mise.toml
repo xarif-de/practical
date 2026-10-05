@@ -69,3 +69,24 @@ docker run --rm -v "$(dirname "$DEST"):/var/lib/rustical" "ghcr.io/lennart-k/rus
   rustical principals edit "${DEV_USER:-thomass}" --for-testing-password-from-arg devpass
 echo "copy at $DEST — login ${DEV_USER:-thomass} / devpass on http://localhost:4001"
 '''
+
+[tasks.e2e-seed]
+description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): RustiCal CLI in docker + PractiCal HTTP, frozen clock, blocked egress"
+run = "e2e/seed/seed.sh"
+
+[tasks.e2e]
+description = "Functional e2e suite (Playwright, e2e/functional) against a release build of this checkout on a fresh copy of the fixture"
+run = '''
+cd e2e
+[ -d node_modules ] || npm ci --no-fund --no-audit
+npx playwright install chromium >/dev/null
+exec npx playwright test
+'''
+
+[tasks.e2e-baseline]
+description = "Visual baseline (PNG + DOM + computed style of every UI state): mise run e2e-baseline -- [outdir], default ~/.cache/practical-e2e/<sha>"
+run = "e2e/baseline.sh"
+
+[tasks.e2e-compare]
+description = "Diff two baselines (pixels, DOM, computed style): mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
+run = "node e2e/compare.mjs"

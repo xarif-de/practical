@@ -42,6 +42,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
 - [Commands](#commands)
 - [The RustiCal version contract](#the-rustical-version-contract)
 - [Local development](#local-development)
+- [End-to-end safety net](#end-to-end-safety-net)
 - [Repository layout](#repository-layout)
 - [License](#license)
 
@@ -377,7 +378,38 @@ makes the server read `assets/*` from disk on every request (uncached) and mount
 SSE stream the page listens to (`body[data-dev]`): a new process boot id or an asset change reloads
 the open tab, and `PRACTICAL__DEV_LOGIN` signs `DEV_USER` back in after the restart (sessions are in
 memory), so nothing needs a manual refresh or login. Never point `DB` at a live RustiCal file — `dev-db`
-takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset in production.
+takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset in production; so is
+`PRACTICAL__DEV_NOW` (RFC 3339, accepted only with `DEV_ASSETS_DIR`), which freezes every server-side
+"now" for reproducible pages (the e2e suite).
+
+## End-to-end safety net
+
+`e2e/` proves that a change keeps function **and** look: a functional Playwright suite and a visual
+baseline of every UI state (PNG + normalised DOM + computed-style digest), both against a release
+build of the checkout on a synthetic database.
+
+```bash
+mise run e2e-seed                       # fixture DB → e2e/.work/fixture.sqlite3 (docker: RustiCal CLI)
+mise run e2e                            # functional suite (e2e/functional), serial, one fresh DB copy
+mise run e2e-baseline -- <dir>          # visual suite → <dir> (default ~/.cache/practical-e2e/<sha>)
+mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>/compare-report; exit 1 on any difference
+```
+
+- **Fixture** (`e2e/seed/`, synthetic data only): users alice/bob/carol (password `devpass`, carol
+  has nothing = empty states), group `group.familie`, five calendars, two address books, tasks, rules,
+  history, holidays (cache rows; no egress). Collection/token ids are fixed UUIDs (`5eed0000-…`),
+  clock-derived values fixed: two seeds render the same pages. Regenerate only when the seed changes —
+  compare baselines taken on the same fixture (its sha256 is in `<dir>/.e2e-baseline`).
+- **Server** (`e2e/global-setup.mjs`): development mode on `127.0.0.1:4101` (`E2E_PORT`) with
+  `PRACTICAL__DEV_LOGIN=alice` and `PRACTICAL__DEV_NOW=2026-10-14T08:00:00Z` — the dev-only fixed
+  clock (`build/src/clock.rs`) — plus a non-dev server on port+1 for the login page; egress blocked
+  (`HTTP(S)_PROXY=127.0.0.1:9`). Browser: clock frozen at the same instant, Europe/Berlin, de-DE
+  (en-GB for `@main` states), reduced motion, transitions/animations/caret off, `Math.random` seeded,
+  service workers blocked, no request leaves 127.0.0.1 (OSM tiles = one gray PNG).
+- **Visual projects**: desktop 1440×900 and phone 390×844 × light/dark (de) + `@main` states in en.
+  Visual tests are read-only (writes are aborted), so they run in parallel on one DB.
+- Pixel baselines depend on the host's fonts and Chromium build (`@playwright/test` pinned in
+  `e2e/package-lock.json`): compare baselines from the same machine.
 
 ## Repository layout
 
