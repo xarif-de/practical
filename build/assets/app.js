@@ -3681,6 +3681,7 @@
   const csrf = document.querySelector('meta[name=csrf]').content;
   const lang = document.body.dataset.lang || 'de';
   const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   // import: read the chosen file, POST its bytes (no multipart)
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;
@@ -3752,7 +3753,7 @@
   if (!en) return;
   const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, c => c.charCodeAt(0)); };
   async function refresh() {
-    try { const subs = await (await fetch('/api/push/subscriptions')).json(); list.innerHTML = subs.map(s => `<li><small class="muted">${(s.user_agent || '').slice(0, 60)} · ${s.created_at}</small></li>`).join('') || ''; } catch (_) {}
+    try { const subs = await (await fetch('/api/push/subscriptions')).json(); list.innerHTML = subs.map(s => `<li><small class="muted">${esc((s.user_agent || '').slice(0, 60))} · ${s.created_at}</small></li>`).join('') || ''; } catch (_) {}
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) { st.textContent = T.unsupported; en.disabled = true; return; }
     const reg = await navigator.serviceWorker.getRegistration('/'); const sub = reg && await reg.pushManager.getSubscription();
     en.hidden = !!sub; dis.hidden = !sub; st.textContent = sub ? T.active : '';
