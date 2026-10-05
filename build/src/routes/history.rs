@@ -141,7 +141,7 @@ fn local(at: &str, tz: chrono_tz::Tz) -> String {
 
 async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx) -> AppResult<HistoryPage> {
     let d = data(&state, &user, &ctx.lang).await?;
-    Ok(HistoryPage { data_json: d.to_string().replace('<', "\\u003c"), ctx })
+    Ok(HistoryPage { data_json: crate::render::script_json(d.to_string()), ctx })
 }
 
 async fn api_data(State(state): State<SharedState>, user: Principal, ctx: PageCtx) -> AppResult<Json<Value>> {

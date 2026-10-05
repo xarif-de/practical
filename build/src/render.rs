@@ -105,6 +105,12 @@ fn hol_class(hol: &Hols, d: NaiveDate) -> String {
     format!("{}{}", if v.iter().any(|m| !m.school) { " hol" } else { "" }, if v.iter().any(|m| m.school) { " fer" } else { "" })
 }
 
+/// JSON for a `<script type="application/json">` block: `<` can only occur inside JSON strings,
+/// and as `\u003c` it can no longer close the block (a task title `</script>…` from a shared
+/// calendar would otherwise inject markup).
+pub fn script_json(json: String) -> String {
+    json.replace('<', "\\u003c")
+}
 
 pub fn e(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
@@ -647,6 +653,14 @@ pub fn month_view(view_date: NaiveDate, picked: NaiveDate, today: NaiveDate, ins
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_json_cannot_close_its_block() {
+        let j = script_json(serde_json::json!({ "title": "</script><script>alert(1)</script>" }).to_string());
+        assert!(!j.contains('<'));
+        let back: serde_json::Value = serde_json::from_str(&j).unwrap();
+        assert_eq!(back["title"], "</script><script>alert(1)</script>");
+    }
 
     #[test]
     fn weeks_of_september_2026() {

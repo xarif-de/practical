@@ -217,9 +217,9 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         today: vc.today,
         view_label,
         in_more,
-        alarm_snaps_json: serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap(),
-        alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
-        category_rules_json: serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "event").await?).unwrap(),
+        alarm_snaps_json: crate::render::script_json(serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap()),
+        alarm_presets_json: crate::render::script_json(p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into())),
+        category_rules_json: crate::render::script_json(serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "event").await?).unwrap()),
     }
     .into_response())
 }

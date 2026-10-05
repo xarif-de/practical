@@ -174,7 +174,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
         default_timezone: state.config.default_timezone.clone(),
-        picker_json: serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones(), "names": region_names }).to_string().replace('<', "\\u003c"),
+        picker_json: crate::render::script_json(serde_json::json!({ "countries": holidays::countries(&ctx.lang), "zones": timezones(), "names": region_names }).to_string()),
         public_regions: public_regions.join(","),
         school_regions: school_regions.join(","),
         region_names,

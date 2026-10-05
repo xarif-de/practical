@@ -163,6 +163,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
         "completed_total": done_total - cancelled_total, "cancelled_total": cancelled_total, "per_day": per_day
     }))
     .unwrap_or_else(|_| "{}".into());
+    let tasks_json = crate::render::script_json(tasks_json);
     let p = prefs::get(&state.db, &user.id).await?;
     Ok(TasksPage {
         ctx,
@@ -176,9 +177,9 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
         open_count,
         done_total,
         tasks_json,
-        alarm_snaps_json: serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap(),
-        alarm_presets_json: p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into()),
-        category_rules_json: serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "task").await?).unwrap(),
+        alarm_snaps_json: crate::render::script_json(serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap()),
+        alarm_presets_json: crate::render::script_json(p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into())),
+        category_rules_json: crate::render::script_json(serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "task").await?).unwrap()),
         columns: p.task_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| DEFAULT_COLUMNS.iter().map(|s| s.to_string()).collect()),
     })
 }
