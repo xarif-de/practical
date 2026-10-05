@@ -6,7 +6,7 @@
 //! - school holidays: OpenHolidays → the last cached answer (no other free source keeps
 //!   them per year; ferien-api.de rate-limits, mehr-schulferien.de only has the next 12 months).
 //!
-//! Answers are cached per (country, subdivision, year, kind-lang) in `xui_holidays` for 30
+//! Answers are cached per (country, subdivision, year, kind-lang) in `practical_holidays` for 30
 //! days; OpenHolidays' subdivision lists the same way (year 0). Country and region *names* and
 //! the region hierarchy of countries OpenHolidays does not cover come from Unicode CLDR,
 //! built into the binary (`src/data/regions.json`, `tools/gen_regions.py`) — no request needed.
@@ -14,7 +14,7 @@
 //! which source covers which country is asked at most weekly (`refresh_coverage`), CLDR is asked
 //! at most weekly whether a newer release exists (`check_cldr`: one small request, usually a
 //! 304) and only then are its files fetched — about once a year. Saved answers live in
-//! `xui_holidays` (year 0) and win over the built-in snapshot when newer.
+//! `practical_holidays` (year 0) and win over the built-in snapshot when newer.
 //!
 //! A region is stored as its ISO 3166-2 code where it has one (DE-SN, AT-1), else as
 //! OpenHolidays' own code (CH-AG-ZZ, a district); both APIs accept ISO codes. A bare country
@@ -454,7 +454,7 @@ async fn cache_get(state: &AppState, country: &str, subdivision: &str, year: i32
 
 /// The cached JSON for a key and its age in hours.
 async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str) -> AppResult<Option<(String, i64)>> {
-    let row = sqlx::query("SELECT json, fetched_at FROM xui_holidays WHERE country = ? AND subdivision = ? AND year = ? AND kind = ?")
+    let row = sqlx::query("SELECT json, fetched_at FROM practical_holidays WHERE country = ? AND subdivision = ? AND year = ? AND kind = ?")
         .bind(country)
         .bind(subdivision)
         .bind(year)
@@ -469,7 +469,7 @@ async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i3
 }
 
 async fn cache_put(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str, json: &str) -> AppResult<()> {
-    sqlx::query("INSERT OR REPLACE INTO xui_holidays (country, subdivision, year, kind, json, fetched_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)")
+    sqlx::query("INSERT OR REPLACE INTO practical_holidays (country, subdivision, year, kind, json, fetched_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)")
         .bind(country)
         .bind(subdivision)
         .bind(year)

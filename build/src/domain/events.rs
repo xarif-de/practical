@@ -831,7 +831,7 @@ pub struct Alarm {
     pub acknowledged: Option<NaiveDateTime>,
 }
 
-/// Preset of a reminder setting, kept per user (`xui_user_settings.alarm_presets_json`): the
+/// Preset of a reminder setting, kept per user (`practical_user_settings.alarm_presets_json`): the
 /// same shape as `Alarm` without idx, text, subject and acknowledgement — those belong to one event.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AlarmPreset {

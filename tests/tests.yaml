@@ -62,7 +62,7 @@ tests:
   - name: ui-runs-against-a-rustical-migrated-database
     # The pairing itself, as the pod runs it: RustiCal's own binary creates and migrates a
     # fresh store and writes a principal + app token; PractiCal then starts against that
-    # file (refuses a non-RustiCal schema, applies its xui_* migrations) and serves pages
+    # file (refuses a non-RustiCal schema, applies its practical_* migrations) and serves pages
     # whose queries read RustiCal's tables through the rustical_* crates. Proven to go red:
     # renaming calendars.displayname in the store turns /settings and /history into HTTP 500
     # (2026-10-01). Binds are IPv4 loopback: the test sandbox need not have IPv6.

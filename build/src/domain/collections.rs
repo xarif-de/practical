@@ -37,7 +37,7 @@ pub struct AbInfo {
     pub is_group: bool,
     pub id: String,
     pub displayname: String,
-    /// xui_addressbook_colors, else default_color(id)
+    /// practical_addressbook_colors, else default_color(id)
     pub color: String,
     pub description: String,
     pub deleted_at: Option<NaiveDateTime>,
@@ -113,7 +113,7 @@ pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) ->
 
 pub async fn addressbooks_for(state: &AppState, user: &Principal, deleted: bool) -> AppResult<Vec<AbInfo>> {
     use sqlx::Row;
-    let colors: std::collections::HashMap<(String, String), String> = sqlx::query("SELECT principal, id, color FROM xui_addressbook_colors")
+    let colors: std::collections::HashMap<(String, String), String> = sqlx::query("SELECT principal, id, color FROM practical_addressbook_colors")
         .fetch_all(&state.db)
         .await?
         .into_iter()
@@ -139,7 +139,7 @@ async fn set_addressbook_color(state: &AppState, owner: &str, id: &str, color: &
     if !valid_color(color) {
         return Err(AppError::BadRequest("color must be #rrggbb".into()));
     }
-    sqlx::query("INSERT INTO xui_addressbook_colors (principal, id, color) VALUES (?, ?, ?) ON CONFLICT(principal, id) DO UPDATE SET color=excluded.color")
+    sqlx::query("INSERT INTO practical_addressbook_colors (principal, id, color) VALUES (?, ?, ?) ON CONFLICT(principal, id) DO UPDATE SET color=excluded.color")
         .bind(owner)
         .bind(id)
         .bind(color)
@@ -270,7 +270,7 @@ pub async fn delete_addressbook(state: &AppState, user: &Principal, owner: &str,
     ensure_owner(user, owner)?;
     state.addressbooks.delete_addressbook(owner, id, !hard).await?;
     if hard {
-        sqlx::query("DELETE FROM xui_addressbook_colors WHERE principal = ? AND id = ?").bind(owner).bind(id).execute(&state.db).await?;
+        sqlx::query("DELETE FROM practical_addressbook_colors WHERE principal = ? AND id = ?").bind(owner).bind(id).execute(&state.db).await?;
     }
     Ok(())
 }

@@ -4,8 +4,8 @@
 //! after, so it can be undone later. Undo is itself a change; the undone one links to it.
 //!
 //! RustiCal keeps no old versions (`REPLACE INTO calendarobjects`) and its change log names no
-//! content and no author, so this module keeps its own copy: `xui_history_heads` holds the last
-//! version it saw of every object (`xui_history_blobs`, content-addressed), `xui_history_cursors`
+//! content and no author, so this module keeps its own copy: `practical_history_heads` holds the last
+//! version it saw of every object (`practical_history_blobs`, content-addressed), `practical_history_cursors`
 //! how far it has read each collection's log. `ingest` reads what moved since and records it; UI
 //! writes run between `begin` and `Guard::commit`, which hold one lock with the poller, so what
 //! they wrote is attributed to them and nothing else is.
@@ -149,11 +149,11 @@ async fn read_obj(state: &AppState, store: Store, p: &str, c: &str, id: &str) ->
 }
 
 async fn last_act(state: &AppState, store: Store, uid: &str) -> AppResult<Option<String>> {
-    Ok(sqlx::query("SELECT act FROM xui_history_items WHERE store = ? AND uid = ? ORDER BY change_id DESC LIMIT 1").bind(store.tag()).bind(uid).fetch_optional(&state.db).await?.map(|r| r.get("act")))
+    Ok(sqlx::query("SELECT act FROM practical_history_items WHERE store = ? AND uid = ? ORDER BY change_id DESC LIMIT 1").bind(store.tag()).bind(uid).fetch_optional(&state.db).await?.map(|r| r.get("act")))
 }
 
 async fn blob(state: &AppState, h: &str) -> AppResult<Option<String>> {
-    Ok(sqlx::query("SELECT body FROM xui_history_blobs WHERE hash = ?").bind(h).fetch_optional(&state.db).await?.map(|r| r.get("body")))
+    Ok(sqlx::query("SELECT body FROM practical_history_blobs WHERE hash = ?").bind(h).fetch_optional(&state.db).await?.map(|r| r.get("body")))
 }
 
 /// Everything that moved since the last read, recorded. `actor`: a UI write's attribution — what
@@ -176,7 +176,7 @@ async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<ObjKey>, &Hash
                 "SELECT id, vcf AS t FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND deleted_at IS NULL",
             ),
         };
-        let seen: HashMap<(String, String), i64> = sqlx::query("SELECT principal, coll, synctoken FROM xui_history_cursors WHERE store = ?")
+        let seen: HashMap<(String, String), i64> = sqlx::query("SELECT principal, coll, synctoken FROM practical_history_cursors WHERE store = ?")
             .bind(store.tag())
             .fetch_all(&state.db)
             .await?
@@ -205,7 +205,7 @@ async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<ObjKey>, &Hash
                 cursors.push((store, p, c, tok));
                 continue;
             }
-            let heads: HashMap<String, String> = sqlx::query("SELECT object_id, hash FROM xui_history_heads WHERE store = ? AND principal = ? AND coll = ?")
+            let heads: HashMap<String, String> = sqlx::query("SELECT object_id, hash FROM practical_history_heads WHERE store = ? AND principal = ? AND coll = ?")
                 .bind(store.tag())
                 .bind(&p)
                 .bind(&c)
@@ -255,8 +255,8 @@ async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<ObjKey>, &Hash
     let mut tx = state.db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
     for (store, p, c, id, uid, text) in &heads_put {
         let h = hash(text);
-        sqlx::query("INSERT OR IGNORE INTO xui_history_blobs (hash, body) VALUES (?, ?)").bind(&h).bind(text).execute(&mut *tx).await?;
-        sqlx::query("INSERT OR REPLACE INTO xui_history_heads (store, principal, coll, object_id, uid, hash) VALUES (?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT OR IGNORE INTO practical_history_blobs (hash, body) VALUES (?, ?)").bind(&h).bind(text).execute(&mut *tx).await?;
+        sqlx::query("INSERT OR REPLACE INTO practical_history_heads (store, principal, coll, object_id, uid, hash) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(store.tag())
             .bind(p)
             .bind(c)
@@ -267,10 +267,10 @@ async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<ObjKey>, &Hash
             .await?;
     }
     for (store, p, c, id) in &heads_del {
-        sqlx::query("DELETE FROM xui_history_heads WHERE store = ? AND principal = ? AND coll = ? AND object_id = ?").bind(store.tag()).bind(p).bind(c).bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM practical_history_heads WHERE store = ? AND principal = ? AND coll = ? AND object_id = ?").bind(store.tag()).bind(p).bind(c).bind(id).execute(&mut *tx).await?;
     }
     for (store, p, c, tok) in &cursors {
-        sqlx::query("INSERT OR REPLACE INTO xui_history_cursors (store, principal, coll, synctoken) VALUES (?, ?, ?, ?)").bind(store.tag()).bind(p).bind(c).bind(tok).execute(&mut *tx).await?;
+        sqlx::query("INSERT OR REPLACE INTO practical_history_cursors (store, principal, coll, synctoken) VALUES (?, ?, ?, ?)").bind(store.tag()).bind(p).bind(c).bind(tok).execute(&mut *tx).await?;
     }
     // devices first: they were there before the write that is being recorded
     theirs.sort_by(|a, b| a.at.cmp(&b.at));
@@ -317,7 +317,7 @@ fn merge_moves(recs: Vec<Rec>) -> Vec<Rec> {
 async fn write_change(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, src: &str, who: Option<&str>, prodid: Option<&str>, label: Option<&str>, reverts: Option<i64>, at: &str, recs: &[Rec]) -> AppResult<i64> {
     let items: Vec<(&Rec, Vec<(String, String, String)>)> = recs.iter().map(|r| (r, r.attrs())).collect();
     let tech = items.iter().all(|(r, a)| r.act == "update" && a.iter().all(|(k, _, _)| ht::is_tech(k)));
-    let id: i64 = sqlx::query("INSERT INTO xui_history_changes (at, src, who, device, label, reverts, tech) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id")
+    let id: i64 = sqlx::query("INSERT INTO practical_history_changes (at, src, who, device, label, reverts, tech) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id")
         .bind(at)
         .bind(src)
         .bind(who)
@@ -332,10 +332,10 @@ async fn write_change(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, src: &str, w
         let put = |t: &Option<String>| t.as_ref().map(|t| (hash(t), t.clone()));
         let (b, a) = (put(&r.before), put(&r.after));
         for (h, t) in b.iter().chain(a.iter()) {
-            sqlx::query("INSERT OR IGNORE INTO xui_history_blobs (hash, body) VALUES (?, ?)").bind(h).bind(t).execute(&mut **tx).await?;
+            sqlx::query("INSERT OR IGNORE INTO practical_history_blobs (hash, body) VALUES (?, ?)").bind(h).bind(t).execute(&mut **tx).await?;
         }
         sqlx::query(
-            "INSERT INTO xui_history_items (change_id, idx, store, principal, coll, object_id, uid, kind, act, from_principal, from_coll, from_object, before_hash, after_hash, title, attrs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO practical_history_items (change_id, idx, store, principal, coll, object_id, uid, kind, act, from_principal, from_coll, from_object, before_hash, after_hash, title, attrs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(i as i64)
@@ -362,10 +362,10 @@ async fn write_change(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, src: &str, w
 /// `n` undid `r`: `r` is undone; if `r` brought objects into being, every later change of them
 /// is inactive now, linked to `n`; and what `r` itself had made inactive counts again.
 async fn mark_reverted(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, r: i64, n: i64) -> AppResult<()> {
-    sqlx::query("UPDATE xui_history_changes SET undone_by = ? WHERE id = ?").bind(n).bind(r).execute(&mut **tx).await?;
+    sqlx::query("UPDATE practical_history_changes SET undone_by = ? WHERE id = ?").bind(n).bind(r).execute(&mut **tx).await?;
     sqlx::query(
-        "UPDATE xui_history_changes SET inactive_by = ? WHERE id > ? AND id < ? AND undone_by IS NULL AND inactive_by IS NULL AND id IN (
-           SELECT i.change_id FROM xui_history_items i JOIN xui_history_items o ON o.store = i.store AND o.uid = i.uid
+        "UPDATE practical_history_changes SET inactive_by = ? WHERE id > ? AND id < ? AND undone_by IS NULL AND inactive_by IS NULL AND id IN (
+           SELECT i.change_id FROM practical_history_items i JOIN practical_history_items o ON o.store = i.store AND o.uid = i.uid
            WHERE o.change_id = ? AND o.act IN ('create', 'restore'))",
     )
     .bind(n)
@@ -374,7 +374,7 @@ async fn mark_reverted(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, r: i64, n: 
     .bind(r)
     .execute(&mut **tx)
     .await?;
-    sqlx::query("UPDATE xui_history_changes SET inactive_by = NULL WHERE inactive_by = ?").bind(r).execute(&mut **tx).await?;
+    sqlx::query("UPDATE practical_history_changes SET inactive_by = NULL WHERE inactive_by = ?").bind(r).execute(&mut **tx).await?;
     Ok(())
 }
 
@@ -383,13 +383,13 @@ pub async fn purge(state: &AppState) -> AppResult<u64> {
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(i64::from(state.config.history_retention_days))).format("%Y-%m-%d %H:%M:%S").to_string();
     let _lock = state.history.lock.lock().await;
     let mut tx = state.db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
-    sqlx::query("DELETE FROM xui_history_items WHERE change_id IN (SELECT id FROM xui_history_changes WHERE at < ?)").bind(&cutoff).execute(&mut *tx).await?;
-    let n = sqlx::query("DELETE FROM xui_history_changes WHERE at < ?").bind(&cutoff).execute(&mut *tx).await?.rows_affected();
+    sqlx::query("DELETE FROM practical_history_items WHERE change_id IN (SELECT id FROM practical_history_changes WHERE at < ?)").bind(&cutoff).execute(&mut *tx).await?;
+    let n = sqlx::query("DELETE FROM practical_history_changes WHERE at < ?").bind(&cutoff).execute(&mut *tx).await?.rows_affected();
     if n > 0 {
         sqlx::query(
-            "DELETE FROM xui_history_blobs WHERE hash NOT IN (SELECT hash FROM xui_history_heads)
-               AND hash NOT IN (SELECT before_hash FROM xui_history_items WHERE before_hash IS NOT NULL)
-               AND hash NOT IN (SELECT after_hash FROM xui_history_items WHERE after_hash IS NOT NULL)",
+            "DELETE FROM practical_history_blobs WHERE hash NOT IN (SELECT hash FROM practical_history_heads)
+               AND hash NOT IN (SELECT before_hash FROM practical_history_items WHERE before_hash IS NOT NULL)
+               AND hash NOT IN (SELECT after_hash FROM practical_history_items WHERE after_hash IS NOT NULL)",
         )
         .execute(&mut *tx)
         .await?;
@@ -464,7 +464,7 @@ fn row_item(r: &sqlx::sqlite::SqliteRow) -> Item {
 /// other collections left out), oldest first. `before`/`after` of the items are blob hashes.
 pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change>> {
     let mut by_id: BTreeMap<i64, Change> = BTreeMap::new();
-    for r in sqlx::query("SELECT * FROM xui_history_changes ORDER BY id").fetch_all(&state.db).await? {
+    for r in sqlx::query("SELECT * FROM practical_history_changes ORDER BY id").fetch_all(&state.db).await? {
         let id: i64 = r.get("id");
         by_id.insert(id, Change {
             id,
@@ -480,7 +480,7 @@ pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change
             items: vec![],
         });
     }
-    for r in sqlx::query("SELECT * FROM xui_history_items ORDER BY change_id, idx").fetch_all(&state.db).await? {
+    for r in sqlx::query("SELECT * FROM practical_history_items ORDER BY change_id, idx").fetch_all(&state.db).await? {
         let it = row_item(&r);
         if !user.is_principal(&it.principal) && !it.from.as_ref().is_some_and(|f| user.is_principal(&f.0)) {
             continue;
@@ -494,7 +494,7 @@ pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change
 
 /// Elements that exist now: (store, uid) with a head.
 pub async fn alive(state: &AppState) -> AppResult<HashSet<(String, String)>> {
-    Ok(sqlx::query("SELECT store, uid FROM xui_history_heads").fetch_all(&state.db).await?.into_iter().map(|r| (r.get("store"), r.get("uid"))).collect())
+    Ok(sqlx::query("SELECT store, uid FROM practical_history_heads").fetch_all(&state.db).await?.into_iter().map(|r| (r.get("store"), r.get("uid"))).collect())
 }
 
 // ---- undo ------------------------------------------------------------------------------------------
@@ -549,7 +549,7 @@ async fn coll_alive(state: &AppState, store: Store, p: &str, c: &str) -> AppResu
 
 /// A live object with this UID in the collection (its id).
 async fn uid_in(state: &AppState, store: Store, p: &str, c: &str, uid: &str) -> AppResult<Option<String>> {
-    let r = sqlx::query("SELECT object_id FROM xui_history_heads WHERE store = ? AND principal = ? AND coll = ? AND uid = ?").bind(store.tag()).bind(p).bind(c).bind(uid).fetch_optional(&state.db).await?;
+    let r = sqlx::query("SELECT object_id FROM practical_history_heads WHERE store = ? AND principal = ? AND coll = ? AND uid = ?").bind(store.tag()).bind(p).bind(c).bind(uid).fetch_optional(&state.db).await?;
     Ok(r.map(|r| r.get("object_id")))
 }
 

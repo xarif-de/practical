@@ -1,4 +1,4 @@
-//! Per-user settings in `xui_user_settings`.
+//! Per-user settings in `practical_user_settings`.
 
 use sqlx::{Row, SqlitePool};
 
@@ -84,7 +84,7 @@ impl Prefs {
 }
 
 pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error> {
-    let row = sqlx::query("SELECT * FROM xui_user_settings WHERE principal = ?")
+    let row = sqlx::query("SELECT * FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?;
@@ -116,7 +116,7 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
 
 /// Language and colour scheme — what every page needs (`PageCtx`), in one query.
 pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<(Option<String>, Option<String>), sqlx::Error> {
-    Ok(sqlx::query("SELECT lang, scheme FROM xui_user_settings WHERE principal = ?")
+    Ok(sqlx::query("SELECT lang, scheme FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?
@@ -126,7 +126,7 @@ pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<(Option<String
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO xui_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, updated_at)
+        "INSERT INTO practical_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,

@@ -1,7 +1,7 @@
-//! Pool on RustiCal's SQLite file plus the UI's OWN schema (`xui_*` tables).
+//! Pool on RustiCal's SQLite file plus the UI's OWN schema (`practical_*` tables).
 //!
 //! Rules (plan D6): RustiCal's migrations are never run from here
-//! (`create_db_pool(.., migrate=false)`); our migrations live in `xui_migrations`
+//! (`create_db_pool(.., migrate=false)`); our migrations live in `practical_migrations`
 //! (never `_sqlx_migrations`, or rustical's own migrator aborts on "unknown
 //! migration"); RustiCal's tables are touched only through its store crates.
 
@@ -12,12 +12,13 @@ pub async fn open(db_path: &str) -> Result<SqlitePool, sqlx::Error> {
     rustical_store_sqlite::create_db_pool(&format!("sqlite://{db_path}"), false).await
 }
 
-/// (version, sql) — append-only; never edit a shipped entry.
+/// (version, sql) — append-only; never change what a shipped entry does. (The table prefix
+/// went xui_ → practical_ on 2026-10-05; existing databases were renamed once, by hand.)
 const MIGRATIONS: &[(i64, &str)] = &[
     (
         1,
         r#"
-CREATE TABLE xui_trashed_groups (
+CREATE TABLE practical_trashed_groups (
     id TEXT PRIMARY KEY,
     displayname TEXT,
     members_json TEXT NOT NULL,
@@ -26,7 +27,7 @@ CREATE TABLE xui_trashed_groups (
     deleted_by TEXT NOT NULL,
     deleted_at TEXT NOT NULL
 );
-CREATE TABLE xui_user_settings (
+CREATE TABLE practical_user_settings (
     principal TEXT PRIMARY KEY,
     lang TEXT,
     scheme TEXT,
@@ -40,7 +41,7 @@ CREATE TABLE xui_user_settings (
     contact_columns_json TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE xui_push_subscriptions (
+CREATE TABLE practical_push_subscriptions (
     id TEXT PRIMARY KEY,
     principal TEXT NOT NULL,
     endpoint TEXT NOT NULL UNIQUE,
@@ -49,8 +50,8 @@ CREATE TABLE xui_push_subscriptions (
     user_agent TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX xui_push_subscriptions_principal ON xui_push_subscriptions (principal);
-CREATE TABLE xui_alarms_sent (
+CREATE INDEX practical_push_subscriptions_principal ON practical_push_subscriptions (principal);
+CREATE TABLE practical_alarms_sent (
     principal TEXT NOT NULL,
     cal_id TEXT NOT NULL,
     object_id TEXT NOT NULL,
@@ -58,7 +59,7 @@ CREATE TABLE xui_alarms_sent (
     sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (principal, cal_id, object_id, trigger_at)
 );
-CREATE TABLE xui_holidays (
+CREATE TABLE practical_holidays (
     country TEXT NOT NULL,
     subdivision TEXT NOT NULL,
     year INTEGER NOT NULL,
@@ -72,96 +73,96 @@ CREATE TABLE xui_holidays (
     (
         2,
         // fields shown per entry in the contacts LIST view (the table has contact_columns_json)
-        "ALTER TABLE xui_user_settings ADD COLUMN contact_list_fields_json TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN contact_list_fields_json TEXT;",
     ),
     (
         3,
         // colour per address book — RustiCal's addressbooks table carries none (calendars do)
-        "CREATE TABLE xui_addressbook_colors (principal TEXT NOT NULL, id TEXT NOT NULL, color TEXT NOT NULL, PRIMARY KEY (principal, id));",
+        "CREATE TABLE practical_addressbook_colors (principal TEXT NOT NULL, id TEXT NOT NULL, color TEXT NOT NULL, PRIMARY KEY (principal, id));",
     ),
     (
         4,
         // reminder presets of the event editor, per user (NULL = the built-in defaults)
-        "ALTER TABLE xui_user_settings ADD COLUMN alarm_presets_json TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN alarm_presets_json TEXT;",
     ),
     (
         5,
         // snap points of the reminder strip, per user (NULL = the built-in list)
-        "ALTER TABLE xui_user_settings ADD COLUMN alarm_snaps_json TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN alarm_snaps_json TEXT;",
     ),
     (
         6,
         // per-user category rules: defaults and fixed values a category applies to an event (JSON, see domain::catrules)
-        "CREATE TABLE xui_category_rules (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, category));",
+        "CREATE TABLE practical_category_rules (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, category));",
     ),
     (
         7,
         // a rule belongs to events or to tasks; everything stored so far was written by the event editor
         // the primary key has to grow, and SQLite cannot alter one — rebuild and copy;
         // everything stored so far was written by the event editor
-        "CREATE TABLE xui_category_rules_new (principal TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'event', category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, scope, category));\n\
-         INSERT INTO xui_category_rules_new (principal, scope, category, rule_json, updated_at) SELECT principal, 'event', category, rule_json, updated_at FROM xui_category_rules;\n\
-         DROP TABLE xui_category_rules;\n\
-         ALTER TABLE xui_category_rules_new RENAME TO xui_category_rules;",
+        "CREATE TABLE practical_category_rules_new (principal TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'event', category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, scope, category));\n\
+         INSERT INTO practical_category_rules_new (principal, scope, category, rule_json, updated_at) SELECT principal, 'event', category, rule_json, updated_at FROM practical_category_rules;\n\
+         DROP TABLE practical_category_rules;\n\
+         ALTER TABLE practical_category_rules_new RENAME TO practical_category_rules;",
     ),
     (
         8,
         // the columns of the task table, per user (NULL = routes::tasks::DEFAULT_COLUMNS)
-        "ALTER TABLE xui_user_settings ADD COLUMN task_columns_json TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN task_columns_json TEXT;",
     ),
     (
         9,
         // the holiday country, per user (NULL = config HOLIDAYS_COUNTRY)
-        "ALTER TABLE xui_user_settings ADD COLUMN holiday_country TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN holiday_country TEXT;",
     ),
     (
         10,
         // the user's colours for public holidays and school holidays (NULL = the theme's)
-        "ALTER TABLE xui_user_settings ADD COLUMN holiday_color TEXT;
-         ALTER TABLE xui_user_settings ADD COLUMN school_color TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN holiday_color TEXT;
+         ALTER TABLE practical_user_settings ADD COLUMN school_color TEXT;",
     ),
     (
         11,
         // the regions of public holidays and of school holidays, each a comma list of region codes
         // ("DE-SN,DE-BY"; "" = none). NULL = the single region of holiday_country/holiday_subdivision
         // (prefs::Prefs::regions), so a region chosen before stays as the list's only entry.
-        "ALTER TABLE xui_user_settings ADD COLUMN public_regions TEXT;
-         ALTER TABLE xui_user_settings ADD COLUMN school_regions TEXT;",
+        "ALTER TABLE practical_user_settings ADD COLUMN public_regions TEXT;
+         ALTER TABLE practical_user_settings ADD COLUMN school_regions TEXT;",
     ),
     (
         12,
         // the top-bar search's history (domain::search_history): one row per query (q_norm = folded),
         // with the result last opened from it; kept for search_history_days (NULL = 90, 0 = not recorded, -1 = unlimited)
-        "CREATE TABLE xui_search_history (id INTEGER PRIMARY KEY AUTOINCREMENT, principal TEXT NOT NULL, q TEXT NOT NULL, q_norm TEXT NOT NULL, target_json TEXT, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, uses INTEGER NOT NULL DEFAULT 1, UNIQUE (principal, q_norm));
-         ALTER TABLE xui_user_settings ADD COLUMN search_history_days INTEGER;",
+        "CREATE TABLE practical_search_history (id INTEGER PRIMARY KEY AUTOINCREMENT, principal TEXT NOT NULL, q TEXT NOT NULL, q_norm TEXT NOT NULL, target_json TEXT, used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, uses INTEGER NOT NULL DEFAULT 1, UNIQUE (principal, q_norm));
+         ALTER TABLE practical_user_settings ADD COLUMN search_history_days INTEGER;",
     ),
     (
         13,
         // the change history (domain::history): changes with their items, the versions before/after as
         // content-addressed blobs, the last version seen of every object and how far each collection's
         // change log is read
-        "CREATE TABLE xui_history_blobs (hash TEXT PRIMARY KEY, body TEXT NOT NULL);
-         CREATE TABLE xui_history_changes (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, src TEXT NOT NULL, who TEXT, device TEXT, label TEXT,
+        "CREATE TABLE practical_history_blobs (hash TEXT PRIMARY KEY, body TEXT NOT NULL);
+         CREATE TABLE practical_history_changes (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, src TEXT NOT NULL, who TEXT, device TEXT, label TEXT,
              reverts INTEGER, undone_by INTEGER, inactive_by INTEGER, tech INTEGER NOT NULL DEFAULT 0);
-         CREATE INDEX xui_history_changes_at ON xui_history_changes (at);
-         CREATE TABLE xui_history_items (change_id INTEGER NOT NULL, idx INTEGER NOT NULL, store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL,
+         CREATE INDEX practical_history_changes_at ON practical_history_changes (at);
+         CREATE TABLE practical_history_items (change_id INTEGER NOT NULL, idx INTEGER NOT NULL, store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL,
              object_id TEXT NOT NULL, uid TEXT NOT NULL, kind TEXT NOT NULL, act TEXT NOT NULL, from_principal TEXT, from_coll TEXT, from_object TEXT,
              before_hash TEXT, after_hash TEXT, title TEXT NOT NULL, attrs TEXT NOT NULL, PRIMARY KEY (change_id, idx));
-         CREATE INDEX xui_history_items_uid ON xui_history_items (store, uid);
-         CREATE TABLE xui_history_heads (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, object_id TEXT NOT NULL, uid TEXT NOT NULL, hash TEXT NOT NULL,
+         CREATE INDEX practical_history_items_uid ON practical_history_items (store, uid);
+         CREATE TABLE practical_history_heads (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, object_id TEXT NOT NULL, uid TEXT NOT NULL, hash TEXT NOT NULL,
              PRIMARY KEY (store, principal, coll, object_id));
-         CREATE INDEX xui_history_heads_uid ON xui_history_heads (store, principal, coll, uid);
-         CREATE TABLE xui_history_cursors (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, synctoken INTEGER NOT NULL, PRIMARY KEY (store, principal, coll));",
+         CREATE INDEX practical_history_heads_uid ON practical_history_heads (store, principal, coll, uid);
+         CREATE TABLE practical_history_cursors (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, synctoken INTEGER NOT NULL, PRIMARY KEY (store, principal, coll));",
     ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS xui_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS practical_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
     )
     .execute(db)
     .await?;
-    let applied: Vec<i64> = sqlx::query("SELECT version FROM xui_migrations ORDER BY version")
+    let applied: Vec<i64> = sqlx::query("SELECT version FROM practical_migrations ORDER BY version")
         .fetch_all(db)
         .await?
         .iter()
@@ -171,10 +172,10 @@ pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
         if applied.contains(version) {
             continue;
         }
-        info!("applying xui migration {version}");
+        info!("applying migration {version}");
         let mut tx = db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
         sqlx::raw_sql(*sql).execute(&mut *tx).await?;
-        sqlx::query("INSERT INTO xui_migrations (version) VALUES (?)")
+        sqlx::query("INSERT INTO practical_migrations (version) VALUES (?)")
             .bind(version)
             .execute(&mut *tx)
             .await?;

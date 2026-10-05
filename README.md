@@ -27,7 +27,7 @@ English, French and Spanish.
 
 It never talks to RustiCal over HTTP for data. It opens **RustiCal's own SQLite file** through
 RustiCal's store crates (`rustical_store_sqlite`, git dependency pinned to the RustiCal release)
-and keeps its own state in `xui_*` tables of the same file, so one backup covers everything.
+and keeps its own state in `practical_*` tables of the same file, so one backup covers everything.
 
 **One image, both programs:** the image also carries RustiCal's own binary, unmodified
 (`/usr/local/bin/rustical`, copied from its official image at the crates' tag), so the pod's two
@@ -50,12 +50,12 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
 - **One database, two processes.** RustiCal and PractiCal run in the same pod as the same
   uid and share the WAL-mode SQLite file. PractiCal waits for RustiCal's `/ping` before it
   opens the file (RustiCal runs its schema migrations at start) and never runs those
-  migrations itself. Its own tables live under the `xui_` prefix with their own
-  `xui_migrations` ledger — never `_sqlx_migrations`, which would make RustiCal abort on an
+  migrations itself. Its own tables live under the `practical_` prefix with their own
+  `practical_migrations` ledger — never `_sqlx_migrations`, which would make RustiCal abort on an
   "unknown migration".
 - **Groups are RustiCal `group` principals** (`group.<slug>`) owned by their members: every
   member may add or remove members, create the group's collections and delete the group.
-  Deleting moves memberships and collections to the trash (`xui_trashed_groups` + RustiCal's
+  Deleting moves memberships and collections to the trash (`practical_trashed_groups` + RustiCal's
   own soft delete); the group is restorable for `TRASH_RETENTION_DAYS`, then a background
   purge removes the principal and the collections for good. The last member leaving trashes
   the group too, so nothing becomes ownerless.
@@ -119,7 +119,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   `X-ALT-DESC` and `STYLED-DESCRIPTION`, which would otherwise keep showing the old text elsewhere.
 - **Categories and rules** (event card, settings tab "Categories"): categories are ordered rows with a
   grip; typing offers the known categories with counts ("existing") or creates a new one, the rest of
-  the known ones sit in a cloud below. A rule per category (`xui_category_rules`, JSON per user, see
+  the known ones sit in a cloud below. A rule per category (`practical_category_rules`, JSON per user, see
   `domain::catrules`) puts values on an event: title, all-day, calendar (new events only), colour, location,
   reminders, repeat, status/busy/visibility/priority and links, each as a *template* (prefilled when
   the category is added, editable) or a *lock* (set on open and fixed in this UI; a differing stored value is
@@ -148,7 +148,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   that add or remove the matching alarm with one click, and one expandable entry per alarm whose
   fields follow the kind (text · sound file · subject, message, recipients) and the trigger (number +
   unit, or date and time). The star in an entry saves its setting — without text, subject and
-  acknowledgement — as a preset; presets are per user (`xui_user_settings.alarm_presets_json`,
+  acknowledgement — as a preset; presets are per user (`practical_user_settings.alarm_presets_json`,
   `/api/alarm-presets`), the built-in list applies until the user changes it. The editor writes
   `ATTENDEE` (mail alarms) and `ATTACH` (the sound of an audio alarm); `PROXIMITY` and `ACKNOWLEDGED`
   (RFC 9074) are kept as the client wrote them — a dismissed alarm shows struck through — and "after
@@ -229,13 +229,13 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   corpus (±2 years of occurrences, contacts, tasks, pre-folded) is cached in memory (`IndexCache`) under a
   fingerprint of the user's collections' synctokens — rebuilt on any change (also CalDAV), dropped after
   30 min idle; the client debounces (180 ms), aborts stale requests and keeps answers 30 s.
-  History (`xui_search_history`, `/api/search/history`): a query is kept when a result is opened from it
+  History (`practical_search_history`, `/api/search/history`): a query is kept when a result is opened from it
   (with that result, so Tab on the grey completion jumps straight there) or on Enter; matching entries
   show at the drop-down's foot (× deletes), recent ones on an empty focus. Settings → Search: retention
-  (`xui_user_settings.search_history_days`: 0 = off, 7/30/90 (default)/365 days, -1 = unlimited; ≤ 300
+  (`practical_user_settings.search_history_days`: 0 = off, 7/30/90 (default)/365 days, -1 = unlimited; ≤ 300
   entries), the list with single deletes, clear all.
 - **Change history** (`/history`; `domain::history`, `domain::history_text`, `routes::history`, assets
-  `history.js`/`history.css`, tables `xui_history_*`): every closed change of an event, task or contact.
+  `history.js`/`history.css`, tables `practical_history_*`): every closed change of an event, task or contact.
   RustiCal keeps no old versions and its change log names no content or author, so PractiCal keeps its
   own: `heads` = last version seen per object, `blobs` = content-addressed versions, `cursors` = log read
   per collection (first sight = baseline, no change; dev copy 4 263 objects, 4.2 MB). Attribution: a UI
@@ -265,8 +265,8 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   (PHOTO, X-…, client items) is carried over verbatim (`preserved_lines`). Parameters are read from
   the raw vCard text (`raw_lines`) because caldata exposes only the first value of a parameter —
   `TYPE=HOME,PREF` and Apple's repeated `;type=…` would otherwise be invisible. Address-book colours
-  live in `xui_addressbook_colors` (RustiCal stores none), list-view field choices per user in
-  `xui_user_settings.contact_list_fields_json`.
+  live in `practical_addressbook_colors` (RustiCal stores none), list-view field choices per user in
+  `practical_user_settings.contact_list_fields_json`.
 - **Addresses** (event location card): suggestions while typing come from [Photon](https://photon.komoot.io)
   (komoot, OSM data, built for search-as-you-type), the address of a map position from
   [Nominatim](https://nominatim.openstreetmap.org) (OSMF; its policy forbids autocomplete and demands
@@ -278,7 +278,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   tile.openstreetmap.org, attribution shown as the tile policy requires.
 - **Holidays**: a source chain per request — public: `openholidaysapi.org` (36 countries, regions down
   to municipalities) → `date.nager.at` (204 countries, ISO 3166-2 regions) → stale cache; school:
-  OpenHolidays → stale cache. 8 s timeout per link, answers cached 30 days in `xui_holidays`.
+  OpenHolidays → stale cache. 8 s timeout per link, answers cached 30 days in `practical_holidays`.
   Each user keeps two region lists, public and school holidays (default: `HOLIDAYS_COUNTRY`/
   `HOLIDAYS_SUBDIVISION`); an entry is a whole country (`DE`) or a region of any depth (`DE-SN`),
   stored as ISO 3166-2 codes where one exists. Holidays several regions share show once; others
@@ -288,7 +288,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   (`build/src/data/regions.json` from `tools/gen_regions.py`; Unicode License v3). Upkeep is lazy
   (daily task; at start it only reads saved state): which source covers which country and CLDR's
   latest release are each asked at most weekly (one request with ETag, usually a 304); only a
-  newer release is downloaded (~3.5 MB, about yearly) and saved in `xui_holidays`, where it wins over
+  newer release is downloaded (~3.5 MB, about yearly) and saved in `practical_holidays`, where it wins over
   the built-in file. A broken answer (error, empty or halved list) never replaces a known one.
 - **Import**: into an existing collection (`.ics` merged by UID, `.vcf`), or a new collection from a
   file (settings › Calendars & address books › Import calendar … / Import address book …). A `.vcf`
@@ -307,7 +307,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   the category if one of that name is in use, else as `\bword\b`.
 - **Push reminders**: browsers register `assets/sw.js` and subscribe with the VAPID public key;
   a one-minute loop expands the subscribers' events a few days ahead, sends each VALARM once
-  (`xui_alarms_sent`) and drops subscriptions the push service reports gone (404/410).
+  (`practical_alarms_sent`) and drops subscriptions the push service reports gone (404/410).
 - **i18n**: Fluent `.ftl` files (`build/locales/{de,en,fr,es}.ftl`), embedded at compile time; a
   missing key falls back to English, then German, and a test keeps all files complete. Language =
   user preference → session → `Accept-Language`. app.js gets its `js-*` strings as JSON from the

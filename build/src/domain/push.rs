@@ -1,6 +1,6 @@
 //! Browser push reminders (plan D12): every minute, look one hour ahead for
 //! VALARM triggers of the subscribers' events, send once, remember in
-//! `xui_alarms_sent` so a restart never repeats a reminder.
+//! `practical_alarms_sent` so a restart never repeats a reminder.
 
 use crate::domain::collections;
 use crate::domain::events;
@@ -19,7 +19,7 @@ struct Sub {
 }
 
 async fn subscriptions(state: &AppState) -> Result<Vec<(String, Vec<Sub>)>, sqlx::Error> {
-    let rows = sqlx::query("SELECT principal, endpoint, p256dh, auth FROM xui_push_subscriptions ORDER BY principal").fetch_all(&state.db).await?;
+    let rows = sqlx::query("SELECT principal, endpoint, p256dh, auth FROM practical_push_subscriptions ORDER BY principal").fetch_all(&state.db).await?;
     let mut out: Vec<(String, Vec<Sub>)> = vec![];
     for r in rows {
         let p: String = r.get("principal");
@@ -106,7 +106,7 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
                 continue;
             }
             let key_trigger = fire.trigger.to_rfc3339();
-            let already: i64 = sqlx::query("SELECT count(*) AS n FROM xui_alarms_sent WHERE principal = ? AND cal_id = ? AND object_id = ? AND trigger_at = ?")
+            let already: i64 = sqlx::query("SELECT count(*) AS n FROM practical_alarms_sent WHERE principal = ? AND cal_id = ? AND object_id = ? AND trigger_at = ?")
                 .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .fetch_one(&state.db).await.map_err(|e| e.to_string())?.get("n");
             if already > 0 {
@@ -119,18 +119,18 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
                     Err(e) => {
                         tracing::warn!("push to {} failed: {e}", &s.endpoint[..s.endpoint.len().min(40)]);
                         if e.contains("410") || e.contains("404") || e.contains("EndpointNotValid") || e.contains("EndpointNotFound") {
-                            let _ = sqlx::query("DELETE FROM xui_push_subscriptions WHERE endpoint = ?").bind(&s.endpoint).execute(&state.db).await;
+                            let _ = sqlx::query("DELETE FROM practical_push_subscriptions WHERE endpoint = ?").bind(&s.endpoint).execute(&state.db).await;
                         }
                     }
                 }
             }
-            sqlx::query("INSERT OR IGNORE INTO xui_alarms_sent (principal, cal_id, object_id, trigger_at) VALUES (?, ?, ?, ?)")
+            sqlx::query("INSERT OR IGNORE INTO practical_alarms_sent (principal, cal_id, object_id, trigger_at) VALUES (?, ?, ?, ?)")
                 .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .execute(&state.db).await.map_err(|e| e.to_string())?;
         }
     }
     // housekeeping: sent-log older than 30 days
-    let _ = sqlx::query("DELETE FROM xui_alarms_sent WHERE sent_at < datetime('now', '-30 days')").execute(&state.db).await;
+    let _ = sqlx::query("DELETE FROM practical_alarms_sent WHERE sent_at < datetime('now', '-30 days')").execute(&state.db).await;
     Ok(sent)
 }
 
