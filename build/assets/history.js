@@ -199,7 +199,7 @@
     const groups = FACETS.map(([k, name]) => {
       const counts = facetCounts(k), vals = facetValues(k).sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || String(facetLabel(k, a)).localeCompare(facetLabel(k, b)));
       if (!vals.length) return '';
-      return `<div class="hx-fg"><h4>${esc(name)}</h4>${vals.map(v => `<label><input type="checkbox" data-f="${k}" value="${esc(v)}"${F[k].has(v) ? ' checked' : ''}>${k === 'colls' ? `<span class="hx-sw" style="--c:${coll(v).color}"></span>` : ''}<span>${esc(facetLabel(k, v))}</span><small>${counts.get(v) || 0}</small></label>`).join('')}</div>`;
+      return `<div class="hx-fg"><h4>${esc(name)}</h4>${vals.map(v => `<label><input type="checkbox" data-f="${k}" value="${esc(v)}"${F[k].has(v) ? ' checked' : ''}>${k === 'colls' ? `<span class="hx-sw" style="--c:${esc(coll(v).color)}"></span>` : ''}<span>${esc(facetLabel(k, v))}</span><small>${counts.get(v) || 0}</small></label>`).join('')}</div>`;
     }).join('');
     const per = `<div class="hx-fg"><h4>${esc(S('f-period'))}</h4><select data-f="period">${PERIODS.map(p => `<option value="${p}"${F.period === p ? ' selected' : ''}>${esc(periodName(p))}</option>`).join('')}</select>${F.period === 'custom' ? `<div class="hx-range"><input type="date" data-f="from" value="${F.from}" min="${dayKey(oldest())}"><span>–</span><input type="date" data-f="to" value="${F.to}"></div>` : ''}</div>`;
     const st = `<div class="hx-fg"><h4>${esc(S('f-status'))}</h4><div class="seg" role="group">${['all', 'active', 'undone'].map(v => `<button type="button" data-fs="${v}" aria-pressed="${F.status === v}">${esc(S('fs-' + v))}</button>`).join('')}</div>
@@ -289,9 +289,9 @@
       if (!(r.stops[0].act === 'create' || r.stops[0].act === 'restore')) x0 = 0;
       for (const s of r.stops) {
         if ((s.act === 'create' || s.act === 'restore') && x0 === null) { if (ghost !== null) segs += `<line x1="${ghost}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-ghost"/>`; ghost = null; x0 = s.x; }
-        if (s.act === 'delete' && x0 !== null) { segs += `<line x1="${x0}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${r.color}"/>`; x0 = null; ghost = s.x; }
+        if (s.act === 'delete' && x0 !== null) { segs += `<line x1="${x0}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${esc(r.color)}"/>`; x0 = null; ghost = s.x; }
       }
-      if (x0 !== null) segs += `<line x1="${x0}" x2="${Math.max(nx, r.stops[r.stops.length - 1].x)}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${r.color}"/>`;
+      if (x0 !== null) segs += `<line x1="${x0}" x2="${Math.max(nx, r.stops[r.stops.length - 1].x)}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${esc(r.color)}"/>`;
       // undo arcs: from the undo stop back to the change it undid (or off the left edge)
       let arcs = '';
       for (const s of r.stops) if (s.c.reverts) {
@@ -354,7 +354,7 @@
       sc.innerHTML = rs.length ? `<div class="hxg-in" style="--w:${W}px">
         <svg width="0" height="0" style="position:absolute"><defs><marker id="hxg-ah" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" fill="var(--hx-undo)"/></marker></defs></svg>
         <div class="hxg-r hxg-head"><div class="hxg-l"></div><div class="hxg-c">${axis(start, W)}</div></div>
-        ${rs.map(r => `<div class="hxg-r"><div class="hxg-l"><span class="hxg-sw" style="background:${r.color}"></span>${ico(r.kind === 'task' ? 'i-tasks' : r.kind === 'contact' ? 'i-contacts' : 'i-calendar')}${r.bulk ? `<span class="t">${esc(r.label)}</span>` : `<a href="#" class="hx-el t" data-el="${esc(r.el)}" title="${esc(S('only-el-tip'))}">${esc(r.label || '—')}</a>`}${r.alive ? '' : `<small>${esc(actWord('delete'))}</small>`}</div><div class="hxg-c"><i class="hxg-nowc" style="left:${nx}px"></i>${rowSvg(r, W, stopX, nx)}</div></div>`).join('')}
+        ${rs.map(r => `<div class="hxg-r"><div class="hxg-l"><span class="hxg-sw" style="background:${esc(r.color)}"></span>${ico(r.kind === 'task' ? 'i-tasks' : r.kind === 'contact' ? 'i-contacts' : 'i-calendar')}${r.bulk ? `<span class="t">${esc(r.label)}</span>` : `<a href="#" class="hx-el t" data-el="${esc(r.el)}" title="${esc(S('only-el-tip'))}">${esc(r.label || '—')}</a>`}${r.alive ? '' : `<small>${esc(actWord('delete'))}</small>`}</div><div class="hxg-c"><i class="hxg-nowc" style="left:${nx}px"></i>${rowSvg(r, W, stopX, nx)}</div></div>`).join('')}
       </div>` : `<div class="hx-empty">${esc(S('empty-window'))} <a href="#" data-reset>${esc(S('reset'))}</a>${zoom < 90 ? ` · <a href="#" data-zoom="90">${esc(tr('days', { n: 90 }))}</a>` : ''}</div>`;
       sc.scrollLeft = scrollEnd ? sc.scrollWidth : keep;
       const hidden = lst.filter(c => !shown.has(c.id)).length;
@@ -454,7 +454,7 @@
         <button class="btn hxc-back" type="button" data-back>‹ ${esc(S('back'))}</button>
         <header><span class="hx-num">#${c.id}</span><h2>${esc(title(c))}</h2>${actTag(actOf(c))}</header>
         <p class="hxc-s">${sentence(c)}</p>
-        <div class="hxc-meta"><span>${ico('i-clock')}${esc(dayLabel(c.t))}, ${esc(time(c.t))}</span><span class="hx-src">${ico(srcIcon(c))}${esc(srcLabel(c))}</span><span><i class="hxc-sw" style="background:${cl.color}"></i>${esc(cl.name)}</span>
+        <div class="hxc-meta"><span>${ico('i-clock')}${esc(dayLabel(c.t))}, ${esc(time(c.t))}</span><span class="hx-src">${ico(srcIcon(c))}${esc(srcLabel(c))}</span><span><i class="hxc-sw" style="background:${esc(cl.color)}"></i>${esc(cl.name)}</span>
           ${c.src === 'dav' && c.prodid ? `<span class="muted" title="PRODID">${esc(c.prodid)}</span>` : ''}${c.tech ? `<span class="hx-st">${esc(S('tech'))}</span>` : ''}</div>
         ${statusTag(c) ? `<div class="hxc-st">${statusTag(c)}</div>` : ''}
         ${table(c, p)}

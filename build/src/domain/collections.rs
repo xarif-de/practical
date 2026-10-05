@@ -78,7 +78,8 @@ fn cal_info(c: Calendar, owner: &Owner) -> CalInfo {
         is_group: owner.is_group,
         id: c.id,
         displayname: c.meta.displayname.unwrap_or_default(),
-        color: c.meta.color.filter(|c| c.starts_with('#') && c.len() == 7).unwrap_or(fallback),
+        // any CalDAV client sets this property: only #rrggbb may reach a style attribute
+        color: c.meta.color.filter(|c| valid_color(c)).unwrap_or(fallback),
         description: c.meta.description.unwrap_or_default(),
         components: c.components.iter().map(|c| c.as_str().to_string()).collect(),
         timezone_id: c.timezone_id.unwrap_or_default(),
@@ -279,4 +280,30 @@ pub async fn restore_addressbook(state: &AppState, user: &Principal, owner: &str
     ensure_owner(user, owner)?;
     state.addressbooks.restore_addressbook(owner, id).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calendar_colour_must_be_hex() {
+        let owner = Owner { id: "p".into(), label: "p".into(), is_group: false };
+        let cal = |color: &str| Calendar {
+            meta: CalendarMetadata { displayname: None, order: 0, description: None, color: Some(color.into()) },
+            principal: "p".into(),
+            id: "c".into(),
+            timezone_id: None,
+            deleted_at: None,
+            synctoken: 0,
+            subscription_url: None,
+            push_topic: String::new(),
+            components: vec![],
+        };
+        assert_eq!(cal_info(cal("#Ab12eF"), &owner).color, "#Ab12eF");
+        // seven bytes, but markup: the fallback takes its place
+        for bad in ["#\"><b>x", "#;x:y()", "#ff00zz"] {
+            assert_eq!(cal_info(cal(bad), &owner).color, default_color("c"), "{bad}");
+        }
+    }
 }
