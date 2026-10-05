@@ -316,8 +316,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
 
 ## Configuration
 
-Environment variables `PRACTICAL__<KEY>`, set on the PractiCal container only. Before v0.10.0 the
-prefix was `RUSTICAL_UI__`, which RustiCal parsed as its own (unknown, rejected) `ui` section.
+Environment variables `PRACTICAL__<KEY>`, set on the PractiCal container only.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
