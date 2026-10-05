@@ -2622,7 +2622,7 @@
   $('#ed-delete').onclick = async () => { if (ruleMode) { if (await ask(T.delRule)) await ruleDelete(); return; } if (!await ask(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
   window.rusticalEd = { open: openEditor, openRule: openRuleEditor };
-  { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { ruleBack = sp.get('back') || null; openRuleEditor(rp); } }
+  { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { const b = sp.get('back'); ruleBack = b && /^\/(?![/\\])/.test(b) ? b : null; openRuleEditor(rp); } } // ?back=: a path of this site only, the link may come from anywhere
 })();
 
 
