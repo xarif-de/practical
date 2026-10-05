@@ -98,7 +98,7 @@ fn hash(text: &str) -> String {
 }
 
 fn now_utc() -> String {
-    chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+    crate::clock::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 /// One object's move found in RustiCal's log.
@@ -380,7 +380,7 @@ async fn mark_reverted(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, r: i64, n: 
 
 /// Drops changes older than the retention and the versions nothing refers to any more.
 pub async fn purge(state: &AppState) -> AppResult<u64> {
-    let cutoff = (chrono::Utc::now() - chrono::Duration::days(i64::from(state.config.history_retention_days))).format("%Y-%m-%d %H:%M:%S").to_string();
+    let cutoff = (crate::clock::now() - chrono::Duration::days(i64::from(state.config.history_retention_days))).format("%Y-%m-%d %H:%M:%S").to_string();
     let _lock = state.history.lock.lock().await;
     let mut tx = state.db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
     sqlx::query("DELETE FROM practical_history_items WHERE change_id IN (SELECT id FROM practical_history_changes WHERE at < ?)").bind(&cutoff).execute(&mut *tx).await?;

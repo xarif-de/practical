@@ -13,7 +13,7 @@ use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{Datelike, Duration, NaiveDate};
 use rustical_store::auth::Principal;
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -96,7 +96,7 @@ pub struct ViewCtx {
 pub async fn view_ctx(state: &SharedState, user: &Principal, lang: &str) -> AppResult<ViewCtx> {
     let p = prefs::get(&state.db, &user.id).await?;
     let tz: chrono_tz::Tz = p.timezone.as_deref().and_then(|t| t.parse().ok()).unwrap_or_else(|| state.config.default_timezone.parse().unwrap_or(chrono_tz::Europe::Berlin));
-    let today = Utc::now().with_timezone(&tz).date_naive();
+    let today = crate::clock::today_in(&tz);
     Ok(ViewCtx { tz, today, l: L::new(lang, state.i18n.clone()) })
 }
 

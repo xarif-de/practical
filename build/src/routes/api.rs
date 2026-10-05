@@ -464,7 +464,7 @@ struct SuggestQuery {
 /// The event editor's title suggestions for a new event (`search::suggest`): three past events.
 async fn event_suggest(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<SuggestQuery>) -> AppResult<Json<Vec<search::Suggestion>>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
-    let now = chrono::Utc::now().with_timezone(&vc.tz).naive_local();
+    let now = crate::clock::now().with_timezone(&vc.tz).naive_local();
     Ok(Json(search::suggest(&state, &user, &q.q, now, vc.tz, &ctx.lang, 3).await?))
 }
 

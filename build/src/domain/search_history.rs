@@ -17,9 +17,14 @@ pub struct Entry {
     pub uses: i64,
 }
 
+/// `datetime('now')`'s format, from clock.rs (a fixed clock in development)
+fn now_sql() -> String {
+    crate::clock::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
 async fn prune(db: &SqlitePool, principal: &str, days: i64) -> Result<(), sqlx::Error> {
     if days > 0 {
-        sqlx::query("DELETE FROM practical_search_history WHERE principal = ? AND used_at < datetime('now', ?)").bind(principal).bind(format!("-{days} days")).execute(db).await?;
+        sqlx::query("DELETE FROM practical_search_history WHERE principal = ? AND used_at < datetime(?, ?)").bind(principal).bind(now_sql()).bind(format!("-{days} days")).execute(db).await?;
     }
     sqlx::query("DELETE FROM practical_search_history WHERE principal = ? AND id NOT IN (SELECT id FROM practical_search_history WHERE principal = ? ORDER BY used_at DESC, id DESC LIMIT ?)")
         .bind(principal)
@@ -56,13 +61,14 @@ pub async fn record(db: &SqlitePool, principal: &str, q: &str, target: Option<&s
     }
     let target = target.map(|t| t.to_string());
     sqlx::query(
-        "INSERT INTO practical_search_history (principal, q, q_norm, target_json, used_at) VALUES (?, ?, ?, ?, datetime('now'))
+        "INSERT INTO practical_search_history (principal, q, q_norm, target_json, used_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (principal, q_norm) DO UPDATE SET q = excluded.q, target_json = COALESCE(excluded.target_json, target_json), used_at = excluded.used_at, uses = uses + 1",
     )
     .bind(principal)
     .bind(q)
     .bind(&norm)
     .bind(target)
+    .bind(now_sql())
     .execute(db)
     .await?;
     prune(db, principal, days).await

@@ -56,7 +56,7 @@ struct Fire {
 
 async fn tick(state: &SharedState) -> Result<usize, String> {
     let subs = subscriptions(state).await.map_err(|e| e.to_string())?;
-    let now = Utc::now();
+    let now = crate::clock::now();
     let mut sent = 0;
     for (principal, subs) in subs {
         let Some(user) = state.principals.get_principal(&principal).await.map_err(|e| e.to_string())? else { continue };

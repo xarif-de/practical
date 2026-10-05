@@ -24,7 +24,7 @@
 
 use crate::error::AppResult;
 use crate::state::AppState;
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -463,7 +463,7 @@ async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i3
         .await?;
     Ok(row.map(|r| {
         let fetched: String = r.get("fetched_at");
-        let hours = chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").map(|f| (Utc::now().naive_utc() - f).num_hours()).unwrap_or(i64::MAX);
+        let hours = chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").map(|f| (crate::clock::now().naive_utc() - f).num_hours()).unwrap_or(i64::MAX);
         (r.get("json"), hours)
     }))
 }

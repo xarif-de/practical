@@ -81,7 +81,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let p = prefs::get(&state.db, &user.id).await?;
     let columns: Vec<String> = p.contact_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_COLUMNS.iter().take(5).map(|s| s.to_string()).collect());
     let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(6).map(|s| s.to_string()).collect());
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::clock::now().date_naive();
     Ok(ContactsPage {
         ctx,
         owners: collections::owners(&state, &user).await?,

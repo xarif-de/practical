@@ -121,7 +121,7 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
     }
     Ok(json!({
         "me": user.id,
-        "now": chrono::Utc::now().with_timezone(&vc.tz).format("%Y-%m-%dT%H:%M").to_string(),
+        "now": crate::clock::now().with_timezone(&vc.tz).format("%Y-%m-%dT%H:%M").to_string(),
         "retention": state.config.history_retention_days,
         "colls": colls,
         "people": people,

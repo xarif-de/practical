@@ -44,6 +44,9 @@ pub struct Config {
     /// Development only, requires `dev_assets_dir`: GET /login signs this principal in without a
     /// password, so the in-memory sessions lost on every watchexec restart cost nothing.
     pub dev_login: Option<String>,
+    /// Development only, requires `dev_assets_dir`: the fixed "now" (RFC 3339) of every server-side
+    /// clock read (clock.rs) — reproducible pages for the e2e suite.
+    pub dev_now: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +105,7 @@ impl Config {
         if var("DEV_LOGIN").is_some() && var("DEV_ASSETS_DIR").is_none() {
             return Err("PRACTICAL__DEV_LOGIN is only honoured together with PRACTICAL__DEV_ASSETS_DIR (development)".into());
         }
+        let dev_now = crate::clock::parse_dev_now(var("DEV_NOW").as_deref(), var("DEV_ASSETS_DIR").is_some())?;
         let session_hours: i64 = var_or("SESSION_HOURS", "12")
             .parse()
             .map_err(|e| format!("PRACTICAL__SESSION_HOURS: {e}"))?;
@@ -126,6 +130,7 @@ impl Config {
             session_hours,
             dev_assets_dir: var("DEV_ASSETS_DIR"),
             dev_login: var("DEV_LOGIN"),
+            dev_now,
         })
     }
 

@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 mod auth;
+mod clock;
 mod config;
 mod csrf;
 mod ctx;
@@ -116,6 +117,10 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
 
 async fn serve() -> Result<(), String> {
     let config = Config::from_env()?;
+    if let Some(at) = config.dev_now {
+        warn!("development clock: every server-side \"now\" is fixed at {at}");
+        clock::fix(at);
+    }
     if config.rustical_url.is_empty() {
         // development only: no rustical process next to us (a copy of the DB)
         warn!("PRACTICAL__RUSTICAL_URL is empty — not waiting for rustical (development mode)");

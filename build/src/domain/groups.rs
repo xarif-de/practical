@@ -208,7 +208,7 @@ pub async fn trash(state: &AppState, user: &Principal, gid: &str, typed_name: Op
     .bind(serde_json::to_string(&cal_ids).unwrap())
     .bind(serde_json::to_string(&ab_ids).unwrap())
     .bind(&user.id)
-    .bind(Utc::now().to_rfc3339())
+    .bind(crate::clock::now().to_rfc3339())
     .execute(&state.db)
     .await?;
     Ok(())
@@ -235,7 +235,7 @@ fn row_to_trash(r: &sqlx::sqlite::SqliteRow) -> TrashRow {
         deleted_by: r.get("deleted_by"),
         deleted_at: DateTime::parse_from_rfc3339(&r.get::<String, _>("deleted_at"))
             .map(|d| d.with_timezone(&Utc))
-            .unwrap_or_else(|_| Utc::now()),
+            .unwrap_or_else(|_| crate::clock::now()),
     }
 }
 
@@ -336,7 +336,7 @@ pub async fn purge_by_member(state: &AppState, user: &Principal, gid: &str) -> A
 }
 
 pub async fn purge_expired(state: &AppState) -> AppResult<usize> {
-    let cutoff = Utc::now() - chrono::Duration::days(i64::from(state.config.trash_retention_days));
+    let cutoff = crate::clock::now() - chrono::Duration::days(i64::from(state.config.trash_retention_days));
     let rows = sqlx::query("SELECT * FROM practical_trashed_groups").fetch_all(&state.db).await?;
     let mut n = 0;
     for r in rows.iter().map(row_to_trash) {

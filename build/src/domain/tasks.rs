@@ -554,7 +554,7 @@ fn assemble(vtimezone: Option<String>, lines: Vec<String>, extra_blocks: &[Strin
 
 pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, tz: chrono_tz::Tz) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
-    normalize(&mut i, chrono::Utc::now().with_timezone(&tz).naive_local());
+    normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
     let vtz = lines.iter().any(|l| l.contains("TZID=")).then(|| ical::vtimezone(tz.name())).flatten();
@@ -577,7 +577,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
     let CalendarInnerData::Todo(t, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
-    normalize(&mut i, chrono::Utc::now().with_timezone(&tz).naive_local());
+    normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = t.get_uid().to_string();
     let stored = existing.get_ics();
     let sequence = t.get_property("SEQUENCE").and_then(|p| p.value.parse::<i64>().ok()).unwrap_or(0) + 1;
