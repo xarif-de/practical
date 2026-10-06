@@ -320,7 +320,7 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 .ed .toggle i { width: 34px; height: 20px; border-radius: 10px; background: var(--line); position: relative; } .ed .toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
 .ed .toggle.on i { background: var(--accent); } .ed .toggle.on i::after { left: 16px; }
 /* the day line beside the cards */
-.ed .dayline { position: relative; background: var(--tile); border-radius: 12px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(100%/14 - 1px), var(--line) calc(100%/14 - 1px), var(--line) calc(100%/14)); height: auto; min-height: 380px; align-self: stretch; }
+.ed .dayline { position: relative; background: var(--tile); border-radius: 12px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(100%/14 - 1px), var(--line) calc(100%/14 - 1px), var(--line) calc(100%/14)); min-height: 380px; align-self: stretch; }
 .ed .dayline .h { position: absolute; left: 6px; font-size: 10px; color: var(--fg-3); transform: translateY(-50%); }
 .ed .dayline .blk { position: absolute; left: 34px; right: 8px; border-radius: 6px; background: color-mix(in srgb, var(--c1) 22%, transparent); border-left: 3px solid var(--c1); font-size: 12px; padding: 4px 6px; cursor: pointer; }
 .ed .dayline .blk.me { background: color-mix(in srgb, var(--accent) 30%, transparent); border-left-color: var(--accent); cursor: grab; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
