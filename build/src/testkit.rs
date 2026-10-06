@@ -142,6 +142,7 @@ impl TestApp {
             geo: Default::default(),
             search_index: Default::default(),
             task_cache: Default::default(),
+            caches: Default::default(),
             history: Default::default(),
             vapid: None,
             started_at: chrono::DateTime::from_timestamp(1_791_964_800, 0).unwrap(),

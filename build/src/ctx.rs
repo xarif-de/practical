@@ -68,8 +68,7 @@ impl PageCtx {
     }
     /// The js-* strings of the page language as JSON for app.js (`<` escaped for the <script> block).
     pub fn js_i18n(&self) -> String {
-        let m: serde_json::Map<String, serde_json::Value> = self.i18n.with_prefix(&self.lang, "js-").into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
-        crate::render::script_json(serde_json::Value::Object(m).to_string())
+        crate::render::script_json(self.i18n.js_json(&self.lang))
     }
     pub fn locale(&self) -> &'static str {
         crate::i18n::locale(&self.lang)

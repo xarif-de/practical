@@ -176,6 +176,7 @@ async fn push_with_vapid() {
         geo: Default::default(),
         search_index: Default::default(),
         task_cache: Default::default(),
+        caches: Default::default(),
         history: Default::default(),
         vapid: Some(rustical_dav_push::VapidKeypair::from_pem(&pem).unwrap()),
         started_at: app.state.started_at,

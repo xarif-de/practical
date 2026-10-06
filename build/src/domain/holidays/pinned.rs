@@ -41,7 +41,7 @@ async fn marks_of_several_regions_and_years() {
     let mut p = crate::domain::prefs::Prefs::defaults();
     p.school_regions = Some("DE-SN,DE-BY".into());
     crate::domain::prefs::set(&app.state.db, "u", &p).await.unwrap();
-    let m = marks(&app.state, "u", date("2026-10-01"), date("2027-01-03"), "de").await.unwrap();
+    let m = marks(&app.state, &crate::domain::prefs::get(&app.state.db, "u").await.unwrap(), date("2026-10-01"), date("2027-01-03"), "de").await.unwrap();
     let day = |d: &str| m.get(&date(d)).map(|v| v.iter().map(|x| format!("{}{}{}", if x.school { "S:" } else { "P:" }, x.name, if x.tags.is_empty() { String::new() } else { format!(" ({})", x.tags.join(",")) })).collect::<Vec<_>>()).unwrap_or_default();
     assert_eq!(day("2026-10-03"), ["P:Tag der Deutschen Einheit"]);
     assert_eq!(day("2026-10-05"), ["S:Herbstferien"], "both regions: no tag");
@@ -54,7 +54,7 @@ async fn marks_of_several_regions_and_years() {
     p.holidays_enabled = false;
     p.school_holidays_enabled = false;
     crate::domain::prefs::set(&app.state.db, "u", &p).await.unwrap();
-    assert!(marks(&app.state, "u", date("2026-10-01"), date("2027-01-03"), "de").await.unwrap().is_empty());
+    assert!(marks(&app.state, &crate::domain::prefs::get(&app.state.db, "u").await.unwrap(), date("2026-10-01"), date("2027-01-03"), "de").await.unwrap().is_empty());
 }
 
 #[tokio::test]

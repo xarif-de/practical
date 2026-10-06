@@ -131,39 +131,163 @@ pub async fn visible_calendars(state: &AppState, user: &Principal, filter: Optio
     })
 }
 
-/// All instances touching [start, end) in the user's zone, sorted by start.
+/// All instances touching [start, end) in the user's zone, sorted by start. Each calendar's share
+/// comes from `InstanceCache` when that calendar was expanded for the same window, zone and synctoken.
 pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz) -> AppResult<Vec<Instance>> {
-    let ws = ical::to_utc(start.and_hms_opt(0, 0, 0).unwrap(), tz) - Duration::days(1);
-    let we = ical::to_utc(end.and_hms_opt(0, 0, 0).unwrap(), tz) + Duration::days(1);
-    let win_start = start.and_hms_opt(0, 0, 0).unwrap();
-    let win_end = end.and_hms_opt(0, 0, 0).unwrap();
     let mut out = vec![];
     for cal in cals {
         if !cal.components.iter().any(|c| c == "VEVENT") {
             continue;
         }
-        let objs = state
-            .calendars
-            .calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) })
-            .await?;
-        for (id, obj) in objs {
-            let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { continue };
-            let recurring = main.has_rruleset();
-            // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
-            // would never remind; an instance without own alarms takes the master's
-            let master_alarms = alarm_offsets(main);
-            let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
-            for ev in &expanded {
-                let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
-                let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
-                if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
-                    out.push(inst);
+        // views' windows only: a year or more has its own caches (density, mentions, search corpus)
+        let cacheable = (end - start).num_days() <= INSTANCE_CACHE_MAX_DAYS;
+        let key: WinKey = (cal.principal.clone(), cal.id.clone(), cal.synctoken, tz, start, end);
+        let part = match state.caches.instances.get(&key).filter(|_| cacheable) {
+            Some(p) => p,
+            None => {
+                // without the calendar's name and colour: those change without the synctoken (filled in below)
+                let bare = CalInfo { displayname: String::new(), color: String::new(), is_group: false, ..cal.clone() };
+                // sorted alone: the merged list below then sorts as runs, with the same (stable) result
+                let mut p = expand(state, &bare, start, end, tz, None).await?;
+                sort_instances(&mut p);
+                p.shrink_to_fit();
+                let p = std::sync::Arc::new(p);
+                if cacheable {
+                    state.caches.instances.put(key, p.clone());
                 }
+                p
+            }
+        };
+        out.extend(part.iter().map(|i| {
+            let mut i = i.clone();
+            i.cal_name.clone_from(&cal.displayname);
+            i.is_group = cal.is_group;
+            // `instance_from` takes the event's own COLOR when valid (never empty), else the calendar's
+            if i.color.is_empty() {
+                i.color.clone_from(&cal.color);
+            }
+            i
+        }));
+    }
+    sort_instances(&mut out);
+    Ok(out)
+}
+
+fn sort_instances(v: &mut [Instance]) {
+    v.sort_by(|a, b| a.start.cmp(&b.start).then(b.all_day.cmp(&a.all_day)).then(a.summary.cmp(&b.summary)));
+}
+
+/// One calendar's instances touching [start, end), unsorted (in the store's object order), and with
+/// `extras` the `SearchExtra` of every object read.
+async fn expand(state: &AppState, cal: &CalInfo, start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz, mut extras: Option<&mut std::collections::HashMap<String, SearchExtra>>) -> AppResult<Vec<Instance>> {
+    let ws = ical::to_utc(start.and_hms_opt(0, 0, 0).unwrap(), tz) - Duration::days(1);
+    let we = ical::to_utc(end.and_hms_opt(0, 0, 0).unwrap(), tz) + Duration::days(1);
+    let win_start = start.and_hms_opt(0, 0, 0).unwrap();
+    let win_end = end.and_hms_opt(0, 0, 0).unwrap();
+    let mut out = vec![];
+    let objs = state
+        .calendars
+        .calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) })
+        .await?;
+    for (id, obj) in objs {
+        if let Some(x) = extras.as_deref_mut() {
+            x.insert(format!("{}/{}/{id}", cal.principal, cal.id), search_extra(&obj));
+        }
+        let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { continue };
+        let recurring = main.has_rruleset();
+        // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
+        // would never remind; an instance without own alarms takes the master's
+        let master_alarms = alarm_offsets(main);
+        let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
+        for ev in &expanded {
+            let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
+            let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
+            if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
+                out.push(inst);
             }
         }
     }
-    out.sort_by(|a, b| a.start.cmp(&b.start).then(b.all_day.cmp(&a.all_day)).then(a.summary.cmp(&b.summary)));
     Ok(out)
+}
+
+type WinKey = (String, String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
+
+/// Expanded instances per (calendar, synctoken, zone, window): the calendar views, the endless lists
+/// and the reminder loop ask for the same windows again until something in the calendar changes —
+/// RustiCal moves the synctoken on every object write. Exact windows only: caldata's expansion depends
+/// on the window (a THISANDFUTURE override before it, the 2048-occurrence cap), so a wider entry is
+/// never cut down to a narrower one. Least recently used entries go first above `INSTANCE_CACHE_BYTES`
+/// (estimated heap); an entry above a quarter of it (a lifetime of history) is not kept.
+#[derive(Default)]
+pub struct InstanceCache(std::sync::Mutex<InstEntries>);
+
+#[derive(Default)]
+pub struct InstEntries {
+    map: std::collections::HashMap<WinKey, (std::sync::Arc<Vec<Instance>>, usize, u64)>,
+    bytes: usize,
+    tick: u64,
+}
+
+const INSTANCE_CACHE_BYTES: usize = 4 << 20;
+/// the longest window kept: the views ask for ≤ 84 days (week stream + month grid), the endless lists ≤ 120
+const INSTANCE_CACHE_MAX_DAYS: i64 = 120;
+
+/// Heap of a cached part: each non-empty String/Vec is one allocation, rounded up to 16 bytes plus
+/// 16 of allocator overhead (macOS `heap` size classes; synthetic DB: 6.0 MB estimated for 5.7 MB live-heap growth).
+fn est_bytes(v: &[Instance]) -> usize {
+    let a = |n: usize| if n == 0 { 0 } else { n.div_ceil(16) * 16 + 16 };
+    v.iter().map(|i| std::mem::size_of::<Instance>() + [&i.principal, &i.cal_id, &i.object_id, &i.uid, &i.summary, &i.location, &i.description, &i.color].iter().map(|s| a(s.len())).sum::<usize>() + a(i.categories.len() * 24) + i.categories.iter().map(|c| a(c.len())).sum::<usize>() + a(i.alarms.len() * 8)).sum::<usize>() + 64
+}
+
+impl InstanceCache {
+    fn get(&self, k: &WinKey) -> Option<std::sync::Arc<Vec<Instance>>> {
+        let mut g = self.0.lock().unwrap();
+        g.tick += 1;
+        let t = g.tick;
+        g.map.get_mut(k).map(|e| {
+            e.2 = t;
+            e.0.clone()
+        })
+    }
+    fn put(&self, k: WinKey, v: std::sync::Arc<Vec<Instance>>) {
+        let size = est_bytes(&v);
+        if size > INSTANCE_CACHE_BYTES / 4 {
+            return;
+        }
+        let mut g = self.0.lock().unwrap();
+        let g = &mut *g;
+        // a request that read the calendar before a write must not push out the newer token's windows
+        if g.map.keys().any(|o| o.0 == k.0 && o.1 == k.1 && o.2 > k.2) {
+            return;
+        }
+        // older tokens of this calendar are dead
+        let stale: Vec<WinKey> = g.map.keys().filter(|o| o.0 == k.0 && o.1 == k.1 && o.2 < k.2).cloned().collect();
+        for o in stale {
+            g.bytes -= g.map.remove(&o).unwrap().1;
+        }
+        while g.bytes + size > INSTANCE_CACHE_BYTES {
+            let Some(old) = g.map.iter().min_by_key(|(_, e)| e.2).map(|(o, _)| o.clone()) else { break };
+            g.bytes -= g.map.remove(&old).unwrap().1;
+        }
+        g.tick += 1;
+        if let Some(prev) = g.map.insert(k, (v, size, g.tick)) {
+            g.bytes -= prev.1;
+        }
+        g.bytes += size;
+    }
+}
+
+/// `instances` and the `SearchExtra` of every object read for them (any component, as the store returns
+/// them; keyed "principal/cal/object") — one fetch and parse of the window's objects for both. Not
+/// cached: the search corpus keeps its own (`search::IndexCache`).
+pub async fn instances_with_extras(state: &AppState, cals: &[CalInfo], start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz) -> AppResult<(Vec<Instance>, std::collections::HashMap<String, SearchExtra>)> {
+    let mut out = vec![];
+    let mut extras = std::collections::HashMap::new();
+    for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
+        out.extend(expand(state, cal, start, end, tz, Some(&mut extras)).await?);
+    }
+    sort_instances(&mut out);
+    Ok((out, extras))
 }
 
 /// What the top-bar search indexes beyond an `Instance` (domain::search): people, links, status words,
@@ -182,27 +306,14 @@ pub struct SearchExtra {
     pub related: Vec<String>,
 }
 
-/// One pass over the objects touching [start, end) — the same ones `instances` expands.
-pub async fn search_extras(state: &AppState, cals: &[CalInfo], start: NaiveDate, end: NaiveDate) -> AppResult<std::collections::HashMap<String, SearchExtra>> {
-    let mut out = std::collections::HashMap::new();
-    for cal in cals {
-        if !cal.components.iter().any(|c| c == "VEVENT") {
-            continue;
-        }
-        for (id, obj) in state.calendars.calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) }).await? {
-            let (raw, _) = split_ics(&obj.get_ics());
-            let p = &raw.props;
-            let get = |n: &str| p.iter().find(|l| prop_name(l) == n).map(|l| ical::split_line(l).2.trim().to_ascii_uppercase()).unwrap_or_default();
-            let mut people = persons_of(p, "ORGANIZER");
-            people.extend(persons_of(p, "ATTENDEE"));
-            let geo = p.iter().find(|l| prop_name(l) == "GEO").and_then(|l| { let v = ical::split_line(l).2; let (a, b) = v.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) });
-            out.insert(
-                format!("{}/{}/{id}", cal.principal, cal.id),
-                SearchExtra { people, links: links_of(p), status: get("STATUS"), transp: get("TRANSP"), class: get("CLASS"), priority: get("PRIORITY").parse().ok(), geo, related: related_of(p).into_iter().map(|r| r.uid).collect() },
-            );
-        }
-    }
-    Ok(out)
+fn search_extra(obj: &CalendarObject) -> SearchExtra {
+    let (raw, _) = split_ics(&obj.get_ics());
+    let p = &raw.props;
+    let get = |n: &str| p.iter().find(|l| prop_name(l) == n).map(|l| ical::split_line(l).2.trim().to_ascii_uppercase()).unwrap_or_default();
+    let mut people = persons_of(p, "ORGANIZER");
+    people.extend(persons_of(p, "ATTENDEE"));
+    let geo = p.iter().find(|l| prop_name(l) == "GEO").and_then(|l| { let v = ical::split_line(l).2; let (a, b) = v.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) });
+    SearchExtra { people, links: links_of(p), status: get("STATUS"), transp: get("TRANSP"), class: get("CLASS"), priority: get("PRIORITY").parse().ok(), geo, related: related_of(p).into_iter().map(|r| r.uid).collect() }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -432,25 +543,28 @@ pub(crate) fn related_lines(list: &[Related]) -> Vec<String> {
 /// client stamps on every object ("Come From :com.appgenix.bizcal") are not categories and are hidden.
 /// `scope` picks the component the counts come from: "task" counts VTODOs, anything else VEVENTs.
 /// A category rule belongs to one of the two, so its category list must too. Tasks come from the
-/// task cache (`tasks::tasks_for`, hence `tz`); events are scanned.
+/// task cache (`tasks::tasks_for`, hence `tz`); events from the object summaries (`ObjMetaCache`).
 pub async fn category_counts(state: &AppState, user: &Principal, scope: &str, tz: chrono_tz::Tz) -> AppResult<Vec<(String, usize)>> {
     let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut count = |cats: Vec<String>| {
-        for c in cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty() && !c.starts_with("Come From :")) {
-            *counts.entry(c).or_default() += 1;
+    let mut count = |cats: &[String]| {
+        for c in cats.iter().map(|c| c.trim()).filter(|c| !c.is_empty() && !c.starts_with("Come From :")) {
+            match counts.get_mut(c) {
+                Some(n) => *n += 1,
+                None => {
+                    counts.insert(c.to_string(), 1);
+                }
+            }
         }
     };
     let cals = visible_calendars(state, user, None).await?;
     if scope == "task" {
         for t in crate::domain::tasks::tasks_for(state, &cals, tz).await? {
-            count(t.categories);
+            count(&t.categories);
         }
     } else {
-        for cal in cals {
-            for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-                if let CalendarInnerData::Event(ev, _) = obj.get_inner().get_inner() {
-                    count(ical::list(ev, "CATEGORIES"));
-                }
+        for cal in &cals {
+            for o in object_meta(state, cal).await?.objs.iter().filter(|o| o.event) {
+                count(&o.categories);
             }
         }
     }
@@ -460,15 +574,18 @@ pub async fn category_counts(state: &AppState, user: &Principal, scope: &str, tz
 }
 
 /// Every event title with its number of events, most used first (the vacation rule's title test in
-/// the settings runs over it). Same scan as `category_counts`.
+/// the settings runs over it). Same objects as `category_counts`.
 pub async fn title_counts(state: &AppState, user: &Principal) -> AppResult<Vec<(String, usize)>> {
     let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for cal in visible_calendars(state, user, None).await? {
-        for (_, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-            if let CalendarInnerData::Event(ev, _) = obj.get_inner().get_inner() {
-                let t = ical::text(ev, "SUMMARY").unwrap_or_default().trim().to_string();
-                if !t.is_empty() {
-                    *counts.entry(t).or_default() += 1;
+        for o in object_meta(state, &cal).await?.objs.iter().filter(|o| o.event) {
+            let t = o.summary.as_deref().unwrap_or_default().trim();
+            if !t.is_empty() {
+                match counts.get_mut(t) {
+                    Some(n) => *n += 1,
+                    None => {
+                        counts.insert(t.to_string(), 1);
+                    }
                 }
             }
         }
@@ -476,6 +593,80 @@ pub async fn title_counts(state: &AppState, user: &Principal) -> AppResult<Vec<(
     let mut out: Vec<(String, usize)> = counts.into_iter().collect();
     out.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.to_lowercase().cmp(&b.0.to_lowercase())));
     Ok(out)
+}
+
+/// What the whole-calendar scans (`category_counts`, `title_counts`, `colors::sources`) read of one
+/// event or task, so they do not parse every object on every call.
+#[derive(Debug, Clone)]
+pub struct ObjMeta {
+    pub id: String,
+    pub uid: String,
+    /// VEVENT; else VTODO (other components are not kept)
+    pub event: bool,
+    /// `ical::text` of SUMMARY, COLOR; `ical::list` of CATEGORIES
+    pub summary: Option<String>,
+    pub color: Option<String>,
+    pub categories: Vec<String>,
+}
+
+fn meta_of(id: String, obj: &CalendarObject) -> Option<ObjMeta> {
+    let uid = obj.get_uid().to_string();
+    Some(match obj.get_inner().get_inner() {
+        CalendarInnerData::Event(ev, _) => ObjMeta { id, uid, event: true, summary: ical::text(ev, "SUMMARY"), color: ical::text(ev, "COLOR"), categories: ical::list(ev, "CATEGORIES") },
+        CalendarInnerData::Todo(t, _) => ObjMeta { id, uid, event: false, summary: ical::text(t, "SUMMARY"), color: ical::text(t, "COLOR"), categories: ical::list(t, "CATEGORIES") },
+        _ => return None,
+    })
+}
+
+/// The objects of one calendar at a synctoken, in the store's read order (`get_objects` walks the
+/// (principal, cal_id, uid) index: by UID — `EXPLAIN QUERY PLAN` on RustiCal 0.16.4's schema).
+pub struct CalMeta {
+    token: i64,
+    pub objs: Vec<ObjMeta>,
+}
+
+/// `CalMeta` per calendar. A moved token is caught up through the store's change log
+/// (`sync_changes`, as `tasks::TaskCache` does), so an edit re-reads only what changed. Size: one
+/// small record per object of the calendars someone looked at.
+#[derive(Default)]
+pub struct ObjMetaCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<CalMeta>>>);
+
+pub async fn object_meta(state: &AppState, cal: &CalInfo) -> AppResult<std::sync::Arc<CalMeta>> {
+    let k = (cal.principal.clone(), cal.id.clone());
+    let cached = state.caches.obj_meta.0.lock().unwrap().get(&k).cloned();
+    if let Some(c) = &cached
+        && c.token >= cal.synctoken
+    {
+        // equal, or newer than the caller's calendar row (read before a write): at least as fresh
+        return Ok(c.clone());
+    }
+    // `cal.synctoken` was read before the objects: a write racing this read is applied again next time
+    let fresh = match cached {
+        Some(c) => {
+            let (changed, deleted, _) = state.calendars.sync_changes(&cal.principal, &cal.id, c.token).await?;
+            let gone: HashSet<&str> = deleted.iter().map(String::as_str).chain(changed.iter().map(|(id, _)| id.as_str())).collect();
+            let mut objs: Vec<ObjMeta> = c.objs.iter().filter(|o| !gone.contains(o.id.as_str())).cloned().collect();
+            for (id, obj) in changed {
+                if let Some(m) = meta_of(id, &obj) {
+                    let at = objs.partition_point(|o| o.uid < m.uid);
+                    objs.insert(at, m);
+                }
+            }
+            CalMeta { token: cal.synctoken, objs }
+        }
+        None => {
+            let mut objs: Vec<ObjMeta> = state.calendars.get_objects(&cal.principal, &cal.id).await?.into_iter().filter_map(|(id, obj)| meta_of(id, &obj)).collect();
+            // collected in place from the parsed objects' buffer: release what the records do not need
+            objs.shrink_to_fit();
+            CalMeta { token: cal.synctoken, objs }
+        }
+    };
+    let fresh = std::sync::Arc::new(fresh);
+    let mut m = state.caches.obj_meta.0.lock().unwrap();
+    if m.get(&k).is_none_or(|c| c.token <= fresh.token) {
+        m.insert(k, fresh.clone());
+    }
+    Ok(fresh)
 }
 
 /// Fills `target` of every RELATED-TO whose UID is an event or task in a visible calendar. One
@@ -1350,18 +1541,61 @@ pub async fn delete_event(state: &AppState, user: &Principal, principal: &str, c
     Ok(())
 }
 
-/// Number of instances per month of `year` (picker density) — one pass over the year.
+/// Number of instances per month of `year` (picker density) — one pass over the year per calendar,
+/// kept in `DensityCache`. `instances` expands every calendar on its own, so the set's counts are the
+/// sum of its calendars' and a calendar filter reuses them.
 pub async fn month_density(state: &AppState, cals: &[CalInfo], year: i32, tz: chrono_tz::Tz) -> AppResult<[usize; 12]> {
     let start = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
     let mut d = [0usize; 12];
-    for i in instances(state, cals, start, end, tz).await? {
-        use chrono::Datelike;
-        if i.start.date().year() == year {
-            d[(i.start.date().month() - 1) as usize] += 1;
+    for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
+        let counts = match state.caches.density.get(cal, tz, year) {
+            Some(c) => c,
+            None => {
+                let mut c = [0usize; 12];
+                for i in instances(state, std::slice::from_ref(cal), start, end, tz).await? {
+                    use chrono::Datelike;
+                    if i.start.date().year() == year {
+                        c[(i.start.date().month() - 1) as usize] += 1;
+                    }
+                }
+                state.caches.density.put(cal, tz, year, c);
+                c
+            }
+        };
+        for (a, b) in d.iter_mut().zip(counts) {
+            *a += b;
         }
     }
     Ok(d)
+}
+
+/// The picker density of one calendar per (synctoken, zone, year). RustiCal moves a calendar's synctoken
+/// on every object write (store_sqlite calendar_store/mod.rs `log_object_operation`), and the counts
+/// depend on nothing else of the calendar. At most `DENSITY_KEEP` (zone, year) pairs per calendar.
+#[derive(Default)]
+pub struct DensityCache(std::sync::Mutex<std::collections::HashMap<(String, String), Vec<(i64, chrono_tz::Tz, i32, [usize; 12])>>>);
+
+const DENSITY_KEEP: usize = 6;
+
+impl DensityCache {
+    fn get(&self, cal: &CalInfo, tz: chrono_tz::Tz, year: i32) -> Option<[usize; 12]> {
+        let m = self.0.lock().unwrap();
+        m.get(&(cal.principal.clone(), cal.id.clone()))?.iter().find(|e| e.0 == cal.synctoken && e.1 == tz && e.2 == year).map(|e| e.3)
+    }
+    fn put(&self, cal: &CalInfo, tz: chrono_tz::Tz, year: i32, counts: [usize; 12]) {
+        let mut m = self.0.lock().unwrap();
+        let v = m.entry((cal.principal.clone(), cal.id.clone())).or_default();
+        // a request that read the calendar before a write must not push out the newer token's counts
+        if v.iter().any(|e| e.0 > cal.synctoken) {
+            return;
+        }
+        v.retain(|e| e.0 == cal.synctoken && !(e.1 == tz && e.2 == year));
+        if v.len() >= DENSITY_KEEP {
+            v.remove(0);
+        }
+        v.push((cal.synctoken, tz, year, counts));
+    }
 }
 
 #[cfg(test)]

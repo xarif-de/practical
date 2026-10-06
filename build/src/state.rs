@@ -32,6 +32,8 @@ pub struct AppState {
     pub search_index: crate::domain::search::IndexCache,
     /// parsed tasks per calendar and synctoken (`domain::tasks::tasks_for`)
     pub task_cache: crate::domain::tasks::TaskCache,
+    /// derived data between requests, each keyed by synctoken (and zone/year/day/language where it depends on them)
+    pub caches: Caches,
     /// the change history's lock between UI writes and the DAV poll (`domain::history`)
     pub history: crate::domain::history::Hist,
     pub vapid: Option<VapidKeypair>,
@@ -39,3 +41,15 @@ pub struct AppState {
 }
 
 pub type SharedState = Arc<AppState>;
+
+/// Request results kept between requests (see each type); all synctoken-keyed, so a write is never
+/// answered from before it.
+#[derive(Default)]
+pub struct Caches {
+    pub instances: crate::domain::events::InstanceCache,
+    pub density: crate::domain::events::DensityCache,
+    pub obj_meta: crate::domain::events::ObjMetaCache,
+    pub contacts: crate::domain::contacts::ContactCache,
+    pub mentions: crate::routes::api::MentionCache,
+    pub holidays: crate::domain::holidays::MemCache,
+}

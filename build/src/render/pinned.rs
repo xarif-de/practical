@@ -208,6 +208,11 @@ fn small_helpers() {
 
 #[test]
 fn event_chip_classes() {
+    let ev_html = |i: &Instance, role: Option<&str>| {
+        let mut out = String::new();
+        super::ev_html(&mut out, i, role);
+        out
+    };
     let mut i = instance("a", "x", "Titel", "2026-10-01T09:00", "2026-10-01T10:00");
     assert_eq!(ev_html(&i, None), "<div class=\"ev\" style=\"--c:#0a84ff\" data-key=\"alice/a/x\" data-date=\"2026-10-01\" title=\"Titel\">Titel 09:00</div>");
     i.cancelled = true;
@@ -215,4 +220,15 @@ fn event_chip_classes() {
     assert_eq!(ev_html(&i, Some("mid")), "<div class=\"ev span mid cancelled\" style=\"--c:&quot;&gt;&lt;script&gt;\" data-key=\"alice/a/x\" data-date=\"2026-10-01\" title=\"Titel\">Titel 09:00</div>");
     let a = instance("a", "y", "Ganztägig", "2026-10-01", "2026-10-02");
     assert_eq!(ev_html(&a, None), "<div class=\"ev allday\" style=\"--c:#0a84ff\" data-key=\"alice/a/y\" data-date=\"2026-10-01\" title=\"Ganztägig\">Ganztägig</div>");
+}
+
+#[test]
+fn escape_on_write_equals_e() {
+    for s in ["", "plain", "a&b<c>d\"e'f", "&&<<>>", "äöü ✓ \u{1F600}<'>", "'", "x&"] {
+        assert_eq!(super::E(s).to_string(), e(s), "{s:?}");
+    }
+    let mut i = instance("a", "x", "T", "2026-10-01T09:00", "2026-10-01T10:00");
+    i.principal = "group.a&b".into();
+    i.object_id = "<id>'".into();
+    assert_eq!(super::EKey(&i).to_string(), e(&i.key()));
 }

@@ -257,8 +257,34 @@ pub struct Mentions {
 pub struct MentionContact { pub name: String, pub email: String, pub key: String }
 #[derive(serde::Serialize)]
 pub struct MentionCategory { pub name: String, pub count: usize }
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct MentionEvent { pub summary: String, pub key: String, pub uid: String, pub date: Option<chrono::NaiveDate> }
+
+/// The note editor's event list per user: a 15-month expansion of every visible calendar, the bulk of
+/// /api/mentions. Valid while the zone, the day and every calendar's synctoken and VEVENT flag are those
+/// it was built from (MentionEvent carries nothing else of a calendar). One list per user.
+#[derive(Default)]
+pub struct MentionCache(std::sync::Mutex<std::collections::HashMap<String, (MentionKey, std::sync::Arc<Vec<MentionEvent>>)>>);
+
+type MentionKey = (chrono_tz::Tz, chrono::NaiveDate, Vec<(String, String, i64, bool)>);
+
+async fn mention_events(state: &SharedState, user: &Principal, cals: &[crate::domain::collections::CalInfo], vc: &crate::routes::calendar::ViewCtx) -> AppResult<std::sync::Arc<Vec<MentionEvent>>> {
+    let key: MentionKey = (vc.tz, vc.today, cals.iter().map(|c| (c.principal.clone(), c.id.clone(), c.synctoken, c.components.iter().any(|x| x == "VEVENT"))).collect());
+    if let Some((k, v)) = state.caches.mentions.0.lock().unwrap().get(&user.id)
+        && *k == key
+    {
+        return Ok(v.clone());
+    }
+    let mut seen = std::collections::HashSet::new();
+    let events: Vec<MentionEvent> = events::instances(state, cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
+    // collected in place from the instances' buffer (std's in-place iteration): without the shrink the
+    // cache would keep the whole 15-month expansion's allocation (measured +9.5 MiB live heap)
+    let mut events = events;
+    events.shrink_to_fit();
+    let events = std::sync::Arc::new(events);
+    state.caches.mentions.0.lock().unwrap().insert(user.id.clone(), (key, events.clone()));
+    Ok(events)
+}
 
 /// Index for the note editor's suggestions and detection: contacts, categories with counts,
 /// events (90 days back, a year ahead, one per UID, at most 500) and open tasks. Loaded on the
@@ -269,8 +295,7 @@ async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate:
     let contacts = contacts::contacts_for(&state, &abs).await?.into_iter().map(|c| MentionContact { name: c.full_name.clone(), email: c.primary_email(), key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id) }).filter(|c| !c.name.trim().is_empty()).collect();
     let categories = events::category_counts(&state, &user, scope_of(&q), vc.tz).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
     let cals = events::visible_calendars(&state, &user, None).await?;
-    let mut seen = std::collections::HashSet::new();
-    let events = events::instances(&state, &cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
+    let events = mention_events(&state, &user, &cals, &vc).await?.as_ref().clone();
     let tasks = tasks::tasks_for(&state, &cals, vc.tz).await?.into_iter().filter(|t| t.open()).map(|t| MentionEvent { summary: t.summary.clone(), key: t.key(), uid: t.uid.clone(), date: t.due.map(|d| d.date()) }).collect();
     Ok(Json(Mentions { contacts, categories, events, tasks }))
 }
