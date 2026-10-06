@@ -36,7 +36,7 @@ pub struct Task {
     pub start_all_day: bool,
     pub due: Option<NaiveDateTime>,
     pub due_all_day: bool,
-    /// "" when the task carries no STATUS at all
+    /// Never empty: a task without STATUS is listed as open or, with a COMPLETED stamp, as done (`shown_status`)
     pub status: String,
     /// PERCENT-COMPLETE; `None` when absent
     pub percent: Option<i64>,
@@ -142,6 +142,18 @@ fn status_of(props: &[String]) -> String {
     if STATUSES.contains(&v.as_str()) { v } else { String::new() }
 }
 
+/// The status a list row is shown, filed, filtered and counted by. A VTODO without STATUS is open
+/// (NEEDS-ACTION), or done when it carries a COMPLETED stamp (the older shape `Task::completed` accepts).
+/// Only the list rows get it: `TaskDetail` keeps the stored value, so a save never adds a STATUS the user
+/// did not pick (`build_vtodo` writes none for "").
+fn shown_status(stored: String, stamped: bool) -> String {
+    match stored.as_str() {
+        "" if stamped => "COMPLETED".into(),
+        "" => "NEEDS-ACTION".into(),
+        _ => stored,
+    }
+}
+
 fn class_of(props: &[String]) -> String {
     let v = text_of(props, "CLASS").to_ascii_uppercase();
     if ["PUBLIC", "PRIVATE", "CONFIDENTIAL"].contains(&v.as_str()) { v } else { String::new() }
@@ -189,6 +201,7 @@ fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: 
     let p = &raw.props;
     let (start, start_all_day) = stamp_of(p, "DTSTART", tz);
     let (due, due_all_day) = stamp_of(p, "DUE", tz);
+    let completed_at = completed_of(p, tz);
     let task = Task {
         principal: principal.to_string(),
         cal_id: cal_id.to_string(),
@@ -203,9 +216,9 @@ fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: 
         start_all_day,
         due,
         due_all_day,
-        status: status_of(p),
+        status: shown_status(status_of(p), completed_at.is_some()),
         percent: num_of(p, "PERCENT-COMPLETE"),
-        completed_at: completed_of(p, tz),
+        completed_at,
         priority: num_of(p, "PRIORITY").unwrap_or(0).clamp(0, 9) as u8,
         class: class_of(p),
         categories: cats_of(p),

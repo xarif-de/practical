@@ -114,8 +114,9 @@ test('tick: completing asks (no keeps it open), reopening does not ask', async (
 });
 
 test('every view shows the task (groups, table, board, timeline, deck, history)', async ({ page }) => {
-  // with a status: the board has a column per STATUS value, a task without one shows on no column
-  const key = await seedTask(page, 'F3 Überall', { status: 'NEEDS-ACTION', start: '2026-10-10', start_all_day: true, due: '2026-11-05' });
+  // without a STATUS: the board files it as open like every other view
+  const key = await seedTask(page, 'F3 Überall', { start: '2026-10-10', start_all_day: true, due: '2026-11-05' });
+  expect((await get(page, key)).status).toBe('');
   for (const v of ['groups', 'table', 'board', 'timeline']) {
     await view(page, v);
     await expect(item(page, key)).toBeVisible();
@@ -128,6 +129,27 @@ test('every view shows the task (groups, table, board, timeline, deck, history)'
   await page.click('.tkhm .dy[data-d="2026-10-14"]'); // completed "now" (DEV_NOW)
   await expect(page.locator(`.tkdl .ri[data-key="${key}"]`)).toBeVisible();
   await expect(page.locator('.tkdl .ri').filter({ hasText: 'Rechnung bezahlt' })).toHaveCount(0); // finished on 10-12
+});
+
+test('a task without STATUS is open on the board and in the table; a save does not add one', async ({ page }) => {
+  const key = await seedTask(page, 'F3 Ohne Status', { due: '2026-11-06' });
+  await view(page, 'board');
+  await expect(page.locator(`.tkcol[data-st="NEEDS-ACTION"] .tkkc[data-key="${key}"]`)).toBeVisible();
+  await view(page, 'table');
+  const row = page.locator(`.sheet tbody tr[data-key="${key}"]`);
+  await expect(row.locator('select[data-f=status]')).toHaveValue('NEEDS-ACTION');
+  // an edit of another cell keeps the stored task without STATUS, the row still says open
+  const title = row.locator('[data-f=summary]');
+  await title.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' 2');
+  const put = waitFor(page, 'PUT', /^\/api\/tasks\//);
+  await page.keyboard.press('Enter');
+  expect((await put).ok()).toBe(true);
+  await expect.poll(async () => (await get(page, key)).summary).toBe('F3 Ohne Status 2');
+  expect((await get(page, key)).status).toBe('');
+  await expect(row.locator('select[data-f=status]')).toHaveValue('NEEDS-ACTION');
+  await expect(row.locator('select[data-f=status] option[value=""]')).toHaveCount(0);
 });
 
 test('board: drag a card into another column sets its status', async ({ page }) => {

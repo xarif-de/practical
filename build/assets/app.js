@@ -3315,7 +3315,7 @@
   }
 
   // ---- B: table — the sheet is the editor: each cell saves on its own, like the contacts table ----
-  const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled, '': '—' };
+  const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled };
   // the choices come from the editor's own selects, so both speak the same words
   const optsOf = name => $$(`#ed select[name=${name}] option`).map(o => [o.value, o.textContent]);
   const shownCols = () => $$('#tk-colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col);
@@ -3338,7 +3338,7 @@
     cal: t => `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
     start: t => `<td>${dtIn(t, 'start')}</td>`,
     due: t => `<td>${dtIn(t, 'due')}</td>`,
-    status: t => `<td>${selIn('status', t.status || '', Object.entries(STL).filter(([v]) => v).map(([v, l]) => [v, l]).concat(t.status ? [] : [['', '—']]))}</td>`,
+    status: t => `<td>${selIn('status', t.status, Object.entries(STL))}</td>`,
     percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent" value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
     priority: t => `<td>${selIn('priority', t.priority ? String(t.priority) : '', optsOf('priority'))}</td>`,
     completed: t => `<td>${dtIn(t, 'completed_at')}</td>`,
@@ -3382,7 +3382,7 @@
     const d = await (await fetch('/api/tasks/' + k)).json(), t = find(k);
     if (!t) return;
     ['summary', 'description', 'location', 'start', 'start_all_day', 'due', 'due_all_day', 'status', 'percent', 'completed_at', 'class', 'categories'].forEach(f => { t[f] = d[f]; });
-    t.priority = d.priority || 0;
+    t.priority = d.priority || 0; if (!t.status) t.status = d.completed_at ? 'COMPLETED' : 'NEEDS-ACTION'; // the list rows' rule (tasks.rs shown_status); the editor's answer keeps a missing STATUS missing
     t.alarms = (d.alarms || []).length; t.links = (d.links || []).length;
     $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
     redrawRow(k);
