@@ -62,6 +62,14 @@ test('filters: text, facet, status; chips remove them; reset', async ({ page }) 
   await expect(page.locator('.hx-chips .hx-chip')).toHaveCount(2);
   await expect(page.locator('[data-r="badge"]')).toHaveText('2');
   for (const it of await page.locator('.hxc-list .hxc-it').all()) await expect(it).toHaveAttribute('data-src', 'import');
+  // the status chip's × lifts the status filter only; the source filter stays
+  await page.locator('.hx-chips .hx-chip[data-unf="status"]').click();
+  await expect(page.locator('.hx-chips .hx-chip')).toHaveCount(1);
+  await expect(page.locator('.hx-chips .hx-chip[data-unf="status"]')).toHaveCount(0);
+  await expect(page.locator('[data-r="badge"]')).toHaveText('1');
+  await expect(page.locator('.hx-fpop [data-fs="all"]')).toHaveAttribute('aria-pressed', 'true');
+  for (const it of await page.locator('.hxc-list .hxc-it').all()) await expect(it).toHaveAttribute('data-src', 'import');
+  await page.locator('.hx-filter > button').click(); // the chip's click outside closed the popover
   await page.locator('.hx-fpop [data-reset]').click();
   await expect(page.locator('.hx-chips .hx-chip')).toHaveCount(0);
   await expect(page.locator('.hxc-list .hxc-it')).toHaveCount(all);
