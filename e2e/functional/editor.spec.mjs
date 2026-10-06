@@ -336,3 +336,35 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   expect(await page.evaluate(() => window.__opened)).toEqual(['https://www.openstreetmap.org/search?query=51.049259%2C13.738144']);
   await expect(page.locator('#ed')).toBeHidden();
 });
+
+test('note text → HTML: a URL holding an e-mail address or #tag stays one link; every piece escaped once', async ({ page }) => {
+  await page.goto('/calendar');
+  const A = u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`, M = v => `<span class="nt-m" data-k="#" data-v="${v}">${v}</span>`;
+  const cases = [
+    ['https://x.example/q@b.de/#tag', A('https://x.example/q@b.de/#tag')], // was a second <a>/<span> inside the href
+    ['https://a.de/12345678901 x', A('https://a.de/12345678901') + ' x'], // was a tel: link inside the href
+    ['<https://a.de>', '&lt;' + A('https://a.de') + '&gt;'], // the URL ended in "&gt;"
+    ['x@y.de #tag https://z.de', '<a href="mailto:x@y.de">x@y.de</a> ' + M('tag') + ' ' + A('https://z.de')],
+    ['Tel. +49 351 1234567, #Kunde!', 'Tel. <a href="tel:+493511234567">+49 351 1234567</a>, ' + M('Kunde') + '!'],
+    ['@Anna Albrecht kommt', '<span class="nt-m" data-k="@" data-v="Anna Albrecht">Anna Albrecht</span> kommt'],
+    ['https://a.de/?a=1&b=2', A('https://a.de/?a=1&amp;b=2')],
+    ['<img src=x onerror=alert(1)> & "q"', '&lt;img src=x onerror=alert(1)&gt; &amp; &quot;q&quot;'],
+    ['https://a.de/"><img src=x onerror=alert(1)>', A('https://a.de/') + '&quot;&gt;&lt;img src=x onerror=alert(1)&gt;'],
+    ['- eins\n- zwei', '• eins\n• zwei'],
+  ];
+  const got = await page.evaluate(c => c.map(([t]) => practical.noteHtml(t)), cases);
+  expect(got).toEqual(cases.map(([, h]) => h));
+});
+
+test('note view: links and mentions render once, never nested', async ({ page }) => {
+  await page.goto('/calendar');
+  const [principal, cal_id] = CAL.privat.split('/');
+  const { id } = await api(page, 'POST', '/api/events', { principal, cal_id, summary: 'F2 Notizlinks', start: '2026-11-09T09:00:00', end: '2026-11-09T10:00:00', all_day: false,
+    description: 'Siehe https://x.example/q@b.de/#tag und #Arbeit, Mail anna@example.org' });
+  await openEdit(page, `${principal}/${cal_id}/${id}`, '2026-11-09', { edit: false });
+  const view = page.locator('#ed-note-view');
+  await expect(view.locator('a')).toHaveCount(2);
+  expect(await view.locator('a').evaluateAll(as => as.map(a => a.getAttribute('href')))).toEqual(['https://x.example/q@b.de/#tag', 'mailto:anna@example.org']);
+  await expect(view.locator('.nt-m')).toHaveText(['Arbeit']);
+  await expect(view.locator('a a, a .nt-m')).toHaveCount(0);
+});
