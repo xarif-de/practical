@@ -27,6 +27,11 @@
     parseYmd: s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); },
     ico: (n, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`,
     // a JSON request with the CSRF header
+    /* the calendar filter kept in this browser (localStorage.calHidden) is a ?cals= list of the shown calendars,
+       which only the calendar and the tasks page can compute (each lists its own calendars): each records its
+       list for the hidden set it was computed from (localStorage.calCals), and a plain click on a bare link to
+       that page carries it, so the server renders the filtered page at once instead of the page fetching it again */
+    keepCals: (page, cals) => { let m = {}; try { m = JSON.parse(localStorage.calCals || '{}'); } catch (_) {} m[page] = [localStorage.calHidden || '[]', cals]; localStorage.calCals = JSON.stringify(m); },
     send: (url, method, body) => fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.practical.csrf() }, body: JSON.stringify(body) }),
     // a suggestion list (body-level .rrpop) under `anchor`, kept inside the dialog box; `r` = the anchor's rect
     placeUnder: (pop, anchor, r = anchor.getBoundingClientRect()) => { const box = anchor.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
@@ -53,8 +58,10 @@
   const setBars = () => { const st = document.documentElement.style, tb = $('.topbar'), tl = $('.toolbar'); if (tb) st.setProperty('--topbar-h', tb.offsetHeight + 'px'); if (tl) st.setProperty('--toolbar-h', tl.offsetHeight + 'px'); };
   if ('ResizeObserver' in window) {
     const ro = new ResizeObserver(setBars);
-    const watch = () => { ro.disconnect(); ['.topbar', '.toolbar'].forEach(s => { const e = $(s); if (e) ro.observe(e); }); setBars(); };
-    watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(watch).observe(mainEl, { childList: true, subtree: true });
+    // re-observed only when the toolbar element itself is another one (a fragment swap): its size changes are the ResizeObserver's
+    let tl0;
+    const watch = () => { tl0 = $('.toolbar'); ro.disconnect(); ['.topbar', '.toolbar'].forEach(s => { const e = $(s); if (e) ro.observe(e); }); setBars(); };
+    watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(() => { if ($('.toolbar') !== tl0) watch(); }).observe(mainEl, { childList: true, subtree: true });
   } else { setBars(); addEventListener('resize', setBars); }
 
   /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
@@ -372,13 +379,15 @@
     // the test translates \b and (?P< for JS and refuses what the crate lacks (look-around, back-references),
     // and an invalid pattern blocks the autosave through the field's validity.
     const vacKind = hid('vacation_kind');
+    // the vacation rule and the categories page both start with the event categories: one request for both
+    let catsFirst = vacKind && $('#vac-re') && $('#categories') ? fetch('/api/categories?scope=event').then(r => r.ok ? r.json() : []) : null;
     if (vacKind && $('#vac-re')) {
       const catSel = $('#vac-cat'), calSel = $('#vac-cal'), re = $('#vac-re'), tools = $('#vac-tools'), test = $('#vac-test');
       let titles = null, cats = null, shown = 'match';
       const summary = () => { const k = vacKind.value; $('#v-vacation').textContent = k === 'title' ? `/${re.value}/` : `„${k === 'calendar' ? (calSel.selectedOptions[0] || {}).textContent || '' : catSel.value}“`; };
       const loadCats = async () => {
         if (cats) return; cats = [];
-        try { const r = await fetch('/api/categories?scope=event'); if (r.ok) cats = await r.json(); } catch (_) {}
+        try { if (catsFirst) cats = await catsFirst; else { const r = await fetch('/api/categories?scope=event'); if (r.ok) cats = await r.json(); } } catch (_) { cats = []; }
         const cur = catSel.value, list = cats.filter(c => c.count || c.name === cur);
         if (cur && !list.some(c => c.name === cur)) list.unshift({ name: cur, count: 0 });
         catSel.innerHTML = (cur ? '' : '<option value="">–</option>') + list.map(c => `<option value="${esc2(c.name)}">${esc2(c.name)} (${c.count || tr('js-vac-no-events')})</option>`).join('');
@@ -440,7 +449,8 @@
       let scope = 'event';
       const ruleUrl = n => (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories');
       const load = async () => {
-        const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : [];
+        const first = scope === 'event' && catsFirst; catsFirst = null;
+        let d; if (first) d = await first; else { const r = await fetch('/api/categories?scope=' + scope); d = r.ok ? await r.json() : []; }
         if (scope === 'event') $('#cat-total').textContent = d.length;
         list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h((scope === 'task' ? t.tCountTask : t.tCount).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
       };
@@ -469,18 +479,41 @@
   fitPops(); addEventListener('resize', fitPops);
   $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));
 
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a[href="/calendar"], a[href="/tasks"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !localStorage.calCals) return;
+    let k; try { k = JSON.parse(localStorage.calCals)[a.getAttribute('href').slice(1)]; } catch (_) { return; }
+    if (!k || !k[1] || k[0] !== (localStorage.calHidden || '[]')) return; // computed for another hidden set: the page corrects it itself
+    e.preventDefault(); location.href = a.getAttribute('href') + '?cals=' + encodeURIComponent(k[1]);
+  });
+
   // "/" focuses the search
   const q = $('#q');
   if (q) addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); } });
 
-  // live updates: server-sent changes → custom event for the views
+  // live updates: server-sent changes → custom event for the views. A hidden tab keeps its stream for
+  // HIDE_GRACE, then closes it (no keep-alive every 15 s, no redraws nobody sees); a change that arrives
+  // while hidden waits. Back in view the stream reopens and, if anything may have been missed, the views get
+  // ONE `rustical:change` ({ resync: true }). After an error the retry waits 5–10 s, doubling up to 5–10 min.
   if (document.body.dataset.user && 'EventSource' in window) {
-    let es; const connect = () => {
-      es = new EventSource('/api/changes');
-      es.addEventListener('change', ev => { try { document.dispatchEvent(new CustomEvent('rustical:change', { detail: JSON.parse(ev.data) })); } catch (_) {} });
-      es.onerror = () => { es.close(); setTimeout(connect, 5000 + Math.random() * 5000); };
+    const HIDE_GRACE = 15000, RETRY = 5000, RETRY_MAX = 300000;
+    let es = null, fails = 0, retryT = 0, graceT = 0, away = false, missed = false;
+    const fire = detail => document.dispatchEvent(new CustomEvent('rustical:change', { detail }));
+    const connect = () => {
+      retryT = 0; es = new EventSource('/api/changes');
+      es.onopen = () => { fails = 0; };
+      es.addEventListener('change', ev => { let d; try { d = JSON.parse(ev.data); } catch (_) { return; } if (document.hidden) missed = true; else fire(d); });
+      es.onerror = () => { es.close(); es = null; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
     };
+    const sleep = () => { away = true; missed = true; clearTimeout(retryT); retryT = 0; if (es) { es.close(); es = null; } };
+    document.addEventListener('visibilitychange', () => {
+      clearTimeout(graceT); graceT = 0;
+      if (document.hidden) { graceT = setTimeout(sleep, HIDE_GRACE); return; }
+      if (away) { away = false; fails = 0; connect(); }
+      if (missed) { missed = false; fire({ resync: true }); }
+    });
     connect();
+    if (document.hidden) graceT = setTimeout(sleep, HIDE_GRACE);
   }
 
 })();
@@ -1185,6 +1218,10 @@
   const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.view === 'week' && state.week ? state.week : state.date; // the date whose month or week is on screen
   root.dataset.date = shown();
   let loading = null; // before the filter setup below: a filter kept in localStorage calls load() right away
+  // the fragment on screen as fetched ({ href, html }) while nothing was added to it since (week blocks,
+  // ledger rows, a carried ledger): a redraw-only load that gets the same text back leaves the view alone —
+  // the live echo of the own save, a change elsewhere that this view does not show
+  let onScreen = null;
   const today = root.dataset.today;
 
   // ---- filter (localStorage-persisted set of hidden calendars) ----
@@ -1194,10 +1231,10 @@
   if (filterBox) {
     $$('input[data-cal]', filterBox).forEach(i => { i.checked = !hidden.has(i.dataset.cal); i.addEventListener('change', () => { if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); persistFilter(); load(); }); });
     $$('[data-filter]', filterBox).forEach(a => a.addEventListener('click', e => { e.preventDefault(); const all = $$('input[data-cal]', filterBox); all.forEach(i => { const mine = !i.parentElement.querySelector('small'); i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && mine); if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); }); persistFilter(); load(); }));
-    state.cals = calsParam();
+    state.cals = calsParam(); practical.keepCals('calendar', state.cals);
     if (state.cals !== (root.dataset.cals || '')) load(false);
   }
-  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); dropCarried(); }
+  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); practical.keepCals('calendar', state.cals); dropCarried(); }
   // holidays: a setting of the user (not of this browser), saved at once, then the view redraws
   $$('input[data-hol]', filterBox || document.createElement('div')).forEach(i => i.addEventListener('change', async () => {
     const body = {}; $$('input[data-hol]', filterBox).forEach(x => { body[x.dataset.hol] = x.checked; }); // no school switch → the setting stays
@@ -1218,7 +1255,9 @@
       const r = await fetch(u, { headers: { Accept: 'text/html' } });
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
-      const html = await r.text(), mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      const html = await r.text();
+      if (!push && onScreen && onScreen.href === u.href && onScreen.html === html) return;
+      const mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
       if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
       const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, shown()); // another load swapped meanwhile: the prefetched months no longer fit
@@ -1226,6 +1265,7 @@
       root.dataset.view = state.view; root.dataset.date = shown();
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
+      onScreen = { href: u.href, html };
       wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
     } catch (e) { console.error(e); }
   }
@@ -1461,6 +1501,7 @@
         // the browser's own scroll anchoring, which a scrollHeight delta would have added a second time
         const anchor = focus && focus.isConnected ? focus : bs[0], y0 = anchor.getBoundingClientRect().top;
         if (dir > 0) stream.append(...fresh); else stream.prepend(...fresh);
+        onScreen = null;
         fresh.forEach(wireItems); markPicked();
         const over = blocks().length - WK_MAX;
         if (over > 0) (dir > 0 ? blocks().slice(0, over) : blocks().slice(-over)).forEach(b => b.remove());
@@ -1483,12 +1524,12 @@
   const LED_CHUNK = 30, LED_MAX = 400, LED_SLACK = 600; // days per fetch, days kept, px of slack before the next fetch
   let ledNode = null, ledScroll = null, ledPin = false, ledOff = null;
   // a filter change (calendars, holidays) makes the carried ledger stale: the next swap takes the server's
-  function dropCarried() { ledNode = null; ledScroll = null; }
+  function dropCarried() { ledNode = null; ledScroll = null; onScreen = null; }
   function mountLedger(box) {
     if (ledOff) { ledOff(); ledOff = null; }
     if (!box || state.view !== 'day') { ledNode = null; ledPin = false; return; }
     const keep = ledNode && ledNode !== box && $(`.lrow[data-date="${state.date}"]`, ledNode); // a day outside the loaded days starts from the page's own ledger
-    if (keep) { box.replaceWith(ledNode); if (ledScroll != null) ledNode.scrollTop = ledScroll; } else ledNode = box;
+    if (keep) { box.replaceWith(ledNode); if (ledScroll != null) ledNode.scrollTop = ledScroll; onScreen = null; } else ledNode = box;
     const led = ledNode, list = $('.lrows', led), head = $('.lhd', led), rows = () => $$('.lrow', led);
     $$('.lrow.sel', led).forEach(r => r.classList.remove('sel'));
     const sel = $(`.lrow[data-date="${state.date}"]`, led); if (sel) sel.classList.add('sel');
@@ -1516,6 +1557,7 @@
         if (!fresh.length) return;
         const top = led.getBoundingClientRect().top, anchor = rows().find(x => x.getBoundingClientRect().bottom > top) || rs[0], y0 = anchor.getBoundingClientRect().top; // a visible row is never the one that gets trimmed
         if (dir > 0) list.append(...fresh); else list.prepend(...fresh);
+        onScreen = null;
         wireItems(list); // the fetched nodes ARE the rows: wiring each one would search inside it and find nothing, and the untouched <a href> would reload the page
         const over = rows().length - LED_MAX;
         if (over > 0) (dir > 0 ? rows().slice(0, over) : rows().slice(-over)).forEach(x => x.remove());
@@ -1600,6 +1642,8 @@
   const DOW = WEEKDAYS;
   const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'conflict', 'delTask']);
   const HOST = () => window.rusticalHost || {};
+  let refreshQ = 0; // a refresh() waiting for the next frame (typing, see the form's input listener)
+  const flush = () => { if (refreshQ) refresh(); };
   let solo = null, soloSigs = {}; // one-card mode (see soloStart); declared early, cards() reads it from the start
   const root = document.getElementById('viewroot') || document.body;
   const today = root.dataset.today || fmt(new Date());
@@ -1627,7 +1671,7 @@
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const h = HOST(); if (h.closed) h.closed(); }
-  const dirty = () => form.classList.contains('mode-edit') && sig() !== baseline;
+  const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
@@ -2445,7 +2489,7 @@
   }
   function whenLine() { if (TASK) return taskLine(); const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
+  function refresh() { if (refreshQ) { cancelAnimationFrame(refreshQ); refreshQ = 0; } whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
@@ -2579,7 +2623,10 @@
     const first = c && ($('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c)); if (first) setTimeout(() => first.focus(), 0);
   }
   function soloEnd() { if (!solo) return; solo = null; f.summary.readOnly = false; ed.classList.remove('solo'); $$('.card.solo-on', form).forEach(c => c.classList.remove('solo-on')); }
-  form.addEventListener('input', refresh);
+  // typing: the save/reset buttons follow at once (Enter must find them right), the derived parts (when line,
+  // rule sentence, note height, reminder strip, footers — two of them force a layout) once per frame; whatever
+  // reads them (save, close) runs a pending refresh first
+  form.addEventListener('input', () => { updateButtons(); if (!refreshQ) refreshQ = requestAnimationFrame(refresh); });
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
   form.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
@@ -2606,6 +2653,7 @@
   }
   form.addEventListener('submit', async e => {
     e.preventDefault();
+    flush();
     if (ruleMode) { await ruleSave(); return; }
     const body = TASK ? taskBody() : eventBody();
     const key = f.key.value;
@@ -2924,9 +2972,10 @@
   const coll = new Intl.Collator(lang, { sensitivity: 'base', numeric: true });
   const MONTHS = Array.from({ length: 12 }, (_, i) => dfmt(new Date(2000, i, 1), { month: 'long' }));
   const initial = v => { const c = v.normalize('NFD').charAt(0).toUpperCase(); return /\p{L}/u.test(c) ? c : '#'; };
+  const rowOf = new Map(); $$('tr[data-key]', wrap).forEach(tr => { if (!rowOf.has(tr.dataset.key)) rowOf.set(tr.dataset.key, tr); }); // one pass, not one search per contact
   const recs = $$('.panels li[data-key]', wrap).map(li => {
     const d = li.dataset, name = d.name.trim(), md = d.bday.match(/(\d{2})-(\d{2})$/);
-    return { li, tr: $(`tr[data-key="${CSS.escape(d.key)}"]`, wrap), given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
+    return { li, tr: rowOf.get(d.key) || null, given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
   });
   const groupOf = r => !r[sort] ? '-' : sort === 'bday' ? r.bday.slice(0, 2) : initial(r[sort]);
   const label = g => g === '-' ? SL.none : sort === 'bday' ? MONTHS[+g - 1] : g;
@@ -3132,11 +3181,10 @@
   // the page ships every open task (the working set, bounded) and the first page of the finished
   // ones (unbounded by the lookback); the rest arrives as a view scrolls towards it
   const DATA = (() => { try { return JSON.parse($('#tasks-data').textContent); } catch (_) { return { open: [], done: [], done_total: 0, per_day: {} }; } })();
-  const OPEN = DATA.open || [], PER_DAY = DATA.per_day || {};
-  const COMPLETED_TOTAL = DATA.completed_total || 0, CANCELLED_TOTAL = DATA.cancelled_total || 0;
-  let DONE = DATA.done || [], DONE_TOTAL = DATA.done_total || 0;
-  let TASKS = OPEN.concat(DONE);
+  let OPEN, PER_DAY, COMPLETED_TOTAL, CANCELLED_TOTAL, DONE, DONE_TOTAL, TASKS, gen = 0; // gen: which data a pending page of finished tasks belongs to
   const rebuild = () => { TASKS = OPEN.concat(DONE); };
+  const setData = d => { OPEN = d.open || []; PER_DAY = d.per_day || {}; COMPLETED_TOTAL = d.completed_total || 0; CANCELLED_TOTAL = d.cancelled_total || 0; DONE = d.done || []; DONE_TOTAL = d.done_total || 0; rebuild(); gen++; };
+  setData(DATA);
   /* a page of the finished list is a valid prefix of these two sorts only; every other one
      needs the whole list, so it is fetched before the view draws */
   const PREFIX_SAFE = ['due', 'done'];
@@ -3146,14 +3194,16 @@
     if (DONE.length >= DONE_TOTAL) return null;
     const limit = all ? Math.min(500, DONE_TOTAL - DONE.length) : +root.dataset.chunk || 120;
     const u = `/api/tasks/done?back=${encodeURIComponent(root.dataset.back)}&offset=${DONE.length}&limit=${limit}` + (root.dataset.cals ? '&cals=' + encodeURIComponent(root.dataset.cals) : '');
+    const g = gen;
     loading = fetch(u).then(r => r.ok ? r.json() : null).then(d => {
+      if (g !== gen) return null; // the page's data was replaced meanwhile (reload)
       loading = null;
       if (!d) return null;
       DONE = DONE.concat(d.items);
       DONE_TOTAL = d.total;
       rebuild();
       return d;
-    }).catch(() => { loading = null; return null; });
+    }).catch(() => { if (g === gen) loading = null; return null; });
     return loading;
   }
   async function ensureAll() { while (DONE.length < DONE_TOTAL) { if (!await loadMore(true)) break; } }
@@ -3559,17 +3609,42 @@
     if (st !== 'COMPLETED') { d.completed_at = null; if (d.percent === 100) d.percent = 0; } else d.percent = 100;
     if (await put(k, d)) reload();
   }
-  function reload() { location.href = url(); }
+  /* after a write: the page as a navigation to url() would show it, without the navigation. The server's
+     render of that address brings the data, the counter and the finished total; the parts of the page this
+     does not carry over (filter, columns, rules, presets, snaps, calendars) must be unchanged, else it
+     navigates after all. Then the page starts again as after a load (nothing picked, first deck card). */
+  const fixedOf = d => ['#calfilter', '#tk-colpop', '#edform select[name=calendar]'].map(x => (d.querySelector(x) || {}).innerHTML).concat(['category-rules-data', 'alarm-presets-data', 'alarm-snaps-data'].map(x => (d.getElementById(x) || {}).textContent)).join('\u0001');
+  const FIXED = fixedOf(document);
+  let reloads = 0;
+  async function reload(hash = '') {
+    const u = url(), n = ++reloads;
+    let doc = null, data = null;
+    try {
+      const r = await fetch(u, { headers: { Accept: 'text/html' } });
+      if (r.ok && new URL(r.url).pathname === '/tasks') { doc = new DOMParser().parseFromString(await r.text(), 'text/html'); data = JSON.parse(doc.getElementById('tasks-data').textContent); }
+    } catch (_) { doc = null; }
+    if (n !== reloads) return;
+    if (!doc || !data || fixedOf(doc) !== FIXED) { location.href = u + hash; return; }
+    $('#tasks-data').textContent = doc.getElementById('tasks-data').textContent;
+    $('#task-count').textContent = doc.getElementById('task-count').textContent;
+    root.dataset.doneTotal = doc.getElementById('taskroot').dataset.doneTotal;
+    setData(data); loading = null;
+    if (location.href !== u) history.pushState(null, '', u);
+    deckI = 0; pick = null; act = cur = null; held = undefined; wantNew = false;
+    start();
+  }
   // ---- calendar filter: the calendar page's hidden set (localStorage.calHidden), sent as ?cals= like there ----
   const cf = $('#calfilter');
+  let refetch = false; // the filter kept in this browser differs from the page's: the page's data is not the one to show
   if (cf) {
     const hid = new Set(JSON.parse(localStorage.calHidden || '[]')), boxes = $$('input[data-cal]', cf);
     const param = () => { const on = boxes.filter(i => i.checked).map(i => i.dataset.cal); return on.length === boxes.length ? '' : on.join(',') || '-'; };
-    const apply = () => { boxes.forEach(i => { if (i.checked) hid.delete(i.dataset.cal); else hid.add(i.dataset.cal); }); localStorage.calHidden = JSON.stringify([...hid]); root.dataset.cals = param(); reload(); };
+    const apply = () => { boxes.forEach(i => { if (i.checked) hid.delete(i.dataset.cal); else hid.add(i.dataset.cal); }); localStorage.calHidden = JSON.stringify([...hid]); root.dataset.cals = param(); practical.keepCals('tasks', root.dataset.cals); reload(); };
     boxes.forEach(i => { i.checked = !hid.has(i.dataset.cal); i.addEventListener('change', apply); });
+    practical.keepCals('tasks', param());
     $$('[data-filter]', cf).forEach(a => a.addEventListener('click', e => { e.preventDefault(); boxes.forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); apply(); }));
     // a filter set on the calendar page applies here too; a rule link (?rule=) keeps its page
-    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); location.href = url() + location.hash; }
+    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); refetch = true; }
   }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
@@ -3657,11 +3732,15 @@
   window.rusticalTasks = { reveal };
   addEventListener('popstate', () => location.reload());
 
-  // back from a save in the docked pane: show what was saved
-  const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
-  if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
+  // the start, also after an in-place reload: back from a save in the docked pane, show what was saved
+  function start() {
+    const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
+    if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
+  }
   // a link to one task (#key, e.g. a search hit from another page)
-  const hk = decodeURIComponent(location.hash.slice(1)); if (hk) { history.replaceState(null, '', url()); reveal(hk); }
+  const hk = decodeURIComponent(location.hash.slice(1)), hash = location.hash;
+  const linked = () => { if (hk) { history.replaceState(null, '', url()); reveal(hk); } };
+  if (refetch) reload(hash).then(linked); else { start(); linked(); }
 })();
 
 /* ===== settings: import files, browser push ===== */

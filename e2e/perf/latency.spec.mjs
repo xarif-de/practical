@@ -125,3 +125,31 @@ test('navigation: calendar with a calendar filter kept in this browser', async (
   });
   await page.evaluate(() => { delete localStorage.calHidden; });
 });
+
+// in-page cost of work the browser does on every keystroke / every DOM change (no network): median of the
+// RUNS repetitions of one batch, in ms of main-thread time
+test('micro: editor keystrokes, DOM changes under .main', async ({ page }) => {
+  const ms = [], mo = [];
+  for (let i = 0; i < RUNS; i++) {
+    await month(page);
+    await page.locator('#viewroot .ev[data-key]').first().click();
+    await page.click('#ed-lock');
+    // 50 keystrokes into the title, each a value change + its input event, then the frame that follows
+    ms.push(await page.evaluate(async () => {
+      const t = document.querySelector('#edh'), t0 = performance.now();
+      for (let k = 0; k < 50; k++) { t.value += 'x'; t.dispatchEvent(new Event('input', { bubbles: true })); }
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      return performance.now() - t0;
+    }));
+    // 200 separate DOM changes inside .main (each its own observer delivery), as scrolling/extending views do
+    mo.push(await page.evaluate(async () => {
+      const box = document.querySelector('#viewroot .month') || document.querySelector('.main'), t0 = performance.now();
+      for (let k = 0; k < 200; k++) { const n = document.createElement('i'); box.appendChild(n); await Promise.resolve(); n.remove(); await Promise.resolve(); }
+      return performance.now() - t0;
+    }));
+  }
+  for (const [name, a] of [['micro-editor-50-keys', ms], ['micro-main-400-mutations', mo]]) {
+    results[name] = { median: Math.round(median(a) * 10) / 10, runs: a.map(t => Math.round(t * 10) / 10) };
+    console.log(JSON.stringify({ name, ...results[name] }));
+  }
+});

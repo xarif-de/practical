@@ -142,9 +142,13 @@
     toast(tr('done', { ref: '#' + id, id: '#' + res.id }));
     emit({ added: res.id });
   }
+  // false: the document came back unchanged (the live echo of an undo made here) — nothing to redraw
+  let lastDoc = '';
   async function reload() {
     const r = await fetch('/api/history', { headers: { Accept: 'application/json' } }).catch(() => null);
-    if (r && r.ok) load(await r.json());
+    if (!r || !r.ok) return true;
+    const t = await r.text(); if (t === lastDoc) return false;
+    lastDoc = t; load(JSON.parse(t)); return true;
   }
   async function planOf(id) {
     if (!plans.has(id)) plans.set(id, fetch(`/api/history/${id}/plan`).then(r => r.ok ? r.json() : null).catch(() => null));
@@ -237,7 +241,7 @@
   // ---- view: line map ---------------------------------------------------------------------------
   const Map_ = (() => {
     const PPD = { 7: 150, 30: 38, 90: 13 }, ROWH = 64, LY = 38; // LY + 22 = the stop's number, inside the row
-    let zoom = +localStorage.hxZoom || 30, openId = null, host = null;
+    let zoom = +localStorage.hxZoom || 30, openId = null, host = null, resizeOn = false;
     // pixels per day: the zoom's minimum, stretched so the days fill the window's width
     let ppd = 38;
     const fit = () => {
@@ -328,7 +332,7 @@
       host = h;
       h.innerHTML = `${legend()}<div class="hxg-scroll" data-m="map"></div><div class="hxg-pop" data-m="pop" hidden></div><div class="hx-foot" data-m="foot"></div>`;
       $('[data-m="map"]', h).addEventListener('scroll', () => { if (openId) pop(); });
-      let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host === h) render(false); }, 150); });
+      if (!resizeOn) { resizeOn = true; let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host) render(false); }, 150); }); } // once: every mount used to add one more
       render(true);
     }
     const M = n => $(`[data-m="${n}"]`, host);
@@ -560,6 +564,6 @@
   const main = $('.main'); if (main) main.addEventListener('scroll', () => V().onScroll());
   // a change anywhere (another tab, a device): reload the document, keep what is open
   let rt;
-  document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { await reload(); chrome(); V().render(); }, 400); });
+  document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { if (await reload()) { chrome(); V().render(); } }, 400); });
   show();
 })();
