@@ -1,6 +1,7 @@
 // Tasks page, end to end (inventory §2.7, §3 tasks rows). Every write targets tasks this file creates
 // (prefix "F3 "); the column choice is restored. Outcomes are read back after a reload and via the API.
 import { test, expect, api } from '../lib/test.mjs';
+import { addCard } from './_editor.mjs';
 
 const CAL = '5eed0000-0000-4000-8000-000000000003'; // alice's "Aufgaben" (fixture)
 const waitFor = (page, method, re) => page.waitForResponse(r => r.request().method() === method && re.test(new URL(r.url()).pathname));
@@ -17,6 +18,12 @@ async function seedTask(page, summary, extra = {}) {
   return `alice/${CAL}/${id}`;
 }
 const get = (page, key) => api(page, 'GET', `/api/tasks/${key}`);
+/** The task's VTODO as stored (the calendar export), between BEGIN:VTODO and END:VTODO. */
+async function storedVtodo(page, key) {
+  const { uid } = await get(page, key);
+  const ics = await (await page.request.get(`/settings/export/calendars/alice/${CAL}`)).text();
+  return ics.replace(/\r\n[ \t]/g, '').split('BEGIN:VTODO').map(b => b.split('END:VTODO')[0]).find(b => b.includes(`\r\nUID:${uid}\r\n`));
+}
 async function yes(page) {
   await expect(page.locator('.ask')).toBeVisible();
   await page.click('.ask [data-a="1"]');
@@ -150,6 +157,47 @@ test('a task without STATUS is open on the board and in the table; a save does n
   expect((await get(page, key)).status).toBe('');
   await expect(row.locator('select[data-f=status]')).toHaveValue('NEEDS-ACTION');
   await expect(row.locator('select[data-f=status] option[value=""]')).toHaveCount(0);
+});
+
+async function editorOpen(page, key) {
+  await view(page, 'groups');
+  await item(page, key).click();
+  await page.click('#ed-lock');
+  await addCard(page, 'progress');
+  return page.locator('#ed-progress-tiles [data-sel=status]');
+}
+test('editor: a task without STATUS shows as open; a save without a status pick writes none', async ({ page }) => {
+  const key = await seedTask(page, 'F3 Editor ohne Status', { due: '2026-11-07' });
+  expect(await storedVtodo(page, key)).not.toContain('STATUS');
+  const tile = await editorOpen(page, key);
+  await expect(tile.locator('b')).toHaveText('Offen');
+  await expect(tile).not.toHaveClass(/\boff\b/);
+  // picking what it already shows is no change
+  await tile.click();
+  await expect(page.locator('.rrpop button[data-v="NEEDS-ACTION"]')).toHaveAttribute('aria-current', 'true');
+  await page.click('.rrpop button[data-v="NEEDS-ACTION"]');
+  await expect(page.locator('#edform select[name=status]')).toHaveValue('');
+  await page.fill('#edh', 'F3 Editor ohne Status 2');
+  const saved = waitFor(page, 'PUT', /^\/api\/tasks\//);
+  await page.click('#ed-save');
+  expect((await saved).ok()).toBe(true);
+  const v = await storedVtodo(page, key);
+  expect(v).toContain('SUMMARY:F3 Editor ohne Status 2');
+  expect(v).not.toContain('STATUS');
+  await api(page, 'DELETE', `/api/tasks/${key}`); // the board drag test below needs its card inside the window
+});
+
+test('editor: a status the user picks for a task without STATUS is written', async ({ page }) => {
+  const key = await seedTask(page, 'F3 Editor Status gewählt', { due: '2026-11-08' });
+  const tile = await editorOpen(page, key);
+  await tile.click();
+  await page.click('.rrpop button[data-v="IN-PROCESS"]');
+  await expect(tile.locator('b')).toHaveText('In Arbeit');
+  const saved = waitFor(page, 'PUT', /^\/api\/tasks\//);
+  await page.click('#ed-save');
+  expect((await saved).ok()).toBe(true);
+  expect(await storedVtodo(page, key)).toMatch(/\r\nSTATUS:IN-PROCESS\r\n/);
+  await api(page, 'DELETE', `/api/tasks/${key}`);
 });
 
 test('a new task names itself "Neue Aufgabe" in the colour picker until it has a title', async ({ page }) => {
