@@ -123,7 +123,7 @@ impl Rule {
 }
 
 pub fn validate(r: &Rule) -> AppResult<()> {
-    let bad = |m: &str| AppError::BadRequest(format!("unknown rule mode {m}"));
+    let bad = |m: &str| AppError::bad1("err-rule-mode", "mode", m);
     for m in [&r.where_.mode, &r.repeat.mode] {
         if !part_mode(m) {
             return Err(bad(m));
@@ -136,21 +136,21 @@ pub fn validate(r: &Rule) -> AppResult<()> {
     if let Some(t) = &r.title
         && (t.value.trim().is_empty() || t.value.chars().count() > 200)
     {
-        return Err(AppError::BadRequest("invalid title".into()));
+        return Err(AppError::bad("err-rule-title"));
     }
     if let Some(c) = &r.when.color
         && !events::valid_color(&c.value)
     {
-        return Err(AppError::BadRequest("invalid colour".into()));
+        return Err(AppError::bad("err-rule-colour"));
     }
     if r.repeat.mode != "off" && !r.repeat.v.rrule.trim().is_empty() {
         events::validate_rrule(r.repeat.v.rrule.trim())?;
     }
     if r.alarm.alarms.len() > 20 || r.links.links.len() > 50 {
-        return Err(AppError::BadRequest("too many rule entries".into()));
+        return Err(AppError::bad("err-rule-entries"));
     }
     if r.links.links.iter().any(|l| l.link.embedded || l.link.data.is_some()) {
-        return Err(AppError::BadRequest("a rule cannot embed files".into()));
+        return Err(AppError::bad("err-rule-files"));
     }
     Ok(())
 }
@@ -175,11 +175,11 @@ pub async fn all(db: &SqlitePool, principal: &str, scope: &str) -> AppResult<BTr
 pub async fn put(db: &SqlitePool, principal: &str, scope: &str, category: &str, rule: &Rule) -> AppResult<()> {
     let name = category.trim();
     if name.is_empty() || name.len() > 80 || name.contains([',', '\n', '\r']) {
-        return Err(AppError::BadRequest("invalid category name".into()));
+        return Err(AppError::bad("err-category-name"));
     }
     validate(rule)?;
     if !valid_scope(scope) {
-        return Err(AppError::BadRequest("unknown rule scope".into()));
+        return Err(AppError::bad("err-rule-scope"));
     }
     sqlx::query("INSERT INTO practical_category_rules (principal, scope, category, rule_json, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(principal, scope, category) DO UPDATE SET rule_json = excluded.rule_json, updated_at = CURRENT_TIMESTAMP")
         .bind(principal).bind(scope).bind(name).bind(serde_json::to_string(rule).unwrap()).execute(db).await?;

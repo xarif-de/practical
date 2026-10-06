@@ -138,7 +138,7 @@ pub fn valid_color(c: &str) -> bool {
 
 async fn set_addressbook_color(state: &AppState, owner: &str, id: &str, color: &str) -> AppResult<()> {
     if !valid_color(color) {
-        return Err(AppError::BadRequest("color must be #rrggbb".into()));
+        return Err(AppError::bad("err-color"));
     }
     sqlx::query("INSERT INTO practical_addressbook_colors (principal, id, color) VALUES (?, ?, ?) ON CONFLICT(principal, id) DO UPDATE SET color=excluded.color")
         .bind(owner)
@@ -184,7 +184,7 @@ pub fn parse_components(s: &[String]) -> Vec<CalendarObjectType> {
 pub async fn create_calendar(state: &AppState, user: &Principal, n: NewCalendar) -> AppResult<String> {
     ensure_owner(user, &n.owner)?;
     if n.name.trim().is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     let id = uuid::Uuid::new_v4().to_string();
     state
@@ -236,7 +236,7 @@ pub async fn restore_calendar(state: &AppState, user: &Principal, owner: &str, i
 pub async fn create_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str) -> AppResult<String> {
     ensure_owner(user, owner)?;
     if name.trim().is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     let id = uuid::Uuid::new_v4().to_string();
     set_addressbook_color(state, owner, &id, color).await?;

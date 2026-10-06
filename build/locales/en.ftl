@@ -33,7 +33,10 @@ tab-trash = Trash
 tab-categories = Categories
 cat-hint = A category can prefill settings of an event (template, editable in the event) or fix them (lock, not editable in the event). With several categories the one higher up in the event wins. Locks hold in this UI only; other calendar apps change freely.
 cat-rule-new = Create rule
-cat-count = { $n } events
+cat-count = { $n ->
+    [one] { $n } event
+   *[other] { $n } events
+}
 cat-none = No categories yet.
 cat-new-placeholder = New category with a rule …
 tab-general = General
@@ -61,7 +64,10 @@ n-addressbooks = { $n ->
     [one] 1 address book
    *[other] { $n } address books
 }
-trash-retention = Everything in the trash stays restorable for { $days } days.
+trash-retention = { $days ->
+    [one] Everything in the trash stays restorable for { $days } day.
+   *[other] Everything in the trash stays restorable for { $days } days.
+}
 calendars = Calendars
 addressbooks = Address books
 col-name = Name
@@ -117,6 +123,51 @@ flash-not-found = Not found.
 flash-exists = That already exists.
 flash-bad-data = The data is not valid: { $detail }
 flash-failed = That did not work – the details are in the server log.
+err-window-too-large = window too large
+err-too-many-changes = too many changes
+err-colour-target = unknown colour target
+err-task-calendar = task cannot change calendar
+err-too-long = too long
+err-push-disabled = push disabled
+err-push-https = endpoint must be https
+err-vacation-title = { vacation-title-bad }: { $detail }
+err-snap-point = snap point: { $token }
+err-color = color must be #rrggbb
+err-color-or-empty = color must be #rrggbb or empty
+err-name-required = name required
+err-summary-required = summary required
+err-end-before-start = end before start
+err-due-before-start = due before start
+err-changed-contact = the contact was changed elsewhere; reload
+err-changed-event = the event was changed elsewhere; reload
+err-changed-task = the task was changed elsewhere; reload
+err-undo-nothing = the undo changed nothing
+err-attach-base64 = attachment is not base64
+err-attach-too-large = attachment too large: { $size } bytes (limit { $file } per file, { $total } per save)
+err-too-many-presets = too many presets
+err-invalid-preset = invalid preset
+err-rrule-empty = empty RRULE
+err-rrule-freq = RRULE must start with FREQ=
+err-rrule = RRULE: { $detail }
+err-latlon = lat/lon out of range
+err-ics = ics: { $detail }
+err-no-calendar-objects = no calendar objects found
+err-vcf = vcf: { $detail }
+err-no-vcards = no vCards found
+err-subscribed-read-only = a subscribed calendar is read-only
+err-no-event-or-task = no event or task in this object
+err-rule-mode = unknown rule mode { $mode }
+err-rule-title = invalid title
+err-rule-colour = invalid colour
+err-rule-entries = too many rule entries
+err-rule-files = a rule cannot embed files
+err-category-name = invalid category name
+err-rule-scope = unknown rule scope
+err-group-empty-id = group name yields an empty id
+err-group-exists = group { $id } exists
+err-group-individuals = only individuals can join a group
+err-group-confirm = confirmation name does not match
+err-group-gone = group principal no longer exists
 flash-confirm-mismatch = The name you typed does not match.
 flash-group-trashed = Group moved to the trash.
 flash-saved = Saved.
@@ -354,7 +405,10 @@ ed-pe-from = stands in for { $n }
 ed-pe-to = represented by { $n }
 ed-pe-known = in the address book
 ed-pe-unknown = not in the address book
-ed-h-count = { $n } times
+ed-h-count = { $n ->
+    [one] once
+   *[other] { $n } times
+}
 ed-h-until = until
 ed-h-on = on
 ed-h-every = every { $n }
@@ -434,7 +488,10 @@ task-done = Done
 tasks-none-open = Nothing open.
 tasks-done = Done
 task-reopen = Reopen
-import-done = { $n } objects imported.
+import-done = { $n ->
+    [one] { $n } object imported.
+   *[other] { $n } objects imported.
+}
 vacation-rule = Vacation counting rule
 vacation-rule-hint = Category: events with this category count. Calendar: every event of the calendar. Title: events whose title matches the regular expression (case does not matter). Workdays without public holidays are counted.
 vacation-kind-category = Category
@@ -502,7 +559,10 @@ ct-reset = Reset
 ct-back = Back to new contact
 ct-vcf = Download vCard
 ct-days-today = today!
-ct-days-in = in { $n } days
+ct-days-in = { $n ->
+    [one] in { $n } day
+   *[other] in { $n } days
+}
 ct-turns = turns { $n }
 act-call = Call
 act-sms = SMS
@@ -589,7 +649,10 @@ set-comp-event = Events
 set-comp-todo = Tasks
 set-comp-journal = Journal
 set-rule = Rule
-cat-count-task = { $n } tasks
+cat-count-task = { $n ->
+    [one] { $n } task
+   *[other] { $n } tasks
+}
 set-region = Region
 set-regions-public = Public holidays
 set-regions-school = School holidays
@@ -819,7 +882,10 @@ js-set-err = Error
 js-set-active = Active on this device.
 js-set-denied = Notifications were denied in the browser.
 js-set-unsupported = This browser does not support push notifications.
-js-set-imported = %n objects imported.
+js-set-imported = { $n ->
+    [one] %n object imported.
+   *[other] %n objects imported.
+}
 js-tk-open = Open
 js-tk-doing = In process
 js-tk-done = Completed
@@ -904,7 +970,10 @@ js-imp-empty = The file holds no events, tasks or journal entries.
 js-imp-other = Choose another file …
 js-imp-in-file = Contained in the file
 js-imp-busy = Importing …
-js-imp-done = “%title” created · %count entries imported
+js-imp-done = { $count ->
+    [one] “%title” created · %count entry imported
+   *[other] “%title” created · %count entries imported
+}
 js-imp-ct1 = 1 contact
 js-imp-ct = %n contacts
 js-imp-gr1 = 1 group
@@ -934,8 +1003,13 @@ js-color-k-category-task = Task category
 js-color-k-holiday = Public holidays
 js-color-k-school = School holidays
 js-color-src = %kind “%name”
-js-color-more = + %n more
-js-color-count = %n entries
+js-color-more = { $n ->
+   *[other] + %n more
+}
+js-color-count = { $n ->
+    [one] %n entry
+   *[other] %n entries
+}
 js-color-changed = Recoloured: %n.
 js-color-recolor-event = Existing events of the category “%cat” with the old colour: %n. Give them the new colour?
 js-color-recolor-task = Existing tasks of the category “%cat” with the old colour: %n. Give them the new colour?
@@ -1002,7 +1076,10 @@ js-color-g-category = Categories · events
 js-color-g-category-task = Categories · tasks
 js-color-g-event = Events with their own colour
 js-color-g-task = Tasks with their own colour
-js-color-g-offer = In the colour picker · %n colours
+js-color-g-offer = { $n ->
+    [one] In the colour picker · %n colour
+   *[other] In the colour picker · %n colours
+}
 js-cfo-block-event = Calendar & events
 js-cfo-block-task = Tasks
 js-cfo-btn = Optimise colours
@@ -1363,7 +1440,9 @@ hxj-s-event = %who %act the event %title
 hxj-s-task = %who %act the task %title
 hxj-s-contact = %who %act the contact %title
 hxj-undone-short = undone
-hxj-more = and %n more
+hxj-more = { $n ->
+   *[other] and %n more
+}
 hxj-empty = (empty)
 hxj-st-reverts = undoes %ref
 hxj-st-undone = undone by %ref
@@ -1396,7 +1475,10 @@ hxj-f-colls = Calendar / address book
 hxj-f-attrs = Changed attribute
 hxj-f-period = Period
 hxj-f-status = Status
-hxj-p-all = Everything (%n days)
+hxj-p-all = { $n ->
+    [one] Everything (%n day)
+   *[other] Everything (%n days)
+}
 hxj-p-today = Today
 hxj-p-yesterday = Yesterday
 hxj-p-7 = Last 7 days
@@ -1417,7 +1499,10 @@ hxj-lg-arc = Undo jumps back
 hxj-empty-window = No change in this time window.
 hxj-before-window = %n matching changes lie before the window –
 hxj-before-window-1 = 1 matching change lies before the window –
-hxj-retention = The history reaches back %n days (to %date). Older changes are removed daily.
+hxj-retention = { $n ->
+    [one] The history reaches back %n day (to %date). Older changes are removed daily.
+   *[other] The history reaches back %n days (to %date). Older changes are removed daily.
+}
 hxj-close = Close
 hxj-tech = technical
 hxj-col-before = Before

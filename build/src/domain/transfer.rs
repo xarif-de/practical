@@ -90,8 +90,8 @@ pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str
     state.calendars.get_calendar(principal, cal_id, false).await?;
     let mut objects = vec![];
     for cal in IcalParser::from_slice(complete_ics(&String::from_utf8_lossy(ics)).as_bytes()) {
-        let cal = cal.map_err(|e| AppError::BadRequest(format!("ics: {e}")))?;
-        for obj in cal.into_objects().map_err(|e| AppError::BadRequest(format!("ics: {e}")))? {
+        let cal = cal.map_err(|e| AppError::bad1("err-ics", "detail", e))?;
+        for obj in cal.into_objects().map_err(|e| AppError::bad1("err-ics", "detail", e))? {
             let id = obj.get_uid().to_string();
             if id.is_empty() || id.contains('/') {
                 continue;
@@ -102,7 +102,7 @@ pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str
     let batch: Vec<(String, CalendarObject)> = readable(objects).into_iter().map(|o| (o.get_uid().to_string(), o)).collect();
     let n = batch.len();
     if batch.is_empty() {
-        return Err(AppError::BadRequest("no calendar objects found".into()));
+        return Err(AppError::bad("err-no-calendar-objects"));
     }
     state.calendars.put_objects(principal, cal_id, batch, true).await?;
     Ok(n)
@@ -112,7 +112,7 @@ pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str
 /// X-WR-* properties (name, description, colour, zone — the page reads them from the file) are dropped
 /// before the objects are split, as RustiCal's own IMPORT does, so they do not land in every object.
 fn new_calendar_objects(ics: &[u8]) -> AppResult<(Vec<CalendarObject>, Vec<CalendarObjectType>)> {
-    let bad = |e: &dyn std::fmt::Display| AppError::BadRequest(format!("ics: {e}"));
+    let bad = |e: &dyn std::fmt::Display| AppError::bad1("err-ics", "detail", e);
     let (mut objects, mut found) = (vec![], vec![]);
     for cal in IcalParser::from_slice(complete_ics(&String::from_utf8_lossy(ics)).as_bytes()) {
         let mut cal = cal.map_err(|e| bad(&e))?.mutable();
@@ -140,11 +140,11 @@ fn new_calendar_objects(ics: &[u8]) -> AppResult<(Vec<CalendarObject>, Vec<Calen
 pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collections::NewCalendar, ics: &[u8]) -> AppResult<(String, usize)> {
     collections::ensure_owner(user, &n.owner)?;
     if n.name.trim().is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     let (objects, found) = new_calendar_objects(ics)?;
     if objects.is_empty() {
-        return Err(AppError::BadRequest("no calendar objects found".into()));
+        return Err(AppError::bad("err-no-calendar-objects"));
     }
     let mut components = n.components;
     for t in found {
@@ -181,18 +181,18 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
 pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str, vcf: &[u8]) -> AppResult<(String, usize)> {
     collections::ensure_owner(user, owner)?;
     if name.trim().is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     if !collections::valid_color(color) {
-        return Err(AppError::BadRequest("color must be #rrggbb".into()));
+        return Err(AppError::bad("err-color"));
     }
     let mut objects = vec![];
     for card in VcardParser::from_slice(crate::domain::contacts::bare_params_as_type(&String::from_utf8_lossy(vcf)).as_bytes()) {
-        let mut card = card.map_err(|e| AppError::BadRequest(format!("vcf: {e}")))?;
+        let mut card = card.map_err(|e| AppError::bad1("err-vcf", "detail", e))?;
         if card.get_uid().is_none() {
             let mut m = card.mutable();
             m.add_content_line(ContentLine { name: "UID".into(), value: uuid::Uuid::new_v4().to_string(), params: vec![].into() });
-            card = m.build(&ParserOptions::default(), None).map_err(|e| AppError::BadRequest(format!("vcf: {e}")))?;
+            card = m.build(&ParserOptions::default(), None).map_err(|e| AppError::bad1("err-vcf", "detail", e))?;
         }
         let id = card.get_uid().unwrap_or_default().to_string();
         if !id.is_empty() && !id.contains('/') {
@@ -200,7 +200,7 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
         }
     }
     if objects.is_empty() {
-        return Err(AppError::BadRequest("no vCards found".into()));
+        return Err(AppError::bad("err-no-vcards"));
     }
     let count = objects.len();
     let id = uuid::Uuid::new_v4().to_string();
@@ -223,7 +223,7 @@ pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &
     state.addressbooks.get_addressbook(principal, ab_id, false).await?;
     let mut n = 0;
     for card in VcardParser::from_slice(crate::domain::contacts::bare_params_as_type(&String::from_utf8_lossy(vcf)).as_bytes()) {
-        let card = card.map_err(|e| AppError::BadRequest(format!("vcf: {e}")))?;
+        let card = card.map_err(|e| AppError::bad1("err-vcf", "detail", e))?;
         let id = card.get_uid().map(str::to_string).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         if id.contains('/') {
             continue;
@@ -233,7 +233,7 @@ pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &
         n += 1;
     }
     if n == 0 {
-        return Err(AppError::BadRequest("no vCards found".into()));
+        return Err(AppError::bad("err-no-vcards"));
     }
     Ok(n)
 }

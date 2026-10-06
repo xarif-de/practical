@@ -481,12 +481,12 @@ fn stamp_line(name: &str, dt: NaiveDateTime, all_day: bool, tz: chrono_tz::Tz) -
 
 fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz::Tz, raw: Option<&events::RawMaster>) -> AppResult<Vec<String>> {
     if i.summary.trim().is_empty() {
-        return Err(AppError::BadRequest("summary required".into()));
+        return Err(AppError::bad("err-summary-required"));
     }
     if let (Some(s), Some(d)) = (i.start, i.due)
         && d < s
     {
-        return Err(AppError::BadRequest("due before start".into()));
+        return Err(AppError::bad("err-due-before-start"));
     }
     let mut l = vec![
         format!("UID:{uid}"),
@@ -602,7 +602,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
         && !e.is_empty()
         && e != existing.get_etag()
     {
-        return Err(AppError::Conflict("the task was changed elsewhere; reload".into()));
+        return Err(AppError::conflict("err-changed-task"));
     }
     let CalendarInnerData::Todo(t, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);

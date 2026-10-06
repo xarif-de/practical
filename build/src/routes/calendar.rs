@@ -238,7 +238,7 @@ pub struct WindowQuery {
 pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<WindowQuery>) -> AppResult<axum::Json<Vec<Instance>>> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     if (q.end - q.start).num_days() > 400 || q.end < q.start {
-        return Err(crate::error::AppError::BadRequest("window too large".into()));
+        return Err(crate::error::AppError::bad("err-window-too-large"));
     }
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     Ok(axum::Json(events::instances(&state, &cals, q.start, q.end, vc.tz).await?))

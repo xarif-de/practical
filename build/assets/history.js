@@ -17,7 +17,7 @@
 
   let D, log, byId, els;
   const S = k => (D.t && D.t[k]) || k;
-  const tr = (k, vars = {}) => S(k).replace(/%(\w+)/g, (m, n) => n in vars ? vars[n] : m);
+  const tr = (k, vars = {}) => { const s = S(k); return (typeof s === 'object' ? plural(s, +vars[s.$]) : s).replace(/%(\w+)/g, (m, n) => n in vars ? vars[n] : m); }; // plural: app.js
   function load(doc) {
     D = doc;
     log = D.changes.map(c => ({ ...c, t: new Date(c.at) }));

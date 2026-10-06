@@ -17,12 +17,12 @@ async fn groups_life_cycle() {
     assert!(alice.memberships.contains(&"group.verein-sport".to_string()));
     // the same name again: a conflict, shown as a flash
     c.post_form("/settings/groups", &[("name", "Verein & Sport")]).await;
-    c.get("/settings").await.has("<div class=\"toast error\" role=\"alert\"><span>group group.verein-sport exists</span>");
+    c.get("/settings").await.has("<div class=\"toast error\" role=\"alert\"><span>Die Gruppe group.verein-sport gibt es schon.</span>");
     // members
     c.post_form("/settings/groups/group.verein-sport/members", &[("member", "bob")]).await;
     assert_eq!(s.app.state.principals_list("group.verein-sport").await, ["alice", "bob"]);
     c.post_form("/settings/groups/group.verein-sport/members", &[("member", "group.familie")]).await;
-    c.get("/settings").await.has("only individuals can join a group");
+    c.get("/settings").await.has("Nur Personen können einer Gruppe beitreten.");
     c.post_form("/settings/groups/group.verein-sport/members/bob/remove", &[]).await;
     assert_eq!(s.app.state.principals_list("group.verein-sport").await, ["alice"]);
     // carol is no member: forbidden
@@ -86,7 +86,7 @@ async fn calendars_and_addressbooks_life_cycle() {
     // address books: the colour is ours, required
     let abs = |deleted| { let st = s.app.state.clone(); let u = user.clone(); async move { crate::domain::collections::addressbooks_for(&st, &u, deleted).await.unwrap() } };
     let r = c.post_form_json("/settings/addressbooks", &[("owner", "alice"), ("name", "Kunden"), ("color", "blue")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "color must be #rrggbb" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Die Farbe muss #rrggbb sein." }));
     c.post_form("/settings/addressbooks", &[("owner", "alice"), ("name", "Kunden"), ("color", "#abcdef")]).await;
     let k = abs(false).await.into_iter().find(|a| a.displayname == "Kunden").unwrap();
     assert_eq!(k.color, "#abcdef");
@@ -122,7 +122,7 @@ async fn app_tokens_are_shown_once() {
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], axum::body::Body::empty()).await.status, StatusCode::OK);
     // empty name, someone else's id, then the real delete
     let r = c.post_form_json("/settings/tokens", &[("name", " ")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "name required" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Bitte einen Namen angeben." }));
     let r = c.post_form_json("/settings/tokens/not-mine/delete", &[]).await;
     assert_eq!(r.json(), json!({ "ok": false, "msg": "Nicht gefunden." }));
     c.post_form(&format!("/settings/tokens/{}/delete", t.id), &[]).await;
@@ -263,7 +263,7 @@ async fn export_and_import() {
     assert_eq!(c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), &one).await.ok().json(), json!({ "imported": 1 }));
     assert_eq!(c.get_json(&format!("/api/events/alice/{copy}/zahnarzt")).await.json()["summary"], "Zahnarzt (verschoben)");
     let r = c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n").await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: no calendar objects found"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Die Datei enthält keine Termine, Aufgaben oder Journaleinträge."));
     let r = c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), "not a calendar").await;
     assert_eq!(r.status, StatusCode::BAD_REQUEST);
     // address books

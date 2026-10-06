@@ -37,7 +37,7 @@ async fn task_create_tick_update_delete() {
     upd["cal_id"] = json!(s.arbeit);
     upd["etag"] = json!(null);
     let r = c.json(Method::PUT, &path, upd).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: task cannot change calendar"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Eine Aufgabe kann den Kalender nicht wechseln."));
     c.delete(&path).await.ok();
     assert_eq!(c.get_json(&path).await.status, StatusCode::NOT_FOUND);
 }
@@ -97,7 +97,7 @@ async fn contact_create_read_vcf_update_move_delete() {
     c.delete(&format!("/api/contacts/alice/{other}/{id}")).await.ok();
     // errors
     let r = c.json(Method::POST, "/api/contacts", json!({ "principal": "alice", "ab_id": s.freunde })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: name required"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Bitte einen Namen angeben."));
     let r = c.json(Method::POST, "/api/contacts", json!({ "principal": "bob", "ab_id": s.freunde, "given": "x" })).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
@@ -138,7 +138,7 @@ async fn search_api_and_history() {
     c.delete("/api/search/history").await.ok();
     assert_eq!(c.get_json("/api/search/history").await.json(), json!([]));
     let r = c.json(Method::POST, "/api/search/history", json!({ "q": "x".repeat(201) })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: too long"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Zu lang."));
     // with the history switched off nothing is kept and the answer says so
     c.post_form("/settings/prefs", &[("search_history_days", "0")]).await;
     assert_eq!(c.json(Method::POST, "/api/search/history", json!({ "q": "a" })).await.json(), json!(false));
@@ -152,7 +152,7 @@ async fn push_without_vapid() {
     let mut c = app.login("alice").await;
     assert_eq!(c.get_json("/api/push/key").await.ok().json(), json!({ "key": null }));
     let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" } })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: push disabled"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Benachrichtigungen sind auf diesem Server ausgeschaltet."));
     assert_eq!(c.get_json("/api/push/subscriptions").await.ok().json(), json!([]));
     assert_eq!(c.send(Method::DELETE, "/api/push/subscriptions", &[("content-type", "application/json"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", &c.csrf.clone())], axum::body::Body::from(r#"{"endpoint":"https://push.example.org/x"}"#)).await.json(), json!({ "id": "" }));
 }
@@ -188,7 +188,7 @@ async fn push_with_vapid() {
     let key = c.get_json("/api/push/key").await.ok().json();
     assert_eq!(key["key"].as_str().unwrap(), kp.public().encode_b64().0);
     let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "http://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" } })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: endpoint must be https"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Der Endpunkt muss https sein."));
     let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" }, "user_agent": "Test" })).await;
     assert_eq!(r.ok().json()["id"].as_str().unwrap().len(), 36);
     let list = c.get_json("/api/push/subscriptions").await.json();
@@ -207,7 +207,7 @@ async fn geocoder_without_network() {
     // too short: answered without asking anyone
     assert_eq!(c.get_json("/api/geo/search?q=ab").await.ok().json(), json!([]));
     let r = c.get_json("/api/geo/reverse?lat=91&lon=0").await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: lat/lon out of range"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Breite/Länge außerhalb des gültigen Bereichs."));
     // the provider cannot be reached: a 500, quickly; the session reads the translated message (the
     // geocoder's own error goes to the log)
     let t = std::time::Instant::now();
@@ -282,4 +282,22 @@ async fn a_card_with_bare_parameters_shows_everywhere() {
     c.json(Method::PUT, &path, upd).await.ok();
     let saved = stored().await;
     assert!(saved.contains("NICKNAME:Ottilein") && saved.contains("TEL;TYPE=CELL:0151 222") && rustical_ical::AddressObject::from_vcf(saved.clone()).is_ok(), "{saved}");
+}
+
+#[tokio::test]
+async fn own_error_texts_speak_the_session_language_api_clients_read_english() {
+    let s = seed().await;
+    let body = json!({ "principal": "alice", "ab_id": s.freunde });
+    // an app token (Basic auth): the English text, as before
+    let mut b = s.app.basic("alice").await;
+    let r = b.json(Method::POST, "/api/contacts", body.clone()).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: name required"));
+    // a browser session: its page language
+    let mut c = s.app.login("alice").await;
+    assert_eq!(c.json(Method::POST, "/api/contacts", body.clone()).await.body, "Bitte einen Namen angeben.");
+    for (lang, text) in [("en", "name required"), ("fr", "Indiquez un nom."), ("es", "Indica un nombre.")] {
+        c.post_form("/settings/prefs", &[("lang", lang)]).await;
+        let r = c.json(Method::POST, "/api/contacts", body.clone()).await;
+        assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, text), "{lang}");
+    }
 }

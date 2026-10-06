@@ -120,11 +120,11 @@ pub async fn ensure_member(state: &AppState, user: &Principal, gid: &str) -> App
 pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult<String> {
     let slug = slugify(name);
     if slug.is_empty() {
-        return Err(AppError::BadRequest("group name yields an empty id".into()));
+        return Err(AppError::bad("err-group-empty-id"));
     }
     let id = format!("{GROUP_PREFIX}{slug}");
     if state.principals.get_principal(&id).await?.is_some() || trashed_row(state, &id).await?.is_some() {
-        return Err(AppError::Conflict(format!("group {id} exists")));
+        return Err(AppError::Conflict(crate::error::Msg { key: "err-group-exists", args: vec![("id", id.to_string())] }));
     }
     state
         .principals
@@ -151,7 +151,7 @@ pub async fn add_member(state: &AppState, user: &Principal, gid: &str, member: &
     ensure_member(state, user, gid).await?;
     let target = state.principals.get_principal(member).await?.ok_or(AppError::NotFound)?;
     if target.principal_type != PrincipalType::Individual {
-        return Err(AppError::BadRequest("only individuals can join a group".into()));
+        return Err(AppError::bad("err-group-individuals"));
     }
     if target.memberships_without_self().contains(&gid) {
         return Ok(());
@@ -185,7 +185,7 @@ pub async fn trash(state: &AppState, user: &Principal, gid: &str, typed_name: Op
         && t.trim() != displayname
         && t.trim() != gid
     {
-        return Err(AppError::BadRequest("confirmation name does not match".into()));
+        return Err(AppError::bad("err-group-confirm"));
     }
     let members = state.principals.list_members(gid).await?;
     let cal_ids: Vec<String> = state.calendars.get_calendars(gid).await?.into_iter().map(|c| c.id).collect();
@@ -279,7 +279,7 @@ pub async fn restore(state: &AppState, user: &Principal, gid: &str) -> AppResult
         return Err(AppError::Forbidden);
     }
     if state.principals.get_principal(gid).await?.is_none() {
-        return Err(AppError::Conflict("group principal no longer exists".into()));
+        return Err(AppError::conflict("err-group-gone"));
     }
     for id in &row.calendars {
         match state.calendars.restore_calendar(gid, id).await {

@@ -63,6 +63,10 @@ impl PageCtx {
     pub fn t1(&self, key: &str, name: &str, value: &str) -> String {
         self.i18n.t1(&self.lang, key, name, FluentValue::from(value.to_string()))
     }
+    /// A plural message for a data attribute app.js formats (`I18n::plural_json`: its forms, the number as `{n}`).
+    pub fn tp(&self, key: &str) -> String {
+        self.i18n.plural_json(&self.lang, key)
+    }
     pub fn tn<V: std::borrow::Borrow<i64>>(&self, key: &str, name: &str, value: V) -> String {
         self.i18n.t1(&self.lang, key, name, FluentValue::from(*value.borrow()))
     }
@@ -162,7 +166,7 @@ impl FromRequestParts<SharedState> for PageCtx {
     }
 }
 
-/// Error responses of the UI in the user's language: an `AppError` puts its user message (`UserText`) on the
+/// Error responses of the UI in the user's language: an `AppError` puts its user message (`error::Msg`) on the
 /// response; a request of a logged-in browser session gets that message, in the page language, as the body
 /// (the editor and the settings show it after "Fehler 404:"). Clients without a session (app tokens, Basic
 /// auth) keep the error's own text.
@@ -171,7 +175,7 @@ pub async fn localize_errors(axum::extract::State(state): axum::extract::State<S
     let user = req.extensions().get::<Principal>().map(|u| u.id.clone());
     let accept = req.headers().get(axum::http::header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok()).map(str::to_string);
     let res = next.run(req).await;
-    let Some(text) = res.extensions().get::<crate::error::UserText>().cloned() else { return res };
+    let Some(text) = res.extensions().get::<crate::error::Msg>().cloned() else { return res };
     let Some(session) = session else { return res };
     if session.get::<String>(SESSION_USER).await.ok().flatten().is_none() {
         return res;

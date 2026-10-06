@@ -3270,6 +3270,7 @@ dependencies = [
  "chrono-tz",
  "flate2",
  "fluent-bundle",
+ "fluent-syntax",
  "futures-util",
  "headers",
  "http",

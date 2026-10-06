@@ -329,6 +329,6 @@ fn links_and_embedded_limits() {
     let two_mb = "A".repeat(EMBED_FILE_MAX / 3 * 4);
     assert!(embedded_lines(&[Link { embedded: true, data: Some(two_mb.clone()), ..Default::default() }]).is_ok());
     let three: Vec<Link> = (0..4).map(|_| Link { embedded: true, data: Some(two_mb.clone()), ..Default::default() }).collect();
-    assert!(matches!(embedded_lines(&three), Err(AppError::BadRequest(m)) if m.starts_with("attachment too large")));
+    assert!(matches!(embedded_lines(&three), Err(AppError::BadRequest(m)) if m.to_string().starts_with("attachment too large")));
     assert_eq!(related_lines(&[Related { uid: " p ".into(), reltype: "parent".into(), ..Default::default() }, Related { uid: "a;b".into(), ..Default::default() }, Related { uid: "c".into(), reltype: "COUSIN".into(), ..Default::default() }]), ["RELATED-TO;RELTYPE=PARENT:p", "RELATED-TO:c"]);
 }

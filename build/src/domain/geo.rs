@@ -195,7 +195,7 @@ pub async fn search(state: &AppState, q: &str, lang: &str, near: Option<(f64, f6
 /// The address at a position (Nominatim), rounded to ~10 m so nearby taps share a cache entry.
 pub async fn reverse(state: &AppState, lat: f64, lon: f64, lang: &str, home: &str) -> AppResult<Option<Place>> {
     if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
-        return Err(AppError::BadRequest("lat/lon out of range".into()));
+        return Err(AppError::bad("err-latlon"));
     }
     let key = format!("r|{lang}|{home}|{lat:.4}|{lon:.4}");
     if let Some(v) = state.geo.cached(&key).await {

@@ -10,9 +10,9 @@ pub enum AppError {
     #[error("unauthorized")]
     Unauthorized,
     #[error("bad request: {0}")]
-    BadRequest(String),
+    BadRequest(Msg),
     #[error("conflict: {0}")]
-    Conflict(String),
+    Conflict(Msg),
     #[error("store error: {0}")]
     Store(#[from] rustical_store::Error),
     #[error("database error: {0}")]
@@ -25,43 +25,71 @@ pub enum AppError {
     Internal(String),
 }
 
-/// What a user reads for an error: a translated message (Fluent key, with the error's detail as `$detail`
-/// where the key takes one). On every error response (`IntoResponse`), so `ctx::localize_errors` can put
-/// it in the user's language; the error's own text (the store's / database's English) stays in the log.
+/// A message for a user: a Fluent key and its arguments. PractiCal's own errors (BadRequest, Conflict) carry
+/// one; every other error maps to one (`AppError::user_text`). Its Display is the English text (en.ftl) —
+/// what app-token / Basic-auth clients read; `ctx::localize_errors` and the settings answers render it in
+/// the user's language. On every error response (`IntoResponse`); a store's/database's own English text
+/// stays in the log.
 #[derive(Debug, Clone)]
-pub struct UserText {
+pub struct Msg {
     pub key: &'static str,
-    pub detail: String,
+    pub args: Vec<(&'static str, String)>,
+}
+
+impl Msg {
+    pub fn render(&self, i18n: &crate::i18n::I18n, lang: &str) -> String {
+        let mut a = fluent_bundle::FluentArgs::new();
+        for (k, v) in &self.args {
+            a.set(*k, v.clone());
+        }
+        i18n.t_args(lang, self.key, Some(&a))
+    }
+}
+
+impl std::fmt::Display for Msg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.render(crate::i18n::I18n::shared(), "en"))
+    }
+}
+
+/// Tests compare a message with its English text (what an API client reads).
+#[cfg(test)]
+impl PartialEq<&str> for Msg {
+    fn eq(&self, other: &&str) -> bool {
+        self.to_string() == *other
+    }
 }
 
 impl AppError {
-    /// The message for a user; None where the error's own text is that message (BadRequest and Conflict
-    /// carry the handler's words) or no user reads it (Unauthorized: a client without a login).
-    pub fn user_text(&self) -> Option<UserText> {
+    /// A bad request with PractiCal's message `key` (en.ftl holds its English text).
+    pub fn bad(key: &'static str) -> Self {
+        Self::BadRequest(Msg { key, args: vec![] })
+    }
+    /// The same with one argument (`{ $name }` in the message).
+    pub fn bad1(key: &'static str, name: &'static str, value: impl ToString) -> Self {
+        Self::BadRequest(Msg { key, args: vec![(name, value.to_string())] })
+    }
+    pub fn conflict(key: &'static str) -> Self {
+        Self::Conflict(Msg { key, args: vec![] })
+    }
+
+    /// The message for a user; None where no user reads it (Unauthorized: a client without a login).
+    pub fn user_text(&self) -> Option<Msg> {
         let key = match self {
+            Self::BadRequest(m) | Self::Conflict(m) => return Some(m.clone()),
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => "flash-not-found",
             Self::Forbidden | Self::Store(rustical_store::Error::ReadOnly) => "flash-forbidden",
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
-            Self::Ical(e) => return Some(UserText { key: "flash-bad-data", detail: e.to_string() }),
-            Self::BadRequest(_) | Self::Conflict(_) | Self::Unauthorized => return None,
+            Self::Ical(e) => return Some(Msg { key: "flash-bad-data", args: vec![("detail", e.to_string())] }),
+            Self::Unauthorized => return None,
             Self::Store(_) | Self::Db(_) | Self::Session(_) | Self::Internal(_) => "flash-failed",
         };
-        Some(UserText { key, detail: String::new() })
+        Some(Msg { key, args: vec![] })
     }
 
     /// The message for a user in `lang` (`user_text`, else the error's own text).
     pub fn user_message(&self, i18n: &crate::i18n::I18n, lang: &str) -> String {
-        match (self.user_text(), self) {
-            (Some(u), _) => u.render(i18n, lang),
-            (None, Self::BadRequest(m) | Self::Conflict(m)) => m.clone(),
-            (None, e) => e.to_string(),
-        }
-    }
-}
-
-impl UserText {
-    pub fn render(&self, i18n: &crate::i18n::I18n, lang: &str) -> String {
-        i18n.t1(lang, self.key, "detail", self.detail.clone())
+        self.user_text().map_or_else(|| self.to_string(), |u| u.render(i18n, lang))
     }
 }
 

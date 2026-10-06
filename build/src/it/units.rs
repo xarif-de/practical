@@ -60,8 +60,10 @@ async fn error_statuses_and_texts() {
         (AppError::Store(rustical_store::Error::NotFound), StatusCode::NOT_FOUND, "store error: Not found"),
         (AppError::Forbidden, StatusCode::FORBIDDEN, "forbidden"),
         (AppError::Unauthorized, StatusCode::UNAUTHORIZED, "unauthorized"),
-        (AppError::BadRequest("x".into()), StatusCode::BAD_REQUEST, "bad request: x"),
-        (AppError::Conflict("y".into()), StatusCode::CONFLICT, "conflict: y"),
+        // PractiCal's own messages: the English text of their key (what an app-token client reads)
+        (AppError::bad("err-name-required"), StatusCode::BAD_REQUEST, "bad request: name required"),
+        (AppError::bad1("err-snap-point", "token", "soon"), StatusCode::BAD_REQUEST, "bad request: snap point: soon"),
+        (AppError::conflict("err-undo-nothing"), StatusCode::CONFLICT, "conflict: the undo changed nothing"),
         (AppError::Store(rustical_store::Error::AlreadyExists), StatusCode::CONFLICT, "store error: Resource already exists and overwrite=false"),
         (AppError::Internal("z".into()), StatusCode::INTERNAL_SERVER_ERROR, "z"),
         (AppError::Db(sqlx::Error::RowNotFound), StatusCode::INTERNAL_SERVER_ERROR, "database error: no rows returned by a query that expected to return at least one row"),

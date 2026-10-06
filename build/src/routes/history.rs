@@ -130,7 +130,7 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
         "changes": changes,
         "els": els,
         // the page's strings (history.js), placeholders as %name
-        "t": state.i18n.with_prefix(lang, "hxj-").into_iter().map(|(k, v)| (k["hxj-".len()..].to_string(), v)).collect::<BTreeMap<_, _>>(),
+        "t": state.i18n.with_prefix_json(lang, "hxj-").into_iter().map(|(k, v)| (k["hxj-".len()..].to_string(), v)).collect::<BTreeMap<_, _>>(),
     }))
 }
 

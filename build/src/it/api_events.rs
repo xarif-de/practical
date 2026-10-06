@@ -60,7 +60,7 @@ async fn event_create_read_update_move_delete() {
     // the stale ETag is a conflict
     let r = c.json(Method::PUT, &path, upd.clone()).await;
     assert_eq!(r.status, StatusCode::CONFLICT);
-    assert_eq!(r.body, "conflict: the event was changed elsewhere; reload");
+    assert_eq!(r.body, "Der Termin wurde anderswo geändert – bitte neu laden.");
 
     // moving to another calendar: new object there (same UID), gone here
     let mut mv = upd.clone();
@@ -84,9 +84,9 @@ async fn event_input_errors() {
     let base = json!({ "principal": "alice", "cal_id": s.privat, "summary": "x", "start": "2026-10-22T19:30:00", "end": "2026-10-22T20:00:00" });
     let with = |k: &str, v: serde_json::Value| { let mut b = base.clone(); b[k] = v; b };
     for (body, status, text) in [
-        (with("summary", json!("  ")), StatusCode::BAD_REQUEST, "bad request: summary required"),
-        (with("end", json!("2026-10-22T19:00:00")), StatusCode::BAD_REQUEST, "bad request: end before start"),
-        (with("rrule", json!("DAILY")), StatusCode::BAD_REQUEST, "bad request: RRULE must start with FREQ="),
+        (with("summary", json!("  ")), StatusCode::BAD_REQUEST, "Bitte einen Titel angeben."),
+        (with("end", json!("2026-10-22T19:00:00")), StatusCode::BAD_REQUEST, "Das Ende liegt vor dem Beginn."),
+        (with("rrule", json!("DAILY")), StatusCode::BAD_REQUEST, "Die Wiederholungsregel muss mit FREQ= beginnen."),
         // a browser session reads the translated message, never the store's own English text
         (with("principal", json!("bob")), StatusCode::FORBIDDEN, "Dafür fehlt die Berechtigung."),
         (with("cal_id", json!("missing")), StatusCode::NOT_FOUND, "Nicht gefunden."),
@@ -185,7 +185,7 @@ async fn window_density_and_errors() {
     assert_eq!(only.as_array().unwrap().len(), 1);
     // limits
     let r = c.get_json("/api/events?start=2026-01-01&end=2027-02-06").await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: window too large"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Der Zeitraum ist zu groß."));
     let r = c.get_json("/api/events?start=2026-10-02&end=2026-10-01").await;
     assert_eq!(r.status, StatusCode::BAD_REQUEST);
     assert_eq!(c.get_json("/api/density?year=2026").await.ok().json(), json!([0, 0, 1, 0, 0, 0, 0, 0, 5, 10, 4, 5]));
@@ -222,7 +222,7 @@ async fn categories_titles_rules_presets() {
     let back = c.get_json("/api/alarm-presets").await.json();
     assert_eq!(back[0], json!({ "action": "DISPLAY", "minutes": 15, "related_end": false, "repeat": 0, "duration_minutes": 0, "attendees": [], "attach": "", "proximity": "" }));
     let r = c.json(Method::PUT, "/api/alarm-presets", json!([{ "action": "PROCEDURE" }])).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: invalid preset"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Ungültige Erinnerungsvorlage."));
     // the calendar page carries them for the editor
     c.get("/calendar?date=2026-10-14").await.ok().has("\"action\":\"EMAIL\"");
 }
@@ -242,11 +242,11 @@ async fn colours_api() {
     let r = c.json(Method::PUT, &format!("/api/colors/addressbook/alice/{}", s.freunde), json!({ "color": "#112233" })).await;
     assert_eq!(r.status, StatusCode::NO_CONTENT);
     let r = c.json(Method::PUT, &format!("/api/colors/addressbook/alice/{}", s.freunde), json!({ "color": "red" })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: color must be #rrggbb"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Die Farbe muss #rrggbb sein."));
     let r = c.json(Method::PUT, &format!("/api/colors/event/alice/{}/review", s.arbeit), json!({ "color": "#00ff00" })).await;
     assert_eq!(r.status, StatusCode::NO_CONTENT);
     let r = c.json(Method::PUT, "/api/colors/planet/x", json!({ "color": "#00ff00" })).await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: unknown colour target"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Unbekanntes Ziel für die Farbe."));
     let after = c.get_json("/api/colors").await.json();
     let find = |kind: &str, name: &str| after.as_array().unwrap().iter().find(|x| x["kind"] == kind && x["name"] == name).unwrap()["color"].clone();
     assert_eq!(find("calendar", "Privat"), json!("#aabbcc"));

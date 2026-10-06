@@ -824,12 +824,12 @@ pub(crate) fn embedded_lines(links: &[Link]) -> AppResult<Vec<String>> {
         let Some(data) = l.data.as_deref() else { continue };
         let clean: String = data.chars().filter(|c| !c.is_whitespace()).collect();
         if clean.is_empty() || !clean.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=') {
-            return Err(AppError::BadRequest("attachment is not base64".into()));
+            return Err(AppError::bad("err-attach-base64"));
         }
         let n = base64_len(&clean);
         total += n;
         if n > EMBED_FILE_MAX || total > EMBED_TOTAL_MAX {
-            return Err(AppError::BadRequest(format!("attachment too large: {} bytes (limit {} per file, {} per save)", n, EMBED_FILE_MAX, EMBED_TOTAL_MAX)));
+            return Err(AppError::BadRequest(crate::error::Msg { key: "err-attach-too-large", args: vec![("size", n.to_string()), ("file", EMBED_FILE_MAX.to_string()), ("total", EMBED_TOTAL_MAX.to_string())] }));
         }
         let mut line = "ATTACH".to_string();
         line.push_str(&link_params(l, false));
@@ -1104,14 +1104,14 @@ pub fn fmt_offsets(list: &[i64]) -> String {
 /// Rejects a preset list that could not have come from the editor (bounds the stored JSON, too).
 pub fn validate_presets(list: &[AlarmPreset]) -> AppResult<()> {
     if list.len() > 50 {
-        return Err(AppError::BadRequest("too many presets".into()));
+        return Err(AppError::bad("err-too-many-presets"));
     }
     for p in list {
         if one_of(&p.action, &["DISPLAY", "AUDIO", "EMAIL"]).is_none() || (!p.proximity.is_empty() && one_of(&p.proximity, PROXIMITY).is_none()) {
-            return Err(AppError::BadRequest("invalid preset".into()));
+            return Err(AppError::bad("err-invalid-preset"));
         }
         if p.minutes.abs() > 366 * 1440 || p.repeat < 0 || p.repeat > 100 || p.duration_minutes < 0 || p.attach.len() > 1000 || p.attendees.len() > 20 {
-            return Err(AppError::BadRequest("invalid preset".into()));
+            return Err(AppError::bad("err-invalid-preset"));
         }
     }
     Ok(())
@@ -1336,12 +1336,12 @@ pub(crate) fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz
 pub fn validate_rrule(r: &str) -> AppResult<String> {
     let r = ical::rrule_canon(r);
     if r.is_empty() {
-        return Err(AppError::BadRequest("empty RRULE".into()));
+        return Err(AppError::bad("err-rrule-empty"));
     }
     if !r.starts_with("FREQ=") || r.chars().any(|c| c == '\n' || c == '\r') {
-        return Err(AppError::BadRequest("RRULE must start with FREQ=".into()));
+        return Err(AppError::bad("err-rrule-freq"));
     }
-    let _: caldata::rrule::RRule<caldata::rrule::Unvalidated> = r.parse().map_err(|e| AppError::BadRequest(format!("RRULE: {e}")))?;
+    let _: caldata::rrule::RRule<caldata::rrule::Unvalidated> = r.parse().map_err(|e| AppError::bad1("err-rrule", "detail", e))?;
     Ok(r)
 }
 
@@ -1350,10 +1350,10 @@ pub fn validate_rrule(r: &str) -> AppResult<String> {
 /// ATTENDEE, STATUS, ATTACH, COLOR, EXDATE, X-… and the unmodelled parts of each VALARM.
 fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz, raw: Option<&RawMaster>) -> AppResult<Vec<String>> {
     if input.summary.trim().is_empty() {
-        return Err(AppError::BadRequest("summary required".into()));
+        return Err(AppError::bad("err-summary-required"));
     }
     if input.end < input.start {
-        return Err(AppError::BadRequest("end before start".into()));
+        return Err(AppError::bad("err-end-before-start"));
     }
     let mut l = vec![
         format!("UID:{uid}"),
@@ -1509,7 +1509,7 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
         && !e.is_empty()
         && e != existing.get_etag()
     {
-        return Err(AppError::Conflict("the event was changed elsewhere; reload".into()));
+        return Err(AppError::conflict("err-changed-event"));
     }
     let CalendarInnerData::Event(main, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);

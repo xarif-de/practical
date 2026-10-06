@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect, api } from '../lib/test.mjs';
-import { WORK } from '../lib/env.mjs';
+import { BASE, WORK } from '../lib/env.mjs';
 import { savePrefs, settingsForm, createEvent } from './_set.mjs';
 
 const FREUNDE = '5eed0000-0000-4000-8000-000000000011'; // alice's "Freunde" (fixture)
@@ -41,6 +41,11 @@ test('B2: a 29 February birthday counts to 28 February 2027, never negative', as
   }
 });
 
+test('B1: counts drawn by app.js are plurals too ("in 1 Tag" on a contact card)', async ({ page }) => {
+  await page.goto(`/contacts#alice/${FREUNDE}/c-oezil@seed`); // birthday 15 October, the frozen today is the 14th
+  await expect(page.locator('#ctform [data-date=birthday] .dateinfo')).toHaveText('in 1 Tag · wird 34');
+});
+
 test('B3: "Jahr in Zahlen" spark bars carry their share, the title week and count', async ({ page }) => {
   await page.goto('/calendar?view=numbers&date=2026-10-14');
   const bars = await page.locator('.spark i').evaluateAll(l => l.map(i => [i.getAttribute('style'), i.getAttribute('title')]));
@@ -52,6 +57,13 @@ test('B3: "Jahr in Zahlen" spark bars carry their share, the title week and coun
 test('B8: saving a collection that does not exist answers in German', async ({ page }) => {
   await page.goto('/settings');
   await expect(settingsForm(page, '/settings/calendars/alice/f9-missing/update', { name: 'x' })).rejects.toThrow('"msg":"Nicht gefunden."');
+});
+
+test("B8: PractiCal's own error texts reach the browser in its language", async ({ page }) => {
+  await page.goto('/calendar');
+  const csrf = await page.locator('meta[name=csrf]').getAttribute('content');
+  const r = await page.request.post('/api/events', { data: { principal: 'alice', cal_id: '5eed0000-0000-4000-8000-000000000001', summary: '  ', start: '2026-10-16T14:00:00', end: '2026-10-16T15:00:00' }, headers: { 'X-CSRF-Token': csrf, Origin: BASE } });
+  expect([r.status(), await r.text()]).toEqual([400, 'Bitte einen Titel angeben.']);
 });
 
 test('B9: the stored language wins; "automatic" follows the browser at once', async ({ page }) => {

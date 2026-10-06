@@ -324,7 +324,7 @@ async fn group_delete(State(state): State<SharedState>, user: Principal, session
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         groups::trash(&state, &user, &gid, Some(&f.confirm)).await.map_err(|e| match e {
-            AppError::BadRequest(_) => AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")),
+            AppError::BadRequest(_) => AppError::bad("flash-confirm-mismatch"),
             e => e,
         })?;
         Ok(None)
@@ -347,7 +347,7 @@ async fn group_purge(State(state): State<SharedState>, user: Principal, session:
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         if f.confirm.trim() != gid {
-            return Err(AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")));
+            return Err(AppError::bad("flash-confirm-mismatch"));
         }
         groups::purge_by_member(&state, &user, &gid).await?;
         Ok(None)
@@ -609,12 +609,12 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
             _ => ("category", f.vacation_category.trim()),
         };
         if kind == "title" && !value.is_empty() {
-            prefs::VacationRule::title_regex(value).map_err(|e| AppError::BadRequest(format!("{}: {e}", ctx.t("vacation-title-bad"))))?;
+            prefs::VacationRule::title_regex(value).map_err(|e| AppError::bad1("err-vacation-title", "detail", e))?;
         }
         p.vacation_rule_json = Some(serde_json::to_string(&prefs::VacationRule { v: 2, kind: kind.into(), value: value.into() }).unwrap());
         // reminder strip snap points: an empty list falls back to the built-in one; a bad token rejects the form
-        let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
-        let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
+        let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;
+        let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;
         let snaps = events::AlarmSnaps { start: if start.is_empty() { events::AlarmSnaps::default().start } else { start }, end };
         p.alarm_snaps_json = if snaps == events::AlarmSnaps::default() { None } else { Some(serde_json::to_string(&snaps).unwrap()) };
         if let Some(d) = f.search_history_days.as_deref().and_then(|d| d.parse::<i64>().ok()).filter(|d| prefs::HISTORY_DAYS.contains(d)) {

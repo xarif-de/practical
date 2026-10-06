@@ -79,7 +79,7 @@ fn used_keys() -> BTreeMap<String, String> {
         used.entry(k).or_insert_with(|| at.to_string());
     };
     for (path, text) in files("templates", "html").into_iter().chain(files("src", "rs")) {
-        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", "l.tn(\"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
+        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tp(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", "l.tn(\"", "::bad(\"", "::bad1(\"", "::conflict(\"", "Msg { key: \"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
             for k in literals_after(&text, call) {
                 add(k, &path);
             }
@@ -190,4 +190,30 @@ fn lookups_and_fallbacks() {
     assert_eq!(negotiate(Some("*"), "en"), "en");
     assert_eq!(negotiate(Some(""), "de"), "de");
     assert_eq!(keys_of("a = 1\n  cont\n# c\nb =\n    .attr = x\nnot a key = y\n"), ["a", "b"]);
+}
+
+#[test]
+fn plural_messages_reach_the_browser_as_forms() {
+    let i = I18n::load();
+    // a js-* plural: its forms and the name of its number; app.js picks one with Intl.PluralRules
+    let js: serde_json::Value = serde_json::from_str(&i.js_json("de")).unwrap();
+    assert_eq!(js["js-set-imported"], serde_json::json!({ "$": "n", "one": "%n Objekt importiert.", "other": "%n Objekte importiert." }));
+    assert_eq!(js["js-imp-done"]["$"], "count");
+    assert_eq!(i.with_prefix_json("fr", "hxj-").into_iter().find(|(k, _)| k == "hxj-more").unwrap().1, serde_json::json!({ "$": "n", "one": "et %n autre", "other": "et %n autres" }));
+    assert!(js["js-set-err"].is_string(), "any other message stays a string");
+    // a data attribute of a template: the forms with {n}
+    assert_eq!(i.plural_json("de", "ct-days-in"), r#"{"one":"in {n} Tag","other":"in {n} Tagen"}"#);
+    assert_eq!(i.plural_json("en", "ed-h-count"), r#"{"one":"once","other":"{n} times"}"#);
+    assert_eq!(i.plural_json("de", "ed-h-count"), "{n}-mal", "a language without plural forms: the plain text");
+    // every plural form the browser picks from is named by a CLDR category (what Intl.PluralRules answers),
+    // "other" always there (Rust-only messages may also select on a number literal: v-rr-ordinal [1])
+    let tp: Vec<String> = files("templates", "html").iter().flat_map(|(_, t)| literals_after(t, "ctx.tp(\"")).collect();
+    assert!(tp.len() >= 4, "{tp:?}");
+    for (lang, src) in SOURCES {
+        for k in messages(src).into_keys().filter(|k| k.starts_with("js-") || k.starts_with("hxj-") || tp.contains(k)) {
+            if let Some((_, forms)) = i.plural_forms(lang, &k, |v| v.to_string()) {
+                assert!(forms.iter().all(|(c, _)| ["zero", "one", "two", "few", "many", "other"].contains(&c.as_str())) && forms.iter().any(|(c, _)| c == "other"), "{lang}/{k}: {forms:?}");
+            }
+        }
+    }
 }

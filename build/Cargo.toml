@@ -64,6 +64,9 @@ vtimezones-rs = "0.3"
 # (runtime directory scanning) we do not use.
 fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
+# Already linked through fluent-bundle (same version): its AST names the variants of a plural message, so
+# the browser gets every form (i18n.rs `plural_forms`) and picks one with Intl.PluralRules.
+fluent-syntax = "0.12"
 # Already linked through tower-http's gzip (same version, same default backend): decodes an embedded
 # .gz asset once for a client that accepts no compression (routes/assets.rs).
 flate2 = "1.1"

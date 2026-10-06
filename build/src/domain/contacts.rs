@@ -312,7 +312,8 @@ pub fn parse_vcf(vcf: &str) -> AppResult<VcardContact> {
 /// content-line parser takes every parameter as `name=value` and rejects the whole card otherwise (caldata
 /// 0.17.3 src/parser/content_line/mod.rs:62 `split_once('=')` → `MissingDelimiter`; `TEL;CELL;TYPE=HOME`
 /// even parses, as one parameter named `CELL;TYPE`) — and RustiCal's store then hides the card. A card without such a parameter comes back unchanged (borrowed); one with it unfolded.
-/// For reading and importing only: a stored card stays as it is until the user saves it here.
+/// For reading and importing only: a stored card stays as it is until the user saves it here. Reported
+/// upstream: https://github.com/lennart-k/caldata-rs/issues/12 — drop this once caldata reads such cards.
 pub fn bare_params_as_type(vcf: &str) -> std::borrow::Cow<'_, str> {
     let bare = |l: &str| split_unquoted(&l[..head_len(l)], ';').iter().skip(1).any(|p| !p.contains('='));
     let lines = unfold(vcf);
@@ -683,7 +684,7 @@ pub fn build_vcf(uid: &str, i: &ContactInput, preserved: &[String]) -> AppResult
         full = format!("{given} {family}").trim().to_string();
     }
     if full.is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     let mut l = vec![
         "BEGIN:VCARD".to_string(),
@@ -782,7 +783,7 @@ pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str,
         && !e.is_empty()
         && e != etag
     {
-        return Err(AppError::Conflict("the contact was changed elsewhere; reload".into()));
+        return Err(AppError::conflict("err-changed-contact"));
     }
     let uid = parse_vcf(&existing)?.get_uid().unwrap_or(object_id).to_string();
     // the lines kept as written: a bare parameter among them as TYPE, or caldata rejects the saved card
