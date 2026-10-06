@@ -438,13 +438,14 @@ Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `te
 CI is one `dagger call … ci` (`base/dagger-modules` docs/ci.md), which `.forgejo/workflows/ci.yml`
 only triggers. Every push runs cargo-deny and builds + tests the image; `main` publishes with the
 `release` profile (skipped when the build inputs are unchanged), `v*` tags with the `dist` profile.
-Deployment follows from the push: Renovate pins the new `:main` digest in `kubernetes/rustical`
-(PR, CI, auto-merge, up to 2 h after the publish), ArgoCD syncs it from the gitlab.com mirror, and the
-pod restarts with both containers on the one new image.
+Deployment follows a release tag only (policy 2026-10-06): `main` images are build versions, never
+deployed; a `vX.Y.Z` tag publishes the release image, Renovate pins it in `kubernetes/rustical` (PR,
+CI, auto-merge for minor/patch, up to 2 h after the publish), ArgoCD syncs it from the gitlab.com
+mirror, and the pod restarts with both containers on the one new image.
 The Dockerfile keeps cargo's
 registry and `target/` in BuildKit cache mounts, so a build recompiles only what changed
 (`base/dagger-modules` docs/rust-functions.md). Image:
-`registry.gitlab.com/xarif/docker/practical:main` (built and pushed by Forgejo Actions,
+`registry.gitlab.com/xarif/docker/practical:vX.Y.Z` (releases; `:main` = build versions; built and pushed by Forgejo Actions,
 pulled from the gitlab.com registry like every xarif image).
 
 **Icons** (`build/assets/icons.svg`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
