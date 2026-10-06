@@ -2,10 +2,9 @@
 //! named by its sources); the settings page "Farben" lists them per element and changes them in place.
 
 use crate::domain::collections::{self, CalInfo};
-use crate::domain::{catrules, events, ical, prefs};
+use crate::domain::{catrules, events, prefs};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use caldata::component::CalendarInnerData;
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
 use rustical_store::{CalendarReadStore, CalendarWriteStore};
@@ -62,22 +61,17 @@ pub async fn sources(state: &AppState, user: &Principal) -> AppResult<Vec<Source
 
 async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source>> {
     let mut out = vec![];
-    for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-        let (kind, color, name, cats) = match obj.get_inner().get_inner() {
-            CalendarInnerData::Event(ev, _) => ("event", ical::text(ev, "COLOR"), ical::text(ev, "SUMMARY"), ical::list(ev, "CATEGORIES")),
-            CalendarInnerData::Todo(t, _) => ("task", ical::text(t, "COLOR"), ical::text(t, "SUMMARY"), ical::list(t, "CATEGORIES")),
-            _ => continue,
-        };
-        let Some(color) = color.map(|c| c.trim().to_string()).filter(|c| events::valid_color(c)) else { continue };
+    for o in &events::object_meta(state, cal).await?.objs {
+        let Some(color) = o.color.as_deref().map(|c| c.trim().to_string()).filter(|c| events::valid_color(c)) else { continue };
         out.push(Source {
-            kind,
-            name: name.unwrap_or_default(),
+            kind: if o.event { "event" } else { "task" },
+            name: o.summary.clone().unwrap_or_default(),
             color,
-            key: format!("{}/{}/{id}", cal.principal, cal.id),
+            key: format!("{}/{}/{}", cal.principal, cal.id, o.id),
             cal: Some(cal.displayname.clone()),
             cal_color: Some(cal.color.clone()),
             editable: cal.subscription_url.is_none(),
-            cats: cats.into_iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect(),
+            cats: o.categories.iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect(),
         });
     }
     Ok(out)
@@ -90,14 +84,9 @@ pub async fn category_objects(state: &AppState, user: &Principal, scope: &str, n
     let (name, from) = (name.trim(), from.trim().to_lowercase());
     let mut out = vec![];
     for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| c.subscription_url.is_none()) {
-        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-            let (cats, color) = match (obj.get_inner().get_inner(), scope) {
-                (CalendarInnerData::Event(ev, _), "event") => (ical::list(ev, "CATEGORIES"), ical::text(ev, "COLOR")),
-                (CalendarInnerData::Todo(t, _), "task") => (ical::list(t, "CATEGORIES"), ical::text(t, "COLOR")),
-                _ => continue,
-            };
-            if color.is_some_and(|c| c.trim().to_lowercase() == from) && cats.iter().any(|c| c.trim() == name) {
-                out.push(format!("{}/{}/{id}", cal.principal, cal.id));
+        for o in events::object_meta(state, cal).await?.objs.iter().filter(|o| o.event == (scope == "event") && matches!(scope, "event" | "task")) {
+            if o.color.as_deref().is_some_and(|c| c.trim().to_lowercase() == from) && o.categories.iter().any(|c| c.trim() == name) {
+                out.push(format!("{}/{}/{}", cal.principal, cal.id, o.id));
             }
         }
     }

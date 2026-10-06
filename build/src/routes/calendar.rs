@@ -91,13 +91,15 @@ pub struct ViewCtx {
     pub tz: chrono_tz::Tz,
     pub today: NaiveDate,
     pub l: L,
+    /// the user's settings, read once per request (the zone above, holidays, editor presets)
+    pub prefs: prefs::Prefs,
 }
 
 pub async fn view_ctx(state: &SharedState, user: &Principal, lang: &str) -> AppResult<ViewCtx> {
     let p = prefs::get(&state.db, &user.id).await?;
     let tz: chrono_tz::Tz = p.timezone.as_deref().and_then(|t| t.parse().ok()).unwrap_or_else(|| state.config.default_timezone.parse().unwrap_or(chrono_tz::Europe::Berlin));
     let today = crate::clock::today_in(&tz);
-    Ok(ViewCtx { tz, today, l: L::new(lang, state.i18n.clone()) })
+    Ok(ViewCtx { tz, today, l: L::new(lang, state.i18n.clone()), prefs: p })
 }
 
 pub fn parse_cals(cals: Option<&str>) -> Option<HashSet<String>> {
@@ -130,7 +132,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
         "day" => {
             let (ds, de) = render::day_window(date);
             let inst = events::instances(state, cals, ds.min(grid_start), de.max(grid_end), vc.tz).await?;
-            let hol = crate::domain::holidays::marks(state, &user.id, ds, de, &ctx.lang).await?;
+            let hol = crate::domain::holidays::marks(state, &vc.prefs, ds, de, &ctx.lang).await?;
             let names: Vec<String> = cals.iter().map(|c| c.displayname.clone()).collect();
             // the document in the middle shows links, coordinates, the rule and the marking, none of
             // which an Instance carries — they are read for the handful of events of THIS day only,
@@ -155,7 +157,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             let hf = NaiveDate::from_ymd_opt(hm.year(), hm.month(), 1).unwrap();
             let hs = hf - Duration::days(i64::from(hf.weekday().num_days_from_monday()));
             let inst = events::instances(state, cals, ws.min(hs), we.max(hs + Duration::days(42)), vc.tz).await?;
-            let hol = crate::domain::holidays::marks(state, &user.id, ws, we, &ctx.lang).await?;
+            let hol = crate::domain::holidays::marks(state, &vc.prefs, ws, we, &ctx.lang).await?;
             (l.week_title(date), render::week_view(date, vc.today, &inst, l, &hol))
         }
         "planner" | "weekends" | "vacation" | "countdown" | "numbers" => {
@@ -170,7 +172,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
             let grid_start = month_start - Duration::days(i64::from(month_start.weekday().num_days_from_monday()));
             let grid_end = grid_start + Duration::days(42);
             let inst = events::instances(state, cals, grid_start, grid_end, vc.tz).await?;
-            let hol = crate::domain::holidays::marks(state, &user.id, grid_start, grid_end, &ctx.lang).await?;
+            let hol = crate::domain::holidays::marks(state, &vc.prefs, grid_start, grid_end, &ctx.lang).await?;
             let agenda_date = if same(date, month) { date } else if same(vc.today, month) { vc.today } else { month_start };
             (format!("{} {}", l.mon(month.month()), month.year()), render::month_view(month, date, vc.today, &inst, l, agenda_date, &hol))
         }
@@ -197,7 +199,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     }
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
-    let p = prefs::get(&state.db, &user.id).await?;
+    let p = vc.prefs;
     let has_school = p.regions(&state.config, true).iter().any(|r| crate::domain::holidays::has_school(crate::domain::holidays::split(r).0));
     Ok(CalendarPage {
         holidays_on: p.holidays_enabled,
@@ -258,7 +260,7 @@ pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: Pa
     let end = q.start + Duration::days(i64::from(count));
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     let inst = events::instances(&state, &cals, q.start, end, vc.tz).await?;
-    let hol = crate::domain::holidays::marks(&state, &user.id, q.start, end, &ctx.lang).await?;
+    let hol = crate::domain::holidays::marks(&state, &vc.prefs, q.start, end, &ctx.lang).await?;
     Ok(Html(render::day_rows(q.start, count as usize, vc.today, None, &inst, &vc.l, &hol)).into_response())
 }
 
@@ -279,7 +281,7 @@ pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: P
     let end = start + Duration::days(7 * count as i64);
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     let inst = events::instances(&state, &cals, start, end, vc.tz).await?;
-    let hol = crate::domain::holidays::marks(&state, &user.id, start, end, &ctx.lang).await?;
+    let hol = crate::domain::holidays::marks(&state, &vc.prefs, start, end, &ctx.lang).await?;
     Ok(Html(render::week_blocks(start, count, vc.today, &inst, &vc.l, &hol)).into_response())
 }
 

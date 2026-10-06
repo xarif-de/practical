@@ -38,7 +38,7 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
     let start = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
     let instances = events::instances(state, cals, start, end, vc.tz).await?;
-    let p = prefs::get(&state.db, &user.id).await?;
+    let p = &vc.prefs;
     let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
     let public = if p.holidays_enabled { holidays::for_regions(state, "public", &public_regions, year, &ctx.lang).await? } else { vec![] };
     let school = if p.school_holidays_enabled { holidays::for_regions(state, "school", &school_regions, year, &ctx.lang).await? } else { vec![] };
@@ -46,7 +46,7 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         Some(r) => holidays::for_regions(state, "public", &[r], year, &ctx.lang).await?,
         None => vec![],
     };
-    let rule = prefs::VacationRule::of(&p);
+    let rule = prefs::VacationRule::of(p);
     let is_vacation = rule.matcher();
     let vacations: Vec<Instance> = instances.iter().filter(|i| is_vacation(&format!("{}/{}", i.principal, i.cal_id), &i.categories, &i.summary)).cloned().collect();
     let abs = collections::addressbooks_for(state, user, false).await?;

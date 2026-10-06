@@ -156,6 +156,7 @@ async fn serve() -> Result<(), String> {
         geo: Default::default(),
         search_index: Default::default(),
         task_cache: Default::default(),
+        caches: Default::default(),
         history: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),

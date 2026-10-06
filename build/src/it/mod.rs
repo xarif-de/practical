@@ -5,6 +5,7 @@ mod api_events;
 mod api_more;
 mod assets;
 mod auth;
+mod caches;
 mod history;
 mod pages;
 pub mod seed;

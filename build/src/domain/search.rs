@@ -764,8 +764,7 @@ async fn index(state: &AppState, user: &Principal, today: NaiveDate, tz: chrono_
     }
     // ±2 years around today: expanding 4 000 objects takes ~40 ms on the real store
     let (from, to) = (today - Duration::days(730), today + Duration::days(730));
-    let inst: Vec<Instance> = events::instances(state, &cals, from, to, tz).await?;
-    let mut extras = events::search_extras(state, &cals, from, to).await?;
+    let (inst, mut extras): (Vec<Instance>, _) = events::instances_with_extras(state, &cals, from, to, tz).await?;
     let tasks = tasks::tasks_for(state, &cals, tz).await?;
     // RELATED-TO names the other side by UID: its title is what can be searched
     let mut titles: HashMap<String, String> = inst.iter().map(|i| (i.uid.clone(), i.summary.clone())).collect();

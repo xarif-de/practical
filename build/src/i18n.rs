@@ -27,6 +27,8 @@ const SOURCES: &[(&str, &str)] = &[
 
 pub struct I18n {
     bundles: Vec<(&'static str, FluentBundle<FluentResource>)>,
+    /// `js_json` per language of SOURCES: the bundles never change after `load`
+    js: Vec<std::sync::OnceLock<String>>,
 }
 
 fn bundle(lang: &str, ftl: &str) -> FluentBundle<FluentResource> {
@@ -61,7 +63,7 @@ pub fn locale(lang: &str) -> &'static str {
 
 impl I18n {
     pub fn load() -> Arc<Self> {
-        Arc::new(Self { bundles: SOURCES.iter().map(|(l, src)| (*l, bundle(l, src))).collect() })
+        Arc::new(Self { bundles: SOURCES.iter().map(|(l, src)| (*l, bundle(l, src))).collect(), js: SOURCES.iter().map(|_| std::sync::OnceLock::new()).collect() })
     }
 
     fn get(&self, lang: &str) -> Option<&FluentBundle<FluentResource>> {
@@ -109,6 +111,19 @@ impl I18n {
                 (k, v)
             })
             .collect()
+    }
+
+    /// The js-* strings of `lang` as a JSON object for app.js (every full page carries it), formatted once
+    /// per language.
+    pub fn js_json(&self, lang: &str) -> String {
+        let build = || {
+            let m: serde_json::Map<String, serde_json::Value> = self.with_prefix(lang, "js-").into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
+            serde_json::Value::Object(m).to_string()
+        };
+        match SOURCES.iter().position(|(l, _)| *l == lang) {
+            Some(i) => self.js[i].get_or_init(build).clone(),
+            None => build(),
+        }
     }
 
     /// Message ids missing in a language (or extra there), compared with German.

@@ -375,15 +375,77 @@ pub fn matches(all: &[Contact], name: &str, email: &str, cutype: &str) -> Vec<Co
 pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Contact>> {
     let mut out = vec![];
     for ab in abs {
-        for (id, obj) in AddressbookReadStore::get_objects(&*state.addressbooks, &ab.principal, &ab.id).await? {
-            match parse_vcf(obj.get_vcf()) {
-                Ok(vc) => out.push(contact_from(&vc, &raw_lines(obj.get_vcf()), ab, &id, obj.get_etag())),
-                Err(e) => tracing::warn!("contact {}/{}/{}: {e}", ab.principal, ab.id, id),
-            }
+        for c in ab_contacts(state, ab).await?.contacts.values() {
+            let mut c = c.clone();
+            // name and colour change without the synctoken moving: always the current ones
+            (c.ab_name, c.ab_color, c.is_group) = (ab.displayname.clone(), ab.color.clone(), ab.is_group);
+            out.push(c);
         }
     }
     out.sort_by_key(|c| c.sort_key());
     Ok(out)
+}
+
+fn cached_contact(ab: &AbInfo, id: &str, obj: &AddressObject) -> Option<Contact> {
+    match parse_vcf(obj.get_vcf()) {
+        Ok(vc) => Some(contact_from(&vc, &raw_lines(obj.get_vcf()), ab, id, obj.get_etag())),
+        Err(e) => {
+            tracing::warn!("contact {}/{}/{}: {e}", ab.principal, ab.id, id);
+            None
+        }
+    }
+}
+
+/// The parsed contacts of one address book at a synctoken (RustiCal moves it on every object write,
+/// store_sqlite addressbook_store/mod.rs `log_object_operation`). Keyed by object id: the store reads
+/// an address book in that order (primary-key index), which the stable sort in `contacts_for` keeps
+/// for equal names.
+pub struct AbContacts {
+    token: i64,
+    contacts: std::collections::BTreeMap<String, Contact>,
+}
+
+/// `AbContacts` per address book, caught up through the store's change log like `tasks::TaskCache`:
+/// a page load no longer parses every vCard twice and hashes it (≈ 300 contacts: 9 → 1 ms per /contacts
+/// on the synthetic DB).
+#[derive(Default)]
+pub struct ContactCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<AbContacts>>>);
+
+async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<AbContacts>> {
+    let k = (ab.principal.clone(), ab.id.clone());
+    let cached = state.caches.contacts.0.lock().unwrap().get(&k).cloned();
+    if let Some(c) = &cached
+        && c.token >= ab.synctoken
+    {
+        return Ok(c.clone());
+    }
+    // `ab.synctoken` was read before the objects: a write racing this read is applied again next time
+    let fresh = match cached {
+        Some(c) => {
+            let (changed, deleted, _) = AddressbookReadStore::sync_changes(&*state.addressbooks, &ab.principal, &ab.id, c.token).await?;
+            let mut contacts = c.contacts.clone();
+            for id in deleted {
+                contacts.remove(&id);
+            }
+            for (id, obj) in changed {
+                contacts.remove(&id);
+                if let Some(ct) = cached_contact(ab, &id, &obj) {
+                    contacts.insert(id, ct);
+                }
+            }
+            AbContacts { token: ab.synctoken, contacts }
+        }
+        None => {
+            let objs = AddressbookReadStore::get_objects(&*state.addressbooks, &ab.principal, &ab.id).await?;
+            AbContacts { token: ab.synctoken, contacts: objs.into_iter().filter_map(|(id, obj)| cached_contact(ab, &id, &obj).map(|c| (id, c))).collect() }
+        }
+    };
+    let fresh = std::sync::Arc::new(fresh);
+    let mut m = state.caches.contacts.0.lock().unwrap();
+    if m.get(&k).is_none_or(|c| c.token <= fresh.token) {
+        m.insert(k, fresh.clone());
+    }
+    Ok(fresh)
 }
 
 pub async fn get_contact(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<Contact> {

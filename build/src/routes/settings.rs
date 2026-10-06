@@ -139,8 +139,8 @@ impl SettingsPage {
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
     let new_token: Option<String> = session.remove(SESSION_NEW_TOKEN).await?;
-    let snaps = events::alarm_snaps(prefs::get(&state.db, &user.id).await?.alarm_snaps_json.as_deref());
     let p = prefs::get(&state.db, &user.id).await?;
+    let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
     let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
     let mut region_names = HashMap::new();
     for code in public_regions.iter().chain(&school_regions) {
@@ -169,7 +169,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         deleted_addressbooks: collections::addressbooks_for(&state, &user, true).await?,
         tokens: tokens::list(&state, &user).await?,
         new_token,
-        prefs: prefs::get(&state.db, &user.id).await?,
+        prefs: p.clone(),
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,

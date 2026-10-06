@@ -454,6 +454,11 @@ async fn cache_get(state: &AppState, country: &str, subdivision: &str, year: i32
 
 /// The cached JSON for a key and its age in hours.
 async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str) -> AppResult<Option<(String, i64)>> {
+    Ok(cache_row(state, country, subdivision, year, kind).await?.map(|(j, fetched)| (j, age_hours(fetched))))
+}
+
+/// The cached JSON for a key and when it was fetched (None: unreadable stamp, i.e. stale).
+async fn cache_row(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str) -> AppResult<Option<(String, Option<chrono::NaiveDateTime>)>> {
     let row = sqlx::query("SELECT json, fetched_at FROM practical_holidays WHERE country = ? AND subdivision = ? AND year = ? AND kind = ?")
         .bind(country)
         .bind(subdivision)
@@ -463,9 +468,25 @@ async fn cache_aged(state: &AppState, country: &str, subdivision: &str, year: i3
         .await?;
     Ok(row.map(|r| {
         let fetched: String = r.get("fetched_at");
-        let hours = chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").map(|f| (crate::clock::now().naive_utc() - f).num_hours()).unwrap_or(i64::MAX);
-        (r.get("json"), hours)
+        (r.get("json"), chrono::NaiveDateTime::parse_from_str(&fetched, "%Y-%m-%d %H:%M:%S").ok())
     }))
+}
+
+fn age_hours(fetched: Option<chrono::NaiveDateTime>) -> i64 {
+    fetched.map(|f| (crate::clock::now().naive_utc() - f).num_hours()).unwrap_or(i64::MAX)
+}
+
+/// `get`'s rows of `practical_holidays`, parsed, so the views do not read and parse them per request.
+/// `cache_put` (the only writer) drops a key; freshness is judged from `fetched_at` on every read, as
+/// before. At most `MEM_MAX` keys (country × subdivision × year × kind-language).
+#[derive(Default)]
+pub struct MemCache(std::sync::Mutex<HashMap<(String, String, i32, String), (std::sync::Arc<Vec<Holiday>>, Option<chrono::NaiveDateTime>)>>);
+
+const MEM_MAX: usize = 512;
+
+#[cfg(test)]
+pub async fn cache_put_for_test(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str, json: &str) {
+    cache_put(state, country, subdivision, year, kind, json).await.unwrap();
 }
 
 async fn cache_put(state: &AppState, country: &str, subdivision: &str, year: i32, kind: &str, json: &str) -> AppResult<()> {
@@ -477,6 +498,7 @@ async fn cache_put(state: &AppState, country: &str, subdivision: &str, year: i32
         .bind(json)
         .execute(&state.db)
         .await?;
+    state.caches.holidays.0.lock().unwrap().remove(&(country.to_string(), subdivision.to_string(), year, kind.to_string()));
     Ok(())
 }
 
@@ -538,7 +560,23 @@ pub async fn get(state: &AppState, kind: &str, country: &str, subdivision: &str,
         return Ok(vec![]);
     }
     let key = format!("{kind}2-{lang}"); // names are in the page language; 2: entries carry `regions`
-    let cached: Option<(Vec<Holiday>, bool)> = cache_get(state, country, subdivision, year, &key).await?.map(|(j, fresh)| (serde_json::from_str(&j).unwrap_or_default(), fresh));
+    let mk = (country.to_string(), subdivision.to_string(), year, key.clone());
+    let mem = state.caches.holidays.0.lock().unwrap().get(&mk).cloned();
+    let row = match mem {
+        Some(r) => Some(r),
+        None => {
+            let r = cache_row(state, country, subdivision, year, &key).await?.map(|(j, fetched)| (std::sync::Arc::new(serde_json::from_str::<Vec<Holiday>>(&j).unwrap_or_default()), fetched));
+            if let Some(r) = &r {
+                let mut m = state.caches.holidays.0.lock().unwrap();
+                if m.len() >= MEM_MAX {
+                    m.clear();
+                }
+                m.insert(mk, r.clone());
+            }
+            r
+        }
+    };
+    let cached: Option<(Vec<Holiday>, bool)> = row.map(|(h, fetched)| ((*h).clone(), age_hours(fetched) < CACHE_DAYS * 24));
     if let Some((h, true)) = &cached {
         return Ok(h.clone());
     }
@@ -669,9 +707,8 @@ pub struct Mark {
 
 /// The holidays the user asked for (settings), by day, for `from..to` — named, in `lang`.
 /// Public ones come first on a day; the years in the window are fetched (cached) once each.
-pub async fn marks(state: &AppState, user: &str, from: NaiveDate, to: NaiveDate, lang: &str) -> AppResult<HashMap<NaiveDate, Vec<Mark>>> {
+pub async fn marks(state: &AppState, p: &crate::domain::prefs::Prefs, from: NaiveDate, to: NaiveDate, lang: &str) -> AppResult<HashMap<NaiveDate, Vec<Mark>>> {
     use chrono::Datelike;
-    let p = crate::domain::prefs::get(&state.db, user).await?;
     let mut out: HashMap<NaiveDate, Vec<Mark>> = HashMap::new();
     // a block across New Year (Weihnachtsferien) comes back for both years: count it once
     let mut seen = std::collections::HashSet::new();
