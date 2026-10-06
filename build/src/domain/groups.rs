@@ -240,7 +240,7 @@ fn row_to_trash(r: &sqlx::sqlite::SqliteRow) -> TrashRow {
 }
 
 async fn trashed_row(state: &AppState, gid: &str) -> AppResult<Option<TrashRow>> {
-    Ok(sqlx::query("SELECT * FROM practical_trashed_groups WHERE id = ?")
+    Ok(sqlx::query("SELECT id, displayname, members_json, calendars_json, addressbooks_json, deleted_by, deleted_at FROM practical_trashed_groups WHERE id = ?")
         .bind(gid)
         .fetch_optional(&state.db)
         .await?
@@ -262,7 +262,7 @@ fn to_public(r: TrashRow, retention_days: u32) -> TrashedGroup {
 }
 
 pub async fn trashed_for_user(state: &AppState, user: &Principal) -> AppResult<Vec<TrashedGroup>> {
-    let rows = sqlx::query("SELECT * FROM practical_trashed_groups ORDER BY deleted_at DESC")
+    let rows = sqlx::query("SELECT id, displayname, members_json, calendars_json, addressbooks_json, deleted_by, deleted_at FROM practical_trashed_groups ORDER BY deleted_at DESC")
         .fetch_all(&state.db)
         .await?;
     Ok(rows
@@ -337,7 +337,7 @@ pub async fn purge_by_member(state: &AppState, user: &Principal, gid: &str) -> A
 
 pub async fn purge_expired(state: &AppState) -> AppResult<usize> {
     let cutoff = crate::clock::now() - chrono::Duration::days(i64::from(state.config.trash_retention_days));
-    let rows = sqlx::query("SELECT * FROM practical_trashed_groups").fetch_all(&state.db).await?;
+    let rows = sqlx::query("SELECT id, displayname, members_json, calendars_json, addressbooks_json, deleted_by, deleted_at FROM practical_trashed_groups").fetch_all(&state.db).await?;
     let mut n = 0;
     for r in rows.iter().map(row_to_trash) {
         if r.deleted_at < cutoff {

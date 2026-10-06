@@ -54,3 +54,27 @@ async fn stored_round_trip() {
     set(&app.state.db, "u", &Prefs::defaults()).await.unwrap();
     assert_eq!(serde_json::to_value(get(&app.state.db, "u").await.unwrap()).unwrap(), serde_json::to_value(Prefs::defaults()).unwrap());
 }
+
+/// A column dropped from the live table while a connection still holds the prepared read (how
+/// 2026-10-05's hand-applied `DROP COLUMN presets_json` met the running pod): the read goes on. With
+/// `SELECT *` the second read panics — the columns after the dropped one have moved, the cached
+/// name → index map has not (here: `timezone` decoded from an INTEGER column; in production the
+/// last name's index ran past the row).
+#[tokio::test]
+async fn a_dropped_column_does_not_break_the_cached_read() {
+    let app = TestApp::new().await;
+    let p = Prefs { timezone: Some("Europe/Vienna".into()), search_history_days: Some(7), ..Prefs::defaults() };
+    set(&app.state.db, "alice", &p).await.unwrap();
+    // the reads on one connection, so the second meets the statement the first prepared; the
+    // schema changes from another (in production: sqlite3 by hand)
+    let url = format!("sqlite://{}", app.state.config.db_path);
+    let pool = || sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect(&url);
+    let (one, other) = (pool().await.unwrap(), pool().await.unwrap());
+    // a column in the middle, as presets_json was
+    let rest: Vec<String> = sqlx::query("SELECT name FROM pragma_table_info('practical_user_settings') WHERE name != 'principal'").fetch_all(&other).await.unwrap().iter().map(|r| r.get("name")).collect();
+    sqlx::raw_sql(sqlx::AssertSqlSafe(format!("ALTER TABLE practical_user_settings RENAME TO s_old; CREATE TABLE practical_user_settings AS SELECT principal, NULL AS gone_soon, {} FROM s_old; DROP TABLE s_old;", rest.join(", ")))).execute(&other).await.unwrap();
+    let read = || async { get(&one, "alice").await.map(|p| (p.timezone, p.search_history_days)) };
+    assert_eq!(read().await.unwrap(), (Some("Europe/Vienna".into()), Some(7)));
+    sqlx::query("ALTER TABLE practical_user_settings DROP COLUMN gone_soon").execute(&other).await.unwrap();
+    assert_eq!(read().await.unwrap(), (Some("Europe/Vienna".into()), Some(7)));
+}

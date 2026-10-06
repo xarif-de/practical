@@ -179,15 +179,17 @@ fn stamp_of(props: &[String], name: &str, tz: chrono_tz::Tz) -> (Option<NaiveDat
     }
 }
 
-/// One VTODO object as a list row. The calendar's name and colour are filled in by `tasks_for`
-/// (they change without the synctoken moving); `color` here is the task's own COLOR, maybe empty.
-fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: chrono_tz::Tz) -> Option<Task> {
+/// One VTODO object as a list row, plus its reminders (`Seed`). The calendar's name and colour are
+/// filled in by `tasks_for` (they change without the synctoken moving); `color` here is the task's
+/// own COLOR, maybe empty.
+fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: chrono_tz::Tz) -> Option<(Task, Option<Seed>)> {
     let CalendarInnerData::Todo(t, _) = obj.get_inner().get_inner() else { return None };
     let (raw, _) = events::split_component(&obj.get_ics(), "VTODO");
+    let seed = seed_of(&raw, tz);
     let p = &raw.props;
     let (start, start_all_day) = stamp_of(p, "DTSTART", tz);
     let (due, due_all_day) = stamp_of(p, "DUE", tz);
-    Some(Task {
+    let task = Task {
         principal: principal.to_string(),
         cal_id: cal_id.to_string(),
         cal_name: String::new(),
@@ -211,7 +213,8 @@ fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: 
         links: events::links_of(p).len(),
         created: stamp_of(p, "CREATED", tz).0,
         extra: TaskExtra { links: events::links_of(p), geo: geo_of(p), related: events::related_of(p).into_iter().map(|r| r.uid).collect() },
-    })
+    };
+    Some((task, seed))
 }
 
 /// The parsed tasks of each calendar at a synctoken, so a page load does not parse every object
@@ -221,11 +224,20 @@ fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: 
 #[derive(Default)]
 pub struct TaskCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<CalTasks>>>);
 
+#[cfg(test)]
+impl TaskCache {
+    pub fn clear(&self) {
+        self.0.lock().unwrap().clear();
+    }
+}
+
 pub struct CalTasks {
     token: i64,
     tz: chrono_tz::Tz,
     /// object id → task
     tasks: std::collections::HashMap<String, Task>,
+    /// object id → its reminders, for the open tasks that have any (`reminders`, the push loop)
+    seeds: std::collections::HashMap<String, Seed>,
 }
 
 async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppResult<std::sync::Arc<CalTasks>> {
@@ -239,24 +251,37 @@ async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppRes
     let fresh = match cached {
         Some(c) => {
             let (changed, deleted, token) = state.calendars.sync_changes(&cal.principal, &cal.id, c.token).await?;
-            let mut tasks = c.tasks.clone();
+            let (mut tasks, mut seeds) = (c.tasks.clone(), c.seeds.clone());
             for id in deleted {
                 tasks.remove(&id);
+                seeds.remove(&id);
             }
             for (id, obj) in changed {
                 tasks.remove(&id);
-                if let Some(t) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                seeds.remove(&id);
+                if let Some((t, seed)) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                    if let Some(seed) = seed {
+                        seeds.insert(id.clone(), seed);
+                    }
                     tasks.insert(id, t);
                 }
             }
-            CalTasks { token, tz, tasks }
+            CalTasks { token, tz, tasks, seeds }
         }
         None => {
             // the token first: a write racing the read is then caught up next time, never lost
             let token = state.calendars.get_calendar(&cal.principal, &cal.id, false).await?.synctoken;
             let objects = state.calendars.get_objects(&cal.principal, &cal.id).await?;
-            let tasks = objects.into_iter().filter_map(|(id, obj)| task_of(&cal.principal, &cal.id, id.clone(), &obj, tz).map(|t| (id, t))).collect();
-            CalTasks { token, tz, tasks }
+            let (mut tasks, mut seeds) = (std::collections::HashMap::new(), std::collections::HashMap::new());
+            for (id, obj) in objects {
+                if let Some((t, seed)) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                    if let Some(seed) = seed {
+                        seeds.insert(id.clone(), seed);
+                    }
+                    tasks.insert(id, t);
+                }
+            }
+            CalTasks { token, tz, tasks, seeds }
         }
     };
     let fresh = std::sync::Arc::new(fresh);
@@ -846,50 +871,69 @@ impl TaskReminder {
     }
 }
 
-/// The reminders one stored task contributes. Finished and cancelled tasks contribute none —
-/// a reminder for something already done is noise, and every client stops showing it too.
-fn reminders_of(ics: &str, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, from: NaiveDate, to: NaiveDate) -> Vec<TaskReminder> {
-    let (raw, _) = events::split_component(ics, "VTODO");
+/// What one stored task's reminders need, read once with the task (`cal_tasks`): when each fires
+/// (wall clock in the cache's zone, in VALARM order) and what the notification says. Finished and
+/// cancelled tasks have none — a reminder for something already done is noise, and every client
+/// stops showing it too. `None` = nothing will ever fire.
+#[derive(Debug, Clone)]
+pub struct Seed {
+    summary: String,
+    ats: Vec<NaiveDateTime>,
+    due: Option<NaiveDateTime>,
+    due_all_day: bool,
+}
+
+fn seed_of(raw: &events::RawMaster, tz: chrono_tz::Tz) -> Option<Seed> {
     if raw.alarms.is_empty() {
-        return vec![];
+        return None;
     }
     let p = &raw.props;
     let status = status_of(p);
     let done = status == "COMPLETED" || (status.is_empty() && completed_of(p, tz).is_some());
     if done || status == "CANCELLED" {
-        return vec![];
+        return None;
     }
     let (start, _) = stamp_of(p, "DTSTART", tz);
     let (due, due_all_day) = stamp_of(p, "DUE", tz);
-    raw.alarms
-        .iter()
-        .enumerate()
-        .filter_map(|(n, lines)| {
-            let at = reminder_at(&events::parse_alarm(n, lines, tz), start, due)?;
-            (at.date() >= from && at.date() <= to).then(|| TaskReminder {
-                principal: cal.principal.clone(),
-                cal_id: cal.id.clone(),
-                cal_name: cal.displayname.clone(),
-                object_id: object_id.to_string(),
-                summary: text_of(p, "SUMMARY"),
-                at,
-                due,
-                due_all_day,
-            })
-        })
-        .collect()
+    let ats: Vec<NaiveDateTime> = raw.alarms.iter().enumerate().filter_map(|(n, lines)| reminder_at(&events::parse_alarm(n, lines, tz), start, due)).collect();
+    (!ats.is_empty()).then(|| Seed { summary: text_of(p, "SUMMARY"), ats, due, due_all_day })
 }
 
-/// Reminders of the *open* tasks that fire between `from` and `to`; see `reminder_at`.
+/// A task's reminders that fire between `from` and `to` (dates, inclusive).
+fn window(seed: &Seed, cal: &CalInfo, object_id: &str, from: NaiveDate, to: NaiveDate) -> impl Iterator<Item = TaskReminder> {
+    seed.ats.iter().filter(move |at| at.date() >= from && at.date() <= to).map(move |&at| TaskReminder {
+        principal: cal.principal.clone(),
+        cal_id: cal.id.clone(),
+        cal_name: cal.displayname.clone(),
+        object_id: object_id.to_string(),
+        summary: seed.summary.clone(),
+        at,
+        due: seed.due,
+        due_all_day: seed.due_all_day,
+    })
+}
+
+/// The reminders one stored task contributes inside the window.
+#[cfg(test)]
+fn reminders_of(ics: &str, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, from: NaiveDate, to: NaiveDate) -> Vec<TaskReminder> {
+    let (raw, _) = events::split_component(ics, "VTODO");
+    seed_of(&raw, tz).map(|s| window(&s, cal, object_id, from, to).collect()).unwrap_or_default()
+}
+
+/// Reminders of the *open* tasks that fire between `from` and `to`; see `reminder_at`. Read from the
+/// task cache, so a minute's push round re-parses nothing that did not change.
 pub async fn reminders(state: &AppState, cals: &[CalInfo], tz: chrono_tz::Tz, from: NaiveDate, to: NaiveDate) -> AppResult<Vec<TaskReminder>> {
     let mut out = vec![];
     for cal in cals {
         if !cal.components.iter().any(|c| c == "VTODO") {
             continue;
         }
-        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
-            let CalendarInnerData::Todo(_, _) = obj.get_inner().get_inner() else { continue };
-            out.extend(reminders_of(&obj.get_ics(), cal, &id, tz, from, to));
+        let ct = cal_tasks(state, cal, tz).await?;
+        // object id order: the cache is a map, the store's order was the table's
+        let mut ids: Vec<&String> = ct.seeds.keys().collect();
+        ids.sort();
+        for id in ids {
+            out.extend(window(&ct.seeds[id], cal, id, from, to));
         }
     }
     Ok(out)

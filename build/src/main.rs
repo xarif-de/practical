@@ -10,6 +10,7 @@ mod error;
 mod i18n;
 mod render;
 mod routes;
+mod sessions;
 mod state;
 mod tasks;
 #[cfg(test)]
@@ -28,7 +29,7 @@ use std::time::Duration;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::SameSite;
-use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
+use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::{info, warn};
 
 pub const RUSTICAL_TAG: &str = env!("RUSTICAL_TAG");
@@ -87,7 +88,7 @@ async fn healthz(axum::extract::State(state): axum::extract::State<SharedState>)
 }
 
 fn build_router(state: &SharedState) -> Result<Router, String> {
-    let session_store = MemoryStore::default();
+    let session_store = sessions::MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name("practical_session")
         .with_secure(state.config.cookie_secure())

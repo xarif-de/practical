@@ -12,6 +12,48 @@ pub async fn open(db_path: &str) -> Result<SqlitePool, sqlx::Error> {
     rustical_store_sqlite::create_db_pool(&format!("sqlite://{db_path}"), false).await
 }
 
+/// "Has anything been written since I last looked?" for the background loops, at the cost of one
+/// `PRAGMA data_version` (no table read). SQLite moves that value iff a commit by ANY OTHER
+/// connection happened in between — the pool's, RustiCal's process — so the connection is taken out
+/// of the pool for good (`detach`) and never writes. The value is per connection: a new one starts a
+/// new series, hence the generation in the stamp — a reconnect never compares equal to before.
+pub struct Watch {
+    pool: SqlitePool,
+    conn: Option<sqlx::SqliteConnection>,
+    generation: u64,
+}
+
+impl Watch {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool, conn: None, generation: 0 }
+    }
+
+    /// The current stamp; `None` (= "assume changed") when the connection fails.
+    pub async fn stamp(&mut self) -> Option<(u64, i64)> {
+        if self.conn.is_none() {
+            match self.pool.acquire().await {
+                Ok(c) => {
+                    self.conn = Some(c.detach());
+                    self.generation += 1;
+                }
+                Err(e) => {
+                    tracing::warn!("db watch: {e}");
+                    return None;
+                }
+            }
+        }
+        let conn = self.conn.as_mut()?;
+        match sqlx::query_scalar::<_, i64>("PRAGMA data_version").fetch_one(&mut *conn).await {
+            Ok(v) => Some((self.generation, v)),
+            Err(e) => {
+                tracing::warn!("db watch: {e}");
+                self.conn = None;
+                None
+            }
+        }
+    }
+}
+
 /// (version, sql) — append-only; never change what a shipped entry does. (2026-10-05, applied to
 /// existing databases once by hand: table prefix xui_ → practical_; column user_settings.presets_json dropped.)
 const MIGRATIONS: &[(i64, &str)] = &[
