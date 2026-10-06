@@ -1,4 +1,4 @@
-//! The request caches (`state::Caches`): every answer read from a cache must equal
+//! The request caches (`state::Caches`, `history::PlanMemo`): every answer read from a cache must equal
 //! what the uncached read gives after any write — a DAV client's, the app's own, a rename or recolour
 //! that leaves the synctoken where it is, and a change of the user's zone. Each test reads, writes,
 //! and reads back.
@@ -134,6 +134,48 @@ async fn holiday_rows_are_reread_after_a_refresh() {
     assert_eq!(names(crate::domain::holidays::get(&app.state, "public", "DE", "DE-SN", 2026, "de").await.unwrap()), first, "the cached answer");
     crate::domain::holidays::cache_put_for_test(&app.state, "DE", "DE-SN", 2026, "public2-de", &json!([{ "start": "2026-05-01", "end": "2026-05-01", "name": "Maifeiertag", "kind": "public" }]).to_string()).await;
     assert_eq!(names(crate::domain::holidays::get(&app.state, "public", "DE", "DE-SN", 2026, "de").await.unwrap()), ["Maifeiertag"]);
+}
+
+/// The history page plans every change with one `PlanMemo`; each plan must equal a plan made alone.
+#[tokio::test]
+async fn shared_plan_memo_plans_like_a_fresh_one() {
+    let s = crate::it::seed::seed().await;
+    let mut c = s.app.login("alice").await;
+    let input = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Yoga", "start": "2026-10-23T18:00:00", "end": "2026-10-23T19:00:00" });
+    let id = c.json(Method::POST, "/api/events", input.clone()).await.ok().json()["id"].as_str().unwrap().to_string();
+    let path = format!("/api/events/alice/{}/{id}", s.privat);
+    for (n, place) in ["Park", "Halle", "Garten"].iter().enumerate() {
+        let mut upd = input.clone();
+        upd["location"] = json!(place);
+        upd["summary"] = json!(format!("Yoga {n}"));
+        c.json(Method::PUT, &path, upd).await.ok();
+    }
+    let other = c.json(Method::POST, "/api/events", json!({ "principal": "alice", "cal_id": s.privat, "summary": "Weg", "start": "2026-10-24T18:00:00", "end": "2026-10-24T19:00:00" })).await.ok().json()["id"].as_str().unwrap().to_string();
+    c.delete(&format!("/api/events/alice/{}/{other}", s.privat)).await.ok();
+    let user = s.app.principal("alice").await;
+    let all = crate::domain::history::visible(&s.app.state, &user).await.unwrap();
+    // an undone change and a change made inactive by it are in the set
+    crate::domain::history::undo(&s.app.state, &user, all[2].id, true).await.unwrap().ok().expect("undone");
+    let all = crate::domain::history::visible(&s.app.state, &user).await.unwrap();
+    assert!(all.len() >= 7, "{}", all.len());
+    let show = |p: &crate::domain::history::Plan| format!("{} {:?} {:?} {:?} {:?}", p.ok, p.why, p.warns, p.skips, p.now);
+    let mut shared = crate::domain::history::PlanMemo::default();
+    shared.prefetch_blobs(&s.app.state, &all).await.unwrap();
+    let mut seen = std::collections::HashSet::new();
+    for ch in &all {
+        let a = crate::domain::history::plan(&s.app.state, &user, ch, &all, &mut shared).await.unwrap();
+        let b = crate::domain::history::plan(&s.app.state, &user, ch, &all, &mut Default::default()).await.unwrap();
+        assert_eq!(show(&a), show(&b), "change {}", ch.id);
+        seen.insert(format!("{} {:?}", a.ok, a.why));
+    }
+    assert!(seen.len() >= 3, "plans of several kinds: {seen:?}");
+    // undoing the create warns about exactly the active later changes of that element (the scan the index replaces)
+    let create = all.iter().find(|x| x.items.iter().any(|i| i.object_id == id && i.act == "create")).unwrap();
+    let uid = &create.items[0].uid;
+    let expected: Vec<i64> = all.iter().filter(|x| x.id > create.id && x.active() && x.items.iter().any(|i| &i.uid == uid)).map(|x| x.id).collect();
+    assert!(!expected.is_empty());
+    let p = crate::domain::history::plan(&s.app.state, &user, create, &all, &mut shared).await.unwrap();
+    assert_eq!(p.warns.iter().filter(|w| w.kind == "later").map(|w| w.ids.clone()).collect::<Vec<_>>(), [expected]);
 }
 
 #[tokio::test]

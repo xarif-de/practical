@@ -57,6 +57,8 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
     let mut people: BTreeMap<String, Value> = BTreeMap::new();
     let mut els: BTreeMap<String, Value> = BTreeMap::new();
     let mut changes = vec![];
+    let mut memo = history::PlanMemo::default();
+    memo.prefetch_blobs(state, &all).await?;
     for c in &all {
         if let Some(w) = &c.who
             && !people.contains_key(w)
@@ -66,7 +68,7 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
             let ini = if ini.chars().count() < 2 { name.chars().take(2).collect() } else { ini };
             people.insert(w.clone(), json!({ "name": name, "ini": ini.to_uppercase() }));
         }
-        let plan = history::plan(state, user, c, &all).await?;
+        let plan = history::plan(state, user, c, &all, &mut memo).await?;
         let mut items = vec![];
         for it in &c.items {
             let el = it.el();
@@ -180,7 +182,7 @@ async fn api_plan(State(state): State<SharedState>, user: Principal, ctx: PageCt
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let all = history::visible(&state, &user).await?;
     let c = all.iter().find(|x| x.id == id).ok_or(AppError::NotFound)?;
-    let p = history::plan(&state, &user, c, &all).await?;
+    let p = history::plan(&state, &user, c, &all, &mut history::PlanMemo::default()).await?;
     Ok(Json(plan_json(&state, &ctx.lang, vc.tz, &coll_names(&state, &user).await?, &p)))
 }
 
