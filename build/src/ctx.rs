@@ -135,7 +135,14 @@ impl FromRequestParts<SharedState> for PageCtx {
                 let _ = session.insert(SESSION_CSRF, &t).await;
                 csrf = Some(t);
             }
-            flash = session.remove::<Flash>(SESSION_FLASH).await.ok().flatten();
+            // removed only when there is one: an unconditional remove marks every page view as a session
+            // write; the use of the session is marked instead (sessions::activity extends it)
+            if session.get_value(SESSION_FLASH).await.ok().flatten().is_some() {
+                flash = session.remove::<Flash>(SESSION_FLASH).await.ok().flatten();
+            }
+            if let Some(used) = parts.extensions.get::<crate::sessions::Used>() {
+                used.mark();
+            }
         }
         // the user's stored language, else the browser's (Accept-Language): "automatic" (no stored choice)
         // follows the browser at once. The DB row is read on every request, so nothing else keeps a copy.

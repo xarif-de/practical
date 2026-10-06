@@ -9,5 +9,6 @@ mod caches;
 mod history;
 mod pages;
 pub mod seed;
+mod sessions;
 mod settings;
 mod units;

@@ -94,13 +94,19 @@ async fn healthz(axum::extract::State(state): axum::extract::State<SharedState>)
 }
 
 fn build_router(state: &SharedState) -> Result<Router, String> {
-    let session_store = sessions::MemoryStore::default();
+    build_router_with(state, sessions::MemoryStore::default())
+}
+
+/// `session_store`: a test keeps a handle on it (testkit).
+fn build_router_with(state: &SharedState, session_store: sessions::MemoryStore) -> Result<Router, String> {
+    let lifetime = tower_sessions::cookie::time::Duration::hours(state.config.session_hours);
+    let activity = sessions::Activity::new(session_store.clone(), lifetime);
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name("practical_session")
         .with_secure(state.config.cookie_secure())
         .with_same_site(SameSite::Lax)
         .with_http_only(true)
-        .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::hours(state.config.session_hours)));
+        .with_expiry(Expiry::OnInactivity(lifetime));
 
     let protected = Router::new()
         .merge(routes::calendar::router())
@@ -119,6 +125,7 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))
         .layer(AuthenticationLayer::new(state.principals.clone()))
+        .layer(axum::middleware::from_fn_with_state(activity, sessions::activity))
         .layer(session_layer)
         .layer(CompressionLayer::new())
         // Merged AFTER the layers above, so none of them runs for these two: static files and the

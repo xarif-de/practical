@@ -24,7 +24,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tower_sessions::Session;
 
-const SESSION_NEW_TOKEN: &str = "new_token";
+pub(crate) const SESSION_NEW_TOKEN: &str = "new_token";
 
 #[derive(Template, WebTemplate)]
 #[template(path = "settings.html")]
@@ -138,7 +138,7 @@ impl SettingsPage {
 }
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
-    let new_token: Option<String> = session.remove(SESSION_NEW_TOKEN).await?;
+    let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let p = prefs::get(&state.db, &user.id).await?;
     let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
     let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
