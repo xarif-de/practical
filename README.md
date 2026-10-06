@@ -81,10 +81,10 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   browser swaps the fragment (`?fragment=1`) on navigation, re-fetches it on SSE change events,
   and only the event editor, date picker, search, the endless timeline rail and the contact editor
   are JavaScript. The page header stays put: the app frame is the viewport, `.main` scrolls, the
-  toolbar sticks under the topbar, scrollbars are hidden everywhere. Per-view CSS/JS budget stays
-  below 60 KB gzip (one shared `style.css` + `app.js`).
+  toolbar sticks under the topbar, scrollbars are hidden everywhere. One shared `style.css` +
+  `app.js` serve every view: 90 KB brotli / 104 KB gzip together (measured 2026-10-06, built assets).
 - **Assets** (`build/build.rs`, `routes/assets.rs`): JS minified by oxc (parser-based, ES2020, top-level
-  names kept), CSS by `minifier`, each stored as gzip-9 + brotli-11 at BUILD time and served by
+  names kept), CSS by `src/css_min.rs` (no dependency), each stored as gzip-9 + brotli-11 at BUILD time and served by
   `Accept-Encoding` — no request compresses. `?v=<asset_version>` URLs are `immutable` for a year;
   sw.js, icon.svg and any other version revalidate daily (ETag per coding, 304). `/assets` and
   `/healthz` sit outside the session, authentication, CSRF and compression layers.
