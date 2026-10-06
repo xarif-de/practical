@@ -72,6 +72,46 @@ function dump(props) {
   return { html, style: { props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out } };
 }
 
+/** In the page: EVERY standard computed property (custom properties excluded) of html, body and each rendered
+ *  element (+ ::before/::after with content, ::placeholder of inputs, ::marker of list items); identical
+ *  property vectors are stored once. Opt-in (E2E_FULL_STYLE=1): a stricter gate than STYLE_PROPS for CSS refactors. */
+function fullDump() {
+  const cs0 = getComputedStyle(document.documentElement);
+  const names = [];
+  for (let i = 0; i < cs0.length; i++) if (!cs0[i].startsWith('--')) names.push(cs0[i]);
+  names.sort();
+  const pathOf = el => {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      let i = 1;
+      for (let s = e.previousElementSibling; s; s = s.previousElementSibling) if (s.tagName === e.tagName) i++;
+      parts.unshift(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}:${i}`);
+    }
+    return parts.join('>');
+  };
+  const vecs = [], index = new Map(), el = {};
+  const put = (k, cs) => {
+    const v = names.map(n => cs.getPropertyValue(n));
+    const j = v.join('\u0001');
+    let id = index.get(j);
+    if (id === undefined) { id = vecs.length; vecs.push(v); index.set(j, id); }
+    el[k] = id;
+  };
+  for (const e of [document.documentElement, document.body, ...document.querySelectorAll('body *')]) {
+    if (e.id === 'e2e-freeze' || e.closest('svg.sprite')) continue;
+    if (e !== document.documentElement && e !== document.body && !e.getClientRects().length) continue;
+    const k = pathOf(e);
+    put(k, getComputedStyle(e));
+    for (const pe of ['::before', '::after']) {
+      const ps = getComputedStyle(e, pe);
+      if (ps.content && ps.content !== 'none' && ps.content !== 'normal') put(k + pe, ps);
+    }
+    if ((e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') && e.placeholder) put(k + '::placeholder', getComputedStyle(e, '::placeholder'));
+    if (getComputedStyle(e).display === 'list-item') put(k + '::marker', getComputedStyle(e, '::marker'));
+  }
+  return { names, vecs, el };
+}
+
 async function stableShot(page, name, opts) {
   // the screenshot is taken until two agree: a late repaint must not land in the baseline
   let png = await page.screenshot(opts);
@@ -98,6 +138,7 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
   const { html, style } = await page.evaluate(dump, STYLE_PROPS);
   fs.writeFileSync(base + '.dom.html.gz', zlib.gzipSync(html, { level: 9 }));
   fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(JSON.stringify(style), { level: 9 }));
+  if (process.env.E2E_FULL_STYLE === '1') fs.writeFileSync(base + '.fullstyle.json.gz', zlib.gzipSync(JSON.stringify(await page.evaluate(fullDump)), { level: 6 }));
   const main = page.locator('main.main');
   if (segments > 0 && (await main.count()) === 1) {
     const start = await main.evaluate(m => m.scrollTop);

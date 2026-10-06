@@ -1,9 +1,8 @@
 {% extends "layout.html" %}
+{% import "macros.html" as m %}
 {% block title %}{{ ctx.t("nav-tasks") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
-<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}"><svg class="ico" aria-hidden="true"><use href="#i-filter"/></svg></button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
-{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
-<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a>{% if self.has_shared() %}<a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a>{% endif %}</div></div></div>
+{{ m::cal_filter() }}</div></div>
 {% endblock %}
 {% block content %}
 <div class="tkpage" id="tkpage">
@@ -12,28 +11,18 @@
   <span class="muted small" id="task-count">{{ open_count }} {{ ctx.t("tasks-open") }}</span>
   <span class="grow"></span>
   {# one lookback for every view: without it a year of ticked-off work drowns the screen #}
-  <span class="sel" title="{{ ctx.t("tk-back-hint") }}"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg>
-  <select id="tk-back" aria-label="{{ ctx.t("tk-back") }}">
-    <option value="day"{% if back == "day" %} selected{% endif %}>{{ ctx.t("tk-back-day") }}</option>
-    <option value="week"{% if back == "week" %} selected{% endif %}>{{ ctx.t("tk-back-week") }}</option>
-    <option value="month"{% if back == "month" %} selected{% endif %}>{{ ctx.t("tk-back-month") }}</option>
-    <option value="quarter"{% if back == "quarter" %} selected{% endif %}>{{ ctx.t("tk-back-quarter") }}</option>
-    <option value="year"{% if back == "year" %} selected{% endif %}>{{ ctx.t("tk-back-year") }}</option>
-    <option value="all"{% if back == "all" %} selected{% endif %}>{{ ctx.t("tk-back-all") }}</option>
+  <span class="sel" title="{{ ctx.t("tk-back-hint") }}">{{ m::ico("clock") }}
+  <select id="tk-back" aria-label="{{ ctx.t("tk-back") }}">{% let backs = [("day", ctx.t("tk-back-day")), ("week", ctx.t("tk-back-week")), ("month", ctx.t("tk-back-month")), ("quarter", ctx.t("tk-back-quarter")), ("year", ctx.t("tk-back-year")), ("all", ctx.t("tk-back-all"))] %}{% for (v, label) in backs %}
+    <option value="{{ v }}"{% if back == *v %} selected{% endif %}>{{ label }}</option>{% endfor %}
   </select></span>
   <span class="tbsep" aria-hidden="true"></span>
   {# sort field + direction, one group shared by every view (filled by app.js) #}
   <span class="tksort" id="tk-sortbox"></span>
   <span class="tbsep" aria-hidden="true"></span>
   {# table view only: the same column picker as the contacts table #}
-  <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("tk-columns") }}" aria-label="{{ ctx.t("tk-columns") }}"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></button><div class="pop" id="tk-colpop"><h4>{{ ctx.t("tk-columns") }}</h4>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
-  <span class="seg" role="group" id="tk-views">
-    <button data-tkview="groups"{% if view == "groups" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-groups") }}" aria-label="{{ ctx.t("tk-v-groups") }}"><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg></button>
-    <button data-tkview="table"{% if view == "table" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-table") }}" aria-label="{{ ctx.t("tk-v-table") }}"><svg class="ico" aria-hidden="true"><use href="#i-table"/></svg></button>
-    <button data-tkview="board"{% if view == "board" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-board") }}" aria-label="{{ ctx.t("tk-v-board") }}"><svg class="ico" aria-hidden="true"><use href="#i-columns"/></svg></button>
-    <button data-tkview="timeline"{% if view == "timeline" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-timeline") }}" aria-label="{{ ctx.t("tk-v-timeline") }}"><svg class="ico" aria-hidden="true"><use href="#i-gantt"/></svg></button>
-    <button data-tkview="deck"{% if view == "deck" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-deck") }}" aria-label="{{ ctx.t("tk-v-deck") }}"><svg class="ico" aria-hidden="true"><use href="#i-layers"/></svg></button>
-    <button data-tkview="history"{% if view == "history" %} aria-pressed="true"{% endif %} title="{{ ctx.t("tk-v-history") }}" aria-label="{{ ctx.t("tk-v-history") }}"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button>
+  <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}>{{ m::pop_btn("eye", ctx.t("tk-columns")) }}<div class="pop" id="tk-colpop"><h4>{{ ctx.t("tk-columns") }}</h4>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
+  <span class="seg" role="group" id="tk-views">{% let views = [("groups", "list", ctx.t("tk-v-groups")), ("table", "table", ctx.t("tk-v-table")), ("board", "columns", ctx.t("tk-v-board")), ("timeline", "gantt", ctx.t("tk-v-timeline")), ("deck", "layers", ctx.t("tk-v-deck")), ("history", "check", ctx.t("tk-v-history"))] %}{% for (v, icon, label) in views %}
+    <button data-tkview="{{ v }}"{% if view == *v %} aria-pressed="true"{% endif %} title="{{ label }}" aria-label="{{ label }}">{{ m::ico(icon) }}</button>{% endfor %}
   </span>
 </div>
 {# groups on a wide window: list | editor, like the contacts page (`.dock`); every other view opens the editor as a dialog, the table edits in place #}

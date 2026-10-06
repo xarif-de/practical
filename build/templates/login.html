@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% import "macros.html" as m %}
 {% block title %}{{ ctx.t("login-title") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block content %}
 <div class="login">
@@ -14,7 +15,7 @@
   {% endif %}
   {% if allow_password_login %}
   <form method="post" action="/login" class="pwform">
-    <input type="hidden" name="csrf" value="{{ ctx.csrf }}">
+    {{ m::csrf() }}
     {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}
     <label>{{ ctx.t("login-username") }}<input type="text" name="username" autocomplete="username" required></label>
     <label>{{ ctx.t("login-password") }}<input type="password" name="password" autocomplete="current-password" required></label>

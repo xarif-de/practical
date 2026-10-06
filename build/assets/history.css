@@ -1,10 +1,9 @@
 /* /history — the change history (history.js): shared marks, the line map (.hxg-*), the list with
    details (.hxc-*) and its day ruler (.hxf-*). Loaded on this page only, after style.css. */
-:root { --hx-ui: var(--accent); --hx-dav: #ff9f0a; --hx-import: #bf5af2; --hx-undo: #8e8e93;
-  --hx-create: #30b46c; --hx-update: var(--accent); --hx-delete: #ff3b30; --hx-restore: #32ade6; --hx-move: #af52de; }
+:root { --hx-ui: var(--accent); --hx-dav: var(--warn); --hx-import: #bf5af2; --hx-undo: #8e8e93;
+  --hx-create: var(--ok); --hx-update: var(--accent); --hx-delete: var(--err); --hx-restore: #32ade6; --hx-move: #af52de; }
 .hxpage { min-width: 0; max-width: 100vw; overflow-x: clip; }
-.hxpage .toolbar { position: sticky; top: 0; z-index: 5; background: var(--bg); }
-.hxpage .toolbar .seg[hidden] { display: none; }
+.hxpage .toolbar { z-index: 5; } /* sticky and opaque: style.css .toolbar */
 
 /* who: initials or the device */
 .hx-av { width: 28px; height: 28px; flex: none; border-radius: 50%; display: inline-grid; place-items: center; font: 600 11px/1 var(--font); color: #fff; background: var(--hx-ui); }
@@ -52,7 +51,7 @@ a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
 .ask-box p { white-space: pre-line; }
 
 /* filters */
-.hx-chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; color: var(--fg-2); background: var(--tile); cursor: pointer; }
+.hx-chip { padding: 3px 10px; cursor: pointer; } /* the rest: style.css .chip */
 .hx-chip:hover { border-color: var(--hx-delete); color: var(--fg); }
 .hx-chip.el { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); color: var(--fg); }
 .hx-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 var(--pad) 8px; }
@@ -65,10 +64,10 @@ a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
 .hx-badge:empty { display: none; }
 .filter .pop.hx-fpop { width: 300px; max-height: 70vh; overflow: auto; }
 .hx-fg { padding: 4px 0 10px; }
-.hx-fg h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); margin: 8px 0 4px; font-weight: 600; }
-.hx-fg label { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.hx-fg h4 { margin: 8px 0 4px; font-weight: 600; } /* inside .filter: its h4/label rules apply */
+.hx-fg label { padding: 3px 4px; border-radius: 6px; cursor: pointer; }
 .hx-fg label:hover { background: var(--bg-2); }
-.hx-fg label small { margin-left: auto; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.hx-fg label small { font-variant-numeric: tabular-nums; }
 .hx-fg .hx-sw { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
 .hx-fg select { width: 100%; }
 .hx-range { display: flex; gap: 6px; align-items: center; margin-top: 6px; } .hx-range input { flex: 1; min-width: 0; }
