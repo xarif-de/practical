@@ -122,6 +122,36 @@ pub fn safe_href(uri: &str) -> bool {
     !["javascript:", "vbscript:", "data:"].iter().any(|p| s.starts_with(p))
 }
 
+/// `e` as a `Display`: escapes while it is written, without a String of its own per value.
+pub struct E<'a>(pub &'a str);
+
+impl std::fmt::Display for E<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut rest = self.0;
+        while let Some(at) = rest.find(['&', '<', '>', '"', '\'']) {
+            f.write_str(&rest[..at])?;
+            f.write_str(match rest.as_bytes()[at] {
+                b'&' => "&amp;",
+                b'<' => "&lt;",
+                b'>' => "&gt;",
+                b'"' => "&quot;",
+                _ => "&#39;",
+            })?;
+            rest = &rest[at + 1..];
+        }
+        f.write_str(rest)
+    }
+}
+
+/// `e(&i.key())` without building the key: "/" needs no escaping, so the parts escape on their own.
+struct EKey<'a>(&'a Instance);
+
+impl std::fmt::Display for EKey<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}/{}", E(&self.0.principal), E(&self.0.cal_id), E(&self.0.object_id))
+    }
+}
+
 pub fn e(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
@@ -180,20 +210,24 @@ pub fn by_day(instances: &[Instance]) -> HashMap<NaiveDate, Vec<&Instance>> {
 
 pub const ADD: &str = "<button class=\"add\" type=\"button\" title=\"+\" aria-label=\"+\">+</button>";
 
-fn ev_html(i: &Instance, role: Option<&str>) -> String {
-    let mut cls = "ev".to_string();
+fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
+    out.push_str("<div class=\"ev");
     if i.all_day || i.multi_day() {
-        cls.push_str(" allday");
+        out.push_str(" allday");
     }
     if let Some(r) = role {
-        cls.push_str(" span ");
-        cls.push_str(r);
+        out.push_str(" span ");
+        out.push_str(r);
     }
     if i.cancelled {
-        cls.push_str(" cancelled");
+        out.push_str(" cancelled");
     }
-    let label = if i.all_day { i.summary.clone() } else { format!("{} {}", i.summary, i.time_label()) };
-    format!("<div class=\"{cls}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\" title=\"{}\">{}</div>", e(&i.color), e(&i.key()), i.start_date(), e(&i.summary), e(&label))
+    // the label is the title, and the start time after a space (digits and a colon: nothing to escape)
+    let _ = write!(out, "\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\" title=\"{}\">{}", E(&i.color), EKey(i), i.start_date(), E(&i.summary), E(&i.summary));
+    if !i.all_day {
+        let _ = write!(out, " {}", i.start.format("%H:%M"));
+    }
+    out.push_str("</div>");
 }
 
 /// Month grid with continuous multi-day bars (lane-aligned per week row).
@@ -266,7 +300,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             let num = if fer.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{fer}</span>", d.day()) };
             let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{ADD}<div class=\"dots\">");
             for i in evs.iter().take(4) {
-                let _ = write!(out, "<i style=\"--c:{}\"></i>", e(&i.color));
+                let _ = write!(out, "<i style=\"--c:{}\"></i>", E(&i.color));
             }
             out.push_str("</div>");
             let mut shown = 0usize;
@@ -278,7 +312,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                     match inst {
                         Some(i) => {
                             let role = if i.start_date() == *d { "start" } else if i.last_date() == *d { "end" } else { "mid" };
-                            out.push_str(&ev_html(i, Some(role)));
+                            ev_html(&mut out, i, Some(role));
                         }
                         None => out.push_str("<div class=\"ev spacer\" aria-hidden=\"true\"></div>"),
                     }
@@ -288,7 +322,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             let singles: Vec<&&Instance> = evs.iter().filter(|i| !i.multi_day()).collect();
             let room = ev_limit.saturating_sub(shown);
             for i in singles.iter().take(room) {
-                out.push_str(&ev_html(i, None));
+                ev_html(&mut out, i, None);
             }
             if singles.len() > room {
                 let _ = write!(out, "<div class=\"more\" data-date=\"{d}\">+{} {}</div>", singles.len() - room, l.t("v-more"));
@@ -307,9 +341,10 @@ pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str, hol: 
     if evs.is_empty() {
         let _ = write!(out, "<li><time></time><span class=\"muted\">{}</span></li>", l.t("v-no-events"));
     }
+    let all_day = if evs.iter().any(|i| i.all_day) { l.t("v-all-day") } else { String::new() };
     for i in evs {
-        let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
-        let _ = write!(out, "<li><time>{}</time><span class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><i class=\"sw\" style=\"--c:{}\"></i> {}</span></li>", tl, e(&i.key()), i.start_date(), e(&i.color), e(&i.summary));
+        let tl = if i.all_day { all_day.clone() } else { i.time_label() };
+        let _ = write!(out, "<li><time>{}</time><span class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><i class=\"sw\" style=\"--c:{}\"></i> {}</span></li>", tl, EKey(i), i.start_date(), E(&i.color), E(&i.summary));
     }
     out.push_str("</ul></section>");
     out
@@ -374,7 +409,8 @@ pub fn week_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: &[Instance], l: &L, hol: &Hols) -> String {
     let idx = by_day(instances);
     let (mon, today_mon) = (monday_of(start), monday_of(today));
-    let mut out = String::new();
+    let mut out = String::with_capacity(count * 4096);
+    let all_day = if instances.iter().any(|i| i.all_day) { l.t("v-all-day") } else { String::new() };
     for wi in 0..count {
         let w0 = mon + Duration::days(7 * wi as i64);
         let w6 = w0 + Duration::days(6);
@@ -392,8 +428,13 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
             let evs = idx.get(&d).cloned().unwrap_or_default();
             let mut items = String::new();
             for i in &evs {
-                let tl = if i.all_day { l.t("v-all-day").to_string() } else { i.time_label() };
-                let _ = write!(items, "<li><time>{}</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", tl, if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, e(&i.color), e(&i.key()), i.start_date(), e(&i.summary));
+                let _ = write!(items, "<li><time>");
+                if i.all_day {
+                    items.push_str(&all_day);
+                } else {
+                    let _ = write!(items, "{}", i.start.format("%H:%M"));
+                }
+                let _ = write!(items, "</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, E(&i.color), EKey(i), i.start_date(), E(&i.summary));
             }
             let marks = hol_labels(hol, d, "span", false);
             if items.is_empty() && marks.is_empty() {
