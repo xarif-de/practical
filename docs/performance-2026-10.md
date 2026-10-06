@@ -99,9 +99,9 @@ before it and the same hour one day earlier): CPU **6.0 → 0.38 mcores** (−94
 13. `T.newTask` undefined — fixed 86d01eb.
 14. Contact name 15 px — fixed 62af209: 20 px/600 like the event title.
 15. Login error blue — fixed d0a7352 (12 % `--err` tint) + c448b2b (`role="alert"` on it, `#ed-error`, `#ct-error`).
-16. Phone history filter popover off-screen — fixed 9a7b3b7 (`practical.fitPop` on mount + open).
+16. Phone history filter popover off-screen — fixed 9a7b3b7 (`practical.fitPop` on mount + open); follow-up 411852c: fitted at the end of `chrome()` (every toolbar update: count, badge, zoom buttons hidden in the list view) instead of before it — when a phone's load-time `resize` comes before the deferred scripts, the closed list-view popover kept the place fitted for the visible zoom buttons (right edge 397.75 px of 390) until an open or a resize.
 17. Note links broken by e-mail/#tag inside a URL — fixed a408fe4 (`practical.noteHtml`, one pass, escaped once).
-18. Four CSS rules that never applied (phone `.ledger` max-height, phone `.more` hiding, `.ed .dayline` 420 px, `.ct-x` grid placement) — pending user decision (before/after screenshots prepared).
+18. Four CSS rules that never applied (phone `.ledger` max-height, phone `.more` hiding, `.ed .dayline` 420 px, `.ct-x` grid placement) — deleted (user decision): the declarations already went in d7045d5 (overridden); 15628a7 drops the last remnant, `height: auto` on `.ed .dayline`, which only cancelled the 420 px.
 19. No Content-Security-Policy — fixed 93366a4: every HTML response `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' <issuer> <logout origin>; frame-ancestors 'none'` (`main.rs content_security_policy`); no inline script left (theme → theme.js, login auto-submit → `data-auto`); `data:` images for Leaflet's empty tile GIF.
 
 ## Release policy (2026-10-06)
