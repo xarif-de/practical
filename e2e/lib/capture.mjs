@@ -5,6 +5,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { OUT } from './env.mjs';
 import { settle } from './test.mjs';
+import { clock, mark } from './timing.mjs';
 
 // the visual properties digested per element (and per ::before/::after with content)
 export const STYLE_PROPS = [
@@ -23,6 +24,7 @@ export const STYLE_PROPS = [
 function dump(props) {
   const UUID = /\b(?!5eed0000-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
   const hash = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193); return (h >>> 0).toString(16); };
+  const t0 = performance.now();
   // ---- DOM: live form values as attributes, volatile values masked, big constant blocks hashed
   const clone = document.documentElement.cloneNode(true);
   const live = document.querySelectorAll('input,textarea,select');
@@ -39,6 +41,7 @@ function dump(props) {
   for (const sel of ['svg.sprite', 'script#i18n']) clone.querySelectorAll(sel).forEach(e => { e.innerHTML = `<!-- e2e: content hash ${hash(e.innerHTML)} -->`; });
   let html = '<!doctype html>\n' + clone.outerHTML;
   html = html.replace(/([?&])v=[0-9a-zA-Z_-]+/g, '$1v=<v>').replace(UUID, '<uuid>').replace(/></g, '>\n<');
+  const t1 = performance.now();
   // ---- style digest: tag path (nth-of-type) → props + box
   const out = {};
   const pathOf = el => {
@@ -69,7 +72,7 @@ function dump(props) {
   // the scroll positions of scrolled boxes change what a screenshot shows
   const scroll = {};
   for (const el of document.querySelectorAll('*')) if (el.scrollTop || el.scrollLeft) scroll[pathOf(el)] = [Math.round(el.scrollLeft), Math.round(el.scrollTop)];
-  return { html, style: { props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out } };
+  return { html, style: { props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out }, t: [t1 - t0, performance.now() - t1, Object.keys(out).length] };
 }
 
 /** In the page: EVERY standard computed property (custom properties excluded) of html, body and each rendered
@@ -112,11 +115,13 @@ function fullDump() {
   return { names, vecs, el };
 }
 
-async function stableShot(page, name, opts) {
+async function stableShot(page, name, opts, t = {}) {
   // the screenshot is taken until two agree: a late repaint must not land in the baseline
   let png = await page.screenshot(opts);
+  t.shots = (t.shots || 0) + 1;
   for (let i = 0; i < 5; i++) {
     const again = await page.screenshot(opts);
+    t.shots++;
     if (again.equals(png)) return png;
     png = again;
     await settle(page);
@@ -128,17 +133,24 @@ async function stableShot(page, name, opts) {
  *  `main.main` (not the document): `segments` more screenshots `<name>~sN.png` follow its content down
  *  (0 for endless lists whose length depends on scrolling). The pointer stays where the test left it. */
 export async function capture(page, testInfo, name, { fullPage = true, mask = [], segments = 3 } = {}) {
+  const t = { k: 'capture', p: testInfo.project.name, n: name }, c0 = clock();
   await settle(page);
+  const c1 = clock();
   const dir = path.join(OUT, testInfo.project.name);
   fs.mkdirSync(dir, { recursive: true });
   const base = path.join(dir, name);
   const shotOpts = { fullPage, animations: 'disabled', caret: 'hide', scale: 'device', mask, maskColor: '#ff00ff' };
-  const png = await stableShot(page, name, shotOpts);
+  const png = await stableShot(page, name, shotOpts, t);
   fs.writeFileSync(base + '.png', png);
-  const { html, style } = await page.evaluate(dump, STYLE_PROPS);
+  const c2 = clock();
+  const { html, style, t: inPage } = await page.evaluate(dump, STYLE_PROPS);
+  [t.domIn, t.styleIn, t.els] = inPage;
+  const c3 = clock();
   fs.writeFileSync(base + '.dom.html.gz', zlib.gzipSync(html, { level: 9 }));
   fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(JSON.stringify(style), { level: 9 }));
   if (process.env.E2E_FULL_STYLE === '1') fs.writeFileSync(base + '.fullstyle.json.gz', zlib.gzipSync(JSON.stringify(await page.evaluate(fullDump)), { level: 6 }));
+  const c4 = clock();
+  Object.assign(t, { settle: c1 - c0, shot: c2 - c1, dump: c3 - c2, write: c4 - c3, segs: 0, segSettle: 0, segShot: 0, restore: 0 });
   const main = page.locator('main.main');
   if (segments > 0 && (await main.count()) === 1) {
     const start = await main.evaluate(m => m.scrollTop);
@@ -149,10 +161,17 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
         return true;
       });
       if (!more) break;
+      const s0 = clock();
       await settle(page);
-      fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts));
+      const s1 = clock();
+      fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts, t));
+      t.segs++; t.segSettle += s1 - s0; t.segShot += clock() - s1;
     }
+    const r0 = clock();
     await main.evaluate((m, t) => { m.scrollTop = t; }, start);
     await settle(page);
+    t.restore = clock() - r0;
   }
+  t.total = clock() - c0;
+  mark(t);
 }
