@@ -33,6 +33,10 @@ use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::{info, warn};
 
+// see Cargo.toml (measurement) and the Dockerfile (MIMALLOC_* options that keep RSS at musl level)
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 pub const RUSTICAL_TAG: &str = env!("RUSTICAL_TAG");
 
 fn print_version() {

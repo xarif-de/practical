@@ -39,8 +39,10 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # Not `scratch` like rustical's image: the shared dagger test harness runs every
 # step through `sh -c`, and a shell also makes `kubectl exec` diagnostics possible.
-# ca-certificates: OIDC token exchange, OpenHolidays API and Web Push over HTTPS.
-RUN apk add --no-cache ca-certificates
+# HTTPS trust (OIDC token exchange, OpenHolidays API, Web Push): the base image's
+# ca-certificates-bundle (/etc/ssl/certs/ca-certificates.crt) is all rustls-native-certs reads.
+# `apk add ca-certificates` (dropped 2026-10-06) only added 242 per-certificate files to
+# /etc/ssl/certs and a 0.25 MB layer; process start CPU and RSS measured the same without it.
 LABEL org.opencontainers.image.source="https://git.xarif.de/docker/practical"
 LABEL org.opencontainers.image.description="RustiCal (unmodified, /usr/local/bin/rustical) plus its web UI PractiCal: groups, collections, app tokens, calendar, contacts, tasks and change history on RustiCal's own SQLite store"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
@@ -52,6 +54,10 @@ COPY --from=builder /practical /practical
 COPY --from=ghcr.io/lennart-k/rustical:0.16.4@sha256:9b857e823612516b3371a4f5453e8e392426c4323fad6d38f3be2ad93f2fc07a /usr/local/bin/rustical /usr/local/bin/rustical
 # the SQLite path RustiCal's image sets (its Dockerfile); PractiCal reads PRACTICAL__* only
 ENV RUSTICAL_DATA_STORE__SQLITE__DB_URL=/var/lib/rustical/db.sqlite3
+# PractiCal's allocator (mimalloc, Cargo.toml): return freed memory at once and commit arena memory
+# on use — with mimalloc's defaults the process held 66-103 MB instead of ~37 MB (measured 2026-10-06).
+# RustiCal's binary does not contain mimalloc: these do nothing for it.
+ENV MIMALLOC_PURGE_DELAY=0 MIMALLOC_ARENA_EAGER_COMMIT=0
 # AGPL-3.0 §4: the license travels with the programs (one text covers both)
 COPY LICENSE /usr/share/licenses/practical/LICENSE
 USER 1000:1000
