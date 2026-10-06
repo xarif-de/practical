@@ -475,6 +475,7 @@
     if (r.left + dx < 8) dx = 8 - r.left;
     if (dx) pop.style.translate = dx + 'px 0';
   };
+  practical.fitPop = fitPop; // history.js draws its filter popover after this runs
   const fitPops = () => $$('.filter > .pop, .more > .pop').forEach(fitPop);
   fitPops(); addEventListener('resize', fitPops);
   $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));

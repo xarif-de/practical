@@ -225,6 +225,9 @@
   <div class="hx-chips" data-r="chips"></div>
   <div data-r="view"></div>`;
   const R = n => $(`[data-r="${n}"]`, root);
+  // the filter popover is drawn after app.js placed every popover on the page: placed here, the same way
+  const hxf = $('.hx-filter', root), fit = () => practical.fitPop(R('panel'));
+  fit(); ['pointerenter', 'focusin', 'click'].forEach(t => hxf.addEventListener(t, fit));
   const subs = [];
   const emit = (info = {}) => { for (const fn of subs) fn(info); };
   const flash = id => { const n = $(`[data-cid="${id}"]`, root); if (n) { n.classList.remove('hx-flash'); void n.getBoundingClientRect(); n.classList.add('hx-flash'); } };
