@@ -385,7 +385,7 @@ crates' tag, for a deployment that runs RustiCal's own image.
 ```bash
 mise run dev-db                # COPY of the production DB → ~/.cache/practical-dev (cluster read-only), test password
 mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
-mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version)
+mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version; e2e/cargo.sh)
 mise run deny                  # cargo-deny: advisories, bans, sources
 mise run pipeline              # the CI pipeline locally (cargo-deny + image build + tests), never publishes
 mise run image                 # the image, loaded into docker as xarif-practical
@@ -404,14 +404,16 @@ takes a `VACUUM INTO` copy through the backup sidecar. Both dev knobs are unset 
 ## End-to-end safety net
 
 `e2e/` proves that a change keeps function **and** look: a functional Playwright suite and a visual
-baseline of every UI state (PNG + normalised DOM + computed-style digest), both against a release
-build of the checkout on a synthetic database.
+baseline of every UI state (PNG + normalised DOM + computed-style digest), both against a build of
+the checkout on a synthetic database.
 
 ```bash
 mise run e2e-seed                       # fixture DB → e2e/.work/fixture.sqlite3 (docker: RustiCal CLI)
-mise run e2e                            # functional suite (e2e/functional), serial, one fresh DB copy
+mise run e2e                            # functional suite (e2e/functional), spec files on 4 workers
 mise run e2e-baseline -- <dir>          # visual suite → <dir> (default ~/.cache/practical-e2e/<sha>)
 mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>/compare-report; exit 1 on any difference
+mise run gate-quick                     # cargo test → server build → functional suite
+mise run gate -- <ref-dir>              # gate-quick → visual baseline → compare against <ref-dir>
 ```
 
 - **Fixture** (`e2e/seed/`, synthetic data only): users alice/bob/carol (password `devpass`, carol
@@ -419,17 +421,49 @@ mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>
   history, holidays (cache rows; no egress). Collection/token ids are fixed UUIDs (`5eed0000-…`),
   clock-derived values fixed: two seeds render the same pages. Regenerate only when the seed changes —
   compare baselines taken on the same fixture (its sha256 is in `<dir>/.e2e-baseline`).
-- **Server** (`e2e/global-setup.mjs`): development mode on `127.0.0.1:4101` (`E2E_PORT`) with
-  `PRACTICAL__DEV_LOGIN=alice` and `PRACTICAL__DEV_NOW=2026-10-14T08:00:00Z` — the dev-only fixed
-  clock (`build/src/clock.rs`), serving the minified assets that build embeds (`E2E_ASSETS=source`: `build/assets`
-  as written) — plus a non-dev server on port+1 for the login page; egress blocked
-  (`HTTP(S)_PROXY=127.0.0.1:9`). Browser: clock frozen at the same instant, Europe/Berlin, de-DE
-  (en-GB for `@main` states), reduced motion, transitions/animations/caret off, `Math.random` seeded,
-  service workers blocked, no request leaves 127.0.0.1 (OSM tiles = one gray PNG).
+- **Build** (`e2e/build-server.sh` → `e2e/cargo.sh`, also behind `mise run test`): the cargo profile
+  `e2e` (release + 256 codegen units + incremental: an edit rebuilds in ~6–14 s instead of ~100 s;
+  `E2E_PROFILE=release` builds the shipped profile — for a release candidate and for a change to the
+  profiles) into a target dir of this checkout's own (`E2E_TARGET_DIR`, default
+  `~/.cache/practical-e2e/target-<hash of the path>`; never a shared one: cargo judges freshness by
+  mtimes and handed one worktree another's binary). A file whose content differs from the last
+  successful run's is touched first, so an edit with an old mtime is rebuilt too. sccache, if
+  installed (`brew install sccache`; `E2E_SCCACHE=0` turns it off), caches dependencies by content
+  across checkouts.
+- **Server** (`e2e/lib/servers.mjs`): development mode with `PRACTICAL__DEV_LOGIN=alice` and
+  `PRACTICAL__DEV_NOW=2026-10-14T08:00:00Z` — the dev-only fixed clock (`build/src/clock.rs`), serving
+  the minified assets that build embeds (`E2E_ASSETS=source`: `build/assets` as written) — plus a
+  non-dev server on port+1 for the login page; egress blocked (`HTTP(S)_PROXY=127.0.0.1:9`), each on
+  a fresh copy of the fixture. The visual suite's workers share one pair on `E2E_PORT` (default
+  4101); the functional suite gives each worker its own pair on `E2E_PORT + 2 × worker` (a run uses
+  `E2E_PORT` … `E2E_PORT + 2 × E2E_WORKERS − 1`), restarted on fresh copies for every spec file: the
+  tests of one file run in order on one worker, no file sees another's writes.
+- **Browser**: clock frozen at the same instant, Europe/Berlin, de-DE (en-GB for `@main` states),
+  reduced motion, transitions/animations/caret off, `Math.random` seeded, service workers blocked, no
+  request leaves 127.0.0.1 (OSM tiles = one gray PNG). `settle()` (`e2e/lib/test.mjs`) waits until no
+  request is in flight, the page's timers due within 300 ms have run (the app's debounces start their
+  requests from timers), frame chains have ended (at most 300 ms), fonts are ready and two frames
+  passed, and no request started meanwhile; the visual capture then takes screenshots until two
+  agree. `E2E_TIMING=1` logs the harness' phases to `e2e/.work/timing-<port>/`.
 - **Visual projects**: desktop 1440×900 and phone 390×844 × light/dark (de) + `@main` states in en.
-  Visual tests are read-only (writes are aborted), so they run in parallel on one DB.
+  Visual tests are read-only (writes are aborted), so they run in parallel (`E2E_WORKERS`, default 4)
+  on one DB. `compare.mjs` takes byte-identical files as equal and diffs the rest on 4 threads.
 - Pixel baselines depend on the host's fonts and Chromium build (`@playwright/test` pinned in
   `e2e/package-lock.json`): compare baselines from the same machine.
+
+### How to gate a change
+
+1. Reference first: a baseline of the change's base commit (same fixture, same machine), e.g. in a
+   worktree of the base: `mise run e2e-baseline -- ~/.cache/practical-e2e/<base-sha>` — or reuse one
+   that is already there for that commit.
+2. While iterating: `mise run gate-quick` (cargo test, server build, functional suite; ~80 s warm).
+   It has no visual part — no rule maps the files a change touches to the states it can reach (a
+   CSS rule, a template, a locale string or a Rust value can show anywhere).
+3. Before a commit: `mise run gate -- ~/.cache/practical-e2e/<base-sha>` → 0 states with
+   differences (or each difference explained). ~3 min warm on an idle host (was ~10 min).
+4. Parallel checkouts: own `E2E_PORT` each (a functional run takes `E2E_PORT` … `E2E_PORT + 7` with
+   4 workers), never two heavy suites at once on a shared host.
+5. Release candidates and profile changes: `E2E_PROFILE=release mise run gate -- <ref-dir>`.
 
 ## Repository layout
 

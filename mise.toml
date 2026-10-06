@@ -87,3 +87,11 @@ run = "e2e/baseline.sh"
 [tasks.e2e-compare]
 description = "Diff two baselines (pixels, DOM, computed style): mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
 run = "node e2e/compare.mjs"
+
+[tasks.gate-quick]
+description = "Gate of a change without the visual part: cargo test → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
+run = "e2e/gate.sh quick"
+
+[tasks.gate]
+description = "Full gate: gate-quick + visual baseline + compare against a reference baseline of the base commit: mise run gate -- <ref-dir> (or E2E_REF)"
+run = "e2e/gate.sh full"
