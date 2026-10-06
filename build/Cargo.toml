@@ -64,6 +64,23 @@ vtimezones-rs = "0.3"
 # (runtime directory scanning) we do not use.
 fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
+# Already linked through tower-http's gzip (same version, same default backend): decodes an embedded
+# .gz asset once for a client that accepts no compression (routes/assets.rs).
+flate2 = "1.1"
+
+# Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
+[build-dependencies]
+# JS minifier with a real parser (a syntax error fails the build): app.js brotli 100.2 → 69.4 KB.
+# One project (oxc-project), 6 lines because the ES2020 target lives in oxc_compat.
+oxc_allocator = "0.153"
+oxc_parser = { version = "0.153", default-features = false }
+oxc_span = "0.153"
+oxc_minifier = "0.153"
+oxc_codegen = { version = "0.153", default-features = false }
+oxc_compat = "0.153"
+# brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
+brotli = "9"
+flate2 = "1.1"
 
 # Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, parallel codegen.
 # `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
@@ -85,3 +102,10 @@ opt-level = 3
 inherits = "release"
 lto = true
 codegen-units = 1
+
+# build.rs only: brotli 11 of the assets took 4.2 s per build-script run at the build-dependency default
+# opt-level 0, 2.4 s at 3 (host, 3 runs each; 1.3 s with one thread per file). Not in the binary.
+[profile.release.package.brotli]
+opt-level = 3
+[profile.dev.package.brotli]
+opt-level = 3

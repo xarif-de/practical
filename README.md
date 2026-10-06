@@ -83,6 +83,11 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   are JavaScript. The page header stays put: the app frame is the viewport, `.main` scrolls, the
   toolbar sticks under the topbar, scrollbars are hidden everywhere. Per-view CSS/JS budget stays
   below 60 KB gzip (one shared `style.css` + `app.js`).
+- **Assets** (`build/build.rs`, `routes/assets.rs`): JS minified by oxc (parser-based, ES2020, top-level
+  names kept), CSS by `minifier`, each stored as gzip-9 + brotli-11 at BUILD time and served by
+  `Accept-Encoding` — no request compresses. `?v=<asset_version>` URLs are `immutable` for a year;
+  sw.js, icon.svg and any other version revalidate daily (ETag per coding, 304). `/assets` and
+  `/healthz` sit outside the session, authentication, CSRF and compression layers.
 - **First paint**: `app.js` sits in `<head>` with `defer blocking="render"`, so a page is painted only
   once app.js has drawn it (task views, sort boxes); the browser keeps the old page meanwhile —
   no empty frame (Chromium; others ignore the attribute). **Tasks** are parsed once per calendar and
@@ -402,7 +407,8 @@ mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>
   compare baselines taken on the same fixture (its sha256 is in `<dir>/.e2e-baseline`).
 - **Server** (`e2e/global-setup.mjs`): development mode on `127.0.0.1:4101` (`E2E_PORT`) with
   `PRACTICAL__DEV_LOGIN=alice` and `PRACTICAL__DEV_NOW=2026-10-14T08:00:00Z` — the dev-only fixed
-  clock (`build/src/clock.rs`) — plus a non-dev server on port+1 for the login page; egress blocked
+  clock (`build/src/clock.rs`), serving the minified assets that build embeds (`E2E_ASSETS=source`: `build/assets`
+  as written) — plus a non-dev server on port+1 for the login page; egress blocked
   (`HTTP(S)_PROXY=127.0.0.1:9`). Browser: clock frozen at the same instant, Europe/Berlin, de-DE
   (en-GB for `@main` states), reduced motion, transitions/animations/caret off, `Math.random` seeded,
   service workers blocked, no request leaves 127.0.0.1 (OSM tiles = one gray PNG).

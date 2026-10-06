@@ -3,6 +3,8 @@ mod auth;
 mod clock;
 mod config;
 mod csrf;
+#[cfg(test)]
+mod css_min;
 mod ctx;
 mod db;
 mod domain;
@@ -106,15 +108,19 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
 
     Ok(Router::new()
         .route("/", get(routes::pages::root))
-        .route("/healthz", get(healthz))
         .merge(auth::router(state)?)
-        .merge(routes::assets::router())
         .merge(routes::dev::router(state.config.dev_assets_dir.is_some()))
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))
         .layer(AuthenticationLayer::new(state.principals.clone()))
         .layer(session_layer)
         .layer(CompressionLayer::new())
+        // Merged AFTER the layers above, so none of them runs for these two: static files and the
+        // kubelet probe read no session, look up no principal (a DB query per request with a session
+        // cookie or Basic auth), need no CSRF check (GET only) and are never compressed per request
+        // (assets come precompressed from build.rs).
+        .merge(routes::assets::router())
+        .route("/healthz", get(healthz))
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone()))
 }
