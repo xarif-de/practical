@@ -64,19 +64,48 @@ vtimezones-rs = "0.3"
 # (runtime directory scanning) we do not use.
 fluent-bundle = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
+# Already linked through tower-http's gzip (same version, same default backend): decodes an embedded
+# .gz asset once for a client that accepts no compression (routes/assets.rs).
+flate2 = "1.1"
+# Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06
+# (arm64 musl image build, 1 CPU / 192 MiB container like prod, synthetic 3,920-object DB, 20 requests
+# per path, 2 rounds, vs the musl build of e74c076): CPU per request −23…30 % (/calendar month 109.5 →
+# 78 ms, /settings 84 → 60, /api/mentions 185 → 129); RSS after the run 41.0 → 37.7 MB only with the
+# Dockerfile's MIMALLOC_PURGE_DELAY=0 + MIMALLOC_ARENA_EAGER_COMMIT=0 — mimalloc's defaults held 66-103 MB.
+# Adds libmimalloc-sys (C, built with cc — already a build dependency of the bundled SQLite).
+mimalloc = { version = "0.1", default-features = false }
 
-# Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, parallel codegen.
+# Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
+[build-dependencies]
+# JS minifier with a real parser (a syntax error fails the build): app.js brotli 100.2 → 69.4 KB.
+# One project (oxc-project), 6 lines because the ES2020 target lives in oxc_compat.
+oxc_allocator = "0.153"
+oxc_parser = { version = "0.153", default-features = false }
+oxc_span = "0.153"
+oxc_minifier = "0.153"
+oxc_codegen = { version = "0.153", default-features = false }
+oxc_compat = "0.153"
+# brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
+brotli = "9"
+flate2 = "1.1"
+
+# Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, one codegen unit.
 # `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
 # capped at 8 CPUs like the CI dind, rust 1.99, one run each), rebuild after a CSS change / cold:
 #   lto = "thin"  249 s / 371 s, 26.7 MB    lto = false  115 s / 290 s, 25.8 MB
 #   lto = "off"    93 s / 220 s, 26.3 MB
-# Cross-crate thin LTO cost ~60 % of every rebuild and made the binary no smaller; the UI waits on
-# SQLite and the network, not on the CPU. `false` over `off`: the smallest of the three for 22 s.
-# (Also measured, not taken: mold −6 %, incremental −28 % with thin LTO, codegen-units=256 slower.)
+# Cross-crate thin LTO cost ~60 % of every rebuild and made the binary no smaller. `false` over `off`:
+# the smallest of the three for 22 s. (Also measured, not taken: mold −6 %, incremental −28 % with
+# thin LTO, codegen-units=256 slower.)
+# Re-measured 2026-10-06 (same container setup, every file touched as the Dockerfile does; with the
+# build.rs asset minifier and mimalloc): codegen-units 16 → 1 = binary 26.6 → 21.2 MB (−20 %),
+# rebuild 115 → 120 s (3 runs each, ±1 s), cold 293 → 252 s (one run each). CPU per request
+# unchanged within noise (±5 %, 1-CPU container), as for thin LTO (26.7 MB, rebuild 343 s) and fat
+# LTO + 1 unit (= dist: 20.7 MB, rebuild 291 s) — those two stay off the per-push build.
 [profile.release]
 strip = true
 lto = false
-codegen-units = 16
+codegen-units = 1
 opt-level = 3
 
 # Release tags only (dagger-ci.yaml release-build-args: CARGO_PROFILE=dist on `v*` tags): the whole program
@@ -85,3 +114,10 @@ opt-level = 3
 inherits = "release"
 lto = true
 codegen-units = 1
+
+# build.rs only: brotli 11 of the assets took 4.2 s per build-script run at the build-dependency default
+# opt-level 0, 2.4 s at 3 (host, 3 runs each; 1.3 s with one thread per file). Not in the binary.
+[profile.release.package.brotli]
+opt-level = 3
+[profile.dev.package.brotli]
+opt-level = 3

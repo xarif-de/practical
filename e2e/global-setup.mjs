@@ -1,5 +1,6 @@
 // Builds this checkout's server (release), starts it twice on fresh COPIES of the fixture DB:
-//  - BASE: development mode (DEV_ASSETS_DIR = build/assets of this checkout, DEV_LOGIN=alice,
+//  - BASE: development mode (DEV_ASSETS_DIR = the minified assets this build embeds, from
+//    build-server.sh; E2E_ASSETS=source serves build/assets as written instead), DEV_LOGIN=alice,
 //    DEV_NOW = NOW) — every test;
 //  - LOGIN_BASE: no development mode, password login — the login page and the password login test.
 // Egress of both is blocked (HTTP(S)_PROXY → 127.0.0.1:9). Only the PIDs started here are stopped
@@ -41,7 +42,7 @@ function start(bin, port, db, dev, tag) {
     PRACTICAL__DEFAULT_LANG: 'de',
     HTTP_PROXY: BLOCK, HTTPS_PROXY: BLOCK, http_proxy: BLOCK, https_proxy: BLOCK, ALL_PROXY: BLOCK, NO_PROXY: '', no_proxy: '',
   };
-  if (dev) Object.assign(env, { PRACTICAL__DEV_ASSETS_DIR: path.join(REPO, 'build', 'assets'), PRACTICAL__DEV_LOGIN: 'alice', PRACTICAL__DEV_NOW: NOW });
+  if (dev) Object.assign(env, { PRACTICAL__DEV_ASSETS_DIR: process.env.E2E_ASSETS === 'source' ? path.join(REPO, 'build', 'assets') : `${bin}.assets`, PRACTICAL__DEV_LOGIN: 'alice', PRACTICAL__DEV_NOW: NOW });
   const out = fs.openSync(log, 'w');
   const child = spawn(bin, ['serve'], { env, stdio: ['ignore', out, out] });
   fs.appendFileSync(path.join(RUN_DIR, 'pids'), `${child.pid}\n`);
@@ -53,7 +54,7 @@ export default async function globalSetup() {
   fs.mkdirSync(RUN_DIR, { recursive: true });
   if (fs.existsSync(path.join(RUN_DIR, 'pids'))) throw new Error(`${RUN_DIR}/pids exists: a run on port ${PORT} is active or was not torn down (stop those PIDs, delete the file)`);
   const bin = path.join(RUN_DIR, 'practical');
-  if (!process.env.E2E_SKIP_BUILD || !fs.existsSync(bin)) {
+  if (!process.env.E2E_SKIP_BUILD || !fs.existsSync(bin) || !fs.existsSync(`${bin}.assets`)) {
     const t0 = Date.now();
     execFileSync(path.join(E2E, 'build-server.sh'), [bin], { stdio: 'inherit' });
     console.log(`[e2e] server built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
