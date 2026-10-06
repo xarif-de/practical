@@ -413,14 +413,17 @@ ed-h-until = hasta
 ed-h-on = el
 ed-h-every = cada { $n }
 ed-h-min = { $n } min
-ed-h-hour = 1 h
-ed-h-day = 1 día
 ed-h-before = antes
 ed-h-hours = { $n } h
-ed-h-days = { $n } días
+ed-h-days = { $n ->
+    [one] { $n } día
+   *[other] { $n } días
+}
 ed-h-repeat = repetido { $n }×
-ed-h-week = 1 semana
-ed-h-weeks = { $n } semanas
+ed-h-weeks = { $n ->
+    [one] { $n } semana
+   *[other] { $n } semanas
+}
 ed-h-after = después del inicio
 ed-h-after-end = después del final
 ed-h-at-start = al inicio
@@ -933,10 +936,14 @@ js-regions-none = Ninguna
 js-regions-n = %n regiones
 js-snp-min = %n min
 js-snp-h = %n h
-js-snp-d1 = 1 día
-js-snp-d = %n días
-js-snp-w1 = 1 semana
-js-snp-w = %n semanas
+js-snp-d = { $n ->
+    [one] %n día
+   *[other] %n días
+}
+js-snp-w = { $n ->
+    [one] %n semana
+   *[other] %n semanas
+}
 js-snp-u-min = min
 js-snp-u-h = h
 js-snp-u-d = días
@@ -954,15 +961,23 @@ js-snp-bad = Introduce un número mayor que 0
 js-snp-max = Como máximo 366 días
 js-snp-dup = Este punto de ajuste ya existe
 js-snp-last = Debe quedar un punto antes del inicio
-js-snaps-one = 1 punto de ajuste
-js-snaps-n = %n puntos de ajuste
+js-snaps-n = { $n ->
+    [one] %n punto de ajuste
+   *[other] %n puntos de ajuste
+}
 js-imp-file = Archivo «%file»
-js-imp-ev1 = 1 evento
-js-imp-ev = %n eventos
-js-imp-td1 = 1 tarea
-js-imp-td = %n tareas
-js-imp-jr1 = 1 entrada de diario
-js-imp-jr = %n entradas de diario
+js-imp-ev = { $n ->
+    [one] %n evento
+   *[other] %n eventos
+}
+js-imp-td = { $n ->
+    [one] %n tarea
+   *[other] %n tareas
+}
+js-imp-jr = { $n ->
+    [one] %n entrada de diario
+   *[other] %n entradas de diario
+}
 js-imp-taken = del archivo: %what
 js-imp-f-name = nombre
 js-imp-f-desc = descripción
@@ -976,10 +991,14 @@ js-imp-done = { $count ->
     [one] «%title» creado · %count entrada importada
    *[other] «%title» creado · %count entradas importadas
 }
-js-imp-ct1 = 1 contacto
-js-imp-ct = %n contactos
-js-imp-gr1 = 1 grupo
-js-imp-gr = %n grupos
+js-imp-ct = { $n ->
+    [one] %n contacto
+   *[other] %n contactos
+}
+js-imp-gr = { $n ->
+    [one] %n grupo
+   *[other] %n grupos
+}
 js-imp-ab-empty = El archivo no contiene contactos.
 js-vac-word = Palabra completa
 js-vac-begin = Al inicio
@@ -1406,8 +1425,10 @@ hx-a-vresource = Recurso (bloque)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Cambios
-hxj-count = %n cambios
-hxj-count-1 = 1 cambio
+hxj-count = { $n ->
+    [one] %n cambio
+   *[other] %n cambios
+}
 hxj-zoom = Periodo
 hxj-days = %n días
 hxj-q = Filtrar: título, valores, persona, dispositivo, n.º
@@ -1465,8 +1486,10 @@ hxj-cancel = Cancelar
 hxj-err = No ha funcionado.
 hxj-ask = ¿Deshacer %ref?
 hxj-done = %ref deshecho → nuevo cambio %id.
-hxj-w-later-1 = «%title» se borrará. El cambio posterior (%refs) queda inactivo.
-hxj-w-later-n = «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+hxj-w-later = { $n ->
+    [one] «%title» se borrará. El cambio posterior (%refs) queda inactivo.
+   *[other] «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+}
 hxj-w-conflict = «%label» se cambió después%by. Deshacer sobrescribe «%cur» con «%old».
 hxj-w-skip = Omitido: «%title»: %why
 hxj-f-kinds = Tipo
@@ -1499,8 +1522,10 @@ hxj-reset = Restablecer filtros
 hxj-lg-hollow = deshecho / inactivo
 hxj-lg-arc = Deshacer salta atrás
 hxj-empty-window = Ningún cambio en este periodo.
-hxj-before-window = %n cambios que coinciden son anteriores:
-hxj-before-window-1 = 1 cambio que coincide es anterior:
+hxj-before-window = { $n ->
+    [one] %n cambio que coincide es anterior:
+   *[other] %n cambios que coinciden son anteriores:
+}
 hxj-retention = { $n ->
     [one] El historial abarca %n día (hasta el %date). Los cambios más antiguos se quitan a diario.
    *[other] El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.

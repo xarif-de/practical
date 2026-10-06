@@ -413,14 +413,17 @@ ed-h-until = until
 ed-h-on = on
 ed-h-every = every { $n }
 ed-h-min = { $n } min
-ed-h-hour = 1 h
-ed-h-day = 1 day
 ed-h-before = before
 ed-h-hours = { $n } h
-ed-h-days = { $n } days
+ed-h-days = { $n ->
+    [one] { $n } day
+   *[other] { $n } days
+}
 ed-h-repeat = repeated { $n }×
-ed-h-week = 1 week
-ed-h-weeks = { $n } weeks
+ed-h-weeks = { $n ->
+    [one] { $n } week
+   *[other] { $n } weeks
+}
 ed-h-after = after start
 ed-h-after-end = after end
 ed-h-at-start = at the start
@@ -931,10 +934,14 @@ js-regions-none = None
 js-regions-n = %n regions
 js-snp-min = %n min
 js-snp-h = %n h
-js-snp-d1 = 1 day
-js-snp-d = %n days
-js-snp-w1 = 1 week
-js-snp-w = %n weeks
+js-snp-d = { $n ->
+    [one] %n day
+   *[other] %n days
+}
+js-snp-w = { $n ->
+    [one] %n week
+   *[other] %n weeks
+}
 js-snp-u-min = min
 js-snp-u-h = h
 js-snp-u-d = days
@@ -952,15 +959,23 @@ js-snp-bad = Enter a number above 0
 js-snp-max = At most 366 days
 js-snp-dup = This snap point already exists
 js-snp-last = One snap point before the start has to stay
-js-snaps-one = 1 snap point
-js-snaps-n = %n snap points
+js-snaps-n = { $n ->
+    [one] %n snap point
+   *[other] %n snap points
+}
 js-imp-file = File “%file”
-js-imp-ev1 = 1 event
-js-imp-ev = %n events
-js-imp-td1 = 1 task
-js-imp-td = %n tasks
-js-imp-jr1 = 1 journal entry
-js-imp-jr = %n journal entries
+js-imp-ev = { $n ->
+    [one] %n event
+   *[other] %n events
+}
+js-imp-td = { $n ->
+    [one] %n task
+   *[other] %n tasks
+}
+js-imp-jr = { $n ->
+    [one] %n journal entry
+   *[other] %n journal entries
+}
 js-imp-taken = from the file: %what
 js-imp-f-name = name
 js-imp-f-desc = description
@@ -974,10 +989,14 @@ js-imp-done = { $count ->
     [one] “%title” created · %count entry imported
    *[other] “%title” created · %count entries imported
 }
-js-imp-ct1 = 1 contact
-js-imp-ct = %n contacts
-js-imp-gr1 = 1 group
-js-imp-gr = %n groups
+js-imp-ct = { $n ->
+    [one] %n contact
+   *[other] %n contacts
+}
+js-imp-gr = { $n ->
+    [one] %n group
+   *[other] %n groups
+}
 js-imp-ab-empty = The file holds no contacts.
 js-vac-word = Whole word
 js-vac-begin = At the start
@@ -1404,8 +1423,10 @@ hx-a-vresource = Resource (block)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Changes
-hxj-count = %n changes
-hxj-count-1 = 1 change
+hxj-count = { $n ->
+    [one] %n change
+   *[other] %n changes
+}
 hxj-zoom = Time window
 hxj-days = %n days
 hxj-q = Filter: title, values, person, device, #no
@@ -1463,8 +1484,10 @@ hxj-cancel = Cancel
 hxj-err = That did not work.
 hxj-ask = Undo %ref?
 hxj-done = %ref undone → new change %id.
-hxj-w-later-1 = “%title” gets deleted. The later change (%refs) goes inactive with it.
-hxj-w-later-n = “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+hxj-w-later = { $n ->
+    [one] “%title” gets deleted. The later change (%refs) goes inactive with it.
+   *[other] “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+}
 hxj-w-conflict = “%label” was changed later%by. Undo overwrites “%cur” with “%old”.
 hxj-w-skip = Skipped: “%title” – %why
 hxj-f-kinds = Type
@@ -1497,8 +1520,10 @@ hxj-reset = Reset filters
 hxj-lg-hollow = undone / inactive
 hxj-lg-arc = Undo jumps back
 hxj-empty-window = No change in this time window.
-hxj-before-window = %n matching changes lie before the window –
-hxj-before-window-1 = 1 matching change lies before the window –
+hxj-before-window = { $n ->
+    [one] %n matching change lies before the window –
+   *[other] %n matching changes lie before the window –
+}
 hxj-retention = { $n ->
     [one] The history reaches back %n day (to %date). Older changes are removed daily.
    *[other] The history reaches back %n days (to %date). Older changes are removed daily.

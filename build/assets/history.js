@@ -119,7 +119,7 @@
 
   // ---- undo -----------------------------------------------------------------------------------
   const warnText = w => w.kind === 'later'
-    ? tr(w.ids.length === 1 ? 'w-later-1' : 'w-later-n', { title: w.title, n: w.ids.length, refs: w.ids.map(i => '#' + i).join(', ') })
+    ? tr('w-later', { title: w.title, n: w.ids.length, refs: w.ids.map(i => '#' + i).join(', ') })
     : tr('w-conflict', { label: w.label, by: w.by ? ` (#${w.by})` : '', cur: w.cur || S('empty'), old: w.old || S('empty') });
   const planText = p => [...p.warns.map(warnText), ...p.skips.map(s => tr('w-skip', { title: s.title, why: whyText(s.why, s.by) }))];
   async function post(id, confirm) {
@@ -230,7 +230,7 @@
   const flash = id => { const n = $(`[data-cid="${id}"]`, root); if (n) { n.classList.remove('hx-flash'); void n.getBoundingClientRect(); n.classList.add('hx-flash'); } };
   function chrome() {
     const n = list().length;
-    R('count').textContent = tr(n === 1 ? 'count-1' : 'count', { n });
+    R('count').textContent = tr('count', { n });
     R('panel').innerHTML = filterPanel();
     const ac = activeCount(); R('badge').textContent = ac || '';
     R('chips').innerHTML = activeChips();
@@ -360,7 +360,7 @@
       </div>` : `<div class="hx-empty">${esc(S('empty-window'))} <a href="#" data-reset>${esc(S('reset'))}</a>${zoom < 90 ? ` · <a href="#" data-zoom="90">${esc(tr('days', { n: 90 }))}</a>` : ''}</div>`;
       sc.scrollLeft = scrollEnd ? sc.scrollWidth : keep;
       const hidden = lst.filter(c => !shown.has(c.id)).length;
-      M('foot').innerHTML = (hidden ? `${esc(tr(hidden === 1 ? 'before-window-1' : 'before-window', { n: hidden }))} <a href="#" data-zoom="90">${esc(tr('days', { n: 90 }))}</a>. ` : '') + esc(tr('retention', { n: D.retention, date: fmtShort.format(oldest()) }));
+      M('foot').innerHTML = (hidden ? `${esc(tr('before-window', { n: hidden }))} <a href="#" data-zoom="90">${esc(tr('days', { n: 90 }))}</a>. ` : '') + esc(tr('retention', { n: D.retention, date: fmtShort.format(oldest()) }));
       if (openId && !shown.has(openId)) openId = null;
       pop();
     }
@@ -472,7 +472,7 @@
       for (let d = days; d >= 0; d--) {
         const t = now(); t.setDate(t.getDate() - d);
         const n = per.get(d) || 0, month = t.getDate() === 1 || d === days;
-        html += `<div class="hxf-day${n ? ' has' : ''}${d === curD ? ' cur' : ''}${month ? ' mon' : ''}" data-day="${d}" style="--n:${Math.min(n, 4)}" title="${esc(dayLabel(t))}${n ? ` · ${esc(tr(n === 1 ? 'count-1' : 'count', { n }))}` : ''}">${month ? `<b>${esc(fmtMonth.format(t))}</b>` : ''}${d === 0 ? `<b class="now">${esc(S('today'))}</b>` : ''}<i></i></div>`;
+        html += `<div class="hxf-day${n ? ' has' : ''}${d === curD ? ' cur' : ''}${month ? ' mon' : ''}" data-day="${d}" style="--n:${Math.min(n, 4)}" title="${esc(dayLabel(t))}${n ? ` · ${esc(tr('count', { n }))}` : ''}">${month ? `<b>${esc(fmtMonth.format(t))}</b>` : ''}${d === 0 ? `<b class="now">${esc(S('today'))}</b>` : ''}<i></i></div>`;
       }
       return html;
     }

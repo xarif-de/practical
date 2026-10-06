@@ -201,6 +201,13 @@ fn plural_messages_reach_the_browser_as_forms() {
     assert_eq!(js["js-imp-done"]["$"], "count");
     assert_eq!(i.with_prefix_json("fr", "hxj-").into_iter().find(|(k, _)| k == "hxj-more").unwrap().1, serde_json::json!({ "$": "n", "one": "et %n autre", "other": "et %n autres" }));
     assert!(js["js-set-err"].is_string(), "any other message stays a string");
+    // the former hand-made singular keys are plural forms now: French takes its singular for 0 as well
+    let fr: serde_json::Value = serde_json::from_str(&i.js_json("fr")).unwrap();
+    assert_eq!(fr["js-imp-ev"], serde_json::json!({ "$": "n", "one": "%n événement", "other": "%n événements" }));
+    let de = messages(SOURCES[0].1);
+    for gone in ["js-imp-ev1", "js-imp-td1", "js-imp-jr1", "js-imp-ct1", "js-imp-gr1", "js-snp-d1", "js-snp-w1", "js-snaps-one", "hxj-count-1", "hxj-before-window-1", "hxj-w-later-1", "hxj-w-later-n", "ed-h-day", "ed-h-hour", "ed-h-week"] {
+        assert!(!de.contains_key(gone), "{gone}");
+    }
     // a data attribute of a template: the forms with {n}
     assert_eq!(i.plural_json("de", "ct-days-in"), r#"{"one":"in {n} Tag","other":"in {n} Tagen"}"#);
     assert_eq!(i.plural_json("en", "ed-h-count"), r#"{"one":"once","other":"{n} times"}"#);

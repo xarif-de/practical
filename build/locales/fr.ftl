@@ -410,14 +410,17 @@ ed-h-until = jusqu'au
 ed-h-on = le
 ed-h-every = tous les { $n }
 ed-h-min = { $n } min
-ed-h-hour = 1 h
-ed-h-day = 1 jour
 ed-h-before = avant
 ed-h-hours = { $n } h
-ed-h-days = { $n } jours
+ed-h-days = { $n ->
+    [one] { $n } jour
+   *[other] { $n } jours
+}
 ed-h-repeat = répété { $n }×
-ed-h-week = 1 semaine
-ed-h-weeks = { $n } semaines
+ed-h-weeks = { $n ->
+    [one] { $n } semaine
+   *[other] { $n } semaines
+}
 ed-h-after = après le début
 ed-h-after-end = après la fin
 ed-h-at-start = au début
@@ -933,10 +936,14 @@ js-regions-none = Aucune
 js-regions-n = %n régions
 js-snp-min = %n min
 js-snp-h = %n h
-js-snp-d1 = 1 jour
-js-snp-d = %n jours
-js-snp-w1 = 1 semaine
-js-snp-w = %n semaines
+js-snp-d = { $n ->
+    [one] %n jour
+   *[other] %n jours
+}
+js-snp-w = { $n ->
+    [one] %n semaine
+   *[other] %n semaines
+}
 js-snp-u-min = min
 js-snp-u-h = h
 js-snp-u-d = jours
@@ -954,15 +961,23 @@ js-snp-bad = Saisissez un nombre supérieur à 0
 js-snp-max = 366 jours au maximum
 js-snp-dup = Ce point d'accroche existe déjà
 js-snp-last = Un point avant le début doit rester
-js-snaps-one = 1 point d'accroche
-js-snaps-n = %n points d'accroche
+js-snaps-n = { $n ->
+    [one] %n point d'accroche
+   *[other] %n points d'accroche
+}
 js-imp-file = Fichier « %file »
-js-imp-ev1 = 1 événement
-js-imp-ev = %n événements
-js-imp-td1 = 1 tâche
-js-imp-td = %n tâches
-js-imp-jr1 = 1 entrée de journal
-js-imp-jr = %n entrées de journal
+js-imp-ev = { $n ->
+    [one] %n événement
+   *[other] %n événements
+}
+js-imp-td = { $n ->
+    [one] %n tâche
+   *[other] %n tâches
+}
+js-imp-jr = { $n ->
+    [one] %n entrée de journal
+   *[other] %n entrées de journal
+}
 js-imp-taken = repris du fichier : %what
 js-imp-f-name = nom
 js-imp-f-desc = description
@@ -976,10 +991,14 @@ js-imp-done = { $count ->
     [one] « %title » créé · %count entrée importée
    *[other] « %title » créé · %count entrées importées
 }
-js-imp-ct1 = 1 contact
-js-imp-ct = %n contacts
-js-imp-gr1 = 1 groupe
-js-imp-gr = %n groupes
+js-imp-ct = { $n ->
+    [one] %n contact
+   *[other] %n contacts
+}
+js-imp-gr = { $n ->
+    [one] %n groupe
+   *[other] %n groupes
+}
 js-imp-ab-empty = Le fichier ne contient aucun contact.
 js-vac-word = Mot entier
 js-vac-begin = Au début
@@ -1407,8 +1426,10 @@ hx-a-vresource = Ressource (bloc)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Modifications
-hxj-count = %n modifications
-hxj-count-1 = 1 modification
+hxj-count = { $n ->
+    [one] %n modification
+   *[other] %n modifications
+}
 hxj-zoom = Période
 hxj-days = %n jours
 hxj-q = Filtrer : titre, valeurs, personne, appareil, n°
@@ -1467,8 +1488,10 @@ hxj-cancel = Annuler
 hxj-err = Cela n’a pas fonctionné.
 hxj-ask = Annuler %ref ?
 hxj-done = %ref annulé → nouvelle modification %id.
-hxj-w-later-1 = « %title » sera supprimé. La modification ultérieure (%refs) devient inactive.
-hxj-w-later-n = « %title » sera supprimé. Les %n modifications ultérieures (%refs) deviennent inactives.
+hxj-w-later = { $n ->
+    [one] « %title » sera supprimé. La modification ultérieure (%refs) devient inactive.
+   *[other] « %title » sera supprimé. Les %n modifications ultérieures (%refs) deviennent inactives.
+}
 hxj-w-conflict = « %label » a été modifié depuis%by. L’annulation remplace « %cur » par « %old ».
 hxj-w-skip = Ignoré : « %title » – %why
 hxj-f-kinds = Type
@@ -1501,8 +1524,10 @@ hxj-reset = Réinitialiser les filtres
 hxj-lg-hollow = annulé / inactif
 hxj-lg-arc = L’annulation renvoie en arrière
 hxj-empty-window = Aucune modification sur cette période.
-hxj-before-window = %n modifications correspondantes sont antérieures –
-hxj-before-window-1 = 1 modification correspondante est antérieure –
+hxj-before-window = { $n ->
+    [one] %n modification correspondante est antérieure –
+   *[other] %n modifications correspondantes sont antérieures –
+}
 hxj-retention = { $n ->
     [one] L’historique remonte à %n jour (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.
    *[other] L’historique remonte à %n jours (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.

@@ -410,14 +410,17 @@ ed-h-until = bis
 ed-h-on = am
 ed-h-every = alle { $n }
 ed-h-min = { $n } Min.
-ed-h-hour = 1 Std.
-ed-h-day = 1 Tag
 ed-h-before = vorher
 ed-h-hours = { $n } Std.
-ed-h-days = { $n } Tage
+ed-h-days = { $n ->
+    [one] { $n } Tag
+   *[other] { $n } Tage
+}
 ed-h-repeat = { $n }× wiederholt
-ed-h-week = 1 Woche
-ed-h-weeks = { $n } Wochen
+ed-h-weeks = { $n ->
+    [one] { $n } Woche
+   *[other] { $n } Wochen
+}
 ed-h-after = nach Beginn
 ed-h-after-end = nach Ende
 ed-h-at-start = zum Beginn
@@ -928,10 +931,14 @@ js-regions-none = Keine
 js-regions-n = %n Regionen
 js-snp-min = %n min
 js-snp-h = %n Std.
-js-snp-d1 = 1 Tag
-js-snp-d = %n Tage
-js-snp-w1 = 1 Woche
-js-snp-w = %n Wochen
+js-snp-d = { $n ->
+    [one] %n Tag
+   *[other] %n Tage
+}
+js-snp-w = { $n ->
+    [one] %n Woche
+   *[other] %n Wochen
+}
 js-snp-u-min = min
 js-snp-u-h = Std.
 js-snp-u-d = Tage
@@ -949,15 +956,23 @@ js-snp-bad = Bitte eine Zahl größer 0
 js-snp-max = Höchstens 366 Tage
 js-snp-dup = Diesen Rastpunkt gibt es schon
 js-snp-last = Ein Rastpunkt vor Beginn muss bleiben
-js-snaps-one = 1 Rastpunkt
-js-snaps-n = %n Rastpunkte
+js-snaps-n = { $n ->
+    [one] %n Rastpunkt
+   *[other] %n Rastpunkte
+}
 js-imp-file = Datei „%file“
-js-imp-ev1 = 1 Termin
-js-imp-ev = %n Termine
-js-imp-td1 = 1 Aufgabe
-js-imp-td = %n Aufgaben
-js-imp-jr1 = 1 Journaleintrag
-js-imp-jr = %n Journaleinträge
+js-imp-ev = { $n ->
+    [one] %n Termin
+   *[other] %n Termine
+}
+js-imp-td = { $n ->
+    [one] %n Aufgabe
+   *[other] %n Aufgaben
+}
+js-imp-jr = { $n ->
+    [one] %n Journaleintrag
+   *[other] %n Journaleinträge
+}
 js-imp-taken = aus der Datei: %what
 js-imp-f-name = Name
 js-imp-f-desc = Beschreibung
@@ -971,10 +986,14 @@ js-imp-done = { $count ->
     [one] „%title“ angelegt · %count Eintrag importiert
    *[other] „%title“ angelegt · %count Einträge importiert
 }
-js-imp-ct1 = 1 Kontakt
-js-imp-ct = %n Kontakte
-js-imp-gr1 = 1 Gruppe
-js-imp-gr = %n Gruppen
+js-imp-ct = { $n ->
+    [one] %n Kontakt
+   *[other] %n Kontakte
+}
+js-imp-gr = { $n ->
+    [one] %n Gruppe
+   *[other] %n Gruppen
+}
 js-imp-ab-empty = Die Datei enthält keine Kontakte.
 js-vac-word = Ganzes Wort
 js-vac-begin = Am Anfang
@@ -1401,8 +1420,10 @@ hx-a-vresource = Ressource (Block)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Änderungen
-hxj-count = %n Änderungen
-hxj-count-1 = 1 Änderung
+hxj-count = { $n ->
+    [one] %n Änderung
+   *[other] %n Änderungen
+}
 hxj-zoom = Zeitfenster
 hxj-days = %n Tage
 hxj-q = Filtern: Titel, Werte, Person, Gerät, #Nr
@@ -1460,8 +1481,10 @@ hxj-cancel = Abbrechen
 hxj-err = Das hat nicht geklappt.
 hxj-ask = %ref rückgängig machen?
 hxj-done = %ref rückgängig gemacht → neue Änderung %id.
-hxj-w-later-1 = „%title“ wird gelöscht. Die spätere Änderung (%refs) wird damit inaktiv.
-hxj-w-later-n = „%title“ wird gelöscht. Die %n späteren Änderungen (%refs) werden damit inaktiv.
+hxj-w-later = { $n ->
+    [one] „%title“ wird gelöscht. Die spätere Änderung (%refs) wird damit inaktiv.
+   *[other] „%title“ wird gelöscht. Die %n späteren Änderungen (%refs) werden damit inaktiv.
+}
 hxj-w-conflict = „%label“ wurde danach geändert%by. Rückgängig überschreibt „%cur“ mit „%old“.
 hxj-w-skip = Übersprungen: „%title“ – %why
 hxj-f-kinds = Typ
@@ -1494,8 +1517,10 @@ hxj-reset = Filter zurücksetzen
 hxj-lg-hollow = rückgängig / inaktiv
 hxj-lg-arc = Rückgängig springt zurück
 hxj-empty-window = Keine Änderung in diesem Zeitfenster.
-hxj-before-window = %n passende Änderungen liegen vor dem Zeitfenster –
-hxj-before-window-1 = 1 passende Änderung liegt vor dem Zeitfenster –
+hxj-before-window = { $n ->
+    [one] %n passende Änderung liegt vor dem Zeitfenster –
+   *[other] %n passende Änderungen liegen vor dem Zeitfenster –
+}
 hxj-retention = { $n ->
     [one] Die Historie reicht %n Tag zurück (bis %date). Ältere Änderungen werden täglich entfernt.
    *[other] Die Historie reicht %n Tage zurück (bis %date). Ältere Änderungen werden täglich entfernt.

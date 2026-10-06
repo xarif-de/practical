@@ -309,7 +309,7 @@
       const unitOf = m => [...UNITS].reverse().find(([u]) => m % u === 0);
       const parseL = v => v.split(',').map(t => { const x = t.trim().match(/^(\d+)\s*(min|h|d|w)$/); return x ? +x[1] * UNITS.find(u => u[1] === x[2])[0] : 0; }).filter(m => m > 0 && m <= MAXM);
       const fmtL = l => l.map(m => { const [u, k] = unitOf(m); return `${m / u} ${k}`; }).join(', ');
-      const label = m => { const [u, k] = unitOf(m), n = m / u; return k === 'min' || k === 'h' ? tr('js-snp-' + k, { n }) : n === 1 ? tr(`js-snp-${k}1`) : tr('js-snp-' + k, { n }); };
+      const label = m => { const [u, k] = unitOf(m), n = m / u; return tr('js-snp-' + k, { n }); };
       const side = k => tr(k === 'start' ? 'js-snp-start' : 'js-snp-end');
       const sortU = l => [...new Set(l)].sort((a, b) => a - b), same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
       let L = { start: sortU(parseL(hid('alarm_snaps_start').value)), end: sortU(parseL(hid('alarm_snaps_end').value)) };
@@ -320,7 +320,7 @@
       const store = () => {
         L = { start: sortU(L.start), end: sortU(L.end) };
         hid('alarm_snaps_start').value = fmtL(L.start); commit('alarm_snaps_end', fmtL(L.end)); // one change posts the whole form
-        $('#v-snaps').textContent = L.start.length === 1 ? tr('js-snaps-one') : tr('js-snaps-n', { n: L.start.length });
+        $('#v-snaps').textContent = tr('js-snaps-n', { n: L.start.length });
       };
       const draw = focus => {
         const o = [...L.start].reverse().map(m => ({ key: 'start', m })).concat([{ fix: 'start' }], [...L.end].reverse().map(m => ({ key: 'end', m })), [{ fix: 'end' }]);
@@ -1880,7 +1880,7 @@
   const fromPreset = p => newAlarm({ action: p.action, minutes: p.minutes, related_end: !!p.related_end, repeat: p.repeat || 0, duration_minutes: p.duration_minutes || 0, attendees: [...(p.attendees || [])], attach: p.attach || '', proximity: p.proximity || '' });
   const matchesPreset = a => !a.at && PRESETS.some(p => presetSig(p) === presetSig(a));
   async function savePresets() { try { const r = await practical.send('/api/alarm-presets', 'PUT', PRESETS); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
-  const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return m === 10080 ? AT.tWeek : AT.tWeeks.replace('{n}', m / 10080); if (m && m % 1440 === 0) return m === 1440 ? D.tDay : D.tDays.replace('{n}', m / 1440); if (m && m % 60 === 0) return m === 60 ? D.tHour : D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
+  const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return plural(AT.tWeeks, m / 10080).replace('{n}', m / 10080); if (m && m % 1440 === 0) return plural(D.tDays, m / 1440).replace('{n}', m / 1440); if (m && m % 60 === 0) return D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
   const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
   const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
@@ -3790,7 +3790,7 @@
     },
   };
   const hexOf = v => { const m = v.match(/^#?([0-9a-f]{6})([0-9a-f]{2})?$/i); return m ? '#' + m[1].toLowerCase() : (window.colorPicker && window.colorPicker.toHex(v)) || ''; }; // #rrggbbaa (Apple) loses its alpha
-  const count = (k, n) => n === 1 ? tr(`js-imp-${k}1`) : tr(`js-imp-${k}`, { n });
+  const count = (k, n) => tr(`js-imp-${k}`, { n });
   settings.querySelectorAll('.imp-form').forEach(form => {
     const kind = form.dataset.kind, q = s => form.querySelector(s), el = form.elements, fields = q('.imp-fields'), info = q('.imp-info'), go = q('.imp-go'), goText = go.textContent;
     let buf = null;
