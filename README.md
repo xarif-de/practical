@@ -303,7 +303,7 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   vacation days and bridge days count by it. Country/region names in every UI language (all ISO
   countries) and the region tree of countries OpenHolidays lacks come from Unicode CLDR, built in
   (`build/src/data/regions.json` from `tools/gen_regions.py`, Unicode License v3; build.rs packs it into
-  two brotli tables — 566 KB → 74 KB in the binary, decoded when first needed: countries 13 KB of heap
+  two gzip tables — 566 KB → 89 KB in the binary, decoded when first needed: countries 13 KB of heap
   for the views, subdivisions 295 KB only for the settings pickers, instead of 3.2 MB of maps). Upkeep is lazy
   (daily task; at start it only reads saved state): which source covers which country and CLDR's
   latest release are each asked at most weekly (one request with ETag, usually a 304); only a

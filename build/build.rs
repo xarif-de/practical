@@ -137,7 +137,7 @@ fn build_asset(name: &str, how: Minify) -> usize {
 }
 
 /// src/data/regions.json (tools/gen_regions.py, 566 KB) as the two tables of names.rs, each
-/// brotli-compressed: what the app reads and nothing else (no `source`/`generated`/`langs`, positional
+/// gzip-9 (decoded by flate2, which the binary links anyway; a brotli decoder would add ≈180 KB): what the app reads and nothing else (no `source`/`generated`/`langs`, positional
 /// fields, a name shared by several languages once). holidays.rs decodes a table when first needed.
 fn regions() {
     println!("cargo:rerun-if-changed=src/data/regions.json");
@@ -164,10 +164,9 @@ fn regions() {
             let out = &out;
             s.spawn(move || {
                 let text = names::encode(rows);
-                let mut br = Vec::new();
-                let params = brotli::enc::BrotliEncoderParams { quality: 11, lgwin: 22, ..Default::default() };
-                brotli::BrotliCompress(&mut text.as_bytes(), &mut br, &params).unwrap();
-                fs::write(format!("{out}/regions-{name}.br"), br).unwrap();
+                let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+                gz.write_all(text.as_bytes()).unwrap();
+                fs::write(format!("{out}/regions-{name}.gz"), gz.finish().unwrap()).unwrap();
             });
         }
     });

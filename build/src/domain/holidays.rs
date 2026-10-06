@@ -129,17 +129,18 @@ use names::Table;
 
 /// the CLDR release of the built-in names (src/data/regions.json)
 const BUILT_IN_CLDR: &str = include_str!(concat!(env!("OUT_DIR"), "/regions-cldr.txt"));
-/// build.rs output, brotli: 4.5 KB for 257 countries, 70 KB for 5,046 subdivisions (decoded
+/// build.rs output, gzip-9: 5.0 KB for 257 countries, 84 KB for 5,046 subdivisions (decoded
 /// 11 / 262 KB); each table is decoded once, when first needed — the subdivisions only by the settings
 /// page (names, `cldr_tree`), not by the calendar views.
-fn unpack(br: &[u8]) -> Table {
-    let mut text = Vec::new();
-    brotli_decompressor::BrotliDecompress(&mut &br[..], &mut text).expect("embedded region names");
+fn unpack(gz: &[u8]) -> Table {
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(gz).read_to_string(&mut text).expect("embedded region names");
     text.shrink_to_fit();
-    Table::new(String::from_utf8(text).expect("region names: UTF-8"))
+    Table::new(text)
 }
-static BUILT_IN_COUNTRIES: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-countries.br"))));
-static BUILT_IN_SUBS: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-subs.br"))));
+static BUILT_IN_COUNTRIES: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-countries.gz"))));
+static BUILT_IN_SUBS: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-subs.gz"))));
 
 /// A newer CLDR release's names, packed like the built-in ones.
 struct Names {
