@@ -224,3 +224,69 @@ fn plural_messages_reach_the_browser_as_forms() {
         }
     }
 }
+
+/// Every message that selects on a number (`{ $n -> [one] … *[other] … }`, anywhere in its pattern), in every
+/// language, for n = 0, 1, 2, 5 (the other placeholders as `‹name›`): golden file `i18n/plurals.txt`, so the text of
+/// each form is pinned. And each variant of such a select is the one Fluent picks for at least one of those numbers
+/// (the language's CLDR rules): a variant no number reaches (`[few]` in German) never shows.
+#[test]
+fn every_plural_form_renders_and_is_reachable() {
+    use fluent_syntax::ast::{Expression, InlineExpression, Pattern, PatternElement, VariantKey};
+    const NS: [i64; 4] = [0, 1, 2, 5];
+    const CATS: [&str; 6] = ["zero", "one", "two", "few", "many", "other"];
+    fn key_of(k: &VariantKey<&str>) -> String {
+        match k { VariantKey::Identifier { name } | VariantKey::NumberLiteral { value: name } => name.to_string() }
+    }
+    // (selector name, variant keys, default key) of each select on a number, nested ones included
+    fn selects(p: &Pattern<&str>, out: &mut Vec<(String, Vec<String>, String)>) {
+        for e in &p.elements {
+            let PatternElement::Placeable { expression: Expression::Select { selector: InlineExpression::VariableReference { id }, variants } } = e else { continue };
+            let keys: Vec<String> = variants.iter().map(|v| key_of(&v.key)).collect();
+            if keys.iter().all(|k| CATS.contains(&k.as_str()) || k.parse::<f64>().is_ok()) {
+                let default = variants.iter().find(|v| v.default).map(|v| key_of(&v.key)).unwrap();
+                out.push((id.name.to_string(), keys, default));
+            }
+            variants.iter().for_each(|v| selects(&v.value, out));
+        }
+    }
+    let i = I18n::load();
+    let (mut golden, mut unreachable, mut count) = (String::new(), vec![], 0);
+    for (lang, src) in SOURCES {
+        let b = i.get(lang).unwrap();
+        for (k, text) in messages(src) {
+            let Some(pattern) = b.get_message(&k).and_then(|m| m.value()) else { continue };
+            let mut sel = vec![];
+            selects(pattern, &mut sel);
+            if sel.is_empty() {
+                continue;
+            }
+            count += 1;
+            for n in NS {
+                let mut args = FluentArgs::new();
+                for p in placeholders(&text).into_iter().filter(|p| p.starts_with('$')) {
+                    let name = p[1..].to_string();
+                    if sel.iter().any(|(s, _, _)| *s == name) { args.set(name, FluentValue::from(n)) } else { args.set(name.clone(), FluentValue::from(format!("‹{name}›"))) }
+                }
+                let mut errors = vec![];
+                let s = b.format_pattern(pattern, Some(&args), &mut errors);
+                assert!(errors.is_empty(), "{lang}/{k} n={n}: {errors:?}");
+                golden.push_str(&format!("{lang} {k} {n}: {}\n", s.replace('\n', "⏎")));
+            }
+            // the variant Fluent picks per number: the same keys in a probe message whose forms are their own names
+            for (_, keys, default) in sel {
+                let body: String = keys.iter().map(|x| format!("    {}[{x}] {x}\n", if *x == default { "*" } else { " " })).collect();
+                let probe = bundle(lang, &format!("probe = {{ $n ->\n{body}}}\n"));
+                let pat = probe.get_message("probe").unwrap().value().unwrap();
+                let hit: BTreeSet<String> = NS.iter().map(|n| {
+                    let mut args = FluentArgs::new();
+                    args.set("n", FluentValue::from(*n));
+                    probe.format_pattern(pat, Some(&args), &mut vec![]).into_owned()
+                }).collect();
+                unreachable.extend(keys.iter().filter(|x| !hit.contains(*x)).map(|x| format!("{lang}/{k} [{x}]")));
+            }
+        }
+    }
+    assert!(count >= 4 * 46, "the scan found {count} plural messages only");
+    assert_eq!(unreachable, Vec::<String>::new());
+    crate::testkit::assert_snapshot("i18n/plurals.txt", &golden);
+}

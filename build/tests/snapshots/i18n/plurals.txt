@@ -1,0 +1,748 @@
+de cat-count 0: 0 Termine
+de cat-count 1: 1 Termin
+de cat-count 2: 2 Termine
+de cat-count 5: 5 Termine
+de cat-count-task 0: 0 Aufgaben
+de cat-count-task 1: 1 Aufgabe
+de cat-count-task 2: 2 Aufgaben
+de cat-count-task 5: 5 Aufgaben
+de ct-days-in 0: in 0 Tagen
+de ct-days-in 1: in 1 Tag
+de ct-days-in 2: in 2 Tagen
+de ct-days-in 5: in 5 Tagen
+de ed-h-days 0: 0 Tage
+de ed-h-days 1: 1 Tag
+de ed-h-days 2: 2 Tage
+de ed-h-days 5: 5 Tage
+de ed-h-weeks 0: 0 Wochen
+de ed-h-weeks 1: 1 Woche
+de ed-h-weeks 2: 2 Wochen
+de ed-h-weeks 5: 5 Wochen
+de hxj-before-window 0: %n passende Änderungen liegen vor dem Zeitfenster –
+de hxj-before-window 1: %n passende Änderung liegt vor dem Zeitfenster –
+de hxj-before-window 2: %n passende Änderungen liegen vor dem Zeitfenster –
+de hxj-before-window 5: %n passende Änderungen liegen vor dem Zeitfenster –
+de hxj-count 0: %n Änderungen
+de hxj-count 1: %n Änderung
+de hxj-count 2: %n Änderungen
+de hxj-count 5: %n Änderungen
+de hxj-more 0: und %n weitere
+de hxj-more 1: und %n weitere
+de hxj-more 2: und %n weitere
+de hxj-more 5: und %n weitere
+de hxj-p-all 0: Alles (%n Tage)
+de hxj-p-all 1: Alles (%n Tag)
+de hxj-p-all 2: Alles (%n Tage)
+de hxj-p-all 5: Alles (%n Tage)
+de hxj-retention 0: Die Historie reicht %n Tage zurück (bis %date). Ältere Änderungen werden täglich entfernt.
+de hxj-retention 1: Die Historie reicht %n Tag zurück (bis %date). Ältere Änderungen werden täglich entfernt.
+de hxj-retention 2: Die Historie reicht %n Tage zurück (bis %date). Ältere Änderungen werden täglich entfernt.
+de hxj-retention 5: Die Historie reicht %n Tage zurück (bis %date). Ältere Änderungen werden täglich entfernt.
+de hxj-w-later 0: „%title“ wird gelöscht. Die %n späteren Änderungen (%refs) werden damit inaktiv.
+de hxj-w-later 1: „%title“ wird gelöscht. Die spätere Änderung (%refs) wird damit inaktiv.
+de hxj-w-later 2: „%title“ wird gelöscht. Die %n späteren Änderungen (%refs) werden damit inaktiv.
+de hxj-w-later 5: „%title“ wird gelöscht. Die %n späteren Änderungen (%refs) werden damit inaktiv.
+de import-done 0: 0 Objekte importiert.
+de import-done 1: 1 Objekt importiert.
+de import-done 2: 2 Objekte importiert.
+de import-done 5: 5 Objekte importiert.
+de js-color-count 0: %n Einträge
+de js-color-count 1: %n Eintrag
+de js-color-count 2: %n Einträge
+de js-color-count 5: %n Einträge
+de js-color-g-offer 0: Im Farbwähler · %n Farben
+de js-color-g-offer 1: Im Farbwähler · %n Farbe
+de js-color-g-offer 2: Im Farbwähler · %n Farben
+de js-color-g-offer 5: Im Farbwähler · %n Farben
+de js-color-more 0: + %n weitere
+de js-color-more 1: + %n weitere
+de js-color-more 2: + %n weitere
+de js-color-more 5: + %n weitere
+de js-imp-ct 0: %n Kontakte
+de js-imp-ct 1: %n Kontakt
+de js-imp-ct 2: %n Kontakte
+de js-imp-ct 5: %n Kontakte
+de js-imp-done 0: „%title“ angelegt · %count Einträge importiert
+de js-imp-done 1: „%title“ angelegt · %count Eintrag importiert
+de js-imp-done 2: „%title“ angelegt · %count Einträge importiert
+de js-imp-done 5: „%title“ angelegt · %count Einträge importiert
+de js-imp-ev 0: %n Termine
+de js-imp-ev 1: %n Termin
+de js-imp-ev 2: %n Termine
+de js-imp-ev 5: %n Termine
+de js-imp-gr 0: %n Gruppen
+de js-imp-gr 1: %n Gruppe
+de js-imp-gr 2: %n Gruppen
+de js-imp-gr 5: %n Gruppen
+de js-imp-jr 0: %n Journaleinträge
+de js-imp-jr 1: %n Journaleintrag
+de js-imp-jr 2: %n Journaleinträge
+de js-imp-jr 5: %n Journaleinträge
+de js-imp-td 0: %n Aufgaben
+de js-imp-td 1: %n Aufgabe
+de js-imp-td 2: %n Aufgaben
+de js-imp-td 5: %n Aufgaben
+de js-set-imported 0: %n Objekte importiert.
+de js-set-imported 1: %n Objekt importiert.
+de js-set-imported 2: %n Objekte importiert.
+de js-set-imported 5: %n Objekte importiert.
+de js-snaps-n 0: %n Rastpunkte
+de js-snaps-n 1: %n Rastpunkt
+de js-snaps-n 2: %n Rastpunkte
+de js-snaps-n 5: %n Rastpunkte
+de js-snp-d 0: %n Tage
+de js-snp-d 1: %n Tag
+de js-snp-d 2: %n Tage
+de js-snp-d 5: %n Tage
+de js-snp-w 0: %n Wochen
+de js-snp-w 1: %n Woche
+de js-snp-w 2: %n Wochen
+de js-snp-w 5: %n Wochen
+de n-addressbooks 0: 0 Adressbücher
+de n-addressbooks 1: 1 Adressbuch
+de n-addressbooks 2: 2 Adressbücher
+de n-addressbooks 5: 5 Adressbücher
+de n-calendars 0: 0 Kalender
+de n-calendars 1: 1 Kalender
+de n-calendars 2: 2 Kalender
+de n-calendars 5: 5 Kalender
+de set-days 0: 0 Tage
+de set-days 1: 1 Tag
+de set-days 2: 2 Tage
+de set-days 5: 5 Tage
+de set-snaps 0: 0 Rastpunkte
+de set-snaps 1: 1 Rastpunkt
+de set-snaps 2: 2 Rastpunkte
+de set-snaps 5: 5 Rastpunkte
+de trash-retention 0: Im Papierkorb bleibt alles 0 Tage wiederherstellbar.
+de trash-retention 1: Im Papierkorb bleibt alles 1 Tag wiederherstellbar.
+de trash-retention 2: Im Papierkorb bleibt alles 2 Tage wiederherstellbar.
+de trash-retention 5: Im Papierkorb bleibt alles 5 Tage wiederherstellbar.
+de v-birthdays-in-the-address-books 0: Geburtstage im Adressbuch
+de v-birthdays-in-the-address-books 1: Geburtstag im Adressbuch
+de v-birthdays-in-the-address-books 2: Geburtstage im Adressbuch
+de v-birthdays-in-the-address-books 5: Geburtstage im Adressbuch
+de v-busy-weekend-days 0: volle Wochenendtage
+de v-busy-weekend-days 1: voller Wochenendtag
+de v-busy-weekend-days 2: volle Wochenendtage
+de v-busy-weekend-days 5: volle Wochenendtage
+de v-days 0: Tage
+de v-days 1: Tag
+de v-days 2: Tage
+de v-days 5: Tage
+de v-evenings-booked-from-6-pm 0: verplante Abende (ab 18 Uhr)
+de v-evenings-booked-from-6-pm 1: verplanter Abend (ab 18 Uhr)
+de v-evenings-booked-from-6-pm 2: verplante Abende (ab 18 Uhr)
+de v-evenings-booked-from-6-pm 5: verplante Abende (ab 18 Uhr)
+de v-events-this-year 0: Termine im Jahr
+de v-events-this-year 1: Termin im Jahr
+de v-events-this-year 2: Termine im Jahr
+de v-events-this-year 5: Termine im Jahr
+de v-extended-by-a-holiday 0: verlängert durch Feiertag
+de v-extended-by-a-holiday 1: verlängert durch Feiertag
+de v-extended-by-a-holiday 2: verlängert durch Feiertag
+de v-extended-by-a-holiday 5: verlängert durch Feiertag
+de v-free-weekends 0: freie Wochenenden
+de v-free-weekends 1: freies Wochenende
+de v-free-weekends 2: freie Wochenenden
+de v-free-weekends 5: freie Wochenenden
+de v-n-days 0: 0 Tage
+de v-n-days 1: 1 Tag
+de v-n-days 2: 2 Tage
+de v-n-days 5: 5 Tage
+de v-n-events 0: 0 Termine
+de v-n-events 1: 1 Termin
+de v-n-events 2: 2 Termine
+de v-n-events 5: 5 Termine
+de v-n-hours 0: 0 Stunden
+de v-n-hours 1: 1 Stunde
+de v-n-hours 2: 2 Stunden
+de v-n-hours 5: 5 Stunden
+de v-n-minutes 0: 0 Minuten
+de v-n-minutes 1: 1 Minute
+de v-n-minutes 2: 2 Minuten
+de v-n-minutes 5: 5 Minuten
+de v-planned 0: verplant
+de v-planned 1: verplant
+de v-planned 2: verplant
+de v-planned 5: verplant
+de v-remaining-of 0: Resturlaub von
+de v-remaining-of 1: Resturlaub von
+de v-remaining-of 2: Resturlaub von
+de v-remaining-of 5: Resturlaub von
+de v-rr-count 0: 0 Termine
+de v-rr-count 1: 1 Termin
+de v-rr-count 2: 2 Termine
+de v-rr-count 5: 5 Termine
+de v-trips 0: Reisen
+de v-trips 1: Reise
+de v-trips 2: Reisen
+de v-trips 5: Reisen
+de v-vacation-days-planned 0: Urlaubstage geplant
+de v-vacation-days-planned 1: Urlaubstag geplant
+de v-vacation-days-planned 2: Urlaubstage geplant
+de v-vacation-days-planned 5: Urlaubstage geplant
+en cat-count 0: 0 events
+en cat-count 1: 1 event
+en cat-count 2: 2 events
+en cat-count 5: 5 events
+en cat-count-task 0: 0 tasks
+en cat-count-task 1: 1 task
+en cat-count-task 2: 2 tasks
+en cat-count-task 5: 5 tasks
+en ct-days-in 0: in 0 days
+en ct-days-in 1: in 1 day
+en ct-days-in 2: in 2 days
+en ct-days-in 5: in 5 days
+en ed-h-count 0: 0 times
+en ed-h-count 1: once
+en ed-h-count 2: 2 times
+en ed-h-count 5: 5 times
+en ed-h-days 0: 0 days
+en ed-h-days 1: 1 day
+en ed-h-days 2: 2 days
+en ed-h-days 5: 5 days
+en ed-h-weeks 0: 0 weeks
+en ed-h-weeks 1: 1 week
+en ed-h-weeks 2: 2 weeks
+en ed-h-weeks 5: 5 weeks
+en hxj-before-window 0: %n matching changes lie before the window –
+en hxj-before-window 1: %n matching change lies before the window –
+en hxj-before-window 2: %n matching changes lie before the window –
+en hxj-before-window 5: %n matching changes lie before the window –
+en hxj-count 0: %n changes
+en hxj-count 1: %n change
+en hxj-count 2: %n changes
+en hxj-count 5: %n changes
+en hxj-more 0: and %n more
+en hxj-more 1: and %n more
+en hxj-more 2: and %n more
+en hxj-more 5: and %n more
+en hxj-p-all 0: Everything (%n days)
+en hxj-p-all 1: Everything (%n day)
+en hxj-p-all 2: Everything (%n days)
+en hxj-p-all 5: Everything (%n days)
+en hxj-retention 0: The history reaches back %n days (to %date). Older changes are removed daily.
+en hxj-retention 1: The history reaches back %n day (to %date). Older changes are removed daily.
+en hxj-retention 2: The history reaches back %n days (to %date). Older changes are removed daily.
+en hxj-retention 5: The history reaches back %n days (to %date). Older changes are removed daily.
+en hxj-w-later 0: “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+en hxj-w-later 1: “%title” gets deleted. The later change (%refs) goes inactive with it.
+en hxj-w-later 2: “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+en hxj-w-later 5: “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+en import-done 0: 0 objects imported.
+en import-done 1: 1 object imported.
+en import-done 2: 2 objects imported.
+en import-done 5: 5 objects imported.
+en js-color-count 0: %n entries
+en js-color-count 1: %n entry
+en js-color-count 2: %n entries
+en js-color-count 5: %n entries
+en js-color-g-offer 0: In the colour picker · %n colours
+en js-color-g-offer 1: In the colour picker · %n colour
+en js-color-g-offer 2: In the colour picker · %n colours
+en js-color-g-offer 5: In the colour picker · %n colours
+en js-color-more 0: + %n more
+en js-color-more 1: + %n more
+en js-color-more 2: + %n more
+en js-color-more 5: + %n more
+en js-imp-ct 0: %n contacts
+en js-imp-ct 1: %n contact
+en js-imp-ct 2: %n contacts
+en js-imp-ct 5: %n contacts
+en js-imp-done 0: “%title” created · %count entries imported
+en js-imp-done 1: “%title” created · %count entry imported
+en js-imp-done 2: “%title” created · %count entries imported
+en js-imp-done 5: “%title” created · %count entries imported
+en js-imp-ev 0: %n events
+en js-imp-ev 1: %n event
+en js-imp-ev 2: %n events
+en js-imp-ev 5: %n events
+en js-imp-gr 0: %n groups
+en js-imp-gr 1: %n group
+en js-imp-gr 2: %n groups
+en js-imp-gr 5: %n groups
+en js-imp-jr 0: %n journal entries
+en js-imp-jr 1: %n journal entry
+en js-imp-jr 2: %n journal entries
+en js-imp-jr 5: %n journal entries
+en js-imp-td 0: %n tasks
+en js-imp-td 1: %n task
+en js-imp-td 2: %n tasks
+en js-imp-td 5: %n tasks
+en js-set-imported 0: %n objects imported.
+en js-set-imported 1: %n object imported.
+en js-set-imported 2: %n objects imported.
+en js-set-imported 5: %n objects imported.
+en js-snaps-n 0: %n snap points
+en js-snaps-n 1: %n snap point
+en js-snaps-n 2: %n snap points
+en js-snaps-n 5: %n snap points
+en js-snp-d 0: %n days
+en js-snp-d 1: %n day
+en js-snp-d 2: %n days
+en js-snp-d 5: %n days
+en js-snp-w 0: %n weeks
+en js-snp-w 1: %n week
+en js-snp-w 2: %n weeks
+en js-snp-w 5: %n weeks
+en n-addressbooks 0: 0 address books
+en n-addressbooks 1: 1 address book
+en n-addressbooks 2: 2 address books
+en n-addressbooks 5: 5 address books
+en n-calendars 0: 0 calendars
+en n-calendars 1: 1 calendar
+en n-calendars 2: 2 calendars
+en n-calendars 5: 5 calendars
+en set-days 0: 0 days
+en set-days 1: 1 day
+en set-days 2: 2 days
+en set-days 5: 5 days
+en set-snaps 0: 0 snap points
+en set-snaps 1: 1 snap point
+en set-snaps 2: 2 snap points
+en set-snaps 5: 5 snap points
+en trash-retention 0: Everything in the trash stays restorable for 0 days.
+en trash-retention 1: Everything in the trash stays restorable for 1 day.
+en trash-retention 2: Everything in the trash stays restorable for 2 days.
+en trash-retention 5: Everything in the trash stays restorable for 5 days.
+en v-birthdays-in-the-address-books 0: birthdays in the address books
+en v-birthdays-in-the-address-books 1: birthday in the address books
+en v-birthdays-in-the-address-books 2: birthdays in the address books
+en v-birthdays-in-the-address-books 5: birthdays in the address books
+en v-busy-weekend-days 0: busy weekend days
+en v-busy-weekend-days 1: busy weekend day
+en v-busy-weekend-days 2: busy weekend days
+en v-busy-weekend-days 5: busy weekend days
+en v-days 0: days
+en v-days 1: day
+en v-days 2: days
+en v-days 5: days
+en v-evenings-booked-from-6-pm 0: evenings booked (from 6 pm)
+en v-evenings-booked-from-6-pm 1: evening booked (from 6 pm)
+en v-evenings-booked-from-6-pm 2: evenings booked (from 6 pm)
+en v-evenings-booked-from-6-pm 5: evenings booked (from 6 pm)
+en v-events-this-year 0: events this year
+en v-events-this-year 1: event this year
+en v-events-this-year 2: events this year
+en v-events-this-year 5: events this year
+en v-extended-by-a-holiday 0: extended by a holiday
+en v-extended-by-a-holiday 1: extended by a holiday
+en v-extended-by-a-holiday 2: extended by a holiday
+en v-extended-by-a-holiday 5: extended by a holiday
+en v-free-weekends 0: free weekends
+en v-free-weekends 1: free weekend
+en v-free-weekends 2: free weekends
+en v-free-weekends 5: free weekends
+en v-n-days 0: 0 days
+en v-n-days 1: 1 day
+en v-n-days 2: 2 days
+en v-n-days 5: 5 days
+en v-n-events 0: 0 events
+en v-n-events 1: 1 event
+en v-n-events 2: 2 events
+en v-n-events 5: 5 events
+en v-n-hours 0: 0 hours
+en v-n-hours 1: 1 hour
+en v-n-hours 2: 2 hours
+en v-n-hours 5: 5 hours
+en v-n-minutes 0: 0 minutes
+en v-n-minutes 1: 1 minute
+en v-n-minutes 2: 2 minutes
+en v-n-minutes 5: 5 minutes
+en v-planned 0: planned
+en v-planned 1: planned
+en v-planned 2: planned
+en v-planned 5: planned
+en v-remaining-of 0: remaining of
+en v-remaining-of 1: remaining of
+en v-remaining-of 2: remaining of
+en v-remaining-of 5: remaining of
+en v-rr-count 0: 0 times
+en v-rr-count 1: once
+en v-rr-count 2: 2 times
+en v-rr-count 5: 5 times
+en v-trips 0: trips
+en v-trips 1: trip
+en v-trips 2: trips
+en v-trips 5: trips
+en v-vacation-days-planned 0: vacation days planned
+en v-vacation-days-planned 1: vacation day planned
+en v-vacation-days-planned 2: vacation days planned
+en v-vacation-days-planned 5: vacation days planned
+fr cat-count 0: 0 événement
+fr cat-count 1: 1 événement
+fr cat-count 2: 2 événements
+fr cat-count 5: 5 événements
+fr cat-count-task 0: 0 tâche
+fr cat-count-task 1: 1 tâche
+fr cat-count-task 2: 2 tâches
+fr cat-count-task 5: 5 tâches
+fr ct-days-in 0: dans 0 jour
+fr ct-days-in 1: dans 1 jour
+fr ct-days-in 2: dans 2 jours
+fr ct-days-in 5: dans 5 jours
+fr ed-h-days 0: 0 jour
+fr ed-h-days 1: 1 jour
+fr ed-h-days 2: 2 jours
+fr ed-h-days 5: 5 jours
+fr ed-h-weeks 0: 0 semaine
+fr ed-h-weeks 1: 1 semaine
+fr ed-h-weeks 2: 2 semaines
+fr ed-h-weeks 5: 5 semaines
+fr hxj-before-window 0: %n modification correspondante est antérieure –
+fr hxj-before-window 1: %n modification correspondante est antérieure –
+fr hxj-before-window 2: %n modifications correspondantes sont antérieures –
+fr hxj-before-window 5: %n modifications correspondantes sont antérieures –
+fr hxj-count 0: %n modification
+fr hxj-count 1: %n modification
+fr hxj-count 2: %n modifications
+fr hxj-count 5: %n modifications
+fr hxj-more 0: et %n autre
+fr hxj-more 1: et %n autre
+fr hxj-more 2: et %n autres
+fr hxj-more 5: et %n autres
+fr hxj-p-all 0: Tout (%n jour)
+fr hxj-p-all 1: Tout (%n jour)
+fr hxj-p-all 2: Tout (%n jours)
+fr hxj-p-all 5: Tout (%n jours)
+fr hxj-retention 0: L’historique remonte à %n jour (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.
+fr hxj-retention 1: L’historique remonte à %n jour (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.
+fr hxj-retention 2: L’historique remonte à %n jours (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.
+fr hxj-retention 5: L’historique remonte à %n jours (jusqu’au %date). Les plus anciennes sont supprimées chaque jour.
+fr hxj-w-later 0: « %title » sera supprimé. La modification ultérieure (%refs) devient inactive.
+fr hxj-w-later 1: « %title » sera supprimé. La modification ultérieure (%refs) devient inactive.
+fr hxj-w-later 2: « %title » sera supprimé. Les %n modifications ultérieures (%refs) deviennent inactives.
+fr hxj-w-later 5: « %title » sera supprimé. Les %n modifications ultérieures (%refs) deviennent inactives.
+fr import-done 0: 0 objet importé.
+fr import-done 1: 1 objet importé.
+fr import-done 2: 2 objets importés.
+fr import-done 5: 5 objets importés.
+fr js-color-count 0: %n entrée
+fr js-color-count 1: %n entrée
+fr js-color-count 2: %n entrées
+fr js-color-count 5: %n entrées
+fr js-color-g-offer 0: Dans le sélecteur · %n couleur
+fr js-color-g-offer 1: Dans le sélecteur · %n couleur
+fr js-color-g-offer 2: Dans le sélecteur · %n couleurs
+fr js-color-g-offer 5: Dans le sélecteur · %n couleurs
+fr js-color-more 0: + %n autre
+fr js-color-more 1: + %n autre
+fr js-color-more 2: + %n autres
+fr js-color-more 5: + %n autres
+fr js-imp-ct 0: %n contact
+fr js-imp-ct 1: %n contact
+fr js-imp-ct 2: %n contacts
+fr js-imp-ct 5: %n contacts
+fr js-imp-done 0: « %title » créé · %count entrée importée
+fr js-imp-done 1: « %title » créé · %count entrée importée
+fr js-imp-done 2: « %title » créé · %count entrées importées
+fr js-imp-done 5: « %title » créé · %count entrées importées
+fr js-imp-ev 0: %n événement
+fr js-imp-ev 1: %n événement
+fr js-imp-ev 2: %n événements
+fr js-imp-ev 5: %n événements
+fr js-imp-gr 0: %n groupe
+fr js-imp-gr 1: %n groupe
+fr js-imp-gr 2: %n groupes
+fr js-imp-gr 5: %n groupes
+fr js-imp-jr 0: %n entrée de journal
+fr js-imp-jr 1: %n entrée de journal
+fr js-imp-jr 2: %n entrées de journal
+fr js-imp-jr 5: %n entrées de journal
+fr js-imp-td 0: %n tâche
+fr js-imp-td 1: %n tâche
+fr js-imp-td 2: %n tâches
+fr js-imp-td 5: %n tâches
+fr js-set-imported 0: %n objet importé.
+fr js-set-imported 1: %n objet importé.
+fr js-set-imported 2: %n objets importés.
+fr js-set-imported 5: %n objets importés.
+fr js-snaps-n 0: %n point d'accroche
+fr js-snaps-n 1: %n point d'accroche
+fr js-snaps-n 2: %n points d'accroche
+fr js-snaps-n 5: %n points d'accroche
+fr js-snp-d 0: %n jour
+fr js-snp-d 1: %n jour
+fr js-snp-d 2: %n jours
+fr js-snp-d 5: %n jours
+fr js-snp-w 0: %n semaine
+fr js-snp-w 1: %n semaine
+fr js-snp-w 2: %n semaines
+fr js-snp-w 5: %n semaines
+fr n-addressbooks 0: 1 carnet d'adresses
+fr n-addressbooks 1: 1 carnet d'adresses
+fr n-addressbooks 2: 2 carnets d'adresses
+fr n-addressbooks 5: 5 carnets d'adresses
+fr n-calendars 0: 1 calendrier
+fr n-calendars 1: 1 calendrier
+fr n-calendars 2: 2 calendriers
+fr n-calendars 5: 5 calendriers
+fr set-days 0: 0 jour
+fr set-days 1: 1 jour
+fr set-days 2: 2 jours
+fr set-days 5: 5 jours
+fr set-snaps 0: 0 point d'accroche
+fr set-snaps 1: 1 point d'accroche
+fr set-snaps 2: 2 points d'accroche
+fr set-snaps 5: 5 points d'accroche
+fr trash-retention 0: Tout ce qui est dans la corbeille reste restaurable pendant 0 jour.
+fr trash-retention 1: Tout ce qui est dans la corbeille reste restaurable pendant 1 jour.
+fr trash-retention 2: Tout ce qui est dans la corbeille reste restaurable pendant 2 jours.
+fr trash-retention 5: Tout ce qui est dans la corbeille reste restaurable pendant 5 jours.
+fr v-birthdays-in-the-address-books 0: anniversaire dans les carnets d'adresses
+fr v-birthdays-in-the-address-books 1: anniversaire dans les carnets d'adresses
+fr v-birthdays-in-the-address-books 2: anniversaires dans les carnets d'adresses
+fr v-birthdays-in-the-address-books 5: anniversaires dans les carnets d'adresses
+fr v-busy-weekend-days 0: jour de week-end occupé
+fr v-busy-weekend-days 1: jour de week-end occupé
+fr v-busy-weekend-days 2: jours de week-end occupés
+fr v-busy-weekend-days 5: jours de week-end occupés
+fr v-days 0: jour
+fr v-days 1: jour
+fr v-days 2: jours
+fr v-days 5: jours
+fr v-evenings-booked-from-6-pm 0: soirée prise (à partir de 18 h)
+fr v-evenings-booked-from-6-pm 1: soirée prise (à partir de 18 h)
+fr v-evenings-booked-from-6-pm 2: soirées prises (à partir de 18 h)
+fr v-evenings-booked-from-6-pm 5: soirées prises (à partir de 18 h)
+fr v-events-this-year 0: événement cette année
+fr v-events-this-year 1: événement cette année
+fr v-events-this-year 2: événements cette année
+fr v-events-this-year 5: événements cette année
+fr v-extended-by-a-holiday 0: prolongé par un jour férié
+fr v-extended-by-a-holiday 1: prolongé par un jour férié
+fr v-extended-by-a-holiday 2: prolongés par un jour férié
+fr v-extended-by-a-holiday 5: prolongés par un jour férié
+fr v-free-weekends 0: week-end libre
+fr v-free-weekends 1: week-end libre
+fr v-free-weekends 2: week-ends libres
+fr v-free-weekends 5: week-ends libres
+fr v-n-days 0: 0 jour
+fr v-n-days 1: 1 jour
+fr v-n-days 2: 2 jours
+fr v-n-days 5: 5 jours
+fr v-n-events 0: 0 événement
+fr v-n-events 1: 1 événement
+fr v-n-events 2: 2 événements
+fr v-n-events 5: 5 événements
+fr v-n-hours 0: 0 heure
+fr v-n-hours 1: 1 heure
+fr v-n-hours 2: 2 heures
+fr v-n-hours 5: 5 heures
+fr v-n-minutes 0: 0 minute
+fr v-n-minutes 1: 1 minute
+fr v-n-minutes 2: 2 minutes
+fr v-n-minutes 5: 5 minutes
+fr v-planned 0: prévu
+fr v-planned 1: prévu
+fr v-planned 2: prévus
+fr v-planned 5: prévus
+fr v-remaining-of 0: restant sur
+fr v-remaining-of 1: restant sur
+fr v-remaining-of 2: restants sur
+fr v-remaining-of 5: restants sur
+fr v-rr-count 0: 0 fois
+fr v-rr-count 1: 1 fois
+fr v-rr-count 2: 2 fois
+fr v-rr-count 5: 5 fois
+fr v-rr-ordinal 0: 0e
+fr v-rr-ordinal 1: 1er
+fr v-rr-ordinal 2: 2e
+fr v-rr-ordinal 5: 5e
+fr v-trips 0: voyage
+fr v-trips 1: voyage
+fr v-trips 2: voyages
+fr v-trips 5: voyages
+fr v-vacation-days-planned 0: jour de congé prévu
+fr v-vacation-days-planned 1: jour de congé prévu
+fr v-vacation-days-planned 2: jours de congé prévus
+fr v-vacation-days-planned 5: jours de congé prévus
+es cat-count 0: 0 eventos
+es cat-count 1: 1 evento
+es cat-count 2: 2 eventos
+es cat-count 5: 5 eventos
+es cat-count-task 0: 0 tareas
+es cat-count-task 1: 1 tarea
+es cat-count-task 2: 2 tareas
+es cat-count-task 5: 5 tareas
+es ct-days-in 0: dentro de 0 días
+es ct-days-in 1: dentro de 1 día
+es ct-days-in 2: dentro de 2 días
+es ct-days-in 5: dentro de 5 días
+es ed-h-count 0: 0 veces
+es ed-h-count 1: 1 vez
+es ed-h-count 2: 2 veces
+es ed-h-count 5: 5 veces
+es ed-h-days 0: 0 días
+es ed-h-days 1: 1 día
+es ed-h-days 2: 2 días
+es ed-h-days 5: 5 días
+es ed-h-weeks 0: 0 semanas
+es ed-h-weeks 1: 1 semana
+es ed-h-weeks 2: 2 semanas
+es ed-h-weeks 5: 5 semanas
+es hxj-before-window 0: %n cambios que coinciden son anteriores:
+es hxj-before-window 1: %n cambio que coincide es anterior:
+es hxj-before-window 2: %n cambios que coinciden son anteriores:
+es hxj-before-window 5: %n cambios que coinciden son anteriores:
+es hxj-count 0: %n cambios
+es hxj-count 1: %n cambio
+es hxj-count 2: %n cambios
+es hxj-count 5: %n cambios
+es hxj-more 0: y %n más
+es hxj-more 1: y %n más
+es hxj-more 2: y %n más
+es hxj-more 5: y %n más
+es hxj-p-all 0: Todo (%n días)
+es hxj-p-all 1: Todo (%n día)
+es hxj-p-all 2: Todo (%n días)
+es hxj-p-all 5: Todo (%n días)
+es hxj-retention 0: El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.
+es hxj-retention 1: El historial abarca %n día (hasta el %date). Los cambios más antiguos se quitan a diario.
+es hxj-retention 2: El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.
+es hxj-retention 5: El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.
+es hxj-w-later 0: «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+es hxj-w-later 1: «%title» se borrará. El cambio posterior (%refs) queda inactivo.
+es hxj-w-later 2: «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+es hxj-w-later 5: «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+es import-done 0: 0 objetos importados.
+es import-done 1: 1 objeto importado.
+es import-done 2: 2 objetos importados.
+es import-done 5: 5 objetos importados.
+es js-color-count 0: %n entradas
+es js-color-count 1: %n entrada
+es js-color-count 2: %n entradas
+es js-color-count 5: %n entradas
+es js-color-g-offer 0: En el selector · %n colores
+es js-color-g-offer 1: En el selector · %n color
+es js-color-g-offer 2: En el selector · %n colores
+es js-color-g-offer 5: En el selector · %n colores
+es js-color-more 0: + %n más
+es js-color-more 1: + %n más
+es js-color-more 2: + %n más
+es js-color-more 5: + %n más
+es js-imp-ct 0: %n contactos
+es js-imp-ct 1: %n contacto
+es js-imp-ct 2: %n contactos
+es js-imp-ct 5: %n contactos
+es js-imp-done 0: «%title» creado · %count entradas importadas
+es js-imp-done 1: «%title» creado · %count entrada importada
+es js-imp-done 2: «%title» creado · %count entradas importadas
+es js-imp-done 5: «%title» creado · %count entradas importadas
+es js-imp-ev 0: %n eventos
+es js-imp-ev 1: %n evento
+es js-imp-ev 2: %n eventos
+es js-imp-ev 5: %n eventos
+es js-imp-gr 0: %n grupos
+es js-imp-gr 1: %n grupo
+es js-imp-gr 2: %n grupos
+es js-imp-gr 5: %n grupos
+es js-imp-jr 0: %n entradas de diario
+es js-imp-jr 1: %n entrada de diario
+es js-imp-jr 2: %n entradas de diario
+es js-imp-jr 5: %n entradas de diario
+es js-imp-td 0: %n tareas
+es js-imp-td 1: %n tarea
+es js-imp-td 2: %n tareas
+es js-imp-td 5: %n tareas
+es js-set-imported 0: %n objetos importados.
+es js-set-imported 1: %n objeto importado.
+es js-set-imported 2: %n objetos importados.
+es js-set-imported 5: %n objetos importados.
+es js-snaps-n 0: %n puntos de ajuste
+es js-snaps-n 1: %n punto de ajuste
+es js-snaps-n 2: %n puntos de ajuste
+es js-snaps-n 5: %n puntos de ajuste
+es js-snp-d 0: %n días
+es js-snp-d 1: %n día
+es js-snp-d 2: %n días
+es js-snp-d 5: %n días
+es js-snp-w 0: %n semanas
+es js-snp-w 1: %n semana
+es js-snp-w 2: %n semanas
+es js-snp-w 5: %n semanas
+es n-addressbooks 0: 0 libretas de direcciones
+es n-addressbooks 1: 1 libreta de direcciones
+es n-addressbooks 2: 2 libretas de direcciones
+es n-addressbooks 5: 5 libretas de direcciones
+es n-calendars 0: 0 calendarios
+es n-calendars 1: 1 calendario
+es n-calendars 2: 2 calendarios
+es n-calendars 5: 5 calendarios
+es set-days 0: 0 días
+es set-days 1: 1 día
+es set-days 2: 2 días
+es set-days 5: 5 días
+es set-snaps 0: 0 puntos de ajuste
+es set-snaps 1: 1 punto de ajuste
+es set-snaps 2: 2 puntos de ajuste
+es set-snaps 5: 5 puntos de ajuste
+es trash-retention 0: Todo lo que está en la papelera se puede restaurar durante 0 días.
+es trash-retention 1: Todo lo que está en la papelera se puede restaurar durante 1 día.
+es trash-retention 2: Todo lo que está en la papelera se puede restaurar durante 2 días.
+es trash-retention 5: Todo lo que está en la papelera se puede restaurar durante 5 días.
+es v-birthdays-in-the-address-books 0: cumpleaños en las libretas de direcciones
+es v-birthdays-in-the-address-books 1: cumpleaños en las libretas de direcciones
+es v-birthdays-in-the-address-books 2: cumpleaños en las libretas de direcciones
+es v-birthdays-in-the-address-books 5: cumpleaños en las libretas de direcciones
+es v-busy-weekend-days 0: días de fin de semana ocupados
+es v-busy-weekend-days 1: día de fin de semana ocupado
+es v-busy-weekend-days 2: días de fin de semana ocupados
+es v-busy-weekend-days 5: días de fin de semana ocupados
+es v-days 0: días
+es v-days 1: día
+es v-days 2: días
+es v-days 5: días
+es v-evenings-booked-from-6-pm 0: tardes ocupadas (desde las 18:00)
+es v-evenings-booked-from-6-pm 1: tarde ocupada (desde las 18:00)
+es v-evenings-booked-from-6-pm 2: tardes ocupadas (desde las 18:00)
+es v-evenings-booked-from-6-pm 5: tardes ocupadas (desde las 18:00)
+es v-events-this-year 0: eventos este año
+es v-events-this-year 1: evento este año
+es v-events-this-year 2: eventos este año
+es v-events-this-year 5: eventos este año
+es v-extended-by-a-holiday 0: alargados por un festivo
+es v-extended-by-a-holiday 1: alargado por un festivo
+es v-extended-by-a-holiday 2: alargados por un festivo
+es v-extended-by-a-holiday 5: alargados por un festivo
+es v-free-weekends 0: fines de semana libres
+es v-free-weekends 1: fin de semana libre
+es v-free-weekends 2: fines de semana libres
+es v-free-weekends 5: fines de semana libres
+es v-n-days 0: 0 días
+es v-n-days 1: 1 día
+es v-n-days 2: 2 días
+es v-n-days 5: 5 días
+es v-n-events 0: 0 eventos
+es v-n-events 1: 1 evento
+es v-n-events 2: 2 eventos
+es v-n-events 5: 5 eventos
+es v-n-hours 0: 0 horas
+es v-n-hours 1: 1 hora
+es v-n-hours 2: 2 horas
+es v-n-hours 5: 5 horas
+es v-n-minutes 0: 0 minutos
+es v-n-minutes 1: 1 minuto
+es v-n-minutes 2: 2 minutos
+es v-n-minutes 5: 5 minutos
+es v-planned 0: planificados
+es v-planned 1: planificado
+es v-planned 2: planificados
+es v-planned 5: planificados
+es v-remaining-of 0: restantes de
+es v-remaining-of 1: restante de
+es v-remaining-of 2: restantes de
+es v-remaining-of 5: restantes de
+es v-rr-count 0: 0 veces
+es v-rr-count 1: 1 vez
+es v-rr-count 2: 2 veces
+es v-rr-count 5: 5 veces
+es v-trips 0: viajes
+es v-trips 1: viaje
+es v-trips 2: viajes
+es v-trips 5: viajes
+es v-vacation-days-planned 0: días de vacaciones planificados
+es v-vacation-days-planned 1: día de vacaciones planificado
+es v-vacation-days-planned 2: días de vacaciones planificados
+es v-vacation-days-planned 5: días de vacaciones planificados
