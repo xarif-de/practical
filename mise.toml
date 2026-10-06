@@ -72,7 +72,7 @@ description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): R
 run = "e2e/seed/seed.sh"
 
 [tasks.e2e]
-description = "Functional e2e suite (Playwright, e2e/functional) against a release build of this checkout on a fresh copy of the fixture"
+description = "Functional e2e suite (Playwright, e2e/functional) against an e2e-profile build of this checkout (E2E_PROFILE=release: the shipped profile); spec files on E2E_WORKERS (4) workers, each file on fresh servers + fixture copies"
 run = '''
 cd e2e
 [ -d node_modules ] || npm ci --no-fund --no-audit

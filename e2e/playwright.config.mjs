@@ -1,11 +1,13 @@
 // PractiCal e2e. Projects:
-//   functional            — e2e/functional, desktop, de, serial (tests share one mutable DB copy)
+//   functional            — e2e/functional, desktop, de; spec files in parallel (E2E_WORKERS, default 4), the tests of
+//                           a file in order on one worker, each file on fresh servers + DB copies (lib/test.mjs)
 //   visual-<vp>-<scheme>  — e2e/visual, every surface; de; desktop 1440×900 / phone 390×844 × light / dark
 //   visual-en-*           — the @main states again in en
 // E2E_SUITE=visual selects the visual projects, otherwise the functional one runs.
-// The server is built and started by global-setup.mjs; artifacts of the visual suite go to E2E_OUT.
+// global-setup.mjs builds the server and starts the visual/perf suites' shared pair (the functional workers start
+// their own); artifacts of the visual suite go to E2E_OUT.
 import { defineConfig } from '@playwright/test';
-import { BASE, PORT, TZ } from './lib/env.mjs';
+import { BASE, FIRST_PORT, TZ } from './lib/env.mjs';
 
 const desktop = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false };
 const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
@@ -28,13 +30,13 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   retries: 0, // a flaky test is fixed, never retried away
   forbidOnly: true,
-  reporter: [['list'], ['json', { outputFile: `.work/last-run-${PORT}.json` }]],
-  outputDir: `.work/test-results-${PORT}`,
+  reporter: [['list'], ['json', { outputFile: `.work/last-run-${FIRST_PORT}.json` }]],
+  outputDir: `.work/test-results-${FIRST_PORT}`,
   workers: Number(process.env.E2E_WORKERS || 4),
-  // one suite per run: both share the server's DB, and the functional suite writes to it
+  // one suite per run: the visual suite's workers share one server (read-only), the functional suite's write to their own
   // perf: interaction latency (e2e/perf), opt-in, never part of the gate
   projects: process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
     : process.env.E2E_SUITE === 'visual' ? visual : [
-    { name: 'functional', testDir: './functional', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } },
+    { name: 'functional', testDir: './functional', fullyParallel: false, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } },
   ],
 });

@@ -3,7 +3,8 @@
 // get one gray PNG), service workers blocked (config). Logged in as alice via DEV_LOGIN on first visit.
 import { test as base, expect } from '@playwright/test';
 import zlib from 'node:zlib';
-import { BASE, NOW } from './env.mjs';
+import { BASE, BIN, FIXTURE, NOW, PER_WORKER, PORT, RUN_DIR } from './env.mjs';
+import { startPair } from './servers.mjs';
 
 // 256×256 gray tile (#d9d9d9), generated once
 const TILE = (() => {
@@ -45,6 +46,22 @@ function initScript([css]) {
 }
 
 export const test = base.extend({
+  // functional suite (PER_WORKER): this worker's own server pair (lib/env.mjs ports), started on fresh fixture copies
+  // for every spec file — a spec sees the fixture as seeded, whatever ran before it in this worker or another
+  _servers: [async ({}, use) => {
+    const s = { file: null, pair: null };
+    await use(s);
+    if (s.pair) await s.pair.stop();
+  }, { scope: 'worker' }],
+  _fresh: [async ({ _servers: s }, use, testInfo) => {
+    if (PER_WORKER && s.file !== testInfo.file) {
+      if (s.pair) await s.pair.stop();
+      s.pair = null;
+      s.pair = await startPair({ bin: BIN, runDir: RUN_DIR, port: PORT, fixture: FIXTURE });
+      s.file = testInfo.file;
+    }
+    await use();
+  }, { auto: true }],
   // in-flight request counter for settle() (SSE streams excluded: they never end)
   page: async ({ page }, use) => {
     const inflight = new Set();

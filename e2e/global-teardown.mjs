@@ -1,16 +1,8 @@
-// Stops exactly the servers global-setup.mjs started (RUN_DIR/pids): SIGINT, then SIGKILL after 5 s.
-import fs from 'node:fs';
-import path from 'node:path';
-import { RUN_DIR } from './lib/env.mjs';
+// Stops exactly the servers this run started (<run dir>/pids of every slot, lib/servers.mjs): SIGINT, then SIGKILL
+// after 5 s. Workers stop their own pairs; what remains here is a crashed worker's or the shared pair.
+import { runDirs } from './global-setup.mjs';
+import { stopPids } from './lib/servers.mjs';
 
-const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
-
-export default async function globalTeardown() {
-  const f = path.join(RUN_DIR, 'pids');
-  if (!fs.existsSync(f)) return;
-  const pids = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).map(Number);
-  for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGINT');
-  for (let i = 0; i < 50 && pids.some(alive); i++) await new Promise(r => setTimeout(r, 100));
-  for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGKILL');
-  fs.rmSync(f);
+export default async function globalTeardown(config) {
+  for (const d of runDirs(config)) await stopPids(d);
 }
