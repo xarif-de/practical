@@ -20,7 +20,7 @@ pub fn generate_secret() -> String {
 /// Returns the one-time visible token string.
 pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult<String> {
     if name.trim().is_empty() {
-        return Err(AppError::BadRequest("name required".into()));
+        return Err(AppError::bad("err-name-required"));
     }
     let secret = generate_secret();
     let mut id = state.principals.add_app_token(&user.id, name.trim().to_string(), secret.clone()).await?;

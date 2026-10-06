@@ -167,7 +167,7 @@ pub fn weekends(y: &YearData, l: &L) -> String {
         let _ = write!(cells, "<div class=\"we {}{}{}{}\" data-date=\"{sa}\"><b>{}</b><small>{}</small><span>{}</span></div>", if is_free { "free" } else { "busy" }, if longw { " long" } else { "" }, if so < y.today { " past" } else { "" }, if is_next { " next" } else { "" }, l.dm(sa), l.week_short(sa.iso_week().week()), e(&label));
         d += Duration::days(7);
     }
-    format!("<div class=\"kpi\"><div><b>{free}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{long_n}</b><span>{}</span></div></div><div class=\"wes\">{cells}</div>", l.t("v-free-weekends"), total - free, l.t("v-planned"), l.t("v-extended-by-a-holiday"))
+    format!("<div class=\"kpi\"><div><b>{free}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{long_n}</b><span>{}</span></div></div><div class=\"wes\">{cells}</div>", l.tn("v-free-weekends", free), total - free, l.tn("v-planned", total - free), l.tn("v-extended-by-a-holiday", long_n))
 }
 
 pub fn vacation(y: &YearData, l: &L) -> String {
@@ -242,11 +242,12 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         bars(&school, "f"),
         l.t("v-vacation"),
         bars(&vacs, "u"),
-        l.t("v-vacation-days-planned"),
-        l.t("v-remaining-of"),
+        l.tn("v-vacation-days-planned", used),
+        // "–" (no entitlement set) is no number: the general form
+        match y.vacation_days { Some(v) => l.tn("v-remaining-of", v - used), None => l.ta("v-remaining-of", &[("n", "–".into())]) },
         y.vacation_days.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
         vacs.len(),
-        l.t("v-trips"),
+        l.tn("v-trips", vacs.len()),
         l.t("v-bridge-days"),
         l.t("v-counting-rule"),
         e(&y.vacation_rule),
@@ -264,17 +265,14 @@ pub fn countdown(y: &YearData, l: &L) -> String {
     }
     let mut items = vec![];
     for c in &y.birthdays {
-        let parts: Vec<&str> = c.birthday.trim_start_matches("--").split('-').collect();
-        let (by, bm, bd) = if c.birthday.starts_with("--") { (None, parts[0].parse::<u32>().ok(), parts.get(1).and_then(|x| x.parse::<u32>().ok())) } else { (parts[0].parse::<i32>().ok(), parts.get(1).and_then(|x| x.parse::<u32>().ok()), parts.get(2).and_then(|x| x.parse::<u32>().ok())) };
-        let (Some(bm), Some(bd)) = (bm, bd) else { continue };
-        let this = NaiveDate::from_ymd_opt(y.today.year(), bm, bd).or_else(|| NaiveDate::from_ymd_opt(y.today.year(), bm, 28));
-        let Some(this) = this else { continue };
+        let Some((by, bm, bd)) = contacts::partial_parts(&c.birthday) else { continue };
+        // this year's day (29 February: the 28th in a common year), and the next one from today on
+        let (Some(this), Some(nd)) = (contacts::yearly_in(y.today.year(), bm, bd), contacts::next_yearly(bm, bd, y.today)) else { continue };
         let age = |yr: i32| by.map(|b| format!(" · {}", yr - b)).unwrap_or_default();
         let ago = (y.today - this).num_days();
         if ago > 0 && ago <= 30 {
             items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true, color: c.color_index() });
         }
-        let nd = if this >= y.today { this } else { NaiveDate::from_ymd_opt(y.today.year() + 1, bm, bd).unwrap_or(this) };
         items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false, color: c.color_index() });
     }
     for v in &y.vacations {
@@ -298,11 +296,11 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         if i.over {
             let ago = (y.today - i.date).num_days();
             let pct = 100 - ago * 100 / 30;
-            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.t("v-days"), crate::render::ico(i.icon), e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
+            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.tn("v-days", ago), crate::render::ico(i.icon), e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
         } else {
             let left = (i.date - y.today).num_days();
             let pct = (100 - left * 100 / 365).clamp(0, 100);
-            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.t("v-days"), crate::render::ico(i.icon), e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
+            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.tn("v-days", left), crate::render::ico(i.icon), e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
         }
     };
     let over: Vec<&Item> = items.iter().filter(|i| i.over).collect();
@@ -338,21 +336,21 @@ pub fn numbers(y: &YearData, l: &L) -> String {
     sorted.sort_by_key(|(_, v)| std::cmp::Reverse(v.0));
     let bars: String = sorted.iter().map(|(k, (n, c))| format!("<div class=\"row\"><span>{}</span><div class=\"b\" style=\"--w:{}%;--c:{}\"></div><b>{n}</b></div>", e(k), n * 100 / mx, e(c))).collect();
     let wmax = per_week.values().copied().max().unwrap_or(1).max(1);
-    let spark: String = (1..=53u32).map(|w| format!("<i style=\"--h:{}%\" title=\"{}: {}\"></i>", l.week_short(w), per_week.get(&w).copied().unwrap_or(0) * 100 / wmax, per_week.get(&w).copied().unwrap_or(0))).collect();
+    let spark: String = (1..=53u32).map(|w| { let n = per_week.get(&w).copied().unwrap_or(0); format!("<i style=\"--h:{}%\" title=\"{}: {n}\"></i>", n * 100 / wmax, l.week_short(w)) }).collect();
     let mut top: Vec<(u32, usize)> = per_week.iter().map(|(k, v)| (*k, *v)).collect();
     top.sort_by_key(|(_, v)| std::cmp::Reverse(*v));
-    let top: String = top.iter().take(5).map(|(k, v)| format!("<li><b>{}</b> — {v} {}</li>", l.week_short(*k), l.t("v-events"))).collect();
+    let top: String = top.iter().take(5).map(|(k, v)| format!("<li><b>{}</b> — {}</li>", l.week_short(*k), l.tn("v-n-events", *v))).collect();
     let total: usize = percal.values().map(|v| v.0).sum();
     let wes = weekend_days.values().filter(|n| **n >= 2).count();
     format!(
         "<div class=\"kpis\"><div><b>{total}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div><div><b>{wes}</b><span>{}</span></div><div><b>{}</b><span>{}</span></div></div>\
 <div class=\"stats\"><div class=\"ybox\"><h2 class=\"yh\">{}</h2>{bars}</div><div class=\"ybox\"><h2 class=\"yh\">{}</h2><div class=\"spark\">{spark}</div><div class=\"sub\">{} → {}</div></div><div class=\"ybox topw\"><h2 class=\"yh\">{}</h2><ol>{top}</ol></div></div>",
-        l.t("v-events-this-year"),
+        l.tn("v-events-this-year", total),
         evenings.len(),
-        l.t("v-evenings-booked-from-6-pm"),
-        l.t("v-busy-weekend-days"),
+        l.tn("v-evenings-booked-from-6-pm", evenings.len()),
+        l.tn("v-busy-weekend-days", wes),
         y.birthdays.len(),
-        l.t("v-birthdays-in-the-address-books"),
+        l.tn("v-birthdays-in-the-address-books", y.birthdays.len()),
         l.t("v-events-per-calendar"),
         l.t("v-load-per-week"),
         l.week_short(1),

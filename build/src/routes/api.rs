@@ -196,7 +196,7 @@ struct BatchDone {
 async fn colors_batch(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<ColorBatch>) -> AppResult<Json<BatchDone>> {
     check_csrf(&session, &headers).await?;
     if b.changes.len() > 5000 {
-        return Err(AppError::BadRequest("too many changes".into()));
+        return Err(AppError::bad("err-too-many-changes"));
     }
     let mut g = history::begin(&state, Actor { label: Some("colors:".into()), ..Actor::ui(&user) }).await;
     for ch in &b.changes {
@@ -225,7 +225,7 @@ async fn color_put(State(state): State<SharedState>, user: Principal, session: S
             colors::set_object_color(&state, &user, p, cal, id, &color).await?;
             g.commit().await;
         }
-        _ => return Err(AppError::BadRequest("unknown colour target".into())),
+        _ => return Err(AppError::bad("err-colour-target")),
     }
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
@@ -385,8 +385,8 @@ async fn update_contact(State(state): State<SharedState>, user: Principal, sessi
     g.object(Store::Ab, &p, &a, &id);
     if u.input.principal != p || u.input.ab_id != a {
         let (tp, ta) = (u.input.principal.clone(), u.input.ab_id.clone());
-        let old = rustical_store::AddressbookReadStore::get_object(&*state.addressbooks, &p, &a, &id, false).await?;
-        let uid = contacts::parse_vcf(old.get_vcf())?.get_uid().unwrap_or(&id).to_string();
+        let (old, _) = contacts::stored_card(&state, &p, &a, &id).await?;
+        let uid = contacts::parse_vcf(&old)?.get_uid().unwrap_or(&id).to_string();
         let new_id = contacts::create_contact_as(&state, &user, u.input, Some(&uid)).await?;
         g.object(Store::Ab, &tp, &ta, &new_id);
         contacts::delete_contact(&state, &user, &p, &a, &id).await?;
@@ -447,7 +447,7 @@ async fn update_task(State(state): State<SharedState>, user: Principal, ctx: cra
         Some(done) => tasks::set_completed(&state, &user, &p, &c, &id, done, vc.tz).await?,
         None => {
             if u.input.principal != p || u.input.cal_id != c {
-                return Err(AppError::BadRequest("task cannot change calendar".into()));
+                return Err(AppError::bad("err-task-calendar"));
             }
             tasks::update_task(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?
         }
@@ -510,7 +510,7 @@ struct HistoryIn {
 async fn history_post(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<HistoryIn>) -> AppResult<Json<bool>> {
     check_csrf(&session, &headers).await?;
     if b.q.chars().count() > 200 || b.target.as_ref().is_some_and(|t| t.to_string().len() > 2000) {
-        return Err(AppError::BadRequest("too long".into()));
+        return Err(AppError::bad("err-too-long"));
     }
     let days = prefs::get(&state.db, &user.id).await?.history_days();
     crate::domain::search_history::record(&state.db, &user.id, &b.q, b.target.as_ref(), days).await?;
@@ -556,10 +556,10 @@ struct SubscribeBody {
 async fn push_subscribe(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<SubscribeBody>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
     if state.vapid.is_none() {
-        return Err(AppError::BadRequest("push disabled".into()));
+        return Err(AppError::bad("err-push-disabled"));
     }
     if !b.endpoint.starts_with("https://") {
-        return Err(AppError::BadRequest("endpoint must be https".into()));
+        return Err(AppError::bad("err-push-https"));
     }
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth, user_agent) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET principal=excluded.principal, p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent")

@@ -62,6 +62,13 @@ pub fn locale(lang: &str) -> &'static str {
 }
 
 impl I18n {
+    /// One process-wide instance (the bundles never change): for texts rendered without a request, the
+    /// English Display of an error message (`error::Msg`).
+    pub fn shared() -> &'static Self {
+        static I: std::sync::OnceLock<Arc<I18n>> = std::sync::OnceLock::new();
+        I.get_or_init(Self::load)
+    }
+
     pub fn load() -> Arc<Self> {
         Arc::new(Self { bundles: SOURCES.iter().map(|(l, src)| (*l, bundle(l, src))).collect(), js: SOURCES.iter().map(|_| std::sync::OnceLock::new()).collect() })
     }
@@ -75,7 +82,19 @@ impl I18n {
     }
 
     pub fn t_args(&self, lang: &str, key: &str, args: Option<&FluentArgs>) -> String {
-        // the asked language, then English, then German
+        self.lookup_args(lang, key, args).unwrap_or_else(|| {
+            tracing::warn!("missing translation {lang}/{key}");
+            format!("⟦{key}⟧")
+        })
+    }
+
+    /// The message in the asked language, then English, then German; None (and no warning) where no
+    /// language has it — for keys built from data (`hx-a-<property>`), whose caller has a fallback.
+    pub fn lookup(&self, lang: &str, key: &str) -> Option<String> {
+        self.lookup_args(lang, key, None)
+    }
+
+    fn lookup_args(&self, lang: &str, key: &str, args: Option<&FluentArgs>) -> Option<String> {
         for l in [lang, "en", "de"] {
             let Some(b) = self.get(l) else { continue };
             let Some(pattern) = b.get_message(key).and_then(|m| m.value()) else { continue };
@@ -87,10 +106,9 @@ impl I18n {
             if !errors.is_empty() {
                 tracing::warn!("translation {l}/{key}: {errors:?}");
             }
-            return s;
+            return Some(s);
         }
-        tracing::warn!("missing translation {lang}/{key}");
-        format!("⟦{key}⟧")
+        None
     }
 
     /// Message with one named argument.
@@ -113,11 +131,53 @@ impl I18n {
             .collect()
     }
 
+    /// The same for the browser: a plural message (`plural_forms`) as an object of its forms plus `"$"`, the
+    /// name of its number (app.js `tr` picks the form with Intl.PluralRules); every other one as a string.
+    pub fn with_prefix_json(&self, lang: &str, prefix: &str) -> Vec<(String, serde_json::Value)> {
+        self.with_prefix(lang, prefix).into_iter().map(|(k, v)| {
+            let v = match self.plural_forms(lang, &k, |var| format!("%{var}")) {
+                Some((var, forms)) => {
+                    let mut o: serde_json::Map<String, serde_json::Value> = forms.into_iter().map(|(c, s)| (c, serde_json::Value::String(s))).collect();
+                    o.insert("$".into(), var.into());
+                    serde_json::Value::Object(o)
+                }
+                None => serde_json::Value::String(v),
+            };
+            (k, v)
+        }).collect()
+    }
+
+    /// The forms of a plural message — one whose whole pattern selects on a number (`{ $n -> [one] … *[other] … }`):
+    /// (the number's name, [(CLDR category or number, the form with `placeholder(name)` for the number)]). None for
+    /// any other message. The browser picks the form (Intl.PluralRules of the page locale, the same CLDR rules).
+    pub fn plural_forms(&self, lang: &str, key: &str, placeholder: impl Fn(&str) -> String) -> Option<(String, Vec<(String, String)>)> {
+        use fluent_syntax::ast::{Expression, InlineExpression, PatternElement, VariantKey};
+        let (b, pattern) = [lang, "en", "de"].into_iter().find_map(|l| Some((self.get(l)?, self.get(l)?.get_message(key)?.value()?)))?;
+        let [PatternElement::Placeable { expression: Expression::Select { selector: InlineExpression::VariableReference { id }, variants } }] = pattern.elements.as_slice() else { return None };
+        let mut args = FluentArgs::new();
+        args.set(id.name.to_string(), FluentValue::from(placeholder(id.name)));
+        let forms = variants.iter().map(|v| {
+            let name = match &v.key { VariantKey::Identifier { name } | VariantKey::NumberLiteral { value: name } => name.to_string() };
+            let mut errors = vec![];
+            (name, b.format_pattern(&v.value, Some(&args), &mut errors).into_owned())
+        }).collect();
+        Some((id.name.to_string(), forms))
+    }
+
+    /// A plural message for a data attribute of a template: its forms as a JSON object, the number as `{n}`
+    /// (app.js `plural`); any other message as it reads with `{n}`.
+    pub fn plural_json(&self, lang: &str, key: &str) -> String {
+        match self.plural_forms(lang, key, |var| format!("{{{var}}}")) {
+            Some((_, forms)) => serde_json::Value::Object(forms.into_iter().map(|(c, s)| (c, serde_json::Value::String(s))).collect()).to_string(),
+            None => self.t1(lang, key, "n", "{n}".to_string()),
+        }
+    }
+
     /// The js-* strings of `lang` as a JSON object for app.js (every full page carries it), formatted once
     /// per language.
     pub fn js_json(&self, lang: &str) -> String {
         let build = || {
-            let m: serde_json::Map<String, serde_json::Value> = self.with_prefix(lang, "js-").into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
+            let m: serde_json::Map<String, serde_json::Value> = self.with_prefix_json(lang, "js-").into_iter().collect();
             serde_json::Value::Object(m).to_string()
         };
         match SOURCES.iter().position(|(l, _)| *l == lang) {

@@ -33,7 +33,10 @@ tab-trash = Papelera
 tab-categories = Categorías
 cat-hint = Una categoría puede rellenar de antemano ajustes de un evento (plantilla, editable en el evento) o fijarlos (bloqueo, no editable en el evento). Con varias categorías gana la que esté más arriba en el evento. Los bloqueos solo se aplican en esta interfaz; otras apps de calendario pueden cambiarlos libremente.
 cat-rule-new = Crear regla
-cat-count = { $n } eventos
+cat-count = { $n ->
+    [one] { $n } evento
+   *[other] { $n } eventos
+}
 cat-none = Aún no hay categorías.
 cat-new-placeholder = Nueva categoría con regla …
 tab-general = General
@@ -61,7 +64,10 @@ n-addressbooks = { $n ->
     [one] 1 libreta de direcciones
    *[other] { $n } libretas de direcciones
 }
-trash-retention = Todo lo que está en la papelera se puede restaurar durante { $days } días.
+trash-retention = { $days ->
+    [one] Todo lo que está en la papelera se puede restaurar durante { $days } día.
+   *[other] Todo lo que está en la papelera se puede restaurar durante { $days } días.
+}
 calendars = Calendarios
 addressbooks = Libretas de direcciones
 col-name = Nombre
@@ -114,6 +120,54 @@ confirm-purge-collection = ¿Eliminar «{ $name }» definitivamente? No se puede
 confirm-delete-token = ¿Eliminar el token «{ $name }»? El dispositivo pierde el acceso de inmediato.
 flash-forbidden = No tienes permiso para hacer eso.
 flash-not-found = No encontrado.
+flash-exists = Eso ya existe.
+flash-bad-data = Los datos no son válidos: { $detail }
+flash-failed = No ha funcionado: los detalles están en el registro del servidor.
+err-window-too-large = El periodo es demasiado largo.
+err-too-many-changes = Demasiados cambios a la vez.
+err-colour-target = Destino de color desconocido.
+err-task-calendar = Una tarea no puede cambiar de calendario.
+err-too-long = Demasiado largo.
+err-push-disabled = Las notificaciones están desactivadas en este servidor.
+err-push-https = El punto de conexión debe ser https.
+err-vacation-title = { vacation-title-bad }: { $detail }
+err-snap-point = Punto de ajuste no válido: { $token }
+err-color = El color debe tener el formato #rrggbb.
+err-color-or-empty = El color debe tener el formato #rrggbb o estar vacío.
+err-name-required = Indica un nombre.
+err-summary-required = Indica un título.
+err-end-before-start = El final es anterior al inicio.
+err-due-before-start = El vencimiento es anterior al inicio.
+err-changed-contact = El contacto se cambió en otro lugar: vuelve a cargar.
+err-changed-event = El evento se cambió en otro lugar: vuelve a cargar.
+err-changed-task = La tarea se cambió en otro lugar: vuelve a cargar.
+err-undo-nothing = Deshacer no ha cambiado nada.
+err-attach-base64 = El adjunto no está codificado en base64.
+err-attach-too-large = Adjunto demasiado grande: { $size } bytes (límite { $file } por archivo, { $total } por guardado).
+err-too-many-presets = Demasiados recordatorios predefinidos.
+err-invalid-preset = Recordatorio predefinido no válido.
+err-rrule-empty = La regla de repetición está vacía.
+err-rrule-freq = La regla de repetición debe empezar por FREQ=.
+err-rrule = Regla de repetición no válida: { $detail }
+err-latlon = Latitud/longitud fuera de rango.
+err-ics = El archivo .ics no es válido: { $detail }
+err-no-calendar-objects = El archivo no contiene eventos, tareas ni entradas de diario.
+err-vcf = El archivo .vcf no es válido: { $detail }
+err-no-vcards = El archivo no contiene ninguna vCard.
+err-subscribed-read-only = Un calendario suscrito es de solo lectura.
+err-no-event-or-task = Este objeto no contiene ningún evento ni tarea.
+err-rule-mode = Modo de regla desconocido { $mode }.
+err-rule-title = Título no válido.
+err-rule-colour = Color no válido.
+err-rule-entries = Demasiadas entradas en la regla.
+err-rule-files = Una regla no puede incrustar archivos.
+err-category-name = Nombre de categoría no válido.
+err-rule-scope = Ámbito de regla desconocido.
+err-group-empty-id = Este nombre de grupo no da ningún identificador.
+err-group-exists = El grupo { $id } ya existe.
+err-group-individuals = Solo las personas pueden unirse a un grupo.
+err-group-confirm = El nombre introducido no coincide.
+err-group-gone = El grupo ya no existe.
 flash-confirm-mismatch = El nombre introducido no coincide.
 flash-group-trashed = Grupo movido a la papelera.
 flash-saved = Guardado.
@@ -351,19 +405,25 @@ ed-pe-from = sustituye a { $n }
 ed-pe-to = representado por { $n }
 ed-pe-known = en la libreta de direcciones
 ed-pe-unknown = no está en la libreta de direcciones
-ed-h-count = { $n } veces
+ed-h-count = { $n ->
+    [one] { $n } vez
+   *[other] { $n } veces
+}
 ed-h-until = hasta
 ed-h-on = el
 ed-h-every = cada { $n }
 ed-h-min = { $n } min
-ed-h-hour = 1 h
-ed-h-day = 1 día
 ed-h-before = antes
 ed-h-hours = { $n } h
-ed-h-days = { $n } días
+ed-h-days = { $n ->
+    [one] { $n } día
+   *[other] { $n } días
+}
 ed-h-repeat = repetido { $n }×
-ed-h-week = 1 semana
-ed-h-weeks = { $n } semanas
+ed-h-weeks = { $n ->
+    [one] { $n } semana
+   *[other] { $n } semanas
+}
 ed-h-after = después del inicio
 ed-h-after-end = después del final
 ed-h-at-start = al inicio
@@ -431,7 +491,10 @@ task-done = Hecha
 tasks-none-open = Nada pendiente.
 tasks-done = Hechas
 task-reopen = Reabrir
-import-done = { $n } objetos importados.
+import-done = { $n ->
+    [one] { $n } objeto importado.
+   *[other] { $n } objetos importados.
+}
 vacation-rule = Regla de cómputo de vacaciones
 vacation-rule-hint = Categoría: cuentan los eventos con esta categoría. Calendario: todos los eventos del calendario. Título: los eventos cuyo título coincide con la expresión regular (sin distinguir mayúsculas). Se cuentan los días laborables sin festivos.
 vacation-kind-category = Categoría
@@ -499,7 +562,10 @@ ct-reset = Restablecer
 ct-back = Volver al contacto nuevo
 ct-vcf = Descargar vCard
 ct-days-today = ¡hoy!
-ct-days-in = dentro de { $n } días
+ct-days-in = { $n ->
+    [one] dentro de { $n } día
+   *[other] dentro de { $n } días
+}
 ct-turns = cumple { $n }
 act-call = Llamar
 act-sms = SMS
@@ -586,7 +652,10 @@ set-comp-event = Eventos
 set-comp-todo = Tareas
 set-comp-journal = Diario
 set-rule = Regla
-cat-count-task = { $n } tareas
+cat-count-task = { $n ->
+    [one] { $n } tarea
+   *[other] { $n } tareas
+}
 set-region = Región
 set-regions-public = Festivos
 set-regions-school = Vacaciones escolares
@@ -608,10 +677,15 @@ v-all-day = todo el día
 v-at-start = al inicio
 v-attachment = Adjunto
 v-before = antes
-v-birthdays-in-the-address-books = cumpleaños en las libretas de direcciones
+v-birthdays-in-the-address-books = { $n ->
+   *[other] cumpleaños en las libretas de direcciones
+}
 v-bridge-days = Puentes
 v-busiest-weeks = Semanas más ocupadas
-v-busy-weekend-days = días de fin de semana ocupados
+v-busy-weekend-days = { $n ->
+    [one] día de fin de semana ocupado
+   *[other] días de fin de semana ocupados
+}
 v-cancelled = Cancelado
 v-coming-up = Próximamente
 v-confidential = Confidencial
@@ -622,18 +696,36 @@ v-counting-rule = Regla de cómputo:
 v-daily = Cada día
 v-day = Día
 v-day-off = día libre
-v-days = días
+v-days = { $n ->
+    [one] día
+   *[other] días
+}
 v-days-in-a-row = días seguidos
 v-density = Densidad
 v-shown-free = Se muestra como libre
 v-entitlement-and-rule-in-the-settings = Días disponibles y regla en los ajustes.
-v-evenings-booked-from-6-pm = tardes ocupadas (desde las 18:00)
-v-events = eventos
+v-evenings-booked-from-6-pm = { $n ->
+    [one] tarde ocupada (desde las 18:00)
+   *[other] tardes ocupadas (desde las 18:00)
+}
+v-n-events = { $n ->
+    [one] { $n } evento
+   *[other] { $n } eventos
+}
 v-events-per-calendar = Eventos por calendario
-v-events-this-year = eventos este año
-v-extended-by-a-holiday = alargado por un festivo
+v-events-this-year = { $n ->
+    [one] evento este año
+   *[other] eventos este año
+}
+v-extended-by-a-holiday = { $n ->
+    [one] alargado por un festivo
+   *[other] alargados por un festivo
+}
 v-free = libre
-v-free-weekends = fines de semana libres
+v-free-weekends = { $n ->
+    [one] fin de semana libre
+   *[other] fines de semana libres
+}
 v-free-weekends-2 = Fines de semana libres
 v-high-priority = Prioridad alta
 v-holidays = Festivos
@@ -652,20 +744,32 @@ v-no-events = Sin eventos
 v-no-events-on-this-day = No hay eventos este día.
 v-not-congratulated-yet = ¿aún no has felicitado?
 v-over = terminado
-v-planned = planificado
+v-planned = { $n ->
+    [one] planificado
+   *[other] planificados
+}
 v-print-ctrl-p = Imprimir: Ctrl+P
 v-private = Privado
 v-public-holiday = Festivo
 v-recurring = Periódico
-v-remaining-of = restantes de
+v-remaining-of = { $n ->
+    [one] restante de
+   *[other] restantes de
+}
 v-school-holidays = Vacaciones escolares
 v-tentative = Provisional
 v-today = Hoy
 v-top-right-on-mondays = arriba a la derecha los lunes
-v-trips = viajes
+v-trips = { $n ->
+    [one] viaje
+   *[other] viajes
+}
 v-up-to-30-days = hasta 30 días
 v-vacation = Vacaciones
-v-vacation-days-planned = días de vacaciones planificados
+v-vacation-days-planned = { $n ->
+    [one] día de vacaciones planificado
+   *[other] días de vacaciones planificados
+}
 v-vacation-planner = Planificador de vacaciones
 v-was = fue
 v-week = Semana
@@ -718,7 +822,10 @@ v-rr-on-nth = el { $which } { $day }
 v-rr-on-monthday = el día { $d }
 v-rr-on-date = el { $d } de { $month }
 v-rr-in-month = en { $month }
-v-rr-count = { $n } veces
+v-rr-count = { $n ->
+    [one] { $n } vez
+   *[other] { $n } veces
+}
 v-rr-until = hasta el { $date }
 v-n-days = { $n ->
     [one] { $n } día
@@ -780,7 +887,10 @@ js-set-err = Error
 js-set-active = Activo en este dispositivo.
 js-set-denied = Las notificaciones se han bloqueado en el navegador.
 js-set-unsupported = Este navegador no admite notificaciones Push.
-js-set-imported = %n objetos importados.
+js-set-imported = { $n ->
+    [one] %n objeto importado.
+   *[other] %n objetos importados.
+}
 js-tk-open = Pendiente
 js-tk-doing = En curso
 js-tk-done = Completada
@@ -826,10 +936,14 @@ js-regions-none = Ninguna
 js-regions-n = %n regiones
 js-snp-min = %n min
 js-snp-h = %n h
-js-snp-d1 = 1 día
-js-snp-d = %n días
-js-snp-w1 = 1 semana
-js-snp-w = %n semanas
+js-snp-d = { $n ->
+    [one] %n día
+   *[other] %n días
+}
+js-snp-w = { $n ->
+    [one] %n semana
+   *[other] %n semanas
+}
 js-snp-u-min = min
 js-snp-u-h = h
 js-snp-u-d = días
@@ -847,15 +961,23 @@ js-snp-bad = Introduce un número mayor que 0
 js-snp-max = Como máximo 366 días
 js-snp-dup = Este punto de ajuste ya existe
 js-snp-last = Debe quedar un punto antes del inicio
-js-snaps-one = 1 punto de ajuste
-js-snaps-n = %n puntos de ajuste
+js-snaps-n = { $n ->
+    [one] %n punto de ajuste
+   *[other] %n puntos de ajuste
+}
 js-imp-file = Archivo «%file»
-js-imp-ev1 = 1 evento
-js-imp-ev = %n eventos
-js-imp-td1 = 1 tarea
-js-imp-td = %n tareas
-js-imp-jr1 = 1 entrada de diario
-js-imp-jr = %n entradas de diario
+js-imp-ev = { $n ->
+    [one] %n evento
+   *[other] %n eventos
+}
+js-imp-td = { $n ->
+    [one] %n tarea
+   *[other] %n tareas
+}
+js-imp-jr = { $n ->
+    [one] %n entrada de diario
+   *[other] %n entradas de diario
+}
 js-imp-taken = del archivo: %what
 js-imp-f-name = nombre
 js-imp-f-desc = descripción
@@ -865,11 +987,18 @@ js-imp-empty = El archivo no contiene eventos, tareas ni entradas de diario.
 js-imp-other = Elegir otro archivo …
 js-imp-in-file = Incluido en el archivo
 js-imp-busy = Importando …
-js-imp-done = «%title» creado · %count entradas importadas
-js-imp-ct1 = 1 contacto
-js-imp-ct = %n contactos
-js-imp-gr1 = 1 grupo
-js-imp-gr = %n grupos
+js-imp-done = { $count ->
+    [one] «%title» creado · %count entrada importada
+   *[other] «%title» creado · %count entradas importadas
+}
+js-imp-ct = { $n ->
+    [one] %n contacto
+   *[other] %n contactos
+}
+js-imp-gr = { $n ->
+    [one] %n grupo
+   *[other] %n grupos
+}
 js-imp-ab-empty = El archivo no contiene contactos.
 js-vac-word = Palabra completa
 js-vac-begin = Al inicio
@@ -895,8 +1024,13 @@ js-color-k-category-task = Categoría de tareas
 js-color-k-holiday = Festivos
 js-color-k-school = Vacaciones escolares
 js-color-src = %kind «%name»
-js-color-more = + %n más
-js-color-count = %n entradas
+js-color-more = { $n ->
+   *[other] + %n más
+}
+js-color-count = { $n ->
+    [one] %n entrada
+   *[other] %n entradas
+}
 js-color-changed = Recoloreados: %n.
 js-color-recolor-event = Eventos existentes de la categoría «%cat» con el color antiguo: %n. ¿Darles el color nuevo?
 js-color-recolor-task = Tareas existentes de la categoría «%cat» con el color antiguo: %n. ¿Darles el color nuevo?
@@ -963,7 +1097,10 @@ js-color-g-category = Categorías · eventos
 js-color-g-category-task = Categorías · tareas
 js-color-g-event = Eventos con color propio
 js-color-g-task = Tareas con color propio
-js-color-g-offer = En el selector · %n colores
+js-color-g-offer = { $n ->
+    [one] En el selector · %n color
+   *[other] En el selector · %n colores
+}
 js-cfo-block-event = Calendario y eventos
 js-cfo-block-task = Tareas
 js-cfo-btn = Optimizar colores
@@ -1288,8 +1425,10 @@ hx-a-vresource = Recurso (bloque)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Cambios
-hxj-count = %n cambios
-hxj-count-1 = 1 cambio
+hxj-count = { $n ->
+    [one] %n cambio
+   *[other] %n cambios
+}
 hxj-zoom = Periodo
 hxj-days = %n días
 hxj-q = Filtrar: título, valores, persona, dispositivo, n.º
@@ -1324,7 +1463,9 @@ hxj-s-event = %who ha %act el evento %title
 hxj-s-task = %who ha %act la tarea %title
 hxj-s-contact = %who ha %act el contacto %title
 hxj-undone-short = deshecho
-hxj-more = y %n más
+hxj-more = { $n ->
+   *[other] y %n más
+}
 hxj-empty = (vacío)
 hxj-st-reverts = deshace %ref
 hxj-st-undone = deshecho por %ref
@@ -1345,8 +1486,10 @@ hxj-cancel = Cancelar
 hxj-err = No ha funcionado.
 hxj-ask = ¿Deshacer %ref?
 hxj-done = %ref deshecho → nuevo cambio %id.
-hxj-w-later-1 = «%title» se borrará. El cambio posterior (%refs) queda inactivo.
-hxj-w-later-n = «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+hxj-w-later = { $n ->
+    [one] «%title» se borrará. El cambio posterior (%refs) queda inactivo.
+   *[other] «%title» se borrará. Los %n cambios posteriores (%refs) quedan inactivos.
+}
 hxj-w-conflict = «%label» se cambió después%by. Deshacer sobrescribe «%cur» con «%old».
 hxj-w-skip = Omitido: «%title»: %why
 hxj-f-kinds = Tipo
@@ -1357,7 +1500,10 @@ hxj-f-colls = Calendario / libreta
 hxj-f-attrs = Atributo cambiado
 hxj-f-period = Periodo
 hxj-f-status = Estado
-hxj-p-all = Todo (%n días)
+hxj-p-all = { $n ->
+    [one] Todo (%n día)
+   *[other] Todo (%n días)
+}
 hxj-p-today = Hoy
 hxj-p-yesterday = Ayer
 hxj-p-7 = Últimos 7 días
@@ -1376,9 +1522,14 @@ hxj-reset = Restablecer filtros
 hxj-lg-hollow = deshecho / inactivo
 hxj-lg-arc = Deshacer salta atrás
 hxj-empty-window = Ningún cambio en este periodo.
-hxj-before-window = %n cambios que coinciden son anteriores:
-hxj-before-window-1 = 1 cambio que coincide es anterior:
-hxj-retention = El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.
+hxj-before-window = { $n ->
+    [one] %n cambio que coincide es anterior:
+   *[other] %n cambios que coinciden son anteriores:
+}
+hxj-retention = { $n ->
+    [one] El historial abarca %n día (hasta el %date). Los cambios más antiguos se quitan a diario.
+   *[other] El historial abarca %n días (hasta el %date). Los cambios más antiguos se quitan a diario.
+}
 hxj-close = Cerrar
 hxj-tech = técnico
 hxj-col-before = Antes

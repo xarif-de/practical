@@ -36,9 +36,9 @@ fn page_context_helpers() {
     assert_eq!(ctx(Some("X"), "a", "/").initials(), "X");
     assert_eq!(ctx(None, "bob", "/").initials(), "BO");
     assert_eq!(ctx(Some("Olaf"), "a", "/").initials(), "OL", "one word: its first two letters");
-    // BUG?: the length check counts bytes, so a one-word name starting with a non-ASCII letter keeps
-    // a single initial ("Ö", 2 bytes) where "Olaf" gets two
-    assert_eq!(ctx(Some("Ölaf"), "a", "/").initials(), "Ö");
+    // the length check counts characters: a one-word name starting with a non-ASCII letter gets two too
+    assert_eq!(ctx(Some("Ölaf"), "a", "/").initials(), "ÖL");
+    assert_eq!(ctx(Some("Ž"), "a", "/").initials(), "Ž");
     let c = ctx(None, "bob", "/settings/prefs");
     assert!(c.is_active("/settings") && !c.is_active("/set") && ctx(None, "b", "/settings").is_active("/settings"));
     assert_eq!((c.user_id(), c.locale(), c.version(), c.rustical_version()), ("bob", "de-DE", env!("CARGO_PKG_VERSION"), env!("RUSTICAL_TAG")));
@@ -60,8 +60,10 @@ async fn error_statuses_and_texts() {
         (AppError::Store(rustical_store::Error::NotFound), StatusCode::NOT_FOUND, "store error: Not found"),
         (AppError::Forbidden, StatusCode::FORBIDDEN, "forbidden"),
         (AppError::Unauthorized, StatusCode::UNAUTHORIZED, "unauthorized"),
-        (AppError::BadRequest("x".into()), StatusCode::BAD_REQUEST, "bad request: x"),
-        (AppError::Conflict("y".into()), StatusCode::CONFLICT, "conflict: y"),
+        // PractiCal's own messages: the English text of their key (what an app-token client reads)
+        (AppError::bad("err-name-required"), StatusCode::BAD_REQUEST, "bad request: name required"),
+        (AppError::bad1("err-snap-point", "token", "soon"), StatusCode::BAD_REQUEST, "bad request: snap point: soon"),
+        (AppError::conflict("err-undo-nothing"), StatusCode::CONFLICT, "conflict: the undo changed nothing"),
         (AppError::Store(rustical_store::Error::AlreadyExists), StatusCode::CONFLICT, "store error: Resource already exists and overwrite=false"),
         (AppError::Internal("z".into()), StatusCode::INTERNAL_SERVER_ERROR, "z"),
         (AppError::Db(sqlx::Error::RowNotFound), StatusCode::INTERNAL_SERVER_ERROR, "database error: no rows returned by a query that expected to return at least one row"),

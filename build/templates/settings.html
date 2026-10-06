@@ -223,7 +223,7 @@
   </form>
 </section>
 
-<section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.t1("cat-count", "n", "{n}") }}" data-t-count-task="{{ ctx.t1("cat-count-task", "n", "{n}") }}" data-t-none="{{ ctx.t("cat-none") }}">
+<section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.tp("cat-count") }}" data-t-count-task="{{ ctx.tp("cat-count-task") }}" data-t-none="{{ ctx.t("cat-none") }}">
   {{ m::back("#", ctx.t("nav-settings")) }}
   <h2>{{ ctx.t("tab-categories") }}</h2>
   {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}

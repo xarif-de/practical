@@ -366,7 +366,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
     let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
     let (raw, _) = split_ics(&obj.get_ics());
-    let rrule = main.get_property("RRULE").map(|p| p.value.clone());
+    let rrule = main.get_property("RRULE").map(|p| ical::rrule_canon(&p.value));
     let timezone = match &main.dtstart.0 {
         caldata::types::CalDateOrDateTime::DateTime(d) => ical::tz_of(&d.timezone()).map(|t| t.name().to_string()).unwrap_or_else(|| tz.name().to_string()),
         _ => tz.name().to_string(),
@@ -709,11 +709,12 @@ pub async fn resolve_related(state: &AppState, user: &Principal, related: &mut [
 pub const EMBED_FILE_MAX: usize = 2 * 1024 * 1024;
 pub const EMBED_TOTAL_MAX: usize = 6 * 1024 * 1024;
 
-/// Decoded byte length of a base64 text (ignoring whitespace), without decoding it.
+/// Decoded byte length of a base64 text (ignoring whitespace and `=` padding, which carries no data),
+/// without decoding it: every 4 characters are 3 bytes, a tail of 2 or 3 characters 1 or 2 bytes (a
+/// lone tail character holds no whole byte).
 fn base64_len(b64: &str) -> usize {
-    let n = b64.bytes().filter(|b| !b.is_ascii_whitespace()).count();
-    let pad = b64.trim_end().bytes().rev().take_while(|b| *b == b'=').count();
-    n / 4 * 3 - pad
+    let n = b64.bytes().filter(|b| !b.is_ascii_whitespace() && *b != b'=').count();
+    n / 4 * 3 + [0, 0, 1, 2][n % 4]
 }
 
 pub(crate) fn is_binary_attach(params: &[(String, String)]) -> bool {
@@ -823,12 +824,12 @@ pub(crate) fn embedded_lines(links: &[Link]) -> AppResult<Vec<String>> {
         let Some(data) = l.data.as_deref() else { continue };
         let clean: String = data.chars().filter(|c| !c.is_whitespace()).collect();
         if clean.is_empty() || !clean.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=') {
-            return Err(AppError::BadRequest("attachment is not base64".into()));
+            return Err(AppError::bad("err-attach-base64"));
         }
         let n = base64_len(&clean);
         total += n;
         if n > EMBED_FILE_MAX || total > EMBED_TOTAL_MAX {
-            return Err(AppError::BadRequest(format!("attachment too large: {} bytes (limit {} per file, {} per save)", n, EMBED_FILE_MAX, EMBED_TOTAL_MAX)));
+            return Err(AppError::BadRequest(crate::error::Msg { key: "err-attach-too-large", args: vec![("size", n.to_string()), ("file", EMBED_FILE_MAX.to_string()), ("total", EMBED_TOTAL_MAX.to_string())] }));
         }
         let mut line = "ATTACH".to_string();
         line.push_str(&link_params(l, false));
@@ -875,7 +876,7 @@ pub struct Person {
 fn persons_of(props: &[String], name: &str) -> Vec<Person> {
     props.iter().filter(|l| prop_name(l) == name).map(|l| {
         let (_, params, value) = ical::split_line(l);
-        let mut p = Person { email: value.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:").to_string(), ..Default::default() };
+        let mut p = Person { email: ical::strip_mailto(value.trim()).to_string(), ..Default::default() };
         for (k, v) in params {
             match k.as_str() {
                 "CN" => p.name = v.trim_matches('"').to_string(),
@@ -957,6 +958,7 @@ fn date_lines(name: &str, values: &[String], all_day: bool, tz: chrono_tz::Tz) -
 
 /// The RRULE's UNTIL as a local date, whatever form it was written in.
 fn rrule_until_local(rrule: &str, tz: chrono_tz::Tz) -> Option<NaiveDate> {
+    let rrule = ical::rrule_canon(rrule);
     let v = rrule.split(';').find_map(|p| p.strip_prefix("UNTIL="))?;
     if let Ok(dt) = NaiveDateTime::parse_from_str(v.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
         return Some(if v.ends_with('Z') { chrono::Utc.from_utc_datetime(&dt).with_timezone(&tz).date_naive() } else { dt.date() });
@@ -967,7 +969,7 @@ fn rrule_until_local(rrule: &str, tz: chrono_tz::Tz) -> Option<NaiveDate> {
 /// A bare `UNTIL=YYYYMMDD` on a timed event becomes the end of that local day in UTC (RFC 5545
 /// wants UNTIL in the DTSTART value type); on an all-day event a date-time UNTIL becomes a date.
 fn normalize_until(rrule: &str, all_day: bool, tz: chrono_tz::Tz) -> String {
-    rrule.split(';').map(|p| {
+    ical::rrule_canon(rrule).split(';').map(|p| {
         let Some(v) = p.strip_prefix("UNTIL=") else { return p.to_string() };
         let date = rrule_until_local(&format!("UNTIL={v}"), tz);
         match date {
@@ -1102,14 +1104,14 @@ pub fn fmt_offsets(list: &[i64]) -> String {
 /// Rejects a preset list that could not have come from the editor (bounds the stored JSON, too).
 pub fn validate_presets(list: &[AlarmPreset]) -> AppResult<()> {
     if list.len() > 50 {
-        return Err(AppError::BadRequest("too many presets".into()));
+        return Err(AppError::bad("err-too-many-presets"));
     }
     for p in list {
         if one_of(&p.action, &["DISPLAY", "AUDIO", "EMAIL"]).is_none() || (!p.proximity.is_empty() && one_of(&p.proximity, PROXIMITY).is_none()) {
-            return Err(AppError::BadRequest("invalid preset".into()));
+            return Err(AppError::bad("err-invalid-preset"));
         }
         if p.minutes.abs() > 366 * 1440 || p.repeat < 0 || p.repeat > 100 || p.duration_minutes < 0 || p.attach.len() > 1000 || p.attendees.len() > 20 {
-            return Err(AppError::BadRequest("invalid preset".into()));
+            return Err(AppError::bad("err-invalid-preset"));
         }
     }
     Ok(())
@@ -1246,7 +1248,7 @@ pub(crate) fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Al
             "SUMMARY" => a.summary = ical::unescape(&value),
             "DURATION" => a.duration_minutes = parse_duration(&value).map(|d| d.num_minutes()).unwrap_or(0),
             "REPEAT" => a.repeat = value.trim().parse().unwrap_or(0),
-            "ATTENDEE" => a.attendees.push(value.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:").to_string()),
+            "ATTENDEE" => a.attendees.push(ical::strip_mailto(value.trim()).to_string()),
             "ATTACH" if attach.is_empty() && !is_binary_attach(&params) => attach = value.trim().to_string(),
             "PROXIMITY" => a.proximity = one_of(&value, PROXIMITY).unwrap_or("").to_string(),
             "ACKNOWLEDGED" => {
@@ -1305,7 +1307,7 @@ pub(crate) fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz
         l.push(format!("SUMMARY:{}", ical::escape(subject)));
         for m in a.attendees.iter().map(|m| m.trim()).filter(|m| m.contains('@')) {
             // the stored line keeps its parameters (CN, …) while the address is unchanged
-            let kept = src.and_then(|s| s.iter().find(|x| prop_name(x) == "ATTENDEE" && ical::split_line(x).2.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:") == m));
+            let kept = src.and_then(|s| s.iter().find(|x| prop_name(x) == "ATTENDEE" && ical::strip_mailto(ical::split_line(x).2.trim()) == m));
             l.push(kept.cloned().unwrap_or_else(|| format!("ATTENDEE:mailto:{m}")));
         }
     }
@@ -1332,15 +1334,15 @@ pub(crate) fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz
 }
 
 pub fn validate_rrule(r: &str) -> AppResult<String> {
-    let r = r.trim().trim_start_matches("RRULE:").to_string();
+    let r = ical::rrule_canon(r);
     if r.is_empty() {
-        return Err(AppError::BadRequest("empty RRULE".into()));
+        return Err(AppError::bad("err-rrule-empty"));
     }
-    if !r.to_uppercase().starts_with("FREQ=") || r.chars().any(|c| c == '\n' || c == '\r') {
-        return Err(AppError::BadRequest("RRULE must start with FREQ=".into()));
+    if !r.starts_with("FREQ=") || r.chars().any(|c| c == '\n' || c == '\r') {
+        return Err(AppError::bad("err-rrule-freq"));
     }
-    let _: caldata::rrule::RRule<caldata::rrule::Unvalidated> = r.parse().map_err(|e| AppError::BadRequest(format!("RRULE: {e}")))?;
-    Ok(r.to_uppercase())
+    let _: caldata::rrule::RRule<caldata::rrule::Unvalidated> = r.parse().map_err(|e| AppError::bad1("err-rrule", "detail", e))?;
+    Ok(r)
 }
 
 /// Builds the VEVENT lines (without BEGIN/END) for the master event. With `raw` (an update)
@@ -1348,10 +1350,10 @@ pub fn validate_rrule(r: &str) -> AppResult<String> {
 /// ATTENDEE, STATUS, ATTACH, COLOR, EXDATE, X-… and the unmodelled parts of each VALARM.
 fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz, raw: Option<&RawMaster>) -> AppResult<Vec<String>> {
     if input.summary.trim().is_empty() {
-        return Err(AppError::BadRequest("summary required".into()));
+        return Err(AppError::bad("err-summary-required"));
     }
     if input.end < input.start {
-        return Err(AppError::BadRequest("end before start".into()));
+        return Err(AppError::bad("err-end-before-start"));
     }
     let mut l = vec![
         format!("UID:{uid}"),
@@ -1507,7 +1509,7 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
         && !e.is_empty()
         && e != existing.get_etag()
     {
-        return Err(AppError::Conflict("the event was changed elsewhere; reload".into()));
+        return Err(AppError::conflict("err-changed-event"));
     }
     let CalendarInnerData::Event(main, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);
@@ -1522,6 +1524,10 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     Ok(())
 }
 
+/// Unfolded content lines, each in its canonical case: property names — and the component name of a
+/// BEGIN/END line — are case-insensitive (RFC 5545 §2, RFC 6350 §3.3) and come out upper-case, so every
+/// `starts_with("BEGIN:VEVENT")` / `prop_name(l) == …` downstream holds for `begin:vevent` too. Values
+/// and parameters stay as written.
 pub fn unfold(raw: &str) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     for l in raw.split('\n') {
@@ -1532,7 +1538,25 @@ pub fn unfold(raw: &str) -> Vec<String> {
             out.push(l.to_string());
         }
     }
+    for l in &mut out {
+        canon_name(l);
+    }
     out
+}
+
+/// Upper-cases the name of one unfolded content line (and the value of BEGIN/END) in place.
+fn canon_name(l: &mut String) {
+    if l.starts_with([' ', '\t']) {
+        return;
+    }
+    let end = l.find([';', ':']).unwrap_or(l.len());
+    if l[..end].bytes().any(|b| b.is_ascii_lowercase()) {
+        let up = l[..end].to_ascii_uppercase();
+        l.replace_range(..end, &up);
+    }
+    if (l.starts_with("BEGIN:") || l.starts_with("END:")) && l.bytes().any(|b| b.is_ascii_lowercase()) {
+        l.make_ascii_uppercase();
+    }
 }
 
 pub async fn delete_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str) -> AppResult<()> {

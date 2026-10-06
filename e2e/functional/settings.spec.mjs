@@ -330,5 +330,5 @@ test('push without VAPID: the page says unavailable, the API refuses a subscript
   const csrf = await page.locator('meta[name=csrf]').getAttribute('content');
   const r = await page.request.post('/api/push/subscriptions', { data: { endpoint: 'https://push.invalid/x', keys: { p256dh: 'x', auth: 'y' } }, headers: { 'X-CSRF-Token': csrf, Origin: BASE } });
   expect(r.status()).toBe(400);
-  expect(await r.text()).toContain('push disabled');
+  expect(await r.text()).toBe('Benachrichtigungen sind auf diesem Server ausgeschaltet.'); // B8: a browser session reads it in its language
 });

@@ -200,7 +200,7 @@ async fn session_csrf_token_is_required_for_session_writes() {
             (Method::POST, "/api/history/1/undo", "{}"),
         ] {
             let r = c.json(method.clone(), path, serde_json::from_str(body).unwrap()).await;
-            assert_eq!((r.status, r.body.as_str()), (StatusCode::FORBIDDEN, "forbidden"), "{method} {path} with {token:?}");
+            assert_eq!((r.status, r.body.as_str()), (StatusCode::FORBIDDEN, "Dafür fehlt die Berechtigung."), "{method} {path} with {token:?}");
         }
         let r = c.post_form("/settings/groups", &[("name", "X")]).await;
         assert_eq!(r.location().as_deref(), Some("/settings#groups"), "a form error is a flash, not a status");

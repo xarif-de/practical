@@ -153,7 +153,7 @@ pub async fn apply(state: &AppState, user: &Principal, changes: &[Change]) -> Ap
 pub async fn set_calendar_color(state: &AppState, user: &Principal, owner: &str, id: &str, color: &str) -> AppResult<()> {
     collections::ensure_owner(user, owner)?;
     if !prefs::is_hex_color(color) {
-        return Err(AppError::BadRequest("color must be #rrggbb".into()));
+        return Err(AppError::bad("err-color"));
     }
     let mut c = state.calendars.get_calendar(owner, id, false).await?;
     c.meta.color = Some(color.to_lowercase());
@@ -166,15 +166,15 @@ pub async fn set_calendar_color(state: &AppState, user: &Principal, owner: &str,
 pub async fn set_object_color(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, color: &str) -> AppResult<()> {
     collections::ensure_owner(user, principal)?;
     if !color.is_empty() && !prefs::is_hex_color(color) {
-        return Err(AppError::BadRequest("color must be #rrggbb or empty".into()));
+        return Err(AppError::bad("err-color-or-empty"));
     }
     let cal = state.calendars.get_calendar(principal, cal_id, false).await?;
     if cal.subscription_url.is_some() {
-        return Err(AppError::BadRequest("a subscribed calendar is read-only".into()));
+        return Err(AppError::bad("err-subscribed-read-only"));
     }
     let existing = state.calendars.get_object(principal, cal_id, object_id, false).await?;
     let Some(ics) = with_color(&existing.get_ics(), &color.to_lowercase()) else {
-        return Err(AppError::BadRequest("no event or task in this object".into()));
+        return Err(AppError::bad("err-no-event-or-task"));
     };
     let obj = CalendarObject::import(&ics, None)?;
     state.calendars.put_object(principal, cal_id, object_id, obj, true).await?;

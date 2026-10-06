@@ -415,14 +415,15 @@ pub fn revert(store: Store, current: &str, before: &str, keys: &[String]) -> Str
 
 /// What a viewer needs to read values: language, zone, and the labels.
 pub struct Show<'a> {
-    pub t: &'a (dyn Fn(&str) -> String + Sync),
+    /// a message of the viewer's language (`I18n::lookup`): None where no language has the key
+    pub t: &'a (dyn Fn(&str) -> Option<String> + Sync),
     pub lang: &'a str,
     pub tz: chrono_tz::Tz,
 }
 
 impl Show<'_> {
     fn date(&self, d: NaiveDate) -> String {
-        let wd = (self.t)(&format!("dow-{}", d.weekday().number_from_monday()));
+        let wd = self.s(&format!("dow-{}", d.weekday().number_from_monday()));
         let (y, m, day) = (d.year(), d.month(), d.day());
         match self.lang {
             "en" => format!("{wd} {m}/{day}/{y}"),
@@ -473,50 +474,57 @@ impl Show<'_> {
     /// "2 Std." of a duration's minutes
     fn amount(&self, mins: i64) -> String {
         let (n, unit) = if mins % 10080 == 0 { (mins / 10080, "w") } else if mins % 1440 == 0 { (mins / 1440, "d") } else if mins % 60 == 0 { (mins / 60, "h") } else { (mins, "min") };
-        format!("{n} {}", (self.t)(&format!("hx-unit-{unit}")))
+        format!("{n} {}", self.s(&format!("hx-unit-{unit}")))
     }
     /// an alarm trigger offset: "1 Std. vorher"
     fn offset(&self, v: &str) -> String {
         let (neg, mins) = self.dur(v);
         if mins == 0 {
-            return (self.t)("hx-al-at-start");
+            return self.s("hx-al-at-start");
         }
-        (self.t)(if neg { "hx-al-before" } else { "hx-al-after" }).replace("%n", &self.amount(mins))
+        self.s(if neg { "hx-al-before" } else { "hx-al-after" }).replace("%n", &self.amount(mins))
     }
     fn rrule(&self, v: &str) -> String {
+        let v = ical::rrule_canon(v);
         let mut f = BTreeMap::new();
         for p in v.split(';') {
             if let Some((k, x)) = p.split_once('=') {
-                f.insert(k.to_ascii_uppercase(), x.to_string());
+                f.insert(k.to_string(), x.to_string());
             }
         }
         let freq = f.get("FREQ").map(|s| s.to_ascii_lowercase()).unwrap_or_default();
         let every: i64 = f.get("INTERVAL").and_then(|s| s.parse().ok()).unwrap_or(1);
-        let mut out = (self.t)(&format!("hx-rr-{freq}"));
+        // a frequency without words (HOURLY, MINUTELY, SECONDLY): the rule as written
+        let Some(mut out) = (self.t)(&format!("hx-rr-{freq}")) else { return v };
         if every > 1 {
-            out = (self.t)(&format!("hx-rr-{freq}-n")).replace("%n", &every.to_string());
+            out = self.tr(&format!("hx-rr-{freq}-n"), &out).replace("%n", &every.to_string());
         }
         if let Some(days) = f.get("BYDAY") {
             let names: Vec<String> = days.split(',').filter_map(|d| {
                 let code = d.trim_start_matches(|c: char| c == '-' || c == '+' || c.is_ascii_digit());
                 let i = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"].iter().position(|x| *x == code)?;
-                Some((self.t)(&format!("dow-{}", i + 1)))
+                Some(self.s(&format!("dow-{}", i + 1)))
             }).collect();
             if !names.is_empty() {
                 out = format!("{out}, {}", names.join(" "));
             }
         }
         if let Some(u) = f.get("UNTIL") {
-            out = format!("{out}, {}", (self.t)("hx-rr-until").replace("%date", &self.when("", u)));
+            out = format!("{out}, {}", self.s("hx-rr-until").replace("%date", &self.when("", u)));
         }
         if let Some(c) = f.get("COUNT") {
             out = format!("{out}, {c}×");
         }
         out
     }
+    /// The message `key`, or `fallback` where no language has it (an attribute without a label: any X-
+    /// property reads as its own name).
     fn tr(&self, key: &str, fallback: &str) -> String {
-        let s = (self.t)(key);
-        if s == key { fallback.to_string() } else { s }
+        (self.t)(key).unwrap_or_else(|| fallback.to_string())
+    }
+    /// A message every language has (the i18n tests check the fixed keys); its key should one be missing.
+    fn s(&self, key: &str) -> String {
+        self.tr(key, key)
     }
     /// A code value (STATUS, PARTSTAT, ROLE, …) through `hx-v-<code>`, else as written.
     fn code(&self, v: &str) -> String {
@@ -536,13 +544,13 @@ impl Show<'_> {
             }
         }
         if param(params, "PREF").is_some() || param(params, "TYPE").is_some_and(|t| t.to_ascii_lowercase().contains("pref")) {
-            out.push((self.t)("hx-t-pref"));
+            out.push(self.s("hx-t-pref"));
         }
         (!out.is_empty()).then(|| out.join(", "))
     }
     /// A person line (ATTENDEE/ORGANIZER; vCard RELATED): name, address, and what the invitation says.
     fn person(&self, key: &str, params: &str, v: &str) -> String {
-        let addr = v.trim().trim_start_matches("mailto:").trim_start_matches("MAILTO:");
+        let addr = ical::strip_mailto(v.trim());
         let mut out = match param(params, "CN") {
             Some(cn) if !addr.is_empty() && !cn.eq_ignore_ascii_case(addr) => format!("{cn} <{addr}>"),
             Some(cn) => cn.to_string(),
@@ -594,10 +602,10 @@ impl Show<'_> {
             "ORG" => parts().join(" · "),
             "GEO" => v.replace(';', ", "),
             "PRIORITY" => match v.trim().parse::<u8>() {
-                Ok(1..=4) => format!("{} ({})", (self.t)("hx-prio-high"), v.trim()),
-                Ok(5) => (self.t)("hx-prio-mid"),
-                Ok(6..=9) => format!("{} ({})", (self.t)("hx-prio-low"), v.trim()),
-                _ => (self.t)("hx-prio-none"),
+                Ok(1..=4) => format!("{} ({})", self.s("hx-prio-high"), v.trim()),
+                Ok(5) => self.s("hx-prio-mid"),
+                Ok(6..=9) => format!("{} ({})", self.s("hx-prio-low"), v.trim()),
+                _ => self.s("hx-prio-none"),
             },
             "PERCENT-COMPLETE" => format!("{} %", v.trim()),
             "STATUS" | "CLASS" | "TRANSP" | "ACTION" | "PROXIMITY" | "KIND" | "GENDER" => self.code(v),
@@ -607,8 +615,8 @@ impl Show<'_> {
                 match (name, binary) {
                     (Some(n), _) => n,
                     (None, true) => match param(params, "FMTTYPE") {
-                        Some(t) => format!("{} ({t})", (self.t)("hx-file")),
-                        None => (self.t)("hx-file"),
+                        Some(t) => format!("{} ({t})", self.s("hx-file")),
+                        None => self.s("hx-file"),
                     },
                     (None, false) => text(),
                 }
@@ -621,8 +629,8 @@ impl Show<'_> {
                 let rel = param(params, "RELTYPE").unwrap_or("PARENT");
                 format!("{}: {}", self.code(rel), text())
             }
-            "TEL" => typed(text().trim_start_matches("tel:").to_string()),
-            "EMAIL" | "URL" | "X-SOCIALPROFILE" => typed(text().trim_start_matches("mailto:").to_string()),
+            "TEL" => typed(ical::strip_scheme(&text(), "tel:").to_string()),
+            "EMAIL" | "URL" | "X-SOCIALPROFILE" => typed(ical::strip_mailto(&text()).to_string()),
             "IMPP" => {
                 let svc = param(params, "X-SERVICE-TYPE").map(str::to_string);
                 let s = text();
@@ -660,16 +668,16 @@ impl Show<'_> {
                 let (neg, m) = self.dur(v);
                 let s = self.offset(v);
                 let end = param(p, "RELATED").is_some_and(|r| r.eq_ignore_ascii_case("END"));
-                (if end { format!("{s} ({})", (self.t)("hx-al-end")) } else { s }, if neg { m } else { -m })
+                (if end { format!("{s} ({})", self.s("hx-al-end")) } else { s }, if neg { m } else { -m })
             }
-            None => ((self.t)("hx-alarm"), 0),
+            None => (self.s("hx-alarm"), 0),
         };
         let mut out = vec![when];
         let action = get("ACTION").map(|(_, v)| v.trim()).unwrap_or("DISPLAY");
         out.push(self.tr(&format!("hx-v-action-{}", action.to_ascii_lowercase()), action));
         let to: Vec<String> = all("ATTENDEE").iter().map(|(p, v)| self.person("ORGANIZER", p, v)).collect();
         if !to.is_empty() {
-            out.push((self.t)("hx-al-to").replace("%who", &to.join(", ")));
+            out.push(self.s("hx-al-to").replace("%who", &to.join(", ")));
         }
         for n in ["SUMMARY", "DESCRIPTION"] {
             if let Some((_, v)) = get(n) {
@@ -681,7 +689,7 @@ impl Show<'_> {
         }
         if let Some((_, r)) = get("REPEAT") {
             let every = get("DURATION").map(|(_, d)| self.amount(self.dur(d).1)).unwrap_or_default();
-            out.push((self.t)("hx-al-repeat").replace("%n", r.trim()).replace("%every", &every));
+            out.push(self.s("hx-al-repeat").replace("%n", r.trim()).replace("%every", &every));
         }
         for (p, v) in all("ATTACH") {
             out.push(self.line("ATTACH", &format!("{p}:{v}")));
@@ -748,10 +756,10 @@ impl Show<'_> {
     /// The label of an attribute key.
     pub fn label(&self, key: &str) -> String {
         if key == COLL_KEY {
-            return (self.t)("hx-a-coll");
+            return self.s("hx-a-coll");
         }
         if let Some(r) = key.strip_prefix("RECURRENCE-ID:") {
-            return (self.t)("hx-a-override").replace("%date", &self.when("", r));
+            return self.s("hx-a-override").replace("%date", &self.when("", r));
         }
         self.tr(&format!("hx-a-{}", key.to_ascii_lowercase()), key)
     }
@@ -845,7 +853,7 @@ mod tests {
 
     #[test]
     fn values_read_like_the_editor() {
-        let t = |k: &str| match k {
+        let t = |k: &str| Some(match k {
             "dow-2" => "Di".to_string(),
             "hx-unit-h" => "Std.".into(),
             "hx-al-before" => "%n vorher".into(),
@@ -854,8 +862,8 @@ mod tests {
             "dow-3" => "Mi".into(),
             "hx-v-action-display" => "Anzeige".into(),
             "hx-v-accepted" => "zugesagt".into(),
-            other => other.to_string(),
-        };
+            _ => return None,
+        });
         let s = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
         let none = |x: &str| x.to_string();
         assert_eq!(s.value("DTSTART", ";TZID=Europe/Berlin:20261006T100000", &none), "Di 6.10.2026 10:00");
@@ -873,7 +881,7 @@ mod tests {
     #[test]
     fn every_edit_of_the_full_event_reads_differently() {
         let i18n = crate::i18n::I18n::load();
-        let t = |k: &str| i18n.t("de", k);
+        let t = |k: &str| i18n.lookup("de", k);
         let show = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
         let none = |x: &str| x.to_string();
         let base = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/demo-event-full.ics")).unwrap().replace("\r\n", "\n");
@@ -920,7 +928,7 @@ mod tests {
     #[test]
     fn every_edit_of_a_contact_reads_differently() {
         let i18n = crate::i18n::I18n::load();
-        let t = |k: &str| i18n.t("de", k);
+        let t = |k: &str| i18n.lookup("de", k);
         let show = Show { t: &t, lang: "de", tz: chrono_tz::Europe::Berlin };
         let none = |x: &str| x.to_string();
         let v = "BEGIN:VCARD\nVERSION:3.0\nUID:c1\nN:Weber;Jana;;Dr.;\nFN:Dr. Jana Weber\nitem1.TEL;TYPE=CELL:+49 170 1\nitem1.X-ABLabel:Dienst\nEMAIL;TYPE=HOME:jana@example.org\nADR;TYPE=HOME:;;Lindenweg 7;Zwickau;;08056;DE\nBDAY:1988-03-14\nitem2.X-ABDATE:2010-06-01\nitem2.X-ABLabel:_$!<Anniversary>!$_\nRELATED;TYPE=spouse:Max\nIMPP;X-SERVICE-TYPE=Signal:signal:+49170\nORG:Praxis;Empfang\nNOTE:alt\nEND:VCARD\n";

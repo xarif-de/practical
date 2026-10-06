@@ -230,22 +230,25 @@ async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: A
     if ctx.wants_json {
         let (ok, msg) = match result {
             Ok(key) => (true, key.map(|k| state.i18n.t(&ctx.lang, k))),
-            Err(AppError::Forbidden) => (false, Some(state.i18n.t(&ctx.lang, "flash-forbidden"))),
-            Err(AppError::NotFound) => (false, Some(state.i18n.t(&ctx.lang, "flash-not-found"))),
-            Err(AppError::BadRequest(m) | AppError::Conflict(m)) => (false, Some(m)),
-            Err(e) => (false, Some(e.to_string())),
+            Err(e) => (false, Some(failed(state, ctx, &e))),
         };
         return axum::Json(serde_json::json!({ "ok": ok, "msg": msg })).into_response();
     }
     match result {
         Ok(None) => {}
         Ok(Some(key)) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,
-        Err(AppError::Forbidden) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-forbidden")).await,
-        Err(AppError::NotFound) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-not-found")).await,
-        Err(AppError::BadRequest(m) | AppError::Conflict(m)) => set_flash(session, "error", m).await,
-        Err(e) => set_flash(session, "error", e.to_string()).await,
+        Err(e) => set_flash(session, "error", failed(state, ctx, &e)).await,
     }
     Redirect::to(&format!("/settings#{anchor}")).into_response()
+}
+
+/// The user's message for a failed settings action (`AppError::user_message`); a server-side failure is
+/// logged with its own text, which the user does not see.
+fn failed(state: &SharedState, ctx: &PageCtx, e: &AppError) -> String {
+    if e.user_text().is_some_and(|u| u.key == "flash-failed") {
+        tracing::error!("{e}");
+    }
+    e.user_message(&state.i18n, &ctx.lang)
 }
 
 #[derive(Deserialize)]
@@ -321,7 +324,7 @@ async fn group_delete(State(state): State<SharedState>, user: Principal, session
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         groups::trash(&state, &user, &gid, Some(&f.confirm)).await.map_err(|e| match e {
-            AppError::BadRequest(_) => AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")),
+            AppError::BadRequest(_) => AppError::bad("flash-confirm-mismatch"),
             e => e,
         })?;
         Ok(None)
@@ -344,7 +347,7 @@ async fn group_purge(State(state): State<SharedState>, user: Principal, session:
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         if f.confirm.trim() != gid {
-            return Err(AppError::BadRequest(state.i18n.t(&ctx.lang, "flash-confirm-mismatch")));
+            return Err(AppError::bad("flash-confirm-mismatch"));
         }
         groups::purge_by_member(&state, &user, &gid).await?;
         Ok(None)
@@ -572,7 +575,7 @@ struct PrefsForm {
     search_history_days: Option<String>,
 }
 
-async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
+async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, headers: axum::http::HeaderMap, Form(f): Form<PrefsForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         let mut p = prefs::get(&state.db, &user.id).await?;
@@ -606,25 +609,21 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
             _ => ("category", f.vacation_category.trim()),
         };
         if kind == "title" && !value.is_empty() {
-            prefs::VacationRule::title_regex(value).map_err(|e| AppError::BadRequest(format!("{}: {e}", ctx.t("vacation-title-bad"))))?;
+            prefs::VacationRule::title_regex(value).map_err(|e| AppError::bad1("err-vacation-title", "detail", e))?;
         }
         p.vacation_rule_json = Some(serde_json::to_string(&prefs::VacationRule { v: 2, kind: kind.into(), value: value.into() }).unwrap());
         // reminder strip snap points: an empty list falls back to the built-in one; a bad token rejects the form
-        let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
-        let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::BadRequest(format!("snap point: {t}")))?;
+        let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;
+        let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;
         let snaps = events::AlarmSnaps { start: if start.is_empty() { events::AlarmSnaps::default().start } else { start }, end };
         p.alarm_snaps_json = if snaps == events::AlarmSnaps::default() { None } else { Some(serde_json::to_string(&snaps).unwrap()) };
         if let Some(d) = f.search_history_days.as_deref().and_then(|d| d.parse::<i64>().ok()).filter(|d| prefs::HISTORY_DAYS.contains(d)) {
             p.search_history_days = Some(d);
         }
         prefs::set(&state.db, &user.id, &p).await?;
-        if let Some(l) = &p.lang {
-            session.insert(crate::ctx::SESSION_LANG, l).await?;
-        }
-        // the answer ("Saved.") speaks the language just chosen
-        if let Some(l) = p.lang.clone() {
-            ctx.lang = l;
-        }
+        // the answer ("Saved.") speaks the language just chosen — "automatic": the browser's
+        let accept = headers.get(axum::http::header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok());
+        ctx.lang = p.lang.clone().unwrap_or_else(|| crate::i18n::negotiate(accept, &state.config.default_lang));
         Ok(Some("flash-saved"))
     }
     .await;

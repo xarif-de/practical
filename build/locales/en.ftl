@@ -33,7 +33,10 @@ tab-trash = Trash
 tab-categories = Categories
 cat-hint = A category can prefill settings of an event (template, editable in the event) or fix them (lock, not editable in the event). With several categories the one higher up in the event wins. Locks hold in this UI only; other calendar apps change freely.
 cat-rule-new = Create rule
-cat-count = { $n } events
+cat-count = { $n ->
+    [one] { $n } event
+   *[other] { $n } events
+}
 cat-none = No categories yet.
 cat-new-placeholder = New category with a rule …
 tab-general = General
@@ -61,7 +64,10 @@ n-addressbooks = { $n ->
     [one] 1 address book
    *[other] { $n } address books
 }
-trash-retention = Everything in the trash stays restorable for { $days } days.
+trash-retention = { $days ->
+    [one] Everything in the trash stays restorable for { $days } day.
+   *[other] Everything in the trash stays restorable for { $days } days.
+}
 calendars = Calendars
 addressbooks = Address books
 col-name = Name
@@ -114,6 +120,54 @@ confirm-purge-collection = Delete “{ $name }” permanently? This cannot be un
 confirm-delete-token = Delete token “{ $name }”? The device loses access immediately.
 flash-forbidden = You are not allowed to do that.
 flash-not-found = Not found.
+flash-exists = That already exists.
+flash-bad-data = The data is not valid: { $detail }
+flash-failed = That did not work – the details are in the server log.
+err-window-too-large = window too large
+err-too-many-changes = too many changes
+err-colour-target = unknown colour target
+err-task-calendar = task cannot change calendar
+err-too-long = too long
+err-push-disabled = push disabled
+err-push-https = endpoint must be https
+err-vacation-title = { vacation-title-bad }: { $detail }
+err-snap-point = snap point: { $token }
+err-color = color must be #rrggbb
+err-color-or-empty = color must be #rrggbb or empty
+err-name-required = name required
+err-summary-required = summary required
+err-end-before-start = end before start
+err-due-before-start = due before start
+err-changed-contact = the contact was changed elsewhere; reload
+err-changed-event = the event was changed elsewhere; reload
+err-changed-task = the task was changed elsewhere; reload
+err-undo-nothing = the undo changed nothing
+err-attach-base64 = attachment is not base64
+err-attach-too-large = attachment too large: { $size } bytes (limit { $file } per file, { $total } per save)
+err-too-many-presets = too many presets
+err-invalid-preset = invalid preset
+err-rrule-empty = empty RRULE
+err-rrule-freq = RRULE must start with FREQ=
+err-rrule = RRULE: { $detail }
+err-latlon = lat/lon out of range
+err-ics = ics: { $detail }
+err-no-calendar-objects = no calendar objects found
+err-vcf = vcf: { $detail }
+err-no-vcards = no vCards found
+err-subscribed-read-only = a subscribed calendar is read-only
+err-no-event-or-task = no event or task in this object
+err-rule-mode = unknown rule mode { $mode }
+err-rule-title = invalid title
+err-rule-colour = invalid colour
+err-rule-entries = too many rule entries
+err-rule-files = a rule cannot embed files
+err-category-name = invalid category name
+err-rule-scope = unknown rule scope
+err-group-empty-id = group name yields an empty id
+err-group-exists = group { $id } exists
+err-group-individuals = only individuals can join a group
+err-group-confirm = confirmation name does not match
+err-group-gone = group principal no longer exists
 flash-confirm-mismatch = The name you typed does not match.
 flash-group-trashed = Group moved to the trash.
 flash-saved = Saved.
@@ -351,19 +405,25 @@ ed-pe-from = stands in for { $n }
 ed-pe-to = represented by { $n }
 ed-pe-known = in the address book
 ed-pe-unknown = not in the address book
-ed-h-count = { $n } times
+ed-h-count = { $n ->
+    [one] once
+   *[other] { $n } times
+}
 ed-h-until = until
 ed-h-on = on
 ed-h-every = every { $n }
 ed-h-min = { $n } min
-ed-h-hour = 1 h
-ed-h-day = 1 day
 ed-h-before = before
 ed-h-hours = { $n } h
-ed-h-days = { $n } days
+ed-h-days = { $n ->
+    [one] { $n } day
+   *[other] { $n } days
+}
 ed-h-repeat = repeated { $n }×
-ed-h-week = 1 week
-ed-h-weeks = { $n } weeks
+ed-h-weeks = { $n ->
+    [one] { $n } week
+   *[other] { $n } weeks
+}
 ed-h-after = after start
 ed-h-after-end = after end
 ed-h-at-start = at the start
@@ -431,7 +491,10 @@ task-done = Done
 tasks-none-open = Nothing open.
 tasks-done = Done
 task-reopen = Reopen
-import-done = { $n } objects imported.
+import-done = { $n ->
+    [one] { $n } object imported.
+   *[other] { $n } objects imported.
+}
 vacation-rule = Vacation counting rule
 vacation-rule-hint = Category: events with this category count. Calendar: every event of the calendar. Title: events whose title matches the regular expression (case does not matter). Workdays without public holidays are counted.
 vacation-kind-category = Category
@@ -499,7 +562,10 @@ ct-reset = Reset
 ct-back = Back to new contact
 ct-vcf = Download vCard
 ct-days-today = today!
-ct-days-in = in { $n } days
+ct-days-in = { $n ->
+    [one] in { $n } day
+   *[other] in { $n } days
+}
 ct-turns = turns { $n }
 act-call = Call
 act-sms = SMS
@@ -586,7 +652,10 @@ set-comp-event = Events
 set-comp-todo = Tasks
 set-comp-journal = Journal
 set-rule = Rule
-cat-count-task = { $n } tasks
+cat-count-task = { $n ->
+    [one] { $n } task
+   *[other] { $n } tasks
+}
 set-region = Region
 set-regions-public = Public holidays
 set-regions-school = School holidays
@@ -608,10 +677,16 @@ v-all-day = all day
 v-at-start = at start
 v-attachment = Attachment
 v-before = before
-v-birthdays-in-the-address-books = birthdays in the address books
+v-birthdays-in-the-address-books = { $n ->
+    [one] birthday in the address books
+   *[other] birthdays in the address books
+}
 v-bridge-days = Bridge days
 v-busiest-weeks = Busiest weeks
-v-busy-weekend-days = busy weekend days
+v-busy-weekend-days = { $n ->
+    [one] busy weekend day
+   *[other] busy weekend days
+}
 v-cancelled = Cancelled
 v-coming-up = Coming up
 v-confidential = Confidential
@@ -622,18 +697,35 @@ v-counting-rule = Counting rule:
 v-daily = Daily
 v-day = Day
 v-day-off = day off
-v-days = days
+v-days = { $n ->
+    [one] day
+   *[other] days
+}
 v-days-in-a-row = days in a row
 v-density = Density
 v-shown-free = Shown as free
 v-entitlement-and-rule-in-the-settings = Entitlement and rule in the settings.
-v-evenings-booked-from-6-pm = evenings booked (from 6 pm)
-v-events = events
+v-evenings-booked-from-6-pm = { $n ->
+    [one] evening booked (from 6 pm)
+   *[other] evenings booked (from 6 pm)
+}
+v-n-events = { $n ->
+    [one] { $n } event
+   *[other] { $n } events
+}
 v-events-per-calendar = Events per calendar
-v-events-this-year = events this year
-v-extended-by-a-holiday = extended by a holiday
+v-events-this-year = { $n ->
+    [one] event this year
+   *[other] events this year
+}
+v-extended-by-a-holiday = { $n ->
+   *[other] extended by a holiday
+}
 v-free = free
-v-free-weekends = free weekends
+v-free-weekends = { $n ->
+    [one] free weekend
+   *[other] free weekends
+}
 v-free-weekends-2 = Free weekends
 v-high-priority = High priority
 v-holidays = Holidays
@@ -652,20 +744,30 @@ v-no-events = No events
 v-no-events-on-this-day = No events on this day.
 v-not-congratulated-yet = not congratulated yet?
 v-over = over
-v-planned = planned
+v-planned = { $n ->
+   *[other] planned
+}
 v-print-ctrl-p = Print: Ctrl+P
 v-private = Private
 v-public-holiday = Public holiday
 v-recurring = Recurring
-v-remaining-of = remaining of
+v-remaining-of = { $n ->
+   *[other] remaining of
+}
 v-school-holidays = School holidays
 v-tentative = Tentative
 v-today = Today
 v-top-right-on-mondays = top right on Mondays
-v-trips = trips
+v-trips = { $n ->
+    [one] trip
+   *[other] trips
+}
 v-up-to-30-days = up to 30 days
 v-vacation = Vacation
-v-vacation-days-planned = vacation days planned
+v-vacation-days-planned = { $n ->
+    [one] vacation day planned
+   *[other] vacation days planned
+}
 v-vacation-planner = Vacation planner
 v-was = was
 v-week = Week
@@ -718,7 +820,10 @@ v-rr-on-nth = on the { $which } { $day }
 v-rr-on-monthday = on day { $d }
 v-rr-on-date = on { $month } { $d }
 v-rr-in-month = in { $month }
-v-rr-count = { $n } times
+v-rr-count = { $n ->
+    [one] once
+   *[other] { $n } times
+}
 v-rr-until = until { $date }
 v-n-days = { $n ->
     [one] { $n } day
@@ -780,7 +885,10 @@ js-set-err = Error
 js-set-active = Active on this device.
 js-set-denied = Notifications were denied in the browser.
 js-set-unsupported = This browser does not support push notifications.
-js-set-imported = %n objects imported.
+js-set-imported = { $n ->
+    [one] %n object imported.
+   *[other] %n objects imported.
+}
 js-tk-open = Open
 js-tk-doing = In process
 js-tk-done = Completed
@@ -826,10 +934,14 @@ js-regions-none = None
 js-regions-n = %n regions
 js-snp-min = %n min
 js-snp-h = %n h
-js-snp-d1 = 1 day
-js-snp-d = %n days
-js-snp-w1 = 1 week
-js-snp-w = %n weeks
+js-snp-d = { $n ->
+    [one] %n day
+   *[other] %n days
+}
+js-snp-w = { $n ->
+    [one] %n week
+   *[other] %n weeks
+}
 js-snp-u-min = min
 js-snp-u-h = h
 js-snp-u-d = days
@@ -847,15 +959,23 @@ js-snp-bad = Enter a number above 0
 js-snp-max = At most 366 days
 js-snp-dup = This snap point already exists
 js-snp-last = One snap point before the start has to stay
-js-snaps-one = 1 snap point
-js-snaps-n = %n snap points
+js-snaps-n = { $n ->
+    [one] %n snap point
+   *[other] %n snap points
+}
 js-imp-file = File “%file”
-js-imp-ev1 = 1 event
-js-imp-ev = %n events
-js-imp-td1 = 1 task
-js-imp-td = %n tasks
-js-imp-jr1 = 1 journal entry
-js-imp-jr = %n journal entries
+js-imp-ev = { $n ->
+    [one] %n event
+   *[other] %n events
+}
+js-imp-td = { $n ->
+    [one] %n task
+   *[other] %n tasks
+}
+js-imp-jr = { $n ->
+    [one] %n journal entry
+   *[other] %n journal entries
+}
 js-imp-taken = from the file: %what
 js-imp-f-name = name
 js-imp-f-desc = description
@@ -865,11 +985,18 @@ js-imp-empty = The file holds no events, tasks or journal entries.
 js-imp-other = Choose another file …
 js-imp-in-file = Contained in the file
 js-imp-busy = Importing …
-js-imp-done = “%title” created · %count entries imported
-js-imp-ct1 = 1 contact
-js-imp-ct = %n contacts
-js-imp-gr1 = 1 group
-js-imp-gr = %n groups
+js-imp-done = { $count ->
+    [one] “%title” created · %count entry imported
+   *[other] “%title” created · %count entries imported
+}
+js-imp-ct = { $n ->
+    [one] %n contact
+   *[other] %n contacts
+}
+js-imp-gr = { $n ->
+    [one] %n group
+   *[other] %n groups
+}
 js-imp-ab-empty = The file holds no contacts.
 js-vac-word = Whole word
 js-vac-begin = At the start
@@ -895,8 +1022,13 @@ js-color-k-category-task = Task category
 js-color-k-holiday = Public holidays
 js-color-k-school = School holidays
 js-color-src = %kind “%name”
-js-color-more = + %n more
-js-color-count = %n entries
+js-color-more = { $n ->
+   *[other] + %n more
+}
+js-color-count = { $n ->
+    [one] %n entry
+   *[other] %n entries
+}
 js-color-changed = Recoloured: %n.
 js-color-recolor-event = Existing events of the category “%cat” with the old colour: %n. Give them the new colour?
 js-color-recolor-task = Existing tasks of the category “%cat” with the old colour: %n. Give them the new colour?
@@ -963,7 +1095,10 @@ js-color-g-category = Categories · events
 js-color-g-category-task = Categories · tasks
 js-color-g-event = Events with their own colour
 js-color-g-task = Tasks with their own colour
-js-color-g-offer = In the colour picker · %n colours
+js-color-g-offer = { $n ->
+    [one] In the colour picker · %n colour
+   *[other] In the colour picker · %n colours
+}
 js-cfo-block-event = Calendar & events
 js-cfo-block-task = Tasks
 js-cfo-btn = Optimise colours
@@ -1288,8 +1423,10 @@ hx-a-vresource = Resource (block)
 
 ## change history page (history.js, shipped with its data)
 hxj-title = Changes
-hxj-count = %n changes
-hxj-count-1 = 1 change
+hxj-count = { $n ->
+    [one] %n change
+   *[other] %n changes
+}
 hxj-zoom = Time window
 hxj-days = %n days
 hxj-q = Filter: title, values, person, device, #no
@@ -1324,7 +1461,9 @@ hxj-s-event = %who %act the event %title
 hxj-s-task = %who %act the task %title
 hxj-s-contact = %who %act the contact %title
 hxj-undone-short = undone
-hxj-more = and %n more
+hxj-more = { $n ->
+   *[other] and %n more
+}
 hxj-empty = (empty)
 hxj-st-reverts = undoes %ref
 hxj-st-undone = undone by %ref
@@ -1345,8 +1484,10 @@ hxj-cancel = Cancel
 hxj-err = That did not work.
 hxj-ask = Undo %ref?
 hxj-done = %ref undone → new change %id.
-hxj-w-later-1 = “%title” gets deleted. The later change (%refs) goes inactive with it.
-hxj-w-later-n = “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+hxj-w-later = { $n ->
+    [one] “%title” gets deleted. The later change (%refs) goes inactive with it.
+   *[other] “%title” gets deleted. The %n later changes (%refs) go inactive with it.
+}
 hxj-w-conflict = “%label” was changed later%by. Undo overwrites “%cur” with “%old”.
 hxj-w-skip = Skipped: “%title” – %why
 hxj-f-kinds = Type
@@ -1357,7 +1498,10 @@ hxj-f-colls = Calendar / address book
 hxj-f-attrs = Changed attribute
 hxj-f-period = Period
 hxj-f-status = Status
-hxj-p-all = Everything (%n days)
+hxj-p-all = { $n ->
+    [one] Everything (%n day)
+   *[other] Everything (%n days)
+}
 hxj-p-today = Today
 hxj-p-yesterday = Yesterday
 hxj-p-7 = Last 7 days
@@ -1376,9 +1520,14 @@ hxj-reset = Reset filters
 hxj-lg-hollow = undone / inactive
 hxj-lg-arc = Undo jumps back
 hxj-empty-window = No change in this time window.
-hxj-before-window = %n matching changes lie before the window –
-hxj-before-window-1 = 1 matching change lies before the window –
-hxj-retention = The history reaches back %n days (to %date). Older changes are removed daily.
+hxj-before-window = { $n ->
+    [one] %n matching change lies before the window –
+   *[other] %n matching changes lie before the window –
+}
+hxj-retention = { $n ->
+    [one] The history reaches back %n day (to %date). Older changes are removed daily.
+   *[other] The history reaches back %n days (to %date). Older changes are removed daily.
+}
 hxj-close = Close
 hxj-tech = technical
 hxj-col-before = Before

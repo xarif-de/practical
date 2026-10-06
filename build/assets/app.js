@@ -5,7 +5,11 @@
   let S = {};
   try { S = JSON.parse(document.getElementById('i18n').textContent); } catch (_) {}
   const LOC = window.LOC = document.body.dataset.locale || 'de-DE';
-  window.tr = (k, v) => { let s = S[k] ?? k; if (v) for (const [n, x] of Object.entries(v)) s = s.split('%' + n).join(x); return s; };
+  // a plural message (i18n.rs plural_forms: {"one": …, "other": …}, as an object or as a data attribute's JSON):
+  // the form for n by the page locale's CLDR rules, the one the server would pick
+  const PR = new Intl.PluralRules(LOC);
+  window.plural = (s, n) => { if (typeof s === 'string' && s.startsWith('{"')) try { s = JSON.parse(s); } catch (_) { return s; } return s && typeof s === 'object' ? s[PR.select(n)] ?? s.other : s; };
+  window.tr = (k, v) => { let s = S[k] ?? k; if (s && typeof s === 'object') s = plural(s, +(v || {})[s.$]); if (v) for (const [n, x] of Object.entries(v)) s = s.split('%' + n).join(x); return s; };
   window.trs = (prefix, names) => Object.fromEntries(names.map(n => [n, tr(prefix + n)]));
   const f = o => new Intl.DateTimeFormat(LOC, o);
   window.dfmt = (d, o) => f(o).format(d);
@@ -305,7 +309,7 @@
       const unitOf = m => [...UNITS].reverse().find(([u]) => m % u === 0);
       const parseL = v => v.split(',').map(t => { const x = t.trim().match(/^(\d+)\s*(min|h|d|w)$/); return x ? +x[1] * UNITS.find(u => u[1] === x[2])[0] : 0; }).filter(m => m > 0 && m <= MAXM);
       const fmtL = l => l.map(m => { const [u, k] = unitOf(m); return `${m / u} ${k}`; }).join(', ');
-      const label = m => { const [u, k] = unitOf(m), n = m / u; return k === 'min' || k === 'h' ? tr('js-snp-' + k, { n }) : n === 1 ? tr(`js-snp-${k}1`) : tr('js-snp-' + k, { n }); };
+      const label = m => { const [u, k] = unitOf(m), n = m / u; return tr('js-snp-' + k, { n }); };
       const side = k => tr(k === 'start' ? 'js-snp-start' : 'js-snp-end');
       const sortU = l => [...new Set(l)].sort((a, b) => a - b), same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
       let L = { start: sortU(parseL(hid('alarm_snaps_start').value)), end: sortU(parseL(hid('alarm_snaps_end').value)) };
@@ -316,7 +320,7 @@
       const store = () => {
         L = { start: sortU(L.start), end: sortU(L.end) };
         hid('alarm_snaps_start').value = fmtL(L.start); commit('alarm_snaps_end', fmtL(L.end)); // one change posts the whole form
-        $('#v-snaps').textContent = L.start.length === 1 ? tr('js-snaps-one') : tr('js-snaps-n', { n: L.start.length });
+        $('#v-snaps').textContent = tr('js-snaps-n', { n: L.start.length });
       };
       const draw = focus => {
         const o = [...L.start].reverse().map(m => ({ key: 'start', m })).concat([{ fix: 'start' }], [...L.end].reverse().map(m => ({ key: 'end', m })), [{ fix: 'end' }]);
@@ -452,7 +456,7 @@
         const first = scope === 'event' && catsFirst; catsFirst = null;
         let d; if (first) d = await first; else { const r = await fetch('/api/categories?scope=' + scope); d = r.ok ? await r.json() : []; }
         if (scope === 'event') $('#cat-total').textContent = d.length;
-        list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h((scope === 'task' ? t.tCountTask : t.tCount).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
+        list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h(plural(scope === 'task' ? t.tCountTask : t.tCount, c.count).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
       };
       $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; segPress(b); load(); });
       $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = ruleUrl(n); });
@@ -1876,7 +1880,7 @@
   const fromPreset = p => newAlarm({ action: p.action, minutes: p.minutes, related_end: !!p.related_end, repeat: p.repeat || 0, duration_minutes: p.duration_minutes || 0, attendees: [...(p.attendees || [])], attach: p.attach || '', proximity: p.proximity || '' });
   const matchesPreset = a => !a.at && PRESETS.some(p => presetSig(p) === presetSig(a));
   async function savePresets() { try { const r = await practical.send('/api/alarm-presets', 'PUT', PRESETS); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
-  const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return m === 10080 ? AT.tWeek : AT.tWeeks.replace('{n}', m / 10080); if (m && m % 1440 === 0) return m === 1440 ? D.tDay : D.tDays.replace('{n}', m / 1440); if (m && m % 60 === 0) return m === 60 ? D.tHour : D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
+  const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return plural(AT.tWeeks, m / 10080).replace('{n}', m / 10080); if (m && m % 1440 === 0) return plural(D.tDays, m / 1440).replace('{n}', m / 1440); if (m && m % 60 === 0) return D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
   const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
   const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
@@ -2346,7 +2350,7 @@
     let t = r.interval > 1 ? D.tEvery.replace('{n}', r.interval) + ' ' + rrUnit() : longs[RR_FREQS.indexOf(r.freq) + 1];
     if (r.freq === 'WEEKLY' && r.byday.length) t += ' ' + D.tOn + ' ' + r.byday.map(d => DOWL[DAYS.indexOf(d)]).join(', ');
     if (r.freq === 'MONTHLY' || r.freq === 'YEARLY') { t += ' ' + D.tOn + ' ' + (r.mode === 'ordinal' ? `${rrOrdTxt()} ${DOWL[DAYS.indexOf(r.ordday)]}` : `${r.bymonthday || s0.getDate()}.`); if (r.freq === 'YEARLY') t += ' ' + RT.tIn + ' ' + MON[(r.bymonth || s0.getMonth() + 1) - 1]; }
-    if (r.end.kind === 'count') t += ', ' + D.tCount.replace('{n}', r.end.count); if (r.end.kind === 'until' && r.end.until) t += ', ' + D.tUntil + ' ' + fmtD(r.end.until);
+    if (r.end.kind === 'count') t += ', ' + plural(D.tCount, r.end.count).replace('{n}', r.end.count); if (r.end.kind === 'until' && r.end.until) t += ', ' + D.tUntil + ' ' + fmtD(r.end.until);
     return t.charAt(0).toUpperCase() + t.slice(1); }
   // occurrences for the strip (the server's caldata is authoritative; this covers what the strip can paint)
   function rrOccurrences(limit) { const r = RR, s0 = rrStart(), out = new Set(); if (!r.freq || r.freq === 'RAW') return out;
@@ -2391,7 +2395,7 @@
     if (RR.freq && !isRaw) {
       const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
       const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
-      const endLabel = () => RR.end.kind === 'count' ? D.tCount.replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
+      const endLabel = () => RR.end.kind === 'count' ? plural(D.tCount, RR.end.count).replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
       rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i">${ico('ellipsis')}<span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e">${ico('to-line')}<span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
       $('.rrbottom', rrBox).onclick = e => { const b = e.target.closest('.pillbtn'); if (!b) return;
         if (b.dataset.s === 'i') rrPop(b, [1, 2, 3, 4, 6].map(n => ({ v: n, label: n === 1 ? each : D.tEvery.replace('{n}', n) + ' ' + u })).concat({ v: 'n', label: RT.tN }), RR.interval, v => { if (v === 'n') rrAskNumber(b, RT.tIntQ.replace('{u}', u), RR.interval, n => { RR.interval = n; rrSet(); }); else { RR.interval = +v; rrSet(); } });
@@ -3020,7 +3024,7 @@
   // partial dates: "YYYY-MM-DD" | "--MM-DD" <-> three inputs
   const setDate = (p, iso) => { const m = (iso || '').match(/^(?:(\d{4})|-)-(\d{2})-(\d{2})$/); $('[data-p=d]', p).value = m ? m[3] : ''; $('[data-p=m]', p).value = m ? m[2] : ''; $('[data-p=y]', p).value = m && m[1] ? m[1] : ''; };
   const getDate = p => { const d = $('[data-p=d]', p).value.trim(), m = $('[data-p=m]', p).value.trim(), y = $('[data-p=y]', p).value.trim(); if (!d || !m) return ''; const dd = d.padStart(2, '0'), mm = m.padStart(2, '0'); return (y ? y.padStart(4, '0') : '-') + `-${mm}-${dd}`; };
-  const dateInfo = p => { const d = +$('[data-p=d]', p).value, m = +$('[data-p=m]', p).value, y = +$('[data-p=y]', p).value; const info = $('.dateinfo', p); if (!info) return; if (!d || !m) { info.textContent = ''; return; } const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()); let next = new Date(now.getFullYear(), m - 1, d); if (next < t0) next = new Date(now.getFullYear() + 1, m - 1, d); const days = Math.round((next - t0) / 864e5); info.textContent = (days === 0 ? D.tToday : D.tIn.replace('{n}', days)) + (y ? ' · ' + D.tTurns.replace('{n}', next.getFullYear() - y) : ''); };
+  const dateInfo = p => { const d = +$('[data-p=d]', p).value, m = +$('[data-p=m]', p).value, y = +$('[data-p=y]', p).value; const info = $('.dateinfo', p); if (!info) return; if (!d || !m) { info.textContent = ''; return; } const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const on = yr => new Date(yr, m - 1, Math.min(d, new Date(yr, m, 0).getDate())); /* 29 Feb → 28 Feb in a common year, as contacts::yearly_in */ let next = on(now.getFullYear()); if (next < t0) next = on(now.getFullYear() + 1); const days = Math.round((next - t0) / 864e5); info.textContent = (days === 0 ? D.tToday : plural(D.tIn, days).replace('{n}', days)) + (y ? ' · ' + D.tTurns.replace('{n}', next.getFullYear() - y) : ''); };
   // list rows from <template>
   const addRow = (list, item) => { const box = $(`[data-list="${list}"]`, form); const tpl = $('template', box); box.appendChild(tpl.content.cloneNode(true)); const row = box.lastElementChild; if (item) { const sel = $('select.typ', row); if (sel && item.kind) { if (![...sel.options].some(o => o.value === item.kind)) sel.add(new Option(item.kind, item.kind)); sel.value = item.kind; } if (row.classList.contains('adr')) { ['street', 'code', 'city', 'country', 'region'].forEach(k => $(`[data-w=${k}]`, row).value = item[k] || ''); } else if (row.classList.contains('xd')) { $('.lbl', row).value = item.label || ''; setDate($('.pdate', row), item.date); dateInfo($('.pdate', row)); } else { $('input', row).value = item.value || ''; } const pref = $('.pref', row); if (pref) pref.setAttribute('aria-pressed', item.pref ? 'true' : 'false'); } return row; };
   const rows = list => [...$$(`[data-list="${list}"] .row`, form)];
@@ -3786,7 +3790,7 @@
     },
   };
   const hexOf = v => { const m = v.match(/^#?([0-9a-f]{6})([0-9a-f]{2})?$/i); return m ? '#' + m[1].toLowerCase() : (window.colorPicker && window.colorPicker.toHex(v)) || ''; }; // #rrggbbaa (Apple) loses its alpha
-  const count = (k, n) => n === 1 ? tr(`js-imp-${k}1`) : tr(`js-imp-${k}`, { n });
+  const count = (k, n) => tr(`js-imp-${k}`, { n });
   settings.querySelectorAll('.imp-form').forEach(form => {
     const kind = form.dataset.kind, q = s => form.querySelector(s), el = form.elements, fields = q('.imp-fields'), info = q('.imp-info'), go = q('.imp-go'), goText = go.textContent;
     let buf = null;

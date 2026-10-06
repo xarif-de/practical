@@ -79,7 +79,7 @@ fn used_keys() -> BTreeMap<String, String> {
         used.entry(k).or_insert_with(|| at.to_string());
     };
     for (path, text) in files("templates", "html").into_iter().chain(files("src", "rs")) {
-        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
+        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tp(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", "l.tn(\"", "::bad(\"", "::bad1(\"", "::conflict(\"", "Msg { key: \"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
             for k in literals_after(&text, call) {
                 add(k, &path);
             }
@@ -178,6 +178,8 @@ fn lookups_and_fallbacks() {
     let i = I18n::load();
     assert_eq!(i.t("xx", "nav-calendar"), "Calendar", "an unknown language reads English");
     assert_eq!(i.t("de", "no-such-key"), "⟦no-such-key⟧");
+    // `lookup`: the same fallback chain, None (no placeholder) where no language has the key
+    assert_eq!((i.lookup("de", "no-such-key"), i.lookup("xx", "nav-calendar").as_deref()), (None, Some("Calendar")));
     assert_eq!(i.t1("de", "v-rr-every-days", "n", 3), "Alle 3 Tage");
     let js = i.with_prefix("en", "js-");
     assert!(js.len() > 100 && js.iter().all(|(k, _)| k.starts_with("js-")));
@@ -188,4 +190,37 @@ fn lookups_and_fallbacks() {
     assert_eq!(negotiate(Some("*"), "en"), "en");
     assert_eq!(negotiate(Some(""), "de"), "de");
     assert_eq!(keys_of("a = 1\n  cont\n# c\nb =\n    .attr = x\nnot a key = y\n"), ["a", "b"]);
+}
+
+#[test]
+fn plural_messages_reach_the_browser_as_forms() {
+    let i = I18n::load();
+    // a js-* plural: its forms and the name of its number; app.js picks one with Intl.PluralRules
+    let js: serde_json::Value = serde_json::from_str(&i.js_json("de")).unwrap();
+    assert_eq!(js["js-set-imported"], serde_json::json!({ "$": "n", "one": "%n Objekt importiert.", "other": "%n Objekte importiert." }));
+    assert_eq!(js["js-imp-done"]["$"], "count");
+    assert_eq!(i.with_prefix_json("fr", "hxj-").into_iter().find(|(k, _)| k == "hxj-more").unwrap().1, serde_json::json!({ "$": "n", "one": "et %n autre", "other": "et %n autres" }));
+    assert!(js["js-set-err"].is_string(), "any other message stays a string");
+    // the former hand-made singular keys are plural forms now: French takes its singular for 0 as well
+    let fr: serde_json::Value = serde_json::from_str(&i.js_json("fr")).unwrap();
+    assert_eq!(fr["js-imp-ev"], serde_json::json!({ "$": "n", "one": "%n événement", "other": "%n événements" }));
+    let de = messages(SOURCES[0].1);
+    for gone in ["js-imp-ev1", "js-imp-td1", "js-imp-jr1", "js-imp-ct1", "js-imp-gr1", "js-snp-d1", "js-snp-w1", "js-snaps-one", "hxj-count-1", "hxj-before-window-1", "hxj-w-later-1", "hxj-w-later-n", "ed-h-day", "ed-h-hour", "ed-h-week"] {
+        assert!(!de.contains_key(gone), "{gone}");
+    }
+    // a data attribute of a template: the forms with {n}
+    assert_eq!(i.plural_json("de", "ct-days-in"), r#"{"one":"in {n} Tag","other":"in {n} Tagen"}"#);
+    assert_eq!(i.plural_json("en", "ed-h-count"), r#"{"one":"once","other":"{n} times"}"#);
+    assert_eq!(i.plural_json("de", "ed-h-count"), "{n}-mal", "a language without plural forms: the plain text");
+    // every plural form the browser picks from is named by a CLDR category (what Intl.PluralRules answers),
+    // "other" always there (Rust-only messages may also select on a number literal: v-rr-ordinal [1])
+    let tp: Vec<String> = files("templates", "html").iter().flat_map(|(_, t)| literals_after(t, "ctx.tp(\"")).collect();
+    assert!(tp.len() >= 4, "{tp:?}");
+    for (lang, src) in SOURCES {
+        for k in messages(src).into_keys().filter(|k| k.starts_with("js-") || k.starts_with("hxj-") || tp.contains(k)) {
+            if let Some((_, forms)) = i.plural_forms(lang, &k, |v| v.to_string()) {
+                assert!(forms.iter().all(|(c, _)| ["zero", "one", "two", "few", "many", "other"].contains(&c.as_str())) && forms.iter().any(|(c, _)| c == "other"), "{lang}/{k}: {forms:?}");
+            }
+        }
+    }
 }

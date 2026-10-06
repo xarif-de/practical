@@ -105,8 +105,8 @@ fn day_view_and_rows_golden() {
     // without details the facts come from the instance alone
     let plain = day_view(date("2026-10-16"), date("2026-10-14"), &v, &l, "Arbeit", &HashMap::new(), &hol);
     assert!(plain.contains("<span>Serie</span>") && plain.contains("<span>15 Minuten vorher</span><span>1 Tag vorher</span>"), "{plain}");
-    // BUG?: the count is not pluralised ("1 Termine"; `{} {}` with v-events, not a Fluent plural)
-    assert!(plain.contains("<div class=\"sub\">1 Termine · Arbeit</div>"), "{plain}");
+    // the count is a Fluent plural: one event is "1 Termin"
+    assert!(plain.contains("<div class=\"sub\">1 Termin · Arbeit</div>"), "{plain}");
     let empty = day_view(date("2026-10-02"), date("2026-10-14"), &v, &lang("en"), "x", &HashMap::new(), &hol);
     assert!(empty.contains("<p class=\"muted\">No events on this day.</p>") && empty.contains("<div class=\"sub\">0 events · x</div>"), "{empty}");
     assert_eq!(day_window(date("2026-10-16")), (date("2026-09-16"), date("2026-11-16")));
@@ -144,9 +144,10 @@ fn rrule_sentences() {
         ("de", "FREQ=YEARLY;BYDAY=1SU;BYMONTH=5", "Jährlich am 1. Sonntag im Mai"),
         ("de", "FREQ=YEARLY;INTERVAL=4", "Alle 4 Jahre am 14. Oktober"),
         ("de", "FREQ=MONTHLY;INTERVAL=6", "Alle 6 Monate"),
-        // BUG?: values are not case-folded (RFC 5545 allows lower case); validate_rrule upper-cases what
-        // this UI stores, so only rules written by other clients read as the bare word
-        ("de", "freq=weekly;byday=sa", "Serie"),
+        // RFC 5545 rule parts are case-insensitive: a rule another client wrote in lower case reads the same
+        ("de", "freq=weekly;byday=sa", "Wöchentlich am Samstag"),
+        ("de", "RRULE:Freq=Monthly;ByDay=-1fr;Count=1", "Monatlich am letzten Freitag, 1 Termin"),
+        ("en", "FREQ=DAILY;COUNT=1", "Daily, once"),
         ("de", "FREQ=HOURLY", "Serie"),
         ("de", "FREQ=MONTHLY;BYDAY=MO,TU;BYSETPOS=1", "Monatlich"),
         ("de", "", "Serie"),

@@ -787,7 +787,7 @@ pub async fn undo(state: &AppState, user: &Principal, id: i64, confirmed: bool) 
     }
     match g.commit().await {
         Some(n) => Ok(Ok(n)),
-        None => Err(AppError::Conflict("the undo changed nothing".into())),
+        None => Err(AppError::conflict("err-undo-nothing")),
     }
 }
 

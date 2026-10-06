@@ -28,6 +28,10 @@ impl L {
         }
         self.i18n.t_args(&self.lang, key, Some(&a))
     }
+    /// Message with the count `n` (its plural form: "1 Termin", "2 Termine").
+    pub fn tn(&self, key: &str, n: impl TryInto<i64>) -> String {
+        self.ta(key, &[("n", n.try_into().unwrap_or(i64::MAX).into())])
+    }
     /// short weekday name, 0 = Monday
     pub fn dow_i(&self, i: usize) -> String {
         self.t(&format!("dow-{}", i + 1))
@@ -485,10 +489,11 @@ fn ico_c(name: &str, color: &str) -> String {
 /// An RRULE in words. Parts the sentence cannot carry (BYSETPOS, several ordinals, …) are left out
 /// rather than guessed — the base sentence stays true, the editor shows the whole rule.
 pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
+    let rule = crate::domain::ical::rrule_canon(rule);
     let mut m = std::collections::HashMap::new();
     for part in rule.split(';') {
         if let Some((k, v)) = part.split_once('=') {
-            m.insert(k.trim().to_ascii_uppercase(), v.trim().to_string());
+            m.insert(k.trim().to_string(), v.trim().to_string());
         }
     }
     let get = |k: &str| m.get(k).map(|s| s.as_str()).unwrap_or("");
@@ -534,7 +539,7 @@ pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
         }
     }
     if let Ok(c) = get("COUNT").parse::<u32>() {
-        let _ = write!(out, ", {}", l.ta("v-rr-count", &[("n", i64::from(c).into())]));
+        let _ = write!(out, ", {}", l.tn("v-rr-count", c));
     } else if get("UNTIL").len() >= 8 {
         let u = get("UNTIL");
         if let Ok(d) = NaiveDate::parse_from_str(&u[..8], "%Y%m%d") {
@@ -664,7 +669,7 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     let (ds, de) = day_window(view_date);
     let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l, hol);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
-    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} {} · {}</div>{}", e(&l.long_date(view_date)), evs.len(), l.t("v-events"), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
+    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} · {}</div>{}", e(&l.long_date(view_date)), l.tn("v-n-events", evs.len()), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
     if evs.is_empty() {
         let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
     }

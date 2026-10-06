@@ -114,9 +114,9 @@ fn build_vevent_lines() {
         "DTEND;TZID=Europe/Berlin:20261014T100000",
         "LOCATION:Ort\\nzwei",
         "CATEGORIES:A\\,B,C",
-        // BUG?: normalize_until looks for an upper-case "UNTIL=", so a lower-case rule keeps a DATE
-        // UNTIL on a timed event (RFC 5545 wants a UTC date-time there); validate_rrule upper-cases after
-        "RRULE:FREQ=DAILY;UNTIL=20261031",
+        // a lower-case rule (RFC 5545: case-insensitive) gets its DATE UNTIL turned into the UTC end of
+        // that local day like an upper-case one — a timed event wants a UTC date-time there
+        "RRULE:FREQ=DAILY;UNTIL=20261031T225959Z",
         "EXDATE;TZID=Europe/Berlin:20261015T090000",
         // a value of date length is a DATE even on a timed event
         "RDATE;VALUE=DATE:20261102",
@@ -224,7 +224,10 @@ fn until_and_rrule_validation() {
         ("FREQ=DAILY;UNTIL=20260130", false, "FREQ=DAILY;UNTIL=20260130T225959Z"),
         ("FREQ=DAILY;UNTIL=20260130T120000", false, "FREQ=DAILY;UNTIL=20260130T120000"),
         ("FREQ=DAILY;UNTIL=20260130T230000Z", true, "FREQ=DAILY;UNTIL=20260131"),
-        ("FREQ=DAILY;UNTIL=garbage", false, "FREQ=DAILY;UNTIL=garbage"),
+        // the rule comes out canonical (upper-case) even where UNTIL does not read
+        ("FREQ=DAILY;UNTIL=garbage", false, "FREQ=DAILY;UNTIL=GARBAGE"),
+        // RFC 5545 rule parts are case-insensitive: a lower-case UNTIL is normalised too
+        ("freq=daily;until=20260130", false, "FREQ=DAILY;UNTIL=20260130T225959Z"),
         ("FREQ=DAILY;COUNT=3", false, "FREQ=DAILY;COUNT=3"),
     ] {
         assert_eq!(normalize_until(rule, all_day, tz), out, "{rule}");
@@ -232,6 +235,7 @@ fn until_and_rrule_validation() {
     assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=20260130T230000Z", tz), Some(date("2026-01-31")));
     assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=20260130", tz), Some(date("2026-01-30")));
     assert_eq!(rrule_until_local("FREQ=DAILY", tz), None);
+    assert_eq!(rrule_until_local("freq=daily;until=20260130t230000z", tz), Some(date("2026-01-31")));
     assert_eq!(validate_rrule(" RRULE:freq=weekly;byday=mo ").unwrap(), "FREQ=WEEKLY;BYDAY=MO");
     for bad in ["", "RRULE:", "BYDAY=MO", "FREQ=DAILY\nX", "FREQ=YEARLY;BYMONTH=13", "FREQ=FORTNIGHTLY"] {
         assert!(validate_rrule(bad).is_err(), "{bad:?}");
@@ -287,8 +291,10 @@ fn raw_split_and_small_helpers() {
     assert_eq!(base64_len("aGVsbG8="), 5);
     assert_eq!(base64_len("aGVs\r\nbG8="), 5);
     assert_eq!(base64_len(""), 0);
-    // BUG?: fewer than four characters with padding underflow (a panic in a debug build)
-    assert!(std::panic::catch_unwind(|| base64_len("==")).is_err());
+    // padding alone, short and unpadded texts: no underflow, the bytes the data characters hold
+    for (b64, n) in [("==", 0), ("=", 0), ("Y", 0), ("YQ", 1), ("YQ==", 1), ("YWI", 2), ("YWI=", 2), ("aGVsbG8", 5), ("aGVs bG8 =", 5)] {
+        assert_eq!(base64_len(b64), n, "{b64}");
+    }
     assert!(is_binary_attach(&[("ENCODING".into(), "BASE64".into())]) && is_binary_attach(&[("VALUE".into(), "binary".into())]) && !is_binary_attach(&[("FMTTYPE".into(), "x".into())]));
     assert!(is_managed("SUMMARY:x") && !is_managed("X-FOO:y") && !is_managed("ATTACH;ENCODING=BASE64;VALUE=BINARY:aGk=") && is_managed("ATTACH:https://x"));
     // instance helpers
@@ -323,6 +329,6 @@ fn links_and_embedded_limits() {
     let two_mb = "A".repeat(EMBED_FILE_MAX / 3 * 4);
     assert!(embedded_lines(&[Link { embedded: true, data: Some(two_mb.clone()), ..Default::default() }]).is_ok());
     let three: Vec<Link> = (0..4).map(|_| Link { embedded: true, data: Some(two_mb.clone()), ..Default::default() }).collect();
-    assert!(matches!(embedded_lines(&three), Err(AppError::BadRequest(m)) if m.starts_with("attachment too large")));
+    assert!(matches!(embedded_lines(&three), Err(AppError::BadRequest(m)) if m.to_string().starts_with("attachment too large")));
     assert_eq!(related_lines(&[Related { uid: " p ".into(), reltype: "parent".into(), ..Default::default() }, Related { uid: "a;b".into(), ..Default::default() }, Related { uid: "c".into(), reltype: "COUSIN".into(), ..Default::default() }]), ["RELATED-TO;RELTYPE=PARENT:p", "RELATED-TO:c"]);
 }

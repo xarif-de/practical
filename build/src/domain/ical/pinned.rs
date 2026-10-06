@@ -57,3 +57,18 @@ fn local_times_and_component_reads() {
         assert_eq!(tz_of(&d.timezone()).map(|t| t.name().to_string()).as_deref(), Some("America/New_York"));
     }
 }
+
+#[test]
+fn tokens_are_case_insensitive() {
+    // RFC 5545 §2: names, enumerated values and parameter values are case-insensitive
+    assert_eq!(rrule_canon(" rrule:freq=weekly;byday=mo,we;until=20261231t225959z "), "FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20261231T225959Z");
+    assert_eq!(parse_tz("europe/berlin"), Some(chrono_tz::Europe::Berlin));
+    assert_eq!(parse_tz("Europe/Berlin"), Some(chrono_tz::Europe::Berlin));
+    assert_eq!(parse_tz("Mars/Base"), None);
+    assert_eq!((strip_mailto("MailTo:a@b.c"), strip_mailto("a@b.c"), strip_scheme("TEL:+49", "tel:")), ("a@b.c", "a@b.c", "+49"));
+    let (name, params, value) = split_line("attendee;partstat=accepted;cn=Anna Maria;value=cal-address:mailto:a@x");
+    assert_eq!((name.as_str(), value.as_str()), ("ATTENDEE", "mailto:a@x"));
+    assert_eq!(params, [("PARTSTAT".to_string(), "ACCEPTED".to_string()), ("CN".into(), "Anna Maria".into()), ("VALUE".into(), "CAL-ADDRESS".into())], "an enumerated value upper-case, a name as written");
+    // names (and component names) come out of `unfold` upper-case, values as written
+    assert_eq!(crate::domain::events::unfold("begin:vevent\r\nsummary;language=de:Probe\r\n Text\r\nend:vevent"), ["BEGIN:VEVENT", "SUMMARY;language=de:ProbeText", "END:VEVENT"]);
+}

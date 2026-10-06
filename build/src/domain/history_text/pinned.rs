@@ -45,7 +45,7 @@ fn values_read_in_each_language() {
     let mut out = String::new();
     let a = attrs(Store::Cal, EV);
     for lang in ["de", "en"] {
-        let t = |k: &str| i18n.t(lang, k);
+        let t = |k: &str| i18n.lookup(lang, k);
         let show = Show { t: &t, lang, tz: "Europe/Berlin".parse().unwrap() };
         let colls = |k: &str| format!("<{k}>");
         for (k, v) in &a {
@@ -56,8 +56,6 @@ fn values_read_in_each_language() {
         out.push_str(&format!("{lang} raw = {}\n", show.raw(":a\\,b\n;X=1:c")));
     }
     crate::testkit::assert_snapshot("history_text/values.txt", &out);
-    // BUG?: `Show::tr` falls back only when the lookup returns the key itself, but a missing Fluent
-    // message comes back as "⟦key⟧" — an attribute without a label (any X- property) reads
-    // "⟦hx-a-x-moz-generation⟧" instead of its name (and logs a missing-translation warning).
-    assert!(out.contains("de ⟦hx-a-x-moz-generation⟧ = 3"));
+    // an attribute without a label (any X- property) reads as its own name, never as a "⟦key⟧" placeholder
+    assert!(out.contains("de X-MOZ-GENERATION = 3") && !out.contains('⟦'), "{out}");
 }

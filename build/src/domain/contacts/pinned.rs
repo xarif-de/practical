@@ -44,9 +44,17 @@ fn other_dialects() {
     assert_eq!((c.related[0].kind.as_str(), c.related[0].value.as_str()), ("friend", "Lee"));
     assert_eq!((c.birthday.as_str(), c.birthday_label().as_str()), ("--12-24", "24.12."));
     assert_eq!((c.letter(), c.given_letter(), c.initials()), ("K".to_string(), "K".to_string(), "K".to_string()));
-    // a vCard 2.1-style bare parameter (TEL;CELL) is rejected by the parser: such a card is skipped
-    // (contacts_for logs it); the raw reader alone would take it as a TYPE
-    assert!(parse_vcf("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:X\r\nTEL;CELL:0151\r\nEND:VCARD\r\n").is_err());
+    // vCard 2.1-style bare parameters (TEL;CELL, TEL;HOME;VOICE, EMAIL;INTERNET) read as TYPE — caldata alone
+    // rejects such a card — also in a folded line, next to a quoted value with ";" and a value with "="
+    let v21 = "BEGIN:VCARD\r\nVERSION:2.1\r\nN:Muster;Olga;;;\r\nFN:Olga Muster\r\nTEL;CELL:0151\r\nTEL;HOME;VOICE:030 1\r\nEMAIL;INTERNET;PREF:olga@example.org\r\nURL;WORK:https://example.org/?a=b\r\nADR;X-A=\"x;y\";HO\r\n ME:;;Weg 1;Ort;;;\r\nBDAY:1990-02-28\r\nEND:VCARD\r\n";
+    assert!(caldata::VcardParser::from_slice(v21.as_bytes()).expect_one().is_err(), "caldata itself still rejects it");
+    let c = read(v21);
+    assert_eq!(c.phones.iter().map(|t| (t.kind.as_str(), t.value.as_str())).collect::<Vec<_>>(), [("cell", "0151"), ("home", "030 1")]);
+    assert_eq!((c.emails[0].value.as_str(), c.emails[0].pref, c.urls[0].kind.as_str(), c.urls[0].value.as_str()), ("olga@example.org", true, "work", "https://example.org/?a=b"));
+    assert_eq!((c.addresses[0].kind.as_str(), c.addresses[0].street.as_str(), c.birthday.as_str()), ("home", "Weg 1", "1990-02-28"));
+    assert!(bare_params_as_type(v21).contains("\r\nTEL;TYPE=HOME;TYPE=VOICE:030 1\r\n"));
+    // a card without one is handed on as it is
+    assert!(matches!(bare_params_as_type(v4), std::borrow::Cow::Borrowed(_)));
     // an empty FN: the name comes from N
     let c = read("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Öztürk;Ayşe;;;\r\nFN:\r\nTEL;TYPE=cell:0151\r\nEND:VCARD\r\n");
     assert_eq!((c.full_name.as_str(), c.phones[0].kind.as_str(), c.uid.as_str(), c.letter().as_str()), ("Ayşe Öztürk", "cell", "obj", "Ö"));

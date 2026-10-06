@@ -481,12 +481,12 @@ fn stamp_line(name: &str, dt: NaiveDateTime, all_day: bool, tz: chrono_tz::Tz) -
 
 fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz::Tz, raw: Option<&events::RawMaster>) -> AppResult<Vec<String>> {
     if i.summary.trim().is_empty() {
-        return Err(AppError::BadRequest("summary required".into()));
+        return Err(AppError::bad("err-summary-required"));
     }
     if let (Some(s), Some(d)) = (i.start, i.due)
         && d < s
     {
-        return Err(AppError::BadRequest("due before start".into()));
+        return Err(AppError::bad("err-due-before-start"));
     }
     let mut l = vec![
         format!("UID:{uid}"),
@@ -577,12 +577,17 @@ fn assemble(vtimezone: Option<String>, lines: Vec<String>, extra_blocks: &[Strin
     out
 }
 
+/// The line references a time zone (a TZID parameter, its name in any case): the object needs that VTIMEZONE.
+fn has_tzid(l: &str) -> bool {
+    ical::split_line(l).1.iter().any(|(k, _)| k == "TZID")
+}
+
 pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, tz: chrono_tz::Tz) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
     normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
-    let vtz = lines.iter().any(|l| l.contains("TZID=")).then(|| ical::vtimezone(tz.name())).flatten();
+    let vtz = lines.iter().any(|l| has_tzid(l)).then(|| ical::vtimezone(tz.name())).flatten();
     let obj = CalendarObject::import(&assemble(vtz, lines, &[]), None)?;
     state.calendars.put_object(&i.principal, &i.cal_id, &uid, obj, false).await?;
     Ok(uid)
@@ -597,7 +602,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
         && !e.is_empty()
         && e != existing.get_etag()
     {
-        return Err(AppError::Conflict("the task was changed elsewhere; reload".into()));
+        return Err(AppError::conflict("err-changed-task"));
     }
     let CalendarInnerData::Todo(t, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);
@@ -609,7 +614,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
     let (raw, extra) = events::split_component(&stored, "VTODO");
     let lines = build_vtodo(&uid, sequence, &i, tz, Some(&raw))?;
     // a carried-over TZID must keep its definition; prefer the stored blocks over a generated one
-    let vtz = if !lines.iter().any(|l| l.contains("TZID=")) {
+    let vtz = if !lines.iter().any(|l| has_tzid(l)) {
         None
     } else {
         let blocks = events::vtimezone_blocks(&stored);

@@ -17,12 +17,12 @@ async fn groups_life_cycle() {
     assert!(alice.memberships.contains(&"group.verein-sport".to_string()));
     // the same name again: a conflict, shown as a flash
     c.post_form("/settings/groups", &[("name", "Verein & Sport")]).await;
-    c.get("/settings").await.has("<div class=\"toast error\" role=\"alert\"><span>group group.verein-sport exists</span>");
+    c.get("/settings").await.has("<div class=\"toast error\" role=\"alert\"><span>Die Gruppe group.verein-sport gibt es schon.</span>");
     // members
     c.post_form("/settings/groups/group.verein-sport/members", &[("member", "bob")]).await;
     assert_eq!(s.app.state.principals_list("group.verein-sport").await, ["alice", "bob"]);
     c.post_form("/settings/groups/group.verein-sport/members", &[("member", "group.familie")]).await;
-    c.get("/settings").await.has("only individuals can join a group");
+    c.get("/settings").await.has("Nur Personen können einer Gruppe beitreten.");
     c.post_form("/settings/groups/group.verein-sport/members/bob/remove", &[]).await;
     assert_eq!(s.app.state.principals_list("group.verein-sport").await, ["alice"]);
     // carol is no member: forbidden
@@ -70,10 +70,9 @@ async fn calendars_and_addressbooks_life_cycle() {
     let sport2 = cals(false).await.into_iter().find(|c| c.id == sport.id).unwrap();
     assert_eq!(sport2.displayname, "Sport & Spiel");
     assert_eq!(sport2.color, crate::domain::collections::default_color(&sport.id), "no colour: the stable fallback");
-    // BUG?: a collection that does not exist answers the store's English text instead of the
-    // translated "Nicht gefunden." (`finish` maps only AppError::NotFound, not Store(NotFound)).
+    // a collection that does not exist: the translated message, not the store's English text
     let r = c.post_form_json("/settings/calendars/alice/missing/update", &[("name", "x")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "store error: Not found" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Nicht gefunden." }));
     // trash, restore, purge
     c.post_form(&format!("/settings/calendars/alice/{}/delete", sport.id), &[]).await;
     assert!(cals(true).await.iter().any(|c| c.id == sport.id));
@@ -87,7 +86,7 @@ async fn calendars_and_addressbooks_life_cycle() {
     // address books: the colour is ours, required
     let abs = |deleted| { let st = s.app.state.clone(); let u = user.clone(); async move { crate::domain::collections::addressbooks_for(&st, &u, deleted).await.unwrap() } };
     let r = c.post_form_json("/settings/addressbooks", &[("owner", "alice"), ("name", "Kunden"), ("color", "blue")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "color must be #rrggbb" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Die Farbe muss #rrggbb sein." }));
     c.post_form("/settings/addressbooks", &[("owner", "alice"), ("name", "Kunden"), ("color", "#abcdef")]).await;
     let k = abs(false).await.into_iter().find(|a| a.displayname == "Kunden").unwrap();
     assert_eq!(k.color, "#abcdef");
@@ -123,7 +122,7 @@ async fn app_tokens_are_shown_once() {
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], axum::body::Body::empty()).await.status, StatusCode::OK);
     // empty name, someone else's id, then the real delete
     let r = c.post_form_json("/settings/tokens", &[("name", " ")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "name required" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Bitte einen Namen angeben." }));
     let r = c.post_form_json("/settings/tokens/not-mine/delete", &[]).await;
     assert_eq!(r.json(), json!({ "ok": false, "msg": "Nicht gefunden." }));
     c.post_form(&format!("/settings/tokens/{}/delete", t.id), &[]).await;
@@ -177,10 +176,35 @@ async fn preferences_form() {
     let r = c.post_form("/settings/prefs", &[("vacation_days", "999")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#prefs"));
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().vacation_days, None, "outside 0..=366");
-    // BUG?: ctx.rs says the stored preference beats the session's language, but the code reads the
-    // session first: after the preference went back to "automatic" (NULL) the session's "en" from
-    // the earlier save still wins, although the default is German. Pinned as it is today.
-    c.get("/settings").await.has("<html lang=\"en\"").has("<div class=\"toast ok\" role=\"status\"><span>Saved.</span>");
+    // the preference went back to "automatic" (NULL): the browser's language (none sent: the default,
+    // German) at once — in the answer of that save too — not the "en" saved earlier
+    c.get("/settings").await.has("<html lang=\"de\"").has("<div class=\"toast ok\" role=\"status\"><span>Gespeichert.</span>");
+}
+
+#[tokio::test]
+async fn the_stored_language_wins_and_automatic_follows_the_browser() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let en = [("accept-language", "en-GB,en;q=0.9")];
+    let lang_of = |body: &str| body.split("<html lang=\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or("").to_string();
+    // no stored choice: the browser's language, else the default
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "en");
+    assert_eq!(lang_of(&c.get("/settings").await.body), "de");
+    // a stored choice beats the browser's
+    c.post_form("/settings/prefs", &[("lang", "fr")]).await;
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "fr");
+    // back to "automatic": at once the browser's language — the save's own answer too
+    let csrf = c.csrf.clone();
+    let body = format!("lang=&csrf={csrf}");
+    let r = c.send(Method::POST, "/settings/prefs", &[("content-type", "application/x-www-form-urlencoded"), ("accept", "application/json"), ("sec-fetch-site", "same-origin"), en[0]], axum::body::Body::from(body)).await;
+    assert_eq!(r.json(), json!({ "ok": true, "msg": "Saved." }));
+    assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().lang, None);
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "en");
+    assert_eq!(lang_of(&c.get("/settings").await.body), "de");
+    // a fresh login (password or OIDC: the same session afterwards) reads the stored choice again
+    c.post_form("/settings/prefs", &[("lang", "es")]).await;
+    let mut again = s.app.login("alice").await;
+    assert_eq!(lang_of(&again.send(Method::GET, "/calendar", &en, axum::body::Body::empty()).await.body), "es");
 }
 
 #[tokio::test]
@@ -239,7 +263,7 @@ async fn export_and_import() {
     assert_eq!(c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), &one).await.ok().json(), json!({ "imported": 1 }));
     assert_eq!(c.get_json(&format!("/api/events/alice/{copy}/zahnarzt")).await.json()["summary"], "Zahnarzt (verschoben)");
     let r = c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n").await;
-    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: no calendar objects found"));
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Die Datei enthält keine Termine, Aufgaben oder Journaleinträge."));
     let r = c.post_raw(&format!("/settings/import/calendars/alice/{copy}"), "not a calendar").await;
     assert_eq!(r.status, StatusCode::BAD_REQUEST);
     // address books

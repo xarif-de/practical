@@ -135,8 +135,32 @@ pub fn fmt_date(d: NaiveDate) -> String {
     d.format("%Y%m%d").to_string()
 }
 
+/// An Olson zone by name; a TZID parameter value is case-insensitive (RFC 5545 §2), so `europe/berlin`
+/// is Europe/Berlin too (the exact spelling first: no scan of the zone table for the usual case).
 pub fn parse_tz(name: &str) -> Option<chrono_tz::Tz> {
-    name.parse().ok()
+    name.parse().ok().or_else(|| chrono_tz::TZ_VARIANTS.iter().find(|z| z.name().eq_ignore_ascii_case(name.trim())).copied())
+}
+
+/// An RRULE value in its canonical form: without a leading `RRULE:`, trimmed and upper-case — every rule
+/// part name and value of RFC 5545 §3.3.10 (FREQ, BYDAY codes, WKST, UNTIL's date-time) is case-insensitive,
+/// so `freq=weekly;byday=sa` is FREQ=WEEKLY;BYDAY=SA for every reader and writer here.
+pub fn rrule_canon(r: &str) -> String {
+    let r = r.trim();
+    let r = if r.len() >= 6 && r[..6].eq_ignore_ascii_case("RRULE:") { &r[6..] } else { r };
+    r.trim().to_ascii_uppercase()
+}
+
+/// A CAL-ADDRESS / e-mail URI without its `mailto:` scheme, whatever its case (RFC 3986 §3.1).
+pub fn strip_mailto(v: &str) -> &str {
+    strip_scheme(v, "mailto:")
+}
+
+/// `v` without a leading `scheme` (given lower-case, with its colon), compared case-insensitively.
+pub fn strip_scheme<'a>(v: &'a str, scheme: &str) -> &'a str {
+    match v.get(..scheme.len()) {
+        Some(h) if h.eq_ignore_ascii_case(scheme) => &v[scheme.len()..],
+        _ => v,
+    }
 }
 
 pub fn tz_of(tz: &Tz) -> Option<chrono_tz::Tz> {
@@ -185,8 +209,13 @@ mod tests {
     }
 }
 
+/// Parameters whose values are enumerations (RFC 5545 §3.2, RFC 7986 §6): case-insensitive like the names,
+/// so `split_line` hands them out upper-case (`VALUE=date` is VALUE=DATE, `PARTSTAT=accepted` ACCEPTED).
+const ENUM_PARAMS: &[&str] = &["CUTYPE", "DISPLAY", "ENCODING", "FBTYPE", "FEATURE", "PARTSTAT", "RANGE", "RELATED", "RELTYPE", "ROLE", "RSVP", "VALUE"];
+
 /// Splits one unfolded content line into (NAME, [(PARAM, value)…], value); quoted parameter
-/// values may contain `;`/`:`/`,`. Parameter names are upper-cased, values kept.
+/// values may contain `;`/`:`/`,`. Parameter names are upper-cased, values kept — except those of
+/// the enumerated parameters (`ENUM_PARAMS`), upper-cased as well.
 pub fn split_line(line: &str) -> (String, Vec<(String, String)>, String) {
     let mut head_end = line.len();
     let mut quoted = false;
@@ -213,6 +242,10 @@ pub fn split_line(line: &str) -> (String, Vec<(String, String)>, String) {
     }
     parts.push(cur);
     let name = parts[0].rsplit('.').next().unwrap_or("").to_ascii_uppercase();
-    let params = parts[1..].iter().filter_map(|p| p.split_once('=').map(|(k, v)| (k.to_ascii_uppercase(), v.to_string()))).collect();
+    let params = parts[1..].iter().filter_map(|p| p.split_once('=').map(|(k, v)| {
+        let k = k.to_ascii_uppercase();
+        let v = if ENUM_PARAMS.contains(&k.as_str()) { v.to_ascii_uppercase() } else { v.to_string() };
+        (k, v)
+    })).collect();
     (name, params, value.to_string())
 }

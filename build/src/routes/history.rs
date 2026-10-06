@@ -40,7 +40,7 @@ pub struct HistoryPage {
 /// undone now, the elements they belong to, the collections and people they name.
 async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Value> {
     let vc = view_ctx(state, user, lang).await?;
-    let t = |k: &str| state.i18n.t(lang, k);
+    let t = |k: &str| state.i18n.lookup(lang, k);
     let show = Show { t: &t, lang, tz: vc.tz };
     let mut colls: BTreeMap<String, Value> = BTreeMap::new();
     for deleted in [true, false] {
@@ -130,7 +130,7 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<Va
         "changes": changes,
         "els": els,
         // the page's strings (history.js), placeholders as %name
-        "t": state.i18n.with_prefix(lang, "hxj-").into_iter().map(|(k, v)| (k["hxj-".len()..].to_string(), v)).collect::<BTreeMap<_, _>>(),
+        "t": state.i18n.with_prefix_json(lang, "hxj-").into_iter().map(|(k, v)| (k["hxj-".len()..].to_string(), v)).collect::<BTreeMap<_, _>>(),
     }))
 }
 
@@ -153,7 +153,7 @@ async fn api_data(State(state): State<SharedState>, user: Principal, ctx: PageCt
 /// What undoing a change would do: warnings (overwritten values, later changes going inactive) and
 /// the parts it has to skip, values readable.
 fn plan_json(state: &SharedState, lang: &str, tz: chrono_tz::Tz, colls: &HashMap<String, String>, p: &Plan) -> Value {
-    let t = |k: &str| state.i18n.t(lang, k);
+    let t = |k: &str| state.i18n.lookup(lang, k);
     let show = Show { t: &t, lang, tz };
     let name = |k: &str| colls.get(k).cloned().unwrap_or_else(|| k.to_string());
     json!({
