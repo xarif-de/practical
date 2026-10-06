@@ -70,10 +70,9 @@ async fn calendars_and_addressbooks_life_cycle() {
     let sport2 = cals(false).await.into_iter().find(|c| c.id == sport.id).unwrap();
     assert_eq!(sport2.displayname, "Sport & Spiel");
     assert_eq!(sport2.color, crate::domain::collections::default_color(&sport.id), "no colour: the stable fallback");
-    // BUG?: a collection that does not exist answers the store's English text instead of the
-    // translated "Nicht gefunden." (`finish` maps only AppError::NotFound, not Store(NotFound)).
+    // a collection that does not exist: the translated message, not the store's English text
     let r = c.post_form_json("/settings/calendars/alice/missing/update", &[("name", "x")]).await;
-    assert_eq!(r.json(), json!({ "ok": false, "msg": "store error: Not found" }));
+    assert_eq!(r.json(), json!({ "ok": false, "msg": "Nicht gefunden." }));
     // trash, restore, purge
     c.post_form(&format!("/settings/calendars/alice/{}/delete", sport.id), &[]).await;
     assert!(cals(true).await.iter().any(|c| c.id == sport.id));
@@ -177,10 +176,35 @@ async fn preferences_form() {
     let r = c.post_form("/settings/prefs", &[("vacation_days", "999")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#prefs"));
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().vacation_days, None, "outside 0..=366");
-    // BUG?: ctx.rs says the stored preference beats the session's language, but the code reads the
-    // session first: after the preference went back to "automatic" (NULL) the session's "en" from
-    // the earlier save still wins, although the default is German. Pinned as it is today.
-    c.get("/settings").await.has("<html lang=\"en\"").has("<div class=\"toast ok\" role=\"status\"><span>Saved.</span>");
+    // the preference went back to "automatic" (NULL): the browser's language (none sent: the default,
+    // German) at once — in the answer of that save too — not the "en" saved earlier
+    c.get("/settings").await.has("<html lang=\"de\"").has("<div class=\"toast ok\" role=\"status\"><span>Gespeichert.</span>");
+}
+
+#[tokio::test]
+async fn the_stored_language_wins_and_automatic_follows_the_browser() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let en = [("accept-language", "en-GB,en;q=0.9")];
+    let lang_of = |body: &str| body.split("<html lang=\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or("").to_string();
+    // no stored choice: the browser's language, else the default
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "en");
+    assert_eq!(lang_of(&c.get("/settings").await.body), "de");
+    // a stored choice beats the browser's
+    c.post_form("/settings/prefs", &[("lang", "fr")]).await;
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "fr");
+    // back to "automatic": at once the browser's language — the save's own answer too
+    let csrf = c.csrf.clone();
+    let body = format!("lang=&csrf={csrf}");
+    let r = c.send(Method::POST, "/settings/prefs", &[("content-type", "application/x-www-form-urlencoded"), ("accept", "application/json"), ("sec-fetch-site", "same-origin"), en[0]], axum::body::Body::from(body)).await;
+    assert_eq!(r.json(), json!({ "ok": true, "msg": "Saved." }));
+    assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().lang, None);
+    assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "en");
+    assert_eq!(lang_of(&c.get("/settings").await.body), "de");
+    // a fresh login (password or OIDC: the same session afterwards) reads the stored choice again
+    c.post_form("/settings/prefs", &[("lang", "es")]).await;
+    let mut again = s.app.login("alice").await;
+    assert_eq!(lang_of(&again.send(Method::GET, "/calendar", &en, axum::body::Body::empty()).await.body), "es");
 }
 
 #[tokio::test]

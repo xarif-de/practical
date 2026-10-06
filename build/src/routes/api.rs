@@ -385,8 +385,8 @@ async fn update_contact(State(state): State<SharedState>, user: Principal, sessi
     g.object(Store::Ab, &p, &a, &id);
     if u.input.principal != p || u.input.ab_id != a {
         let (tp, ta) = (u.input.principal.clone(), u.input.ab_id.clone());
-        let old = rustical_store::AddressbookReadStore::get_object(&*state.addressbooks, &p, &a, &id, false).await?;
-        let uid = contacts::parse_vcf(old.get_vcf())?.get_uid().unwrap_or(&id).to_string();
+        let (old, _) = contacts::stored_card(&state, &p, &a, &id).await?;
+        let uid = contacts::parse_vcf(&old)?.get_uid().unwrap_or(&id).to_string();
         let new_id = contacts::create_contact_as(&state, &user, u.input, Some(&uid)).await?;
         g.object(Store::Ab, &tp, &ta, &new_id);
         contacts::delete_contact(&state, &user, &p, &a, &id).await?;

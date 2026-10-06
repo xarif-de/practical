@@ -75,7 +75,19 @@ impl I18n {
     }
 
     pub fn t_args(&self, lang: &str, key: &str, args: Option<&FluentArgs>) -> String {
-        // the asked language, then English, then German
+        self.lookup_args(lang, key, args).unwrap_or_else(|| {
+            tracing::warn!("missing translation {lang}/{key}");
+            format!("⟦{key}⟧")
+        })
+    }
+
+    /// The message in the asked language, then English, then German; None (and no warning) where no
+    /// language has it — for keys built from data (`hx-a-<property>`), whose caller has a fallback.
+    pub fn lookup(&self, lang: &str, key: &str) -> Option<String> {
+        self.lookup_args(lang, key, None)
+    }
+
+    fn lookup_args(&self, lang: &str, key: &str, args: Option<&FluentArgs>) -> Option<String> {
         for l in [lang, "en", "de"] {
             let Some(b) = self.get(l) else { continue };
             let Some(pattern) = b.get_message(key).and_then(|m| m.value()) else { continue };
@@ -87,10 +99,9 @@ impl I18n {
             if !errors.is_empty() {
                 tracing::warn!("translation {l}/{key}: {errors:?}");
             }
-            return s;
+            return Some(s);
         }
-        tracing::warn!("missing translation {lang}/{key}");
-        format!("⟦{key}⟧")
+        None
     }
 
     /// Message with one named argument.

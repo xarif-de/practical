@@ -93,9 +93,13 @@ fn countdown_golden() {
     // Ben's birthday was 12 days ago: in "just passed", and next year's in the coming list
     assert!(html.contains("<b>−12</b>"), "{html}");
     assert!(html.contains("Anna Schmidt · 41"), "the age it turns: {html}");
-    // BUG?: a 29 February birthday in a non-leap year falls back to the 28th of THIS year; when that
-    // is past, next year has no 29 February either and the tile counts negative days ("−228").
-    assert!(html.contains("<b>-228</b>"), "{html}");
+    // a 29 February birthday in a common year is on the 28th; this year's is past, so the next one
+    // (28 February 2027) — never a negative count
+    assert!(html.contains("<b>137</b><small>Tage</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-cake\"/></svg></div><h3>Lea Schaltjahr</h3><span>Sonntag, 28. Februar 2027</span>"), "{html}");
+    assert!(!html.contains("<b>-"), "{html}");
+    // the unit under the count is a plural: one day is "Tag"
+    let tomorrow = countdown(&year("2026-10-19"), &lang("de"));
+    assert!(tomorrow.contains("<b>1</b><small>Tag</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-cake\"/></svg></div><h3>Anna Schmidt · 41</h3>"), "{tomorrow}");
 }
 
 #[test]
@@ -105,9 +109,10 @@ fn numbers_golden() {
     assert_snapshot("more/numbers_de.html", &lines_of_html(&html));
     // instances of 2026 only: 7 of the 8 (the 2025 one is out)
     assert!(html.starts_with("<div class=\"kpis\"><div><b>7</b>"), "{html}");
-    // BUG?: the spark bars get their arguments shifted — `--h` receives the week label and the
-    // title the percentage and the count ("--h:KW 1%", title "0: 0").
-    assert!(html.contains("<i style=\"--h:KW 1%\" title=\"0: 0\"></i>"), "{html}");
+    // the spark bars: `--h` the share of the busiest week, the title the week and its count
+    assert!(html.contains("<i style=\"--h:0%\" title=\"KW 1: 0\"></i>") && html.contains("<i style=\"--h:100%\" title=\"KW 42: 4\"></i><i style=\"--h:0%\" title=\"KW 43: 0\"></i><i style=\"--h:25%\" title=\"KW 44: 1\"></i>"), "{html}");
+    // counts are plurals ("1 Termin")
+    assert!(html.contains("<li><b>KW 28</b> — 1 Termin</li>") && html.contains("<li><b>KW 42</b> — 4 Termine</li>"), "{html}");
 }
 
 #[test]

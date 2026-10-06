@@ -109,6 +109,7 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .merge(routes::history::router())
         .merge(routes::settings::router())
         .merge(routes::api::router())
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), ctx::localize_errors))
         .route_layer(axum::middleware::from_fn(auth::require_user));
 
     Ok(Router::new()

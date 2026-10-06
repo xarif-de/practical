@@ -230,22 +230,25 @@ async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: A
     if ctx.wants_json {
         let (ok, msg) = match result {
             Ok(key) => (true, key.map(|k| state.i18n.t(&ctx.lang, k))),
-            Err(AppError::Forbidden) => (false, Some(state.i18n.t(&ctx.lang, "flash-forbidden"))),
-            Err(AppError::NotFound) => (false, Some(state.i18n.t(&ctx.lang, "flash-not-found"))),
-            Err(AppError::BadRequest(m) | AppError::Conflict(m)) => (false, Some(m)),
-            Err(e) => (false, Some(e.to_string())),
+            Err(e) => (false, Some(failed(state, ctx, &e))),
         };
         return axum::Json(serde_json::json!({ "ok": ok, "msg": msg })).into_response();
     }
     match result {
         Ok(None) => {}
         Ok(Some(key)) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,
-        Err(AppError::Forbidden) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-forbidden")).await,
-        Err(AppError::NotFound) => set_flash(session, "error", state.i18n.t(&ctx.lang, "flash-not-found")).await,
-        Err(AppError::BadRequest(m) | AppError::Conflict(m)) => set_flash(session, "error", m).await,
-        Err(e) => set_flash(session, "error", e.to_string()).await,
+        Err(e) => set_flash(session, "error", failed(state, ctx, &e)).await,
     }
     Redirect::to(&format!("/settings#{anchor}")).into_response()
+}
+
+/// The user's message for a failed settings action (`AppError::user_message`); a server-side failure is
+/// logged with its own text, which the user does not see.
+fn failed(state: &SharedState, ctx: &PageCtx, e: &AppError) -> String {
+    if e.user_text().is_some_and(|u| u.key == "flash-failed") {
+        tracing::error!("{e}");
+    }
+    e.user_message(&state.i18n, &ctx.lang)
 }
 
 #[derive(Deserialize)]
@@ -572,7 +575,7 @@ struct PrefsForm {
     search_history_days: Option<String>,
 }
 
-async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, Form(f): Form<PrefsForm>) -> Response {
+async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, headers: axum::http::HeaderMap, Form(f): Form<PrefsForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
         let mut p = prefs::get(&state.db, &user.id).await?;
@@ -618,13 +621,9 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
             p.search_history_days = Some(d);
         }
         prefs::set(&state.db, &user.id, &p).await?;
-        if let Some(l) = &p.lang {
-            session.insert(crate::ctx::SESSION_LANG, l).await?;
-        }
-        // the answer ("Saved.") speaks the language just chosen
-        if let Some(l) = p.lang.clone() {
-            ctx.lang = l;
-        }
+        // the answer ("Saved.") speaks the language just chosen — "automatic": the browser's
+        let accept = headers.get(axum::http::header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok());
+        ctx.lang = p.lang.clone().unwrap_or_else(|| crate::i18n::negotiate(accept, &state.config.default_lang));
         Ok(Some("flash-saved"))
     }
     .await;

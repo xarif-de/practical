@@ -4,6 +4,7 @@ use crate::i18n::negotiate;
 use crate::state::SharedState;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use axum::response::IntoResponse;
 use fluent_bundle::FluentValue;
 use rustical_store::auth::Principal;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tower_sessions::Session;
 
-pub const SESSION_LANG: &str = "lang";
 pub const SESSION_CSRF: &str = "csrf";
 pub const SESSION_FLASH: &str = "flash";
 pub const SESSION_USER: &str = "user";
@@ -91,7 +91,7 @@ impl PageCtx {
             .filter_map(|p| p.chars().next())
             .take(2)
             .collect();
-        if s.len() < 2 {
+        if s.chars().count() < 2 {
             s = name.chars().take(2).collect();
         }
         s.to_uppercase()
@@ -125,7 +125,6 @@ impl FromRequestParts<SharedState> for PageCtx {
         let mut csrf = None;
         let mut flash = None;
         if let Some(session) = &session {
-            lang = session.get::<String>(SESSION_LANG).await.ok().flatten();
             csrf = session.get::<String>(SESSION_CSRF).await.ok().flatten();
             if csrf.is_none() {
                 let t = random_token();
@@ -134,14 +133,13 @@ impl FromRequestParts<SharedState> for PageCtx {
             }
             flash = session.remove::<Flash>(SESSION_FLASH).await.ok().flatten();
         }
-        // user preference (DB) beats the session choice which beats Accept-Language
+        // the user's stored language, else the browser's (Accept-Language): "automatic" (no stored choice)
+        // follows the browser at once. The DB row is read on every request, so nothing else keeps a copy.
         let mut scheme = "auto".to_string();
         if let Some(u) = &user
             && let Ok((l, s)) = crate::domain::prefs::get_look(&state.db, &u.id).await
         {
-            if lang.is_none() {
-                lang = l;
-            }
+            lang = l;
             if let Some(s) = s.filter(|s| s == "light" || s == "dark") {
                 scheme = s;
             }
@@ -162,6 +160,28 @@ impl FromRequestParts<SharedState> for PageCtx {
             scheme,
         })
     }
+}
+
+/// Error responses of the UI in the user's language: an `AppError` puts its user message (`UserText`) on the
+/// response; a request of a logged-in browser session gets that message, in the page language, as the body
+/// (the editor and the settings show it after "Fehler 404:"). Clients without a session (app tokens, Basic
+/// auth) keep the error's own text.
+pub async fn localize_errors(axum::extract::State(state): axum::extract::State<SharedState>, req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+    let session = req.extensions().get::<Session>().cloned();
+    let user = req.extensions().get::<Principal>().map(|u| u.id.clone());
+    let accept = req.headers().get(axum::http::header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let res = next.run(req).await;
+    let Some(text) = res.extensions().get::<crate::error::UserText>().cloned() else { return res };
+    let Some(session) = session else { return res };
+    if session.get::<String>(SESSION_USER).await.ok().flatten().is_none() {
+        return res;
+    }
+    let stored = match &user {
+        Some(u) => crate::domain::prefs::get_look(&state.db, u).await.ok().and_then(|(l, _)| l),
+        None => None,
+    };
+    let lang = stored.unwrap_or_else(|| negotiate(accept.as_deref(), &state.config.default_lang));
+    (res.status(), text.render(&state.i18n, &lang)).into_response()
 }
 
 pub async fn set_flash(session: &Session, kind: &str, text: String) {

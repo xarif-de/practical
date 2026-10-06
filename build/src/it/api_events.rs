@@ -87,9 +87,9 @@ async fn event_input_errors() {
         (with("summary", json!("  ")), StatusCode::BAD_REQUEST, "bad request: summary required"),
         (with("end", json!("2026-10-22T19:00:00")), StatusCode::BAD_REQUEST, "bad request: end before start"),
         (with("rrule", json!("DAILY")), StatusCode::BAD_REQUEST, "bad request: RRULE must start with FREQ="),
-        (with("principal", json!("bob")), StatusCode::FORBIDDEN, "forbidden"),
-        // the store's own error text reaches the client
-        (with("cal_id", json!("missing")), StatusCode::NOT_FOUND, "store error: Not found"),
+        // a browser session reads the translated message, never the store's own English text
+        (with("principal", json!("bob")), StatusCode::FORBIDDEN, "Dafür fehlt die Berechtigung."),
+        (with("cal_id", json!("missing")), StatusCode::NOT_FOUND, "Nicht gefunden."),
     ] {
         let r = c.json(Method::POST, "/api/events", body).await;
         assert_eq!((r.status, r.body.as_str()), (status, text));

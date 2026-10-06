@@ -79,7 +79,7 @@ fn used_keys() -> BTreeMap<String, String> {
         used.entry(k).or_insert_with(|| at.to_string());
     };
     for (path, text) in files("templates", "html").into_iter().chain(files("src", "rs")) {
-        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
+        for call in ["ctx.t(\"", "ctx.t1(\"", "ctx.tn(\"", "l.t(\"", "l.ta(\"", "l.tn(\"", ".t(&ctx.lang, \"", ".t(lang, \"", "i18n.t(&ctx.lang, \"", "i18n.t_args(&self.ctx.lang, \"", "(self.t)(\"", "self.ctx.t(\"", "self.ctx.tn(\"", "self.ctx.t1(\""] {
             for k in literals_after(&text, call) {
                 add(k, &path);
             }
@@ -178,6 +178,8 @@ fn lookups_and_fallbacks() {
     let i = I18n::load();
     assert_eq!(i.t("xx", "nav-calendar"), "Calendar", "an unknown language reads English");
     assert_eq!(i.t("de", "no-such-key"), "⟦no-such-key⟧");
+    // `lookup`: the same fallback chain, None (no placeholder) where no language has the key
+    assert_eq!((i.lookup("de", "no-such-key"), i.lookup("xx", "nav-calendar").as_deref()), (None, Some("Calendar")));
     assert_eq!(i.t1("de", "v-rr-every-days", "n", 3), "Alle 3 Tage");
     let js = i.with_prefix("en", "js-");
     assert!(js.len() > 100 && js.iter().all(|(k, _)| k.starts_with("js-")));

@@ -13,7 +13,7 @@ de Wiederholung = alle 2 Wochen, Di Do, bis Do 31.12.2026 23:59
 de Status = vorläufig
 de Titel = Probe
 de Erinnerung = 90 Min. vorher · Anzeige
-de ⟦hx-a-x-moz-generation⟧ = 3
+de X-MOZ-GENERATION = 3
 de Kalender / Adressbuch = <alice/cal>
 de Termin am Mi 21.10.2026 19:00
 de raw = a,b
@@ -33,7 +33,7 @@ en Repeat = every 2 weeks, Tue Thu, until Thu 12/31/2026 23:59
 en Status = tentative
 en Title = Probe
 en Reminder = 90 min before · Display
-en ⟦hx-a-x-moz-generation⟧ = 3
+en X-MOZ-GENERATION = 3
 en Calendar / address book = <alice/cal>
 en Occurrence on Wed 10/21/2026 19:00
 en raw = a,b

@@ -208,11 +208,12 @@ async fn geocoder_without_network() {
     assert_eq!(c.get_json("/api/geo/search?q=ab").await.ok().json(), json!([]));
     let r = c.get_json("/api/geo/reverse?lat=91&lon=0").await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "bad request: lat/lon out of range"));
-    // the provider cannot be reached: a 500 naming the geocoder, quickly
+    // the provider cannot be reached: a 500, quickly; the session reads the translated message (the
+    // geocoder's own error goes to the log)
     let t = std::time::Instant::now();
     let r = c.get_json("/api/geo/search?q=Dresden").await;
     assert_eq!(r.status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(r.body.starts_with("geocoder: "), "{}", r.body);
+    assert_eq!(r.body, "Das hat nicht geklappt – die Einzelheiten stehen im Server-Log.");
     assert!(t.elapsed() < std::time::Duration::from_secs(5));
 }
 
@@ -248,4 +249,37 @@ async fn holiday_regions() {
     assert!(codes.contains(&"DE-SN"));
     // a code no source covers: nothing
     assert_eq!(c.get_json("/api/holidays/subdivisions?country=XX").await.ok().json(), json!([]));
+}
+
+#[tokio::test]
+async fn a_card_with_bare_parameters_shows_everywhere() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    // the contact cache is warm: the card below arrives through the change log
+    c.get("/contacts").await.ok().has("Anna Schmidt");
+    // a vCard 2.1-style card as stored before RustiCal parsed what it stores: caldata rejects it, the
+    // store hides it (skip_broken) and fails a change list holding it
+    let v21 = "BEGIN:VCARD\r\nVERSION:2.1\r\nUID:otto\r\nN:Alt;Otto;;;\r\nFN:Otto Alt\r\nTEL;CELL;VOICE:0151 222\r\nEMAIL;INTERNET:otto@example.org\r\nBDAY:1972-02-29\r\nEND:VCARD\r\n";
+    s.app.put_vcf("alice", &s.freunde, "otto", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:otto\r\nFN:Otto\r\nEND:VCARD\r\n").await;
+    sqlx::query("UPDATE addressobjects SET vcf = ? WHERE id = 'otto'").bind(v21).execute(&s.app.state.db).await.unwrap();
+    assert!(rustical_store::AddressbookReadStore::get_objects(&*s.app.state.addressbooks, "alice", &s.freunde).await.unwrap().iter().all(|(id, _)| id != "otto"), "the store alone leaves it out");
+    // list, table, search, the birthdays of the year views, the detail, the download
+    c.get("/contacts").await.ok().has("Otto Alt").has("29.02.1972");
+    c.get("/contacts?view=table").await.ok().has("0151 222").has("otto@example.org");
+    let hits = c.get_json("/api/search?q=Otto").await.ok().json();
+    assert_eq!(hits["contacts"][0]["name"], "Otto Alt");
+    let abs = crate::domain::collections::addressbooks_for(&s.app.state, &s.app.principal("alice").await, false).await.unwrap();
+    assert!(crate::domain::contacts::contacts_for(&s.app.state, &abs).await.unwrap().iter().any(|x| x.full_name == "Otto Alt" && x.birthday == "1972-02-29"));
+    let path = format!("/api/contacts/alice/{}/otto", s.freunde);
+    let d = c.get_json(&path).await.ok().json();
+    assert_eq!((d["phones"].clone(), d["emails"][0]["value"].clone()), (json!([{ "kind": "cell", "value": "0151 222", "pref": false }]), json!("otto@example.org")));
+    assert_eq!(c.get_json(&format!("{path}/vcf")).await.ok().body, v21, "the stored card, as stored");
+    // reading never rewrites it; a save from here does (as vCard 3.0, which caldata reads)
+    let stored = || async { sqlx::Row::get::<String, _>(&sqlx::query("SELECT vcf FROM addressobjects WHERE id = 'otto'").fetch_one(&s.app.state.db).await.unwrap(), "vcf") };
+    assert_eq!(stored().await, v21);
+    let mut upd = d.clone();
+    upd["nickname"] = json!("Ottilein");
+    c.json(Method::PUT, &path, upd).await.ok();
+    let saved = stored().await;
+    assert!(saved.contains("NICKNAME:Ottilein") && saved.contains("TEL;TYPE=CELL:0151 222") && rustical_ical::AddressObject::from_vcf(saved.clone()).is_ok(), "{saved}");
 }

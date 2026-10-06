@@ -8,6 +8,7 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use caldata::VcardParser;
 use caldata::component::{Component, VcardContact};
+use chrono::{Datelike, NaiveDate};
 use rustical_ical::AddressObject;
 use rustical_store::auth::Principal;
 use rustical_store::{AddressbookReadStore, AddressbookWriteStore};
@@ -142,6 +143,37 @@ pub fn fmt_partial(s: &str) -> String {
     }
 }
 
+/// (year if given, month, day) of a `norm_partial` date: `1984-02-29`, `--02-29`.
+pub fn partial_parts(s: &str) -> Option<(Option<i32>, u32, u32)> {
+    let (y, md) = match s.strip_prefix("--") {
+        Some(md) => (None, md),
+        None => {
+            let (y, md) = s.split_once('-')?;
+            (Some(y.parse().ok()?), md)
+        }
+    };
+    let (m, d) = md.split_once('-')?;
+    Some((y, m.parse().ok()?, d.parse().ok()?))
+}
+
+/// The day a yearly date (birthday, anniversary) falls on in `year`. A day its month lacks that year —
+/// 29 February in a common year — is the month's last day, 28 February: where Apple's and Google's
+/// calendars show such a birthday (German law would make the person a year older on 1 March only,
+/// BGB §187(2), §188(2)/(3): the year ends with 28 February). One rule for every view.
+pub fn yearly_in(year: i32, month: u32, day: u32) -> Option<NaiveDate> {
+    if day == 0 {
+        return None;
+    }
+    let first = NaiveDate::from_ymd_opt(year, month, 1)?;
+    let last = first.checked_add_months(chrono::Months::new(1))?.pred_opt()?.day();
+    NaiveDate::from_ymd_opt(year, month, day.min(last))
+}
+
+/// The first day on or after `today` the yearly date falls on (`yearly_in`).
+pub fn next_yearly(month: u32, day: u32, today: NaiveDate) -> Option<NaiveDate> {
+    yearly_in(today.year(), month, day).filter(|d| *d >= today).or_else(|| yearly_in(today.year() + 1, month, day))
+}
+
 /// Normalise BDAY/ANNIVERSARY values (19840312, 1984-03-12, --0312, --03-12, 19840312T...) → ISO.
 pub fn norm_partial(v: &str) -> String {
     let v = v.split('T').next().unwrap_or("").trim();
@@ -183,12 +215,28 @@ fn unfold(vcf: &str) -> Vec<String> {
     lines
 }
 
-/// Split at `sep` outside double quotes.
+/// Byte length of a content line's head (name and parameters): up to its first `:` outside double quotes.
+fn head_len(l: &str) -> usize {
+    let mut q = false;
+    for (i, c) in l.char_indices() {
+        match c {
+            '"' => q = !q,
+            ':' if !q => return i,
+            _ => {}
+        }
+    }
+    l.len()
+}
+
+/// Split at `sep` outside double quotes (the quotes stay in the parts).
 fn split_unquoted(s: &str, sep: char) -> Vec<String> {
     let (mut out, mut cur, mut q) = (vec![], String::new(), false);
     for c in s.chars() {
         match c {
-            '"' => q = !q,
+            '"' => {
+                q = !q;
+                cur.push(c);
+            }
             c if c == sep && !q => out.push(std::mem::take(&mut cur)),
             c => cur.push(c),
         }
@@ -201,16 +249,17 @@ pub fn raw_lines(vcf: &str) -> Vec<RawLine> {
     unfold(vcf)
         .into_iter()
         .filter_map(|l| {
-            let parts = split_unquoted(&l, ':');
-            let (head, value) = parts.split_first().map(|(h, rest)| (h.clone(), rest.join(":")))?;
-            let mut it = split_unquoted(&head, ';').into_iter();
+            let h = head_len(&l);
+            let (head, value) = (&l[..h], l.get(h + 1..).unwrap_or("").to_string());
+            let mut it = split_unquoted(head, ';').into_iter();
             let name = it.next()?;
             let name = name.rsplit('.').next().unwrap_or(&name).to_ascii_uppercase();
             let mut params = vec![];
             for p in it {
                 let (k, v) = p.split_once('=').map(|(k, v)| (k.to_ascii_uppercase(), v.to_string())).unwrap_or(("TYPE".into(), p.clone()));
-                for v in split_unquoted(&v, ',') {
-                    params.push((k.clone(), v.trim_matches('"').to_string()));
+                // a quoted list is a list too (RFC 6350 §5.6: TYPE="voice,home")
+                for v in v.replace('"', "").split(',') {
+                    params.push((k.clone(), v.to_string()));
                 }
             }
             Some(RawLine { name, params, value })
@@ -253,8 +302,82 @@ pub fn preserved_lines(vcf: &str) -> Vec<String> {
         .collect()
 }
 
+/// Parses one vCard; vCard 2.1 bare parameters are read as TYPE (`bare_params_as_type`).
 pub fn parse_vcf(vcf: &str) -> AppResult<VcardContact> {
-    Ok(VcardParser::from_slice(vcf.as_bytes()).expect_one()?)
+    Ok(VcardParser::from_slice(bare_params_as_type(vcf).as_bytes()).expect_one()?)
+}
+
+/// vCard 2.1 parameters without a name (`TEL;CELL;VOICE:…`, `EMAIL;INTERNET:…`; RFC 2426 §5: "The "TYPE="
+/// prefix to parameter values is required. In [VCARD] this was optional.") written as `TYPE=` parameters. caldata's
+/// content-line parser takes every parameter as `name=value` and rejects the whole card otherwise (caldata
+/// 0.17.3 src/parser/content_line/mod.rs:62 `split_once('=')` → `MissingDelimiter`; `TEL;CELL;TYPE=HOME`
+/// even parses, as one parameter named `CELL;TYPE`) — and RustiCal's store then hides the card. A card without such a parameter comes back unchanged (borrowed); one with it unfolded.
+/// For reading and importing only: a stored card stays as it is until the user saves it here.
+pub fn bare_params_as_type(vcf: &str) -> std::borrow::Cow<'_, str> {
+    let bare = |l: &str| split_unquoted(&l[..head_len(l)], ';').iter().skip(1).any(|p| !p.contains('='));
+    let lines = unfold(vcf);
+    if !lines.iter().any(|l| bare(l)) {
+        return std::borrow::Cow::Borrowed(vcf);
+    }
+    let mut out = String::with_capacity(vcf.len() + 32);
+    for l in lines {
+        let (head, value) = l.split_at(head_len(&l));
+        let mut parts = split_unquoted(head, ';').into_iter();
+        out.push_str(&parts.next().unwrap_or_default());
+        for p in parts.filter(|p| !p.is_empty()) {
+            out.push(';');
+            if !p.contains('=') {
+                out.push_str("TYPE=");
+            }
+            out.push_str(&p);
+        }
+        out.push_str(value);
+        out.push_str("\r\n");
+    }
+    std::borrow::Cow::Owned(out)
+}
+
+/// RustiCal's ETag of a stored text (rustical_ical address_object.rs `get_etag`: the quoted hex SHA-256 of
+/// the vCard text) — for a card the store hands out no `AddressObject` for (`stored_card`).
+fn etag_of(vcf: &str) -> String {
+    use sha2::Digest;
+    let h = sha2::Sha256::digest(vcf.as_bytes());
+    format!("\"{}\"", h.iter().map(|b| format!("{b:02x}")).collect::<String>())
+}
+
+/// The stored text and ETag of one card. A card caldata rejects (`bare_params_as_type`) has no
+/// `AddressObject` — the store answers its parse error — and is read from the table as RustiCal stored it.
+pub async fn stored_card(state: &AppState, principal: &str, ab_id: &str, object_id: &str) -> AppResult<(String, String)> {
+    match AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await {
+        Ok(obj) => Ok((obj.get_vcf().to_string(), obj.get_etag())),
+        Err(rustical_store::Error::IcalError(_)) => {
+            let row = sqlx::query("SELECT vcf FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND id = ? AND deleted_at IS NULL").bind(principal).bind(ab_id).bind(object_id).fetch_optional(&state.db).await?;
+            let vcf: String = sqlx::Row::get(&row.ok_or(AppError::NotFound)?, "vcf");
+            let etag = etag_of(&vcf);
+            Ok((vcf, etag))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// The cards of an address book the store left out of `get_objects` (with skip_broken, every card caldata
+/// rejects): (id, stored text) of each live object whose id is not in `have`. One count query when none is
+/// missing.
+async fn unparsed_cards(state: &AppState, principal: &str, ab_id: &str, have: &(dyn Fn(&str) -> bool + Sync), n_have: usize) -> AppResult<Vec<(String, String)>> {
+    let n: i64 = sqlx::Row::get(&sqlx::query("SELECT count(*) AS n FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND deleted_at IS NULL").bind(principal).bind(ab_id).fetch_one(&state.db).await?, "n");
+    if usize::try_from(n).unwrap_or(0) <= n_have {
+        return Ok(vec![]);
+    }
+    let rows = sqlx::query("SELECT id, vcf FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND deleted_at IS NULL").bind(principal).bind(ab_id).fetch_all(&state.db).await?;
+    Ok(rows.iter().map(|r| (sqlx::Row::get::<String, _>(r, "id"), sqlx::Row::get::<String, _>(r, "vcf"))).filter(|(id, _)| !have(id)).collect())
+}
+
+/// Every card of an address book as (id, stored text): the store's, plus those it hides (`unparsed_cards`).
+pub async fn ab_cards(state: &AppState, principal: &str, ab_id: &str) -> AppResult<Vec<(String, String)>> {
+    let mut out: Vec<(String, String)> = AddressbookReadStore::get_objects(&*state.addressbooks, principal, ab_id).await?.into_iter().map(|(id, o)| (id, o.get_vcf().to_string())).collect();
+    let have: std::collections::HashSet<String> = out.iter().map(|(id, _)| id.clone()).collect();
+    out.extend(unparsed_cards(state, principal, ab_id, &|id| have.contains(id), have.len()).await?);
+    Ok(out)
 }
 
 pub fn contact_from(vc: &VcardContact, raw: &[RawLine], ab: &AbInfo, object_id: &str, etag: String) -> Contact {
@@ -386,9 +509,9 @@ pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Con
     Ok(out)
 }
 
-fn cached_contact(ab: &AbInfo, id: &str, obj: &AddressObject) -> Option<Contact> {
-    match parse_vcf(obj.get_vcf()) {
-        Ok(vc) => Some(contact_from(&vc, &raw_lines(obj.get_vcf()), ab, id, obj.get_etag())),
+fn cached_contact(ab: &AbInfo, id: &str, vcf: &str, etag: String) -> Option<Contact> {
+    match parse_vcf(vcf) {
+        Ok(vc) => Some(contact_from(&vc, &raw_lines(vcf), ab, id, etag)),
         Err(e) => {
             tracing::warn!("contact {}/{}/{}: {e}", ab.principal, ab.id, id);
             None
@@ -420,24 +543,40 @@ async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<
         return Ok(c.clone());
     }
     // `ab.synctoken` was read before the objects: a write racing this read is applied again next time
-    let fresh = match cached {
-        Some(c) => {
-            let (changed, deleted, _) = AddressbookReadStore::sync_changes(&*state.addressbooks, &ab.principal, &ab.id, c.token).await?;
+    // a changed card the store cannot parse fails its whole change list (store_sqlite `_sync_changes`):
+    // then the book is read anew, which takes such a card from the table (`unparsed_cards`)
+    let changes = match &cached {
+        Some(c) => match AddressbookReadStore::sync_changes(&*state.addressbooks, &ab.principal, &ab.id, c.token).await {
+            Ok(ch) => Some(ch),
+            Err(rustical_store::Error::IcalError(_)) => None,
+            Err(e) => return Err(e.into()),
+        },
+        None => None,
+    };
+    let fresh = match (cached, changes) {
+        (Some(c), Some((changed, deleted, _))) => {
             let mut contacts = c.contacts.clone();
             for id in deleted {
                 contacts.remove(&id);
             }
             for (id, obj) in changed {
                 contacts.remove(&id);
-                if let Some(ct) = cached_contact(ab, &id, &obj) {
+                if let Some(ct) = cached_contact(ab, &id, obj.get_vcf(), obj.get_etag()) {
                     contacts.insert(id, ct);
                 }
             }
             AbContacts { token: ab.synctoken, contacts }
         }
-        None => {
+        _ => {
             let objs = AddressbookReadStore::get_objects(&*state.addressbooks, &ab.principal, &ab.id).await?;
-            AbContacts { token: ab.synctoken, contacts: objs.into_iter().filter_map(|(id, obj)| cached_contact(ab, &id, &obj).map(|c| (id, c))).collect() }
+            let mut contacts: std::collections::BTreeMap<String, Contact> = objs.into_iter().filter_map(|(id, obj)| cached_contact(ab, &id, obj.get_vcf(), obj.get_etag()).map(|c| (id, c))).collect();
+            let n_store = contacts.len();
+            for (id, vcf) in unparsed_cards(state, &ab.principal, &ab.id, &|id| contacts.contains_key(id), n_store).await? {
+                if let Some(c) = cached_contact(ab, &id, &vcf, etag_of(&vcf)) {
+                    contacts.insert(id, c);
+                }
+            }
+            AbContacts { token: ab.synctoken, contacts }
         }
     };
     let fresh = std::sync::Arc::new(fresh);
@@ -452,15 +591,14 @@ pub async fn get_contact(state: &AppState, user: &Principal, principal: &str, ab
     collections::ensure_owner(user, principal)?;
     let ab_row = state.addressbooks.get_addressbook(principal, ab_id, false).await?;
     let ab = AbInfo { color: String::new(), principal: principal.into(), owner_label: String::new(), is_group: principal.starts_with("group."), id: ab_id.into(), displayname: ab_row.displayname.unwrap_or_default(), description: String::new(), deleted_at: None, synctoken: 0 };
-    let obj = AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await?;
-    Ok(contact_from(&parse_vcf(obj.get_vcf())?, &raw_lines(obj.get_vcf()), &ab, object_id, obj.get_etag()))
+    let (vcf, etag) = stored_card(state, principal, ab_id, object_id).await?;
+    Ok(contact_from(&parse_vcf(&vcf)?, &raw_lines(&vcf), &ab, object_id, etag))
 }
 
 /// The stored vCard text of one contact (download button).
 pub async fn get_vcf(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<String> {
     collections::ensure_owner(user, principal)?;
-    let obj = AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await?;
-    Ok(obj.get_vcf().to_string())
+    Ok(stored_card(state, principal, ab_id, object_id).await?.0)
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -628,7 +766,7 @@ pub async fn create_contact(state: &AppState, user: &Principal, i: ContactInput)
 pub async fn create_contact_as(state: &AppState, user: &Principal, i: ContactInput, keep_uid: Option<&str>) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
     let keep = match keep_uid {
-        Some(u) if AddressbookReadStore::get_object(&*state.addressbooks, &i.principal, &i.ab_id, u, false).await.is_err() => Some(u.to_string()),
+        Some(u) if matches!(stored_card(state, &i.principal, &i.ab_id, u).await, Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound))) => Some(u.to_string()),
         _ => None,
     };
     let uid = keep.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -639,15 +777,16 @@ pub async fn create_contact_as(state: &AppState, user: &Principal, i: ContactInp
 
 pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str, i: ContactInput, expected_etag: Option<&str>) -> AppResult<()> {
     collections::ensure_owner(user, &i.principal)?;
-    let existing = AddressbookReadStore::get_object(&*state.addressbooks, &i.principal, &i.ab_id, object_id, false).await?;
+    let (existing, etag) = stored_card(state, &i.principal, &i.ab_id, object_id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()
-        && e != existing.get_etag()
+        && e != etag
     {
         return Err(AppError::Conflict("the contact was changed elsewhere; reload".into()));
     }
-    let uid = parse_vcf(existing.get_vcf())?.get_uid().unwrap_or(object_id).to_string();
-    let keep = preserved_lines(existing.get_vcf());
+    let uid = parse_vcf(&existing)?.get_uid().unwrap_or(object_id).to_string();
+    // the lines kept as written: a bare parameter among them as TYPE, or caldata rejects the saved card
+    let keep = preserved_lines(&bare_params_as_type(&existing));
     let obj = AddressObject::from_vcf(build_vcf(&uid, &i, &keep)?)?;
     state.addressbooks.put_object(&i.principal, &i.ab_id, object_id, obj, true).await?;
     Ok(())
@@ -681,6 +820,20 @@ mod tests {
         assert!(matches(&all, "Max", "", "").is_empty());
         assert!(matches(&all, "Lena Beispiel", "lena@example.org", "").is_empty());
         assert!(matches(&all, "Max Mustermann", "max.mustermann@firma.de", "ROOM").is_empty());
+    }
+
+    #[test]
+    fn yearly_dates() {
+        use crate::testkit::date;
+        assert_eq!((partial_parts("1984-02-29"), partial_parts("--02-29"), partial_parts("irgendwann")), (Some((Some(1984), 2, 29)), Some((None, 2, 29)), None));
+        // a day the month lacks is its last day: 29 February in a common year is the 28th
+        assert_eq!((yearly_in(2027, 2, 29), yearly_in(2028, 2, 29), yearly_in(2026, 4, 31)), (Some(date("2027-02-28")), Some(date("2028-02-29")), Some(date("2026-04-30"))));
+        assert_eq!((yearly_in(2026, 13, 1), yearly_in(2026, 2, 0)), (None, None));
+        // today counts; past it, the next year's day (a leap year's own 29th)
+        assert_eq!(next_yearly(2, 29, date("2027-02-28")), Some(date("2027-02-28")));
+        assert_eq!(next_yearly(2, 29, date("2027-03-01")), Some(date("2028-02-29")));
+        assert_eq!(next_yearly(2, 29, date("2026-10-14")), Some(date("2027-02-28")));
+        assert_eq!(next_yearly(12, 31, date("2026-12-31")), Some(date("2026-12-31")));
     }
 
     #[test]

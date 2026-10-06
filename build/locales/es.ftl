@@ -114,6 +114,9 @@ confirm-purge-collection = ¿Eliminar «{ $name }» definitivamente? No se puede
 confirm-delete-token = ¿Eliminar el token «{ $name }»? El dispositivo pierde el acceso de inmediato.
 flash-forbidden = No tienes permiso para hacer eso.
 flash-not-found = No encontrado.
+flash-exists = Eso ya existe.
+flash-bad-data = Los datos no son válidos: { $detail }
+flash-failed = No ha funcionado: los detalles están en el registro del servidor.
 flash-confirm-mismatch = El nombre introducido no coincide.
 flash-group-trashed = Grupo movido a la papelera.
 flash-saved = Guardado.
@@ -608,10 +611,15 @@ v-all-day = todo el día
 v-at-start = al inicio
 v-attachment = Adjunto
 v-before = antes
-v-birthdays-in-the-address-books = cumpleaños en las libretas de direcciones
+v-birthdays-in-the-address-books = { $n ->
+   *[other] cumpleaños en las libretas de direcciones
+}
 v-bridge-days = Puentes
 v-busiest-weeks = Semanas más ocupadas
-v-busy-weekend-days = días de fin de semana ocupados
+v-busy-weekend-days = { $n ->
+    [one] día de fin de semana ocupado
+   *[other] días de fin de semana ocupados
+}
 v-cancelled = Cancelado
 v-coming-up = Próximamente
 v-confidential = Confidencial
@@ -622,18 +630,36 @@ v-counting-rule = Regla de cómputo:
 v-daily = Cada día
 v-day = Día
 v-day-off = día libre
-v-days = días
+v-days = { $n ->
+    [one] día
+   *[other] días
+}
 v-days-in-a-row = días seguidos
 v-density = Densidad
 v-shown-free = Se muestra como libre
 v-entitlement-and-rule-in-the-settings = Días disponibles y regla en los ajustes.
-v-evenings-booked-from-6-pm = tardes ocupadas (desde las 18:00)
-v-events = eventos
+v-evenings-booked-from-6-pm = { $n ->
+    [one] tarde ocupada (desde las 18:00)
+   *[other] tardes ocupadas (desde las 18:00)
+}
+v-n-events = { $n ->
+    [one] { $n } evento
+   *[other] { $n } eventos
+}
 v-events-per-calendar = Eventos por calendario
-v-events-this-year = eventos este año
-v-extended-by-a-holiday = alargado por un festivo
+v-events-this-year = { $n ->
+    [one] evento este año
+   *[other] eventos este año
+}
+v-extended-by-a-holiday = { $n ->
+    [one] alargado por un festivo
+   *[other] alargados por un festivo
+}
 v-free = libre
-v-free-weekends = fines de semana libres
+v-free-weekends = { $n ->
+    [one] fin de semana libre
+   *[other] fines de semana libres
+}
 v-free-weekends-2 = Fines de semana libres
 v-high-priority = Prioridad alta
 v-holidays = Festivos
@@ -652,20 +678,32 @@ v-no-events = Sin eventos
 v-no-events-on-this-day = No hay eventos este día.
 v-not-congratulated-yet = ¿aún no has felicitado?
 v-over = terminado
-v-planned = planificado
+v-planned = { $n ->
+    [one] planificado
+   *[other] planificados
+}
 v-print-ctrl-p = Imprimir: Ctrl+P
 v-private = Privado
 v-public-holiday = Festivo
 v-recurring = Periódico
-v-remaining-of = restantes de
+v-remaining-of = { $n ->
+    [one] restante de
+   *[other] restantes de
+}
 v-school-holidays = Vacaciones escolares
 v-tentative = Provisional
 v-today = Hoy
 v-top-right-on-mondays = arriba a la derecha los lunes
-v-trips = viajes
+v-trips = { $n ->
+    [one] viaje
+   *[other] viajes
+}
 v-up-to-30-days = hasta 30 días
 v-vacation = Vacaciones
-v-vacation-days-planned = días de vacaciones planificados
+v-vacation-days-planned = { $n ->
+    [one] día de vacaciones planificado
+   *[other] días de vacaciones planificados
+}
 v-vacation-planner = Planificador de vacaciones
 v-was = fue
 v-week = Semana
@@ -718,7 +756,10 @@ v-rr-on-nth = el { $which } { $day }
 v-rr-on-monthday = el día { $d }
 v-rr-on-date = el { $d } de { $month }
 v-rr-in-month = en { $month }
-v-rr-count = { $n } veces
+v-rr-count = { $n ->
+    [one] { $n } vez
+   *[other] { $n } veces
+}
 v-rr-until = hasta el { $date }
 v-n-days = { $n ->
     [one] { $n } día
