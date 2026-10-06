@@ -32,7 +32,9 @@ export default defineConfig({
   outputDir: `.work/test-results-${PORT}`,
   workers: Number(process.env.E2E_WORKERS || 4),
   // one suite per run: both share the server's DB, and the functional suite writes to it
-  projects: process.env.E2E_SUITE === 'visual' ? visual : [
+  // perf: interaction latency (e2e/perf), opt-in, never part of the gate
+  projects: process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
+    : process.env.E2E_SUITE === 'visual' ? visual : [
     { name: 'functional', testDir: './functional', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } },
   ],
 });

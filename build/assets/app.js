@@ -12,12 +12,35 @@
   const days = style => Array.from({ length: 7 }, (_, i) => f({ weekday: style }).format(new Date(2024, 0, 1 + i)).replace(/\.$/, '')); // 2024-01-01 was a Monday
   window.MONTHS = Array.from({ length: 12 }, (_, i) => f({ month: 'long' }).format(new Date(2024, i, 1)));
   window.WEEKDAYS = days('short'); window.WEEKDAYS_LONG = days('long');
+  // helpers of every block below and of history.js (loaded after this file): one definition each
+  const $ = (s, r = document) => r.querySelector(s), ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  const pad = n => String(n).padStart(2, '0');
+  window.practical = {
+    $, $$: (s, r = document) => [...r.querySelectorAll(s)],
+    csrf: () => ($('meta[name=csrf]') || {}).content || '',
+    // HTML text and double-quoted attributes: `esc` prints null as "null"; escN prints '' for null/undefined; escQ also escapes '
+    esc: s => String(s).replace(/[&<>"]/g, c => ESC[c]),
+    escN: s => String(s ?? '').replace(/[&<>"]/g, c => ESC[c]),
+    escQ: s => String(s ?? '').replace(/[&<>"']/g, c => ESC[c]),
+    pad,
+    ymd: d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, // the local calendar day
+    parseYmd: s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); },
+    ico: (n, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`,
+    // a JSON request with the CSRF header
+    /* the calendar filter kept in this browser (localStorage.calHidden) is a ?cals= list of the shown calendars,
+       which only the calendar and the tasks page can compute (each lists its own calendars): each records its
+       list for the hidden set it was computed from (localStorage.calCals), and a plain click on a bare link to
+       that page carries it, so the server renders the filtered page at once instead of the page fetching it again */
+    keepCals: (page, cals) => { let m = {}; try { m = JSON.parse(localStorage.calCals || '{}'); } catch (_) {} m[page] = [localStorage.calHidden || '[]', cals]; localStorage.calCals = JSON.stringify(m); },
+    send: (url, method, body) => fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.practical.csrf() }, body: JSON.stringify(body) }),
+    // a suggestion list (body-level .rrpop) under `anchor`, kept inside the dialog box; `r` = the anchor's rect
+    placeUnder: (pop, anchor, r = anchor.getBoundingClientRect()) => { const box = anchor.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
+      pop.style.left = `${Math.max(8, Math.min(r.left, maxRight - pop.offsetWidth)) + scrollX}px`; pop.style.top = `${r.bottom + scrollY + 4}px`; },
+  };
 })();
 
 (function () {
-  const $ = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = () => ($('meta[name=csrf]') || {}).content || '';
+  const { $, $$, csrf, ico } = practical;
 
   // development only (body[data-dev]): reload after a rebuild (new boot id) or an asset edit
   if (document.body.dataset.dev) {
@@ -35,8 +58,10 @@
   const setBars = () => { const st = document.documentElement.style, tb = $('.topbar'), tl = $('.toolbar'); if (tb) st.setProperty('--topbar-h', tb.offsetHeight + 'px'); if (tl) st.setProperty('--toolbar-h', tl.offsetHeight + 'px'); };
   if ('ResizeObserver' in window) {
     const ro = new ResizeObserver(setBars);
-    const watch = () => { ro.disconnect(); ['.topbar', '.toolbar'].forEach(s => { const e = $(s); if (e) ro.observe(e); }); setBars(); };
-    watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(watch).observe(mainEl, { childList: true, subtree: true });
+    // re-observed only when the toolbar element itself is another one (a fragment swap): its size changes are the ResizeObserver's
+    let tl0;
+    const watch = () => { tl0 = $('.toolbar'); ro.disconnect(); ['.topbar', '.toolbar'].forEach(s => { const e = $(s); if (e) ro.observe(e); }); setBars(); };
+    watch(); const mainEl = $('.main'); if (mainEl) new MutationObserver(() => { if ($('.toolbar') !== tl0) watch(); }).observe(mainEl, { childList: true, subtree: true });
   } else { setBars(); addEventListener('resize', setBars); }
 
   /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
@@ -90,7 +115,7 @@
     const seg = $('.seg[data-field=scheme]');
     if (seg) { segPress($(`button[data-v="${v}"]`, seg)); seg.closest('.val').querySelector('input[name=scheme]').value = v; }
     if (!document.body.dataset.user) return; // the login page: for this visit only
-    const r = await fetch('/settings/scheme', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ scheme: v }) }).catch(() => null);
+    const r = await practical.send('/settings/scheme', 'POST', { scheme: v }).catch(() => null);
     if (!r || !r.ok) toast(tr('js-set-err'), true);
   });
 
@@ -109,7 +134,7 @@
   // settings: grouped lists with drill-in pages, one <section class="page"> per URL hash (without JS all are shown)
   const settings = $('.settings');
   if (settings) {
-    const csrfTok = ($('meta[name=csrf]') || {}).content || '';
+    const csrfTok = csrf();
     // old hashes: the tabs of the previous layout and the server's redirect anchors
     const OLD = { profile: 'account', tokens: 'account', prefs: 'home', '': 'home' };
     let show = () => {
@@ -127,12 +152,12 @@
     const hp = $('#search', settings);
     if (hp) {
       const D = hp.dataset, list = $('#hist-list', hp), clr = $('#hist-clear', hp);
-      const e2 = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const e2 = practical.escQ;
       const when = t => { const d = new Date(String(t).replace(' ', 'T') + 'Z'); return isNaN(d) ? '' : dfmt(d, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }; // stored in UTC
       const drawHist = async () => {
         let H = []; try { H = await (await fetch('/api/search/history')).json(); } catch (_) {}
         $('#hist-n', hp).textContent = H.length ? `(${H.length})` : ''; clr.disabled = !H.length;
-        list.innerHTML = H.length ? H.map(e => `<div class="cell noic" data-id="${e.id}"><span>${e2(e.q)}<span class="sub">${e2([when(e.used_at), e.uses > 1 ? D.tUses.replace('{n}', e.uses) : '', e.target && e.target.label ? '→ ' + e.target.label : ''].filter(Boolean).join(' · '))}</span></span><span class="val"><button type="button" class="btn icon-btn" data-hrm title="${e2(D.tRm)}" aria-label="${e2(D.tRm)}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`).join('')
+        list.innerHTML = H.length ? H.map(e => `<div class="cell noic" data-id="${e.id}"><span>${e2(e.q)}<span class="sub">${e2([when(e.used_at), e.uses > 1 ? D.tUses.replace('{n}', e.uses) : '', e.target && e.target.label ? '→ ' + e.target.label : ''].filter(Boolean).join(' · '))}</span></span><span class="val"><button type="button" class="btn icon-btn" data-hrm title="${e2(D.tRm)}" aria-label="${e2(D.tRm)}">${ico('x')}</button></span></div>`).join('')
           : `<div class="cell noic"><span class="muted">${e2(D.tEmpty)}</span></div>`;
       };
       list.addEventListener('click', async e => { const b = e.target.closest('[data-hrm]'); if (!b) return; await fetch('/api/search/history/' + b.closest('[data-id]').dataset.id, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); drawHist(); });
@@ -167,7 +192,7 @@
     const names = pickData.names || {}; // code → [name, path above it]
     let subs = null, subsFor = '';
     const loadSubs = async c => { if (subsFor !== c) { const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(c)); subs = r.ok ? await r.json() : []; subsFor = c; } return subs; };
-    const esc2 = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const esc2 = practical.esc;
     const commit = (name, value) => { const i = hid(name); i.value = value; i.dispatchEvent(new Event('change', { bubbles: true })); };
     const pathOf = (list, r) => { const out = []; let x = r; while (x && out.length < 5) { out.unshift(x.name); x = list.find(y => y.code === x.parent); } return out; };
     const countryName = c => (pickData.countries.find(x => x.code === c) || { name: c }).name;
@@ -316,7 +341,7 @@
         let row = '';
         if (edit) {
           const [u] = unitOf(edit.m), last = !canRm(edit.key);
-          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok><svg class="ico" aria-hidden="true"><use href="#i-pencil"/></svg><span>${esc2(tr('js-snp-change'))}</span></button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>${esc2(tr('js-snp-remove'))}</span></button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></span></div>`;
+          row = `<div class="cell noic snp-edit"><span>${esc2(label(edit.m) + ' ' + side(edit.key))}<span class="sub snp-err" role="alert"></span></span><span class="val"><input type="number" min="1" step="1" value="${edit.m / u}" aria-label="${esc2(tr('js-snp-amount'))}"><span class="seg">${UNITS.map(([uu, k]) => `<button type="button" data-u="${uu}" aria-pressed="${uu === u}">${esc2(tr('js-snp-u-' + k))}</button>`).join('')}</span><button type="button" class="btn" data-ok>${ico('pencil')}<span>${esc2(tr('js-snp-change'))}</span></button><button type="button" class="btn danger" data-del${last ? ` disabled title="${esc2(tr('js-snp-last'))}"` : ''}>${ico('trash')}<span>${esc2(tr('js-snp-remove'))}</span></button><button type="button" class="btn icon-btn" data-close title="${esc2(tr('js-snp-close'))}" aria-label="${esc2(tr('js-snp-close'))}">${ico('x')}</button></span></div>`;
         }
         const sc = $('.snp-scroll', snapBox), keep = sc ? sc.scrollLeft : 0; // redrawing must not jump a scrolled strip back
         snapBox.innerHTML = `<div class="snp-scroll"><div class="snp-es" style="min-width:${(o.length + 1) * 31}px">${h}</div></div>${row}`;
@@ -354,13 +379,15 @@
     // the test translates \b and (?P< for JS and refuses what the crate lacks (look-around, back-references),
     // and an invalid pattern blocks the autosave through the field's validity.
     const vacKind = hid('vacation_kind');
+    // the vacation rule and the categories page both start with the event categories: one request for both
+    let catsFirst = vacKind && $('#vac-re') && $('#categories') ? fetch('/api/categories?scope=event').then(r => r.ok ? r.json() : []) : null;
     if (vacKind && $('#vac-re')) {
       const catSel = $('#vac-cat'), calSel = $('#vac-cal'), re = $('#vac-re'), tools = $('#vac-tools'), test = $('#vac-test');
       let titles = null, cats = null, shown = 'match';
       const summary = () => { const k = vacKind.value; $('#v-vacation').textContent = k === 'title' ? `/${re.value}/` : `„${k === 'calendar' ? (calSel.selectedOptions[0] || {}).textContent || '' : catSel.value}“`; };
       const loadCats = async () => {
         if (cats) return; cats = [];
-        try { const r = await fetch('/api/categories?scope=event'); if (r.ok) cats = await r.json(); } catch (_) {}
+        try { if (catsFirst) cats = await catsFirst; else { const r = await fetch('/api/categories?scope=event'); if (r.ok) cats = await r.json(); } } catch (_) { cats = []; }
         const cur = catSel.value, list = cats.filter(c => c.count || c.name === cur);
         if (cur && !list.some(c => c.name === cur)) list.unshift({ name: cur, count: 0 });
         catSel.innerHTML = (cur ? '' : '<option value="">–</option>') + list.map(c => `<option value="${esc2(c.name)}">${esc2(c.name)} (${c.count || tr('js-vac-no-events')})</option>`).join('');
@@ -418,11 +445,12 @@
     // categories: the index with counts; a click opens the category's rule in the calendar's (or tasks') editor
     const catPanel = $('#categories');
     if (catPanel) {
-      const t = catPanel.dataset, list = $('#cat-list'), h = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const t = catPanel.dataset, list = $('#cat-list'), h = practical.esc;
       let scope = 'event';
       const ruleUrl = n => (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories');
       const load = async () => {
-        const r = await fetch('/api/categories?scope=' + scope); const d = r.ok ? await r.json() : [];
+        const first = scope === 'event' && catsFirst; catsFirst = null;
+        let d; if (first) d = await first; else { const r = await fetch('/api/categories?scope=' + scope); d = r.ok ? await r.json() : []; }
         if (scope === 'event') $('#cat-total').textContent = d.length;
         list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h((scope === 'task' ? t.tCountTask : t.tCount).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
       };
@@ -451,21 +479,43 @@
   fitPops(); addEventListener('resize', fitPops);
   $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));
 
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a[href="/calendar"], a[href="/tasks"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !localStorage.calCals) return;
+    let k; try { k = JSON.parse(localStorage.calCals)[a.getAttribute('href').slice(1)]; } catch (_) { return; }
+    if (!k || !k[1] || k[0] !== (localStorage.calHidden || '[]')) return; // computed for another hidden set: the page corrects it itself
+    e.preventDefault(); location.href = a.getAttribute('href') + '?cals=' + encodeURIComponent(k[1]);
+  });
+
   // "/" focuses the search
   const q = $('#q');
   if (q) addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); } });
 
-  // live updates: server-sent changes → custom event for the views
+  // live updates: server-sent changes → custom event for the views. A hidden tab keeps its stream for
+  // HIDE_GRACE, then closes it (no keep-alive every 15 s, no redraws nobody sees); a change that arrives
+  // while hidden waits. Back in view the stream reopens and, if anything may have been missed, the views get
+  // ONE `rustical:change` ({ resync: true }). After an error the retry waits 5–10 s, doubling up to 5–10 min.
   if (document.body.dataset.user && 'EventSource' in window) {
-    let es; const connect = () => {
-      es = new EventSource('/api/changes');
-      es.addEventListener('change', ev => { try { document.dispatchEvent(new CustomEvent('rustical:change', { detail: JSON.parse(ev.data) })); } catch (_) {} });
-      es.onerror = () => { es.close(); setTimeout(connect, 5000 + Math.random() * 5000); };
+    const HIDE_GRACE = 15000, RETRY = 5000, RETRY_MAX = 300000;
+    let es = null, fails = 0, retryT = 0, graceT = 0, away = false, missed = false;
+    const fire = detail => document.dispatchEvent(new CustomEvent('rustical:change', { detail }));
+    const connect = () => {
+      retryT = 0; es = new EventSource('/api/changes');
+      es.onopen = () => { fails = 0; };
+      es.addEventListener('change', ev => { let d; try { d = JSON.parse(ev.data); } catch (_) { return; } if (document.hidden) missed = true; else fire(d); });
+      es.onerror = () => { es.close(); es = null; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
     };
+    const sleep = () => { away = true; missed = true; clearTimeout(retryT); retryT = 0; if (es) { es.close(); es = null; } };
+    document.addEventListener('visibilitychange', () => {
+      clearTimeout(graceT); graceT = 0;
+      if (document.hidden) { graceT = setTimeout(sleep, HIDE_GRACE); return; }
+      if (away) { away = false; fails = 0; connect(); }
+      if (missed) { missed = false; fire({ resync: true }); }
+    });
     connect();
+    if (document.hidden) graceT = setTimeout(sleep, HIDE_GRACE);
   }
 
-  window.practical = { csrf, $, $$ };
 })();
 
 /* ===== colour picker (round 13): one picker for every colour in the app. The popover offers the colours
@@ -473,9 +523,7 @@
    where the element has such a fallback; ＋ opens the dialog for a new colour: a fan deck or a text
    field with three sliders, the distance to the colours in use, and a light and dark preview. ===== */
 (function () {
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = () => ($('meta[name=csrf]') || {}).content || '';
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const { $, $$, csrf, esc, ico } = practical;
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const num = new Intl.NumberFormat(window.LOC, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -534,7 +582,7 @@
   // ---- the preview: the colour where the app shows it, on the light and the dark page at once ----
   const preview = title => {
     const el = document.createElement('div'); el.className = 'cpk-pv';
-    const panel = dark => `<div class="cpk-pvp${dark ? ' dark' : ''}"><span class="sq"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span class="evs"><span class="t"><b>10:00</b> ${esc(title)}</span><span class="ad">${esc(tr('js-color-pv-allday'))}</span></span><span class="hd">3</span></div>`;
+    const panel = dark => `<div class="cpk-pvp${dark ? ' dark' : ''}"><span class="sq">${ico('calendar')}</span><span class="evs"><span class="t"><b>10:00</b> ${esc(title)}</span><span class="ad">${esc(tr('js-color-pv-allday'))}</span></span><span class="hd">3</span></div>`;
     el.innerHTML = panel(false) + panel(true) + '<div class="meta"></div>';
     return { el, set: x => { el.style.setProperty('--x', x); const r = C.contrast(x, LIGHT), d = C.contrast(x, DARK);
       $('.meta', el).innerHTML = `<code>${x}</code><span class="${r < 3 ? 'warn' : ''}">${esc(tr('js-color-on-light', { r: num.format(r) }))}</span><span class="${d < 3 ? 'warn' : ''}">${esc(tr('js-color-on-dark', { r: num.format(d) }))}</span>`; } };
@@ -584,7 +632,7 @@
   function fieldPicker(onPick) {
     let hex = '#000000', mode = MODES[localStorage.cpkMode] ? localStorage.cpkMode : 'simple', vals = [0, 0, 0], rows = [];
     const el = document.createElement('div'); el.className = 'cpk-field';
-    el.innerHTML = `<div class="cpk-in"><span class="cpk-chip"></span><input type="text" spellcheck="false" autocomplete="off" aria-label="${esc(tr('js-color-text'))}"><button class="btn icon-btn" type="button" title="${esc(tr('js-color-dice'))}" aria-label="${esc(tr('js-color-dice'))}"><svg class="ico" aria-hidden="true"><use href="#i-dice"/></svg></button></div><div class="cpk-err" hidden></div>
+    el.innerHTML = `<div class="cpk-in"><span class="cpk-chip"></span><input type="text" spellcheck="false" autocomplete="off" aria-label="${esc(tr('js-color-text'))}"><button class="btn icon-btn" type="button" title="${esc(tr('js-color-dice'))}" aria-label="${esc(tr('js-color-dice'))}">${ico('dice')}</button></div><div class="cpk-err" hidden></div>
       <span class="seg">${Object.keys(MODES).map(m => `<button type="button" data-m="${m}" aria-pressed="${m === mode}">${esc(tr('js-color-m-' + m))}</button>`).join('')}</span><div class="cpk-sl"></div>
       <div class="cpk-cap">${esc(tr('js-color-sugg'))}</div><div class="cpk-sugg">${SUGG.map(x => `<button type="button" data-v="${x}" style="background:${x}" title="${x}" aria-checked="false"></button>`).join('')}</div>`;
     const box = $('.cpk-in', el), chip = $('.cpk-chip', el), inp = $('input', el), err = $('.cpk-err', el), sl = $('.cpk-sl', el), sugg = $$('.cpk-sugg button', el);
@@ -615,9 +663,9 @@
     let tab = localStorage.cpkTab === 'field' ? 'field' : 'fan';
     const w = document.createElement('div'); w.className = 'ask cpk-ask'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-color-new'));
     w.innerHTML = `<div class="ask-box cpk-dlg"><div class="cpk-dh"><span><b>${esc(tr('js-color-new'))}</b><small>${esc(tr('js-color-for', { what: o.what || o.title }))}</small></span>
-      <span class="seg"><button type="button" data-t="fan"><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><span>${esc(tr('js-color-tab-fan'))}</span></button><button type="button" data-t="field"><svg class="ico" aria-hidden="true"><use href="#i-eyedropper"/></svg><span>${esc(tr('js-color-tab-field'))}</span></button></span>
-      <button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-ok title="${esc(tr('js-color-apply'))}" aria-label="${esc(tr('js-color-apply'))}"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button></div></div>`;
+      <span class="seg"><button type="button" data-t="fan">${ico('palette')}<span>${esc(tr('js-color-tab-fan'))}</span></button><button type="button" data-t="field">${ico('eyedropper')}<span>${esc(tr('js-color-tab-field'))}</span></button></span>
+      <button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}">${ico('x')}</button></div>
+      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}">${ico('x')}</button><button class="btn btn-primary icon-btn" type="button" data-ok title="${esc(tr('js-color-apply'))}" aria-label="${esc(tr('js-color-apply'))}">${ico('check')}</button></div></div>`;
     const pv = preview(o.title); $('.cpk-near', w).after(pv.el);
     const body = $('.cpk-body', w), near = $('.cpk-near', w);
     const showNear = () => {
@@ -661,8 +709,8 @@
     const extra = cur() && !pal.some(p => p.hex === cur()) ? cur() : ''; // a colour nothing else has yet (a form not yet saved)
     pop = document.createElement('div'); pop.className = 'cpk'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', o.title);
     const circle = (v, hex, text, cls = '') => `<button type="button" class="cpk-sw${cls}" data-v="${v}" style="--c:${hex};--ink:${ink(hex)}" title="${esc(text)}" aria-label="${esc(text)}" aria-checked="false"></button>`;
-    pop.innerHTML = `<div class="cpk-h"><span class="sq"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span><b>${esc(o.title)}</b><small>${esc(o.sub || '')}</small></span></div>
-      <div class="cpk-sws" role="radiogroup" aria-label="${esc(o.title)}">${o.inherit ? circle('', o.inherit.hex, o.inherit.text, ' inh') : ''}${pal.map(p => circle(p.hex, p.hex, srcText(p.src))).join('')}${extra ? circle(extra, extra, tr('js-color-current')) : ''}<button type="button" class="cpk-sw cpk-add" data-new title="${esc(tr('js-color-add'))}" aria-label="${esc(tr('js-color-add'))}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+    pop.innerHTML = `<div class="cpk-h"><span class="sq">${ico('calendar')}</span><span><b>${esc(o.title)}</b><small>${esc(o.sub || '')}</small></span></div>
+      <div class="cpk-sws" role="radiogroup" aria-label="${esc(o.title)}">${o.inherit ? circle('', o.inherit.hex, o.inherit.text, ' inh') : ''}${pal.map(p => circle(p.hex, p.hex, srcText(p.src))).join('')}${extra ? circle(extra, extra, tr('js-color-current')) : ''}<button type="button" class="cpk-sw cpk-add" data-new title="${esc(tr('js-color-add'))}" aria-label="${esc(tr('js-color-add'))}">${ico('plus')}</button></div>
       <div class="cpk-name"></div>`;
     const pv = preview(o.title); pop.appendChild(pv.el);
     const name = $('.cpk-name', pop), sq = $('.cpk-h .sq', pop), sws = $$('.cpk-sw:not(.cpk-add)', pop);
@@ -688,7 +736,7 @@
     (sws.find(b => b.getAttribute('aria-checked') === 'true') || $('.cpk-sw', pop)).focus();
   }
 
-  window.colorPicker = { open, close, load, invalidate: () => { cache = null; }, toHex, palette, label, srcText, hexOf };
+  window.colorPicker = { open, toHex };
 
   /* ---- a colour field in a form: <input type=hidden name=…> + <button class="cpk-btn" data-cpk-…>.
      A pick writes the field and fires `change` (the settings' autosave). data-cpk-kind/-key name the
@@ -721,17 +769,17 @@
     const q = '?scope=' + scope, rules = await (await fetch('/api/category-rules' + q)).json(), rule = rules[name];
     if (!rule || !rule.when || !rule.when.color) return { ok: false, status: 404 };
     rule.when.color.value = color;
-    return fetch('/api/category-rules/' + encodeURIComponent(name) + q, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify(rule) });
+    return practical.send('/api/category-rules/' + encodeURIComponent(name) + q, 'PUT', rule);
   };
   // a category's new colour: existing events/tasks with the category that still carry the old one may follow
   const recolor = async (scope, name, from, to) => {
-    const post = apply => fetch('/api/colors/category', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ scope, name, from, to, apply }) }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const post = apply => practical.send('/api/colors/category', 'POST', { scope, name, from, to, apply }).then(r => r.ok ? r.json() : null).catch(() => null);
     const c = await post(false); if (!c || !c.count) return;
     close(); // the question needs the page, not the popover over it
     if (!await askYesNo(tr('js-color-recolor-' + scope, { n: c.count, cat: name }), tr('js-color-recolor-yes'), tr('js-color-recolor-no'), true)) return;
     const d = await post(true); if (d) toast(tr('js-color-recolored', { n: d.count })); else toast(tr('js-set-err'), true);
   };
-  const put = (kind, key, color) => fetch('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ color }) });
+  const put = (kind, key, color) => practical.send('/api/colors/' + kind + '/' + key.split('/').map(encodeURIComponent).join('/'), 'PUT', { color });
   const ICON = { calendar: 'i-calendar', addressbook: 'i-contacts', holiday: 'i-party', school: 'i-grad', category: 'i-tag', 'category-task': 'i-tag', event: 'i-calendar', task: 'i-tasks' };
   // two blocks whose colours are seen together (calendar view, task list), each with "Farben optimieren"; address books apart
   const BLOCKS = [['event', ['calendar', 'holiday', 'category', 'event']], ['task', ['category-task', 'task']], ['', ['addressbook']]];
@@ -1004,7 +1052,7 @@
     const manual = st => st.pins.size + st.excl.size + st.moves.size + st.off.size;
     let st = fresh(3), P = null, src = [], ro = null, preview = null;
     const w = document.createElement('div'); w.className = 'ask cfo-wrap'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-cfo-title'));
-    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span><button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button></div><div class="cfo-body"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-apply><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><b class="n" hidden></b></button></div></div>`;
+    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span><button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}">${ico('x')}</button></div><div class="cfo-body"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}">${ico('x')}</button><button class="btn btn-primary icon-btn" type="button" data-apply>${ico('check')}<b class="n" hidden></b></button></div></div>`;
     const bodyEl = $('.cfo-body', w), applyBtn = $('[data-apply]', w);
     const sw = (hex, t) => `<i class="cfo-sw" style="--x:${hex}"${t ? ` title="${esc(t)}"` : ''}></i>`;
     const cname = (hex, raw) => (raw && raw[0] !== '#' ? raw : hex);
@@ -1012,7 +1060,7 @@
       const ex = st.excl.has(g.key), stay = !ex && g.editable && F.to && g.hex === F.to, n = g.items.length;
       const sub = [kindText(g.kind) + (n > 1 ? ' · ' + n + '×' : ''), cname(g.hex, g.raw), ex ? tr('js-cfo-excl-state') : !g.editable ? tr('js-cfo-ro') : stay ? tr('js-cfo-stay') : ''].filter(Boolean).join(' · ');
       return `<div class="cfo-src${ex ? ' excl' : ''}${g.moved ? ' moved' : ''}${stay ? ' stay' : ''}${g.editable ? '' : ' ro'}" data-n="g:${esc(g.key)}" data-g="${esc(g.key)}" data-l="${li}" style="--x:${g.hex}">`
-        + `<span class="cfo-grip" title="${esc(tr('js-cfo-grip'))}">⠿</span>${sw(g.hex)}<span class="cfo-t"><b>${esc(g.name)}</b><small>${esc(sub)}</small>${g.moved ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr(g.moved === 'split' ? 'js-cfo-man-split' : 'js-cfo-man-moved'))}</span>` : ''}</span>`
+        + `<span class="cfo-grip" title="${esc(tr('js-cfo-grip'))}">⠿</span>${sw(g.hex)}<span class="cfo-t"><b>${esc(g.name)}</b><small>${esc(sub)}</small>${g.moved ? `<span class="cfo-man">${ico('hand')}${esc(tr(g.moved === 'split' ? 'js-cfo-man-split' : 'js-cfo-man-moved'))}</span>` : ''}</span>`
         + (g.moved ? `<button type="button" class="cfo-mini" data-unmove="${esc(g.key)}" title="${esc(tr('js-cfo-unmove'))}">↺</button>` : '')
         + (g.editable ? `<button type="button" class="cfo-mini${ex ? ' on' : ''}" data-excl="${esc(g.key)}" title="${esc(tr(ex ? 'js-cfo-incl-t' : 'js-cfo-excl'))}">${ex ? esc(tr('js-cfo-incl')) : '⊘'}</button>` : '') + '</div>';
     };
@@ -1026,16 +1074,16 @@
         if (F.to) edges.push(['m:' + F.key, 'r:' + F.key, on ? 'out' : 'off', li, F.to]);
         const tag = F.split ? 'js-cfo-tag-split' : F.groups.some(g => g.moved) ? 'js-cfo-tag-moved' : F.pinned ? 'js-cfo-tag-pin' : '';
         const warn = P.notes.some(x => x.warn && x.F === F);
-        const mid = `<button type="button" class="cfo-mid${on ? '' : ' off'}${F.manual ? ' manual' : ''}" data-n="m:${esc(F.key)}" data-off="${esc(F.key)}" data-l="${li}" title="${esc(tr(on ? 'js-cfo-off-t' : 'js-cfo-on-t'))}"><span class="cfo-b ${F.type}">${esc(tr('js-cfo-t-' + F.type))}</span>${tag ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr(tag))}</span>` : ''}<small>${esc(F.why)}</small><span class="cfo-ck">${esc(on ? (changes.length ? tr('js-cfo-on', { n: changes.length }) : tr('js-cfo-none')) : tr('js-cfo-off'))}</span></button>`;
+        const mid = `<button type="button" class="cfo-mid${on ? '' : ' off'}${F.manual ? ' manual' : ''}" data-n="m:${esc(F.key)}" data-off="${esc(F.key)}" data-l="${li}" title="${esc(tr(on ? 'js-cfo-off-t' : 'js-cfo-on-t'))}"><span class="cfo-b ${F.type}">${esc(tr('js-cfo-t-' + F.type))}</span>${tag ? `<span class="cfo-man">${ico('hand')}${esc(tr(tag))}</span>` : ''}<small>${esc(F.why)}</small><span class="cfo-ck">${esc(on ? (changes.length ? tr('js-cfo-on', { n: changes.length }) : tr('js-cfo-none')) : tr('js-cfo-off'))}</span></button>`;
         const inh = F.cal && F.inc.some(g => g.kind !== 'calendar');
-        const res = F.to ? `<button type="button" class="cfo-res${on ? '' : ' off'}${F.pinned ? ' pinned' : ''}${warn ? ' warn' : ''}" data-n="r:${esc(F.key)}" data-pick="${esc(F.key)}" data-l="${li}" title="${esc(tr('js-cfo-pick'))}">${sw(F.to)}<span class="cfo-t"><b>${esc(cname(F.to, (F.colors.find(c => c.hex === F.to) || {}).raw))}</b><small>${esc(tr('js-cfo-entries', { n: F.n }) + (inh ? ' · ' + tr('js-color-inherit-cal', { cal: F.lead.name }) : '') + (F.moved && !F.pinned ? ' · ' + tr('js-cfo-new') : ''))}</small>${F.pinned ? `<span class="cfo-man"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr('js-cfo-tag-pin'))}${warn ? ' · ⚠' : ''}</span>` : ''}</span>${F.pinned ? `<span class="cfo-mini" role="button" tabindex="0" data-unpin="${esc(F.key)}" title="${esc(tr('js-cfo-unpin'))}">↺</span>` : `<span class="cfo-edit">${esc(tr('js-cfo-edit'))}</span>`}</button>` : '';
+        const res = F.to ? `<button type="button" class="cfo-res${on ? '' : ' off'}${F.pinned ? ' pinned' : ''}${warn ? ' warn' : ''}" data-n="r:${esc(F.key)}" data-pick="${esc(F.key)}" data-l="${li}" title="${esc(tr('js-cfo-pick'))}">${sw(F.to)}<span class="cfo-t"><b>${esc(cname(F.to, (F.colors.find(c => c.hex === F.to) || {}).raw))}</b><small>${esc(tr('js-cfo-entries', { n: F.n }) + (inh ? ' · ' + tr('js-color-inherit-cal', { cal: F.lead.name }) : '') + (F.moved && !F.pinned ? ' · ' + tr('js-cfo-new') : ''))}</small>${F.pinned ? `<span class="cfo-man">${ico('hand')}${esc(tr('js-cfo-tag-pin'))}${warn ? ' · ⚠' : ''}</span>` : ''}</span>${F.pinned ? `<span class="cfo-mini" role="button" tabindex="0" data-unpin="${esc(F.key)}" title="${esc(tr('js-cfo-unpin'))}">↺</span>` : `<span class="cfo-edit">${esc(tr('js-cfo-edit'))}</span>`}</button>` : '';
         return `<div class="cfo-lane${F.manual ? ' manual' : ''}" data-l="${li}" data-f="${esc(F.key)}"><div class="cfo-lc">${left}</div><div class="cfo-lc">${mid}</div><div class="cfo-lc">${res}</div></div>`;
       }).join('');
       const L = P.L, lv = st.level;
       bodyEl.innerHTML = `<div class="cfo-level"><div class="cfo-lh"><span>${esc(tr('js-cfo-scope'))}</span><b>${esc(tr('js-cfo-l' + lv))}</b>${L.rec ? `<em>${esc(tr('js-cfo-rec'))}</em>` : ''}</div>
         <input type="range" min="0" max="${LEVELS.length - 1}" step="1" value="${lv}" data-level aria-label="${esc(tr('js-cfo-scope'))}">
         <div class="cfo-ticks">${LEVELS.map((x, i) => `<button type="button" data-lv="${i}" aria-pressed="${i === lv}">${esc(tr('js-cfo-l' + i))}</button>`).join('')}</div><p class="cfo-ltext">${esc(tr('js-cfo-l' + lv + '-text'))}</p></div>
-        <div class="cfo-sum"><span class="cfo-m good">${esc(tr('js-cfo-m-colors', { a: P.before, b: P.after }))}</span><span class="cfo-m${P.sim1 < P.sim0 ? ' good' : ''}">${esc(tr('js-cfo-m-similar', { a: P.sim0, b: P.sim1 }))}</span><span class="cfo-m">${esc(tr('js-cfo-m-changes', { n: P.changes.length }))}</span>${n ? `<span class="cfo-manbar"><svg class="ico" aria-hidden="true"><use href="#i-hand"/></svg>${esc(tr('js-cfo-manual', { n }))} <button type="button" class="link" data-discard>${esc(tr('js-cfo-discard'))}</button></span>` : ''}</div>
+        <div class="cfo-sum"><span class="cfo-m good">${esc(tr('js-cfo-m-colors', { a: P.before, b: P.after }))}</span><span class="cfo-m${P.sim1 < P.sim0 ? ' good' : ''}">${esc(tr('js-cfo-m-similar', { a: P.sim0, b: P.sim1 }))}</span><span class="cfo-m">${esc(tr('js-cfo-m-changes', { n: P.changes.length }))}</span>${n ? `<span class="cfo-manbar">${ico('hand')}${esc(tr('js-cfo-manual', { n }))} <button type="button" class="link" data-discard>${esc(tr('js-cfo-discard'))}</button></span>` : ''}</div>
         ${P.notes.length ? `<div class="cfo-notes">${P.notes.map(x => `<p class="${x.warn ? 'warn' : 'info'}">${x.warn ? '⚠' : 'ℹ'} ${esc(x.text)}</p>`).join('')}</div>` : ''}
         ${P.lanes.length ? `<div class="cfo-head"><span>${esc(tr('js-cfo-h-now'))}</span><span>${esc(tr('js-cfo-h-act'))}</span><span>${esc(tr('js-cfo-h-after'))}</span></div><div class="cfo-fd"><svg class="cfo-svg" aria-hidden="true"></svg>${lanes}</div><p class="cfo-help">${esc(tr('js-cfo-help'))}</p>`
           : `<div class="cfo-empty"><b>${esc(tr('js-cfo-empty'))}</b><span>${esc(tr('js-cfo-empty-hint'))}</span></div>`}`;
@@ -1071,7 +1119,7 @@
     const applyAll = async () => {
       const list = P.changes.map(c => ({ kind: c.item.kind, key: c.item.kind.startsWith('category') ? c.item.name : c.item.key, color: c.to }));
       applyBtn.disabled = true;
-      const r = await fetch('/api/colors/batch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ changes: list }) }).then(x => x.ok ? x.json() : null).catch(() => null);
+      const r = await practical.send('/api/colors/batch', 'POST', { changes: list }).then(x => x.ok ? x.json() : null).catch(() => null);
       if (!r) { applyBtn.disabled = false; toast(tr('js-set-err'), true); return; }
       // holiday colours live in the prefs form too (autosave would write the old value back); calendars elsewhere on the page
       for (const c of list) { const vr = VAR[c.kind]; if (vr) { const f = field(vr[0]); if (f) f.value = c.color; themeVar(vr[1], c.color); } else if (c.kind === 'calendar') syncPage('calendar', c.key, c.color); }
@@ -1158,17 +1206,11 @@
 (function () {
   const root = document.getElementById('viewroot');
   if (!root) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = document.querySelector('meta[name=csrf]').content;
-  const lang = document.body.dataset.lang || 'de';
+  const { $, $$, esc, pad, ymd, parseYmd: parse } = practical, csrf = practical.csrf();
   const MON = MONTHS;
   const DOW = WEEKDAYS;
-  const T = trs('js-ed-', ['suggNone', 'saved', 'err', 'del', 'delRule', 'series', 'newEv', 'editEv', 'conflict', 'copied', 'delTask']);
-  const iso = d => d.toISOString().slice(0, 10);
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const T = trs('js-ed-', ['copied']);
   const edOpen = (key, date) => window.rusticalEd && window.rusticalEd.open(key, date);
-  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-  const pad = n => String(n).padStart(2, '0');
   // date = the picked day, which every view shows as selected; month (YYYY-MM) / week (its Monday) = what the
   // month / week view has on screen once scrolling left the picked day's — scrolling never changes the picked day
   const q0 = new URL(location.href).searchParams;
@@ -1176,6 +1218,10 @@
   const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.view === 'week' && state.week ? state.week : state.date; // the date whose month or week is on screen
   root.dataset.date = shown();
   let loading = null; // before the filter setup below: a filter kept in localStorage calls load() right away
+  // the fragment on screen as fetched ({ href, html }) while nothing was added to it since (week blocks,
+  // ledger rows, a carried ledger): a redraw-only load that gets the same text back leaves the view alone —
+  // the live echo of the own save, a change elsewhere that this view does not show
+  let onScreen = null;
   const today = root.dataset.today;
 
   // ---- filter (localStorage-persisted set of hidden calendars) ----
@@ -1185,14 +1231,14 @@
   if (filterBox) {
     $$('input[data-cal]', filterBox).forEach(i => { i.checked = !hidden.has(i.dataset.cal); i.addEventListener('change', () => { if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); persistFilter(); load(); }); });
     $$('[data-filter]', filterBox).forEach(a => a.addEventListener('click', e => { e.preventDefault(); const all = $$('input[data-cal]', filterBox); all.forEach(i => { const mine = !i.parentElement.querySelector('small'); i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && mine); if (i.checked) hidden.delete(i.dataset.cal); else hidden.add(i.dataset.cal); }); persistFilter(); load(); }));
-    state.cals = calsParam();
+    state.cals = calsParam(); practical.keepCals('calendar', state.cals);
     if (state.cals !== (root.dataset.cals || '')) load(false);
   }
-  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); dropCarried(); }
+  function persistFilter() { localStorage.calHidden = JSON.stringify([...hidden]); state.cals = calsParam(); practical.keepCals('calendar', state.cals); dropCarried(); }
   // holidays: a setting of the user (not of this browser), saved at once, then the view redraws
   $$('input[data-hol]', filterBox || document.createElement('div')).forEach(i => i.addEventListener('change', async () => {
     const body = {}; $$('input[data-hol]', filterBox).forEach(x => { body[x.dataset.hol] = x.checked; }); // no school switch → the setting stays
-    await fetch('/settings/holiday-display', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    await practical.send('/settings/holiday-display', 'POST', body);
     dropCarried(); load(false);
   }));
 
@@ -1209,7 +1255,9 @@
       const r = await fetch(u, { headers: { Accept: 'text/html' } });
       if (loading !== u) return;
       if (!r.ok) throw new Error(r.status);
-      const html = await r.text(), mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      const html = await r.text();
+      if (!push && onScreen && onScreen.href === u.href && onScreen.html === html) return;
+      const mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
       if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
       const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, shown()); // another load swapped meanwhile: the prefetched months no longer fit
@@ -1217,6 +1265,7 @@
       root.dataset.view = state.view; root.dataset.date = shown();
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
+      onScreen = { href: u.href, html };
       wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
     } catch (e) { console.error(e); }
   }
@@ -1227,7 +1276,7 @@
     else if (state.view === 'week') d.setDate(d.getDate() + 7 * dir);
     else if (state.view === 'month') { const m = parse(shown()); m.setDate(1); m.setMonth(m.getMonth() + dir); state.month = localIso(m).slice(0, 7); return load(); }
     else d.setFullYear(d.getFullYear() + dir);
-    state.date = iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
+    state.date = ymd(d);
     load();
   }
   function go(view, date) { if (date || (view && view !== state.view)) state.month = state.week = null; if (view) state.view = view; if (date) state.date = date; load(); } // a picked day or another view shows the picked day's month again
@@ -1265,7 +1314,7 @@
   const FLIP_MS = 480, FLIP_STEP = 90, FLIP_MAX = 1500, FLIP_EASE = 'cubic-bezier(.65,0,.35,1)', FLIP_GAP = 24, FLIP_FETCH = 12; // ms for one page, ms per further page, cap; px between pages
   let flip = null;
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const localIso = d => iso(new Date(d.getTime() - d.getTimezoneOffset() * 60000));
+  const localIso = ymd;
   function monthsBetween(a, b) { const out = [], d = parse(a.slice(0, 7) + '-01'), dir = b > a ? 1 : -1; for (;;) { d.setMonth(d.getMonth() + dir); const m = localIso(d); if (m.slice(0, 7) === b.slice(0, 7)) return out; out.push(m); } } // first days of the months strictly between, in travel order
   const fetchMonths = list => Promise.all(list.map(async m => { try { const u = url(true); u.searchParams.set('month', m.slice(0, 7)); const r = await fetch(u, { headers: { Accept: 'text/html' } }); return r.ok ? new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('.month') : null; } catch { return null; } }));
   function skeleton(m, dows) { const d = parse(m), y = d.getFullYear(), mo = d.getMonth(), first = new Date(y, mo, 1), c = new Date(y, mo, 1 - ((first.getDay() + 6) % 7)); let h = dows.map(x => `<div class="dow">${esc(x)}</div>`).join('');
@@ -1298,7 +1347,7 @@
   function tlMetrics(box, kind) { const k = TLK[kind], h = Math.max(200, box.clientHeight);
     const step = Math.max(6, Math.min(k.step, Math.round((k.step + h / k.per) / 2)));
     return { step, r: Math.min(k.r, step * 0.3), ring: Math.max(4.5, Math.min(7.5, step * 0.62)), chunk: Math.max(k.chunk, Math.ceil(h / step)) }; }
-  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const fmt = ymd;
   const dm = d => dfmt(d, { day: 'numeric', month: 'numeric' });
   const isoWeek = d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); };
   const weekStart = d => { const w = new Date(d); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); return w; };
@@ -1452,6 +1501,7 @@
         // the browser's own scroll anchoring, which a scrollHeight delta would have added a second time
         const anchor = focus && focus.isConnected ? focus : bs[0], y0 = anchor.getBoundingClientRect().top;
         if (dir > 0) stream.append(...fresh); else stream.prepend(...fresh);
+        onScreen = null;
         fresh.forEach(wireItems); markPicked();
         const over = blocks().length - WK_MAX;
         if (over > 0) (dir > 0 ? blocks().slice(0, over) : blocks().slice(-over)).forEach(b => b.remove());
@@ -1474,12 +1524,12 @@
   const LED_CHUNK = 30, LED_MAX = 400, LED_SLACK = 600; // days per fetch, days kept, px of slack before the next fetch
   let ledNode = null, ledScroll = null, ledPin = false, ledOff = null;
   // a filter change (calendars, holidays) makes the carried ledger stale: the next swap takes the server's
-  function dropCarried() { ledNode = null; ledScroll = null; }
+  function dropCarried() { ledNode = null; ledScroll = null; onScreen = null; }
   function mountLedger(box) {
     if (ledOff) { ledOff(); ledOff = null; }
     if (!box || state.view !== 'day') { ledNode = null; ledPin = false; return; }
     const keep = ledNode && ledNode !== box && $(`.lrow[data-date="${state.date}"]`, ledNode); // a day outside the loaded days starts from the page's own ledger
-    if (keep) { box.replaceWith(ledNode); if (ledScroll != null) ledNode.scrollTop = ledScroll; } else ledNode = box;
+    if (keep) { box.replaceWith(ledNode); if (ledScroll != null) ledNode.scrollTop = ledScroll; onScreen = null; } else ledNode = box;
     const led = ledNode, list = $('.lrows', led), head = $('.lhd', led), rows = () => $$('.lrow', led);
     $$('.lrow.sel', led).forEach(r => r.classList.remove('sel'));
     const sel = $(`.lrow[data-date="${state.date}"]`, led); if (sel) sel.classList.add('sel');
@@ -1507,6 +1557,7 @@
         if (!fresh.length) return;
         const top = led.getBoundingClientRect().top, anchor = rows().find(x => x.getBoundingClientRect().bottom > top) || rs[0], y0 = anchor.getBoundingClientRect().top; // a visible row is never the one that gets trimmed
         if (dir > 0) list.append(...fresh); else list.prepend(...fresh);
+        onScreen = null;
         wireItems(list); // the fetched nodes ARE the rows: wiring each one would search inside it and find nothing, and the untouched <a href> would reload the page
         const over = rows().length - LED_MAX;
         if (over > 0) (dir > 0 ? rows().slice(0, over) : rows().slice(-over)).forEach(x => x.remove());
@@ -1574,9 +1625,9 @@
 
 
   wire();
-  window.rusticalCal = { go, view: () => state.view, openEditor: edOpen };
+  window.rusticalCal = { go, view: () => state.view };
   // the editor module asks the page where "now" is and how to redraw after a save
-  window.rusticalHost = { kind: root.dataset.kind || 'calendar', date: () => state.date, cals: () => state.cals, reload: (push) => load(push) };
+  window.rusticalHost = { date: () => state.date, cals: () => state.cals, reload: (push) => load(push) };
 })();
 
 // ---- editor: the card dialog. One implementation for THREE consumers — the calendar's events,
@@ -1585,17 +1636,14 @@
 // (where "now" is and how to reload); everything else lives here. ----
 (function () {
   if (!document.getElementById('edform')) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = document.querySelector('meta[name=csrf]').content;
+  const { $, $$, esc, ico, pad, ymd: fmt, parseYmd: parse, placeUnder } = practical, csrf = practical.csrf();
   const lang = document.body.dataset.lang || 'de';
   const MON = MONTHS;
   const DOW = WEEKDAYS;
-  const T = trs('js-ed-', ['suggNone', 'saved', 'err', 'del', 'delRule', 'series', 'newEv', 'editEv', 'conflict', 'copied', 'delTask']);
-  const iso = d => d.toISOString().slice(0, 10);
-  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-  const pad = n => String(n).padStart(2, '0');
-  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'conflict', 'delTask']);
   const HOST = () => window.rusticalHost || {};
+  let refreshQ = 0; // a refresh() waiting for the next frame (typing, see the form's input listener)
+  const flush = () => { if (refreshQ) refresh(); };
   let solo = null, soloSigs = {}; // one-card mode (see soloStart); declared early, cards() reads it from the start
   const root = document.getElementById('viewroot') || document.body;
   const today = root.dataset.today || fmt(new Date());
@@ -1623,7 +1671,7 @@
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const h = HOST(); if (h.closed) h.closed(); }
-  const dirty = () => form.classList.contains('mode-edit') && sig() !== baseline;
+  const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };
   function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
@@ -1680,11 +1728,10 @@
   async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ' <svg class="ico" style="width:10px;height:10px"><use href="#i-tag"/></svg>' : ''}</button>`).join(''); }
   function catsInit(list) { CATS = (list || []).map(c => String(c).trim()).filter(Boolean); ctRender(); }
   function catAdd(v) { v = String(v).replace(/,/g, '').trim(); if (!v || CATS.includes(v)) return; addCard('cats'); CATS.push(v); ctRender(); rulesApply('add'); refresh(); }
-  const addChip = catAdd;
   const ctClosePop = () => { if (ctPop) { ctPop.remove(); ctPop = null; } };
   ctIn.addEventListener('input', async () => { const q = ctIn.value.replace(/,/g, '').trim().toLowerCase(); ctClosePop(); if (!q) return; const idx = await ctIndex(); if (ctIn.value.replace(/,/g, '').trim().toLowerCase() !== q) return; const hits = idx.filter(c => c.name.toLowerCase().includes(q) && !CATS.includes(c.name)).slice(0, 5); const exact = idx.some(c => c.name.toLowerCase() === q);
     ctPop = document.createElement('div'); ctPop.className = 'rrpop'; ctPop.innerHTML = hits.map(c => `<button type="button" class="ct-hit" data-v="${esc(c.name)}">${esc(c.name)}<small>${esc(CTT.tExisting)}${c.count ? ' · ' + c.count : ''}</small></button>`).join('') + (exact ? '' : `<button type="button" class="ct-hit new" data-v="${esc(ctIn.value.replace(/,/g, '').trim())}">${esc(CTT.tNew.replace('{n}', ctIn.value.replace(/,/g, '').trim()))}</button>`);
-    document.body.appendChild(ctPop); const r = ctIn.getBoundingClientRect(), box = ctIn.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; ctPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - ctPop.offsetWidth)) + scrollX}px`; ctPop.style.top = `${r.bottom + scrollY + 4}px`;
+    document.body.appendChild(ctPop); placeUnder(ctPop, ctIn);
     ctPop.addEventListener('mousedown', e => e.preventDefault()); ctPop.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { catAdd(b.dataset.v); ctIn.value = ''; ctClosePop(); } }); });
   ctIn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const first = ctPop && $('.ct-hit:not(.new)', ctPop); if (first && e.key === 'Enter') catAdd(first.dataset.v); else catAdd(ctIn.value); ctIn.value = ''; ctClosePop(); } else if (e.key === 'Escape') ctClosePop(); }); /* Enter takes the first existing suggestion; a new name is created via the last entry or a comma */
   ctIn.addEventListener('blur', () => { setTimeout(ctClosePop, 150); if (ctIn.value.trim()) { catAdd(ctIn.value); ctIn.value = ''; } });
@@ -1805,7 +1852,7 @@
     if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
     if (ruleBack) { const to = ruleBack; ruleBack = null; location.href = to; return true; }
     return false; }
-  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(rule) }); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
+  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await practical.send('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, 'PUT', rule); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
   async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
@@ -1828,13 +1875,12 @@
   const presetSig = a => a.at ? null : JSON.stringify([!!a.related_end, a.minutes, a.action, a.repeat, a.duration_minutes, a.proximity || '', a.attach || '', [...(a.attendees || [])].sort()]);
   const fromPreset = p => newAlarm({ action: p.action, minutes: p.minutes, related_end: !!p.related_end, repeat: p.repeat || 0, duration_minutes: p.duration_minutes || 0, attendees: [...(p.attendees || [])], attach: p.attach || '', proximity: p.proximity || '' });
   const matchesPreset = a => !a.at && PRESETS.some(p => presetSig(p) === presetSig(a));
-  async function savePresets() { try { const r = await fetch('/api/alarm-presets', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(PRESETS) }); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
+  async function savePresets() { try { const r = await practical.send('/api/alarm-presets', 'PUT', PRESETS); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
   const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return m === 10080 ? AT.tWeek : AT.tWeeks.replace('{n}', m / 10080); if (m && m % 1440 === 0) return m === 1440 ? D.tDay : D.tDays.replace('{n}', m / 1440); if (m && m % 60 === 0) return m === 60 ? D.tHour : D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
   const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
   const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
   const extrasOf = a => [a.repeat > 0 ? D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : '') : '', proxText(a), a.action === 'EMAIL' ? (a.attendees.length ? AT.tToTxt + ' ' + a.attendees.join(', ') : AT.tToMissing) : '', a.description ? '„' + a.description + '“' : ''].filter(Boolean).join(' · ');
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const alIco = id => `<svg class="ico" aria-hidden="true"><use href="${id}"/></svg>`;
   const unitOf = m => { m = Math.abs(m); for (const u of [...AL_UNITS].reverse()) if (m && m % u === 0) return u; return 1; };
   const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
@@ -1850,7 +1896,6 @@
   // axis: every snap point owns a zone of the same width (the strip is ordinal, not to scale) — the
   // marker follows the pointer and the value changes at regular intervals; an alarm off the grid sits
   // between its neighbours
-  const SPAN = SNAP_START[SNAP_START.length - 1];
   const alCands = () => { const len = evLen(), ends = SNAP_END_ALL.filter(m => m < len);
     const order = [...SNAP_START].reverse().map(m => ({ related_end: false, minutes: m })).concat([{ related_end: false, minutes: 0 }], [...ends].reverse().map(m => ({ related_end: true, minutes: m })), [{ related_end: true, minutes: 0 }]);
     const step = 1 / (order.length + 1); return order.map((c, i) => ({ ...c, x: step * (i + 1), mb: c.related_end ? c.minutes - len : c.minutes })); };
@@ -1953,7 +1998,7 @@
   // ---- status card (design K): the four hidden selects stay the model (dirty tracking, reset, submit work as
   // before); the tiles are their face. Each select carries its label and one icon per option (`data-icons`),
   // so the tile's icon follows the value; a priority outside 1/5/9 (Outlook writes 2) maps by the RFC bands. ----
-  const SC = $x('#ed-status-card'), SSEL = ['status', 'transp', 'class', 'priority'].map(n => f[n]).filter(Boolean);
+  const SC = $x('#ed-status-card');
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, sel.selectedIndex)] || ic[0]; };
   const stText = sel => sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value;
   function stRender() {
@@ -1992,8 +2037,7 @@
     ntPop = document.createElement('div'); ntPop.className = 'rrpop';
     ntPop.innerHTML = hits.slice(0, 7).map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><span class="nt-pre">${h.p}</span><span>${esc(h.v)}</span><small>${esc(h.sub)}</small></button>`).join('');
     document.body.appendChild(ntPop);
-    const r = f.description.getBoundingClientRect(), box = f.description.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
-    ntPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - ntPop.offsetWidth)) + scrollX}px`; ntPop.style.top = `${r.bottom + scrollY + 4}px`;
+    placeUnder(ntPop, f.description);
     ntPop.addEventListener('mousedown', e => e.preventDefault()); // keep the textarea focused
     ntPop.addEventListener('click', e => { const b = e.target.closest('.lk-hit'); if (b) ntPick(hits[+b.dataset.h]); });
     ntPop._pick = () => ntPick(hits[0]);
@@ -2004,6 +2048,7 @@
   f.description.addEventListener('input', () => { ntSuggest(); clearTimeout(ntTimer); ntTimer = setTimeout(ntDetect, 300); });
   const ntChanged = () => { grow(); refresh(); ntDetect(); };
   // detection: what the note mentions that the other cards do not have yet
+  const chips2 = () => chips(); // the event's categories: ntDetect has a local `chips` of its own
   async function ntDetect() {
     const text = f.description.value; ntFound.innerHTML = '';
     if (!text.trim() || !form.classList.contains('mode-edit')) return;
@@ -2022,7 +2067,6 @@
     ntFound.innerHTML = chips.map((c, i) => `<button class="pillbtn${c.ghost ? ' ghost' : ''}" type="button" data-nt="${i}"><svg class="ico"><use href="#${c.icon}"/></svg><span>${esc(c.text)}</span><small>${esc(c.sub)}</small></button>`).join('');
     ntFound._chips = chips;
   }
-  const chips2 = () => chips(); // categories currently on the event (the chips widget)
   ntFound.addEventListener('click', e => { const b = e.target.closest('[data-nt]'); if (!b) return; const c = ntFound._chips[+b.dataset.nt];
     if (c.k === 'person') { addCard('people'); PEOPLE.attendees.push({ name: c.data.name, email: c.data.email, role: 'REQ-PARTICIPANT', status: '', cutype: '', extra: [], contacts: [{ key: c.data.key, name: c.data.name, sub: c.data.email, initials: c.data.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(), color_index: 1 }] }); peopleRender(); }
     else if (c.k === 'link') { addCard('links'); lkAddUri(c.data); }
@@ -2104,7 +2148,7 @@
     const idx = LK.links.map((l, i) => i);
     const conf = idx.filter(i => LK.links[i].kind === 'conference'), web = conf.filter(i => /^https?:/i.test(LK.links[i].uri)), tel = conf.filter(i => /^tel:/i.test(LK.links[i].uri));
     let c = '';
-    if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}"><svg class="ico" aria-hidden="true"><use href="#i-headset"/></svg><span>${esc(LKT.tJoin)}</span></button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
+    if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}">${ico('headset')}<span>${esc(LKT.tJoin)}</span></button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
     c += conf.filter(i => i !== web[0] && !tel.includes(i)).map(lkRow).join('') + (web.length ? lkRow(web[0]) .replace('class="lk-row', 'class="lk-row edits') : '');
     if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
     const internal = LK.related.map((r, i) => lkRelRow(i)).join('');
@@ -2125,7 +2169,7 @@
   const lkAddFiles = files => { let total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0); const errs = []; [...files].forEach(file => { if (file.size > 2 * 1024 * 1024 || total + file.size > 6 * 1024 * 1024) { errs.push(LKT.tToobig.replace('{name}', file.name)); return; } total += file.size; const rd = new FileReader(); rd.onload = () => { LK.links.push({ kind: 'attach', uri: '', label: '', embedded: true, filename: file.name, fmt: file.type || 'application/octet-stream', size: file.size, features: [], extra: [], keep: false, data: String(rd.result).replace(/^data:[^,]*,/, '') }); lkSync(); }; rd.readAsDataURL(file); }); lkMsg.className = 'lk-msg' + (errs.length ? ' err' : ''); lkMsg.textContent = errs.join(' · '); };
   const lkClosePop = () => { if (lkPop) { lkPop.remove(); lkPop = null; } };
   let lkSearchT = 0;
-  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await fetch('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = await r.json(); const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; const box = e.target.closest('.box'); document.body.appendChild(lkPop); const r2 = e.target.getBoundingClientRect(), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; lkPop.style.left = `${Math.max(8, Math.min(r2.left, maxRight - lkPop.offsetWidth)) + scrollX}px`; lkPop.style.top = `${r2.bottom + scrollY + 4}px`; lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
+  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await fetch('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = await r.json(); const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; document.body.appendChild(lkPop); placeUnder(lkPop, e.target); lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
   $('#ed-lk-search').addEventListener('blur', () => setTimeout(lkClosePop, 150));
   $('#ed-lk-addbtn').onclick = () => { lkAddUri($('#ed-lk-url').value); $('#ed-lk-url').value = ''; };
   $('#ed-lk-url').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#ed-lk-addbtn').click(); } });
@@ -2185,7 +2229,7 @@
     $('[data-geo=map]', form).classList.toggle('hot', LOC.errAddr || LOC.errCoords);
     let h = '';
     if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LT.tAddr : LT.tGeo}"><svg class="ico" aria-hidden="true"><use href="#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LT.tRmAddr : LT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LT.tErrAddr : LT.tErrCoords}</span>` : ''); }
-    else h = `<button class="chip ghost" type="button" data-locadd="${O}"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> ${O === 'addr' ? LT.tAddAddr : LT.tAddCoords}</button>`;
+    else h = `<button class="chip ghost" type="button" data-locadd="${O}">${ico('plus')} ${O === 'addr' ? LT.tAddAddr : LT.tAddCoords}</button>`;
     locsub.innerHTML = h;
     const addr = f.location.value.trim(); $('#ed-loc-view').hidden = !addr; $('#ed-geo-view').hidden = !geoOf();
     $('#ed-addr-lines').innerHTML = addr.split(/,\s*/).filter(Boolean).map(l => `<span class="ln">${l.replace(/</g, '&lt;')}</span>`).join('');
@@ -2270,10 +2314,9 @@
   const DOWL = WEEKDAYS_LONG;
   const blankRR = () => ({ freq: '', interval: 1, byday: [], mode: 'date', bymonthday: null, ordinal: 1, ordday: 'TU', bymonth: null, end: { kind: 'never', count: 10, until: '' }, exdates: [], rdates: [], raw: '' });
   let RR = blankRR(), rrMode = 'pattern', rrPicking = false, rrFocus = null, rrLocked = false;
-  const rrIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const rrIso = fmt;
   const rrWd = d => (d.getDay() + 6) % 7; // 0 = Monday
   const rrStart = () => parse((f.date.value || today).slice(0, 10));
-  const ordN = () => Math.ceil(rrStart().getDate() / 7);
   // a stored rule → the model; parts the strip cannot paint keep the rule as raw text
   function rrParse(r, untilLocal) {
     const m = blankRR(); if (!r) return m;
@@ -2322,7 +2365,7 @@
   // popovers for the pills: a list of choices or a number entry
   let rrOpenPop = null; const rrClosePop = () => { if (rrOpenPop) { rrOpenPop.remove(); rrOpenPop = null; document.removeEventListener('click', rrOutside, true); } };
   function rrOutside(e) { if (rrOpenPop && !rrOpenPop.contains(e.target)) rrClosePop(); }
-  function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); document.body.appendChild(p); const box = anchor.closest('.box'); const maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8; p.style.left = `${Math.max(8, Math.min(r.left, maxRight - p.offsetWidth)) + scrollX}px`; p.style.top = `${r.bottom + scrollY + 4}px`; rrOpenPop = p; /* kept inside the dialog box */ p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
+  function rrPop(anchor, items, cur, onpick, extra) { rrClosePop(); const p = document.createElement('div'); p.className = 'rrpop'; p.innerHTML = (extra || '') + items.map(i => `<button type="button" data-v="${esc(i.v)}"${String(i.v) === String(cur) ? ' aria-current="true"' : ''}>${esc(i.label)}</button>`).join(''); const r = anchor.getBoundingClientRect(); document.body.appendChild(p); placeUnder(p, anchor, r); rrOpenPop = p; /* kept inside the dialog box */ p.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) { rrClosePop(); onpick(b.dataset.v); } }); setTimeout(() => document.addEventListener('click', rrOutside, true), 0); return p; }
   function rrAskNumber(anchor, label, value, on) { const p = rrPop(anchor, [], null, () => {}, `<div class="q">${esc(label)}</div><input type="number" min="1" max="999" value="${value}"><button type="button" class="ok">${esc(RT.tApply)}</button>`); const i = $('input', p); i.focus(); i.select(); const ok = () => { const n = +i.value; if (n >= 1) on(n); rrClosePop(); }; i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } }; $('.ok', p).onclick = ok; }
   const rrSet = () => { rrRender(); refresh(); };
   // a short eased glide of a scroll container (200–420 ms); any input stops it
@@ -2344,18 +2387,18 @@
     const isRaw = RR.freq === 'RAW';
     rrBox.insertAdjacentHTML('beforeend', `<div class="rrsegs"><span class="seg" data-w="freq">${[''].concat(RR_FREQS).map((v, i) => `<button type="button" data-v="${v}" aria-pressed="${RR.freq === v}" title="${esc(longs[i])}">${esc(freqs[i])}</button>`).join('')}${isRaw ? `<button type="button" data-v="RAW" aria-pressed="true" title="${esc(RT.tCustom)}">${esc(RT.tCustomShort)}</button>` : ''}</span></div>`);
     $('[data-w=freq]', rrBox).onclick = e => { const b = e.target.closest('button'); if (!b) return; RR.freq = b.dataset.v; if (RR.freq === 'WEEKLY' && !RR.byday.length) RR.byday = [DAYS[rrWd(s0)]]; rrSet(); };
-    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-ellipsis"/></svg><span>${esc(RT.tInterval)}</span></button><button class="pillbtn ghost" type="button" disabled><svg class="ico" aria-hidden="true"><use href="#i-to-line"/></svg><span>${esc(RT.tEnd)}</span></button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
+    if (!RR.freq) rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn ghost" type="button" disabled>${ico('ellipsis')}<span>${esc(RT.tInterval)}</span></button><button class="pillbtn ghost" type="button" disabled>${ico('to-line')}<span>${esc(RT.tEnd)}</span></button></div><hr class="rrsep">`); // no frequency yet: the row stays, inert
     if (RR.freq && !isRaw) {
       const u = rrUnit(), each = RT.tEach.split('|')[RR_FREQS.indexOf(RR.freq)];
       const shortD = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
       const endLabel = () => RR.end.kind === 'count' ? D.tCount.replace('{n}', RR.end.count) : RR.end.kind === 'until' && RR.end.until ? D.tUntil + ' ' + shortD(RR.end.until) : RT.tNoEnd;
-      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i"><svg class="ico" aria-hidden="true"><use href="#i-ellipsis"/></svg><span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e"><svg class="ico" aria-hidden="true"><use href="#i-to-line"/></svg><span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
+      rrBox.insertAdjacentHTML('beforeend', `<div class="rrbottom"><button class="pillbtn${RR.interval > 1 ? '' : ' ghost'}" type="button" data-s="i">${ico('ellipsis')}<span>${esc(RR.interval > 1 ? D.tEvery.replace('{n}', RR.interval) + ' ' + u : each)}</span></button><button class="pillbtn${RR.end.kind === 'never' ? ' ghost' : ''}" type="button" data-s="e">${ico('to-line')}<span>${esc(endLabel())}</span></button></div><hr class="rrsep">`);
       $('.rrbottom', rrBox).onclick = e => { const b = e.target.closest('.pillbtn'); if (!b) return;
         if (b.dataset.s === 'i') rrPop(b, [1, 2, 3, 4, 6].map(n => ({ v: n, label: n === 1 ? each : D.tEvery.replace('{n}', n) + ' ' + u })).concat({ v: 'n', label: RT.tN }), RR.interval, v => { if (v === 'n') rrAskNumber(b, RT.tIntQ.replace('{u}', u), RR.interval, n => { RR.interval = n; rrSet(); }); else { RR.interval = +v; rrSet(); } });
         else rrPop(b, [{ v: 'never', label: RT.tNoEnd }, { v: 'count', label: RT.tEndCount + ' …' }, { v: 'until', label: RT.tEndUntil + ' …' }], RR.end.kind, v => { if (v === 'count') rrAskNumber(b, RT.tCountQ, RR.end.count, n => { RR.end = { ...RR.end, kind: 'count', count: n }; rrSet(); }); else if (v === 'until') { rrPicking = true; rrRender(); } else { RR.end = { ...RR.end, kind: 'never' }; rrSet(); } }); };
     }
     if (isRaw) { rrBox.insertAdjacentHTML('beforeend', `<div class="rrhint">${esc(RT.tCustomHint)}</div><div class="rrraw"><input type="text" value="${esc(RR.raw)}" placeholder="FREQ=…"></div>`); $('.rrraw input', rrBox).onchange = e => { RR.raw = e.target.value.trim(); rrSet(); }; }
-    if (rrPicking) { rrBox.insertAdjacentHTML('beforeend', `<div class="pickmsg"><svg class="ico" aria-hidden="true"><use href="#i-today"/></svg><span>${esc(RT.tPick)}</span><button class="btn" type="button">${esc(RT.tCancel)}</button></div>`); $('.pickmsg .btn', rrBox).onclick = () => { rrPicking = false; rrRender(); }; }
+    if (rrPicking) { rrBox.insertAdjacentHTML('beforeend', `<div class="pickmsg">${ico('today')}<span>${esc(RT.tPick)}</span><button class="btn" type="button">${esc(RT.tCancel)}</button></div>`); $('.pickmsg .btn', rrBox).onclick = () => { rrPicking = false; rrRender(); }; }
     else rrBox.insertAdjacentHTML('beforeend', `<div class="rrhint">${esc(rrMode === 'pattern' ? RT.tHintPattern : RT.tHintEx)}</div>`);
     // week rows
     const occ = rrOccurrences(1100), ex = new Set(RR.exdates), rd = new Set(RR.rdates), untilD = RR.end.kind === 'until' ? RR.end.until : null, W0 = rrW0();
@@ -2446,7 +2489,7 @@
   }
   function whenLine() { if (TASK) return taskLine(); const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
   const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
+  function refresh() { if (refreshQ) { cancelAnimationFrame(refreshQ); refreshQ = 0; } whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
@@ -2533,8 +2576,7 @@
     tplPop = document.createElement('div'); tplPop.className = 'rrpop tplpop'; tplPop.setAttribute('role', 'listbox');
     tplPop.innerHTML = `<div class="q">${esc(D.tTplHead)}</div>` + hits.map((h, i) => `<button type="button" class="lk-hit" role="option" data-h="${i}" aria-selected="false"><svg class="ico" style="color:${esc(h.color)}"><use href="#i-calendar"/></svg><span>${esc(h.summary)}</span><small>${esc([D.tTplCount.replace('{n}', h.count), D.tTplLast.replace('{date}', fmtD(h.last) + (h.time ? ' ' + h.time : '')), h.cal_name].filter(Boolean).join(' · '))}</small></button>`).join('');
     document.body.appendChild(tplPop);
-    const r = f.summary.getBoundingClientRect(), box = f.summary.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
-    tplPop.style.left = `${Math.max(8, Math.min(r.left, maxRight - tplPop.offsetWidth)) + scrollX}px`; tplPop.style.top = `${r.bottom + scrollY + 4}px`;
+    placeUnder(tplPop, f.summary);
     tplPop.addEventListener('mousedown', e => e.preventDefault()); // the title keeps the focus
     tplPop.addEventListener('click', e => { const b = e.target.closest('.lk-hit'); if (b) tplUse(tplHits[+b.dataset.h]); });
   }
@@ -2581,7 +2623,10 @@
     const first = c && ($('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c)); if (first) setTimeout(() => first.focus(), 0);
   }
   function soloEnd() { if (!solo) return; solo = null; f.summary.readOnly = false; ed.classList.remove('solo'); $$('.card.solo-on', form).forEach(c => c.classList.remove('solo-on')); }
-  form.addEventListener('input', refresh);
+  // typing: the save/reset buttons follow at once (Enter must find them right), the derived parts (when line,
+  // rule sentence, note height, reminder strip, footers — two of them force a layout) once per frame; whatever
+  // reads them (save, close) runs a pending refresh first
+  form.addEventListener('input', () => { updateButtons(); if (!refreshQ) refreshQ = requestAnimationFrame(refresh); });
   form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) syncDot(); if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
   form.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
@@ -2608,6 +2653,7 @@
   }
   form.addEventListener('submit', async e => {
     e.preventDefault();
+    flush();
     if (ruleMode) { await ruleSave(); return; }
     const body = TASK ? taskBody() : eventBody();
     const key = f.key.value;
@@ -2621,7 +2667,7 @@
   });
   $('#ed-delete').onclick = async () => { if (ruleMode) { if (await ask(T.delRule)) await ruleDelete(); return; } if (!await ask(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
 
-  window.rusticalEd = { open: openEditor, openRule: openRuleEditor };
+  window.rusticalEd = { open: openEditor };
   { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { const b = sp.get('back'); ruleBack = b && /^\/(?![/\\])/.test(b) ? b : null; openRuleEditor(rp); } } // ?back=: a path of this site only, the link may come from anywhere
 })();
 
@@ -2636,11 +2682,9 @@
 (function () {
   const q = document.getElementById('q'), box = document.getElementById('sres'), ghost = document.getElementById('q-ghost');
   if (!q) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = (document.querySelector('meta[name=csrf]') || {}).content || '';
+  const { $, ico } = practical, csrf = practical.csrf();
   const T = trs('js-search-', ['jump', 'ev', 'ct', 'tk', 'none', 'all', 'of', 'hist', 'histRm', 'dlg', 'tabAll', 'close', 'keys', 'only', 'series', 'why']);
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const ico = n => `<svg class="ico" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const esc = practical.escQ;
   // the server's fold (domain::search::fold): case and diacritics off, for highlighting and history matches
   const FOLD = { 'ß': 'ss', 'æ': 'ae', 'œ': 'oe', 'ø': 'o', 'ł': 'l' };
   const foldc = c => FOLD[c] ?? c.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -2873,8 +2917,7 @@
 (function () {
   const wrap = document.getElementById('contacts');
   if (!wrap) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = document.querySelector('meta[name=csrf]').content;
+  const { $, $$ } = practical, csrf = practical.csrf();
   const lang = document.body.dataset.lang || 'de';
   const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
   // view switch; the picked contact (activeKey) stays picked and in view
@@ -2883,11 +2926,11 @@
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table') && location.hash.length <= 1) $('[data-ctview=table]').click(); // a link to one contact (#key) opens the list
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
-  $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); fetch('/settings/columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
+  $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); practical.send('/settings/columns', 'POST', on); }));
   applyCols();
   // list view: the same picker toggles the lines of every entry
   function applyListFields() { const on = $$('#colpop input[data-lf]').filter(i => i.checked).map(i => i.dataset.lf); $$('.panels [data-lf]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.lf))); return on; }
-  $$('#colpop input[data-lf]').forEach(i => i.addEventListener('change', () => { const on = applyListFields(); fetch('/settings/list-fields', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(on) }); }));
+  $$('#colpop input[data-lf]').forEach(i => i.addEventListener('change', () => { const on = applyListFields(); practical.send('/settings/list-fields', 'POST', on); }));
   applyListFields(); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (wrap.classList.contains('view-table') ? 'table' : 'list'));
   // filter by addressbook / category
   const fb = $('#abfilter');
@@ -2925,13 +2968,14 @@
   const SL = trs('js-ctsort-', ['given', 'family', 'bday', 'email', 'none']), TS = trs('js-tk-', ['sort', 'asc', 'desc']);
   const FIELDS = ['given', 'family', 'bday', 'email'];
   let sort = FIELDS.includes(localStorage.ctSort) ? localStorage.ctSort : 'given', desc = localStorage.ctDesc === '1';
-  const hesc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const hesc = practical.esc;
   const coll = new Intl.Collator(lang, { sensitivity: 'base', numeric: true });
   const MONTHS = Array.from({ length: 12 }, (_, i) => dfmt(new Date(2000, i, 1), { month: 'long' }));
   const initial = v => { const c = v.normalize('NFD').charAt(0).toUpperCase(); return /\p{L}/u.test(c) ? c : '#'; };
+  const rowOf = new Map(); $$('tr[data-key]', wrap).forEach(tr => { if (!rowOf.has(tr.dataset.key)) rowOf.set(tr.dataset.key, tr); }); // one pass, not one search per contact
   const recs = $$('.panels li[data-key]', wrap).map(li => {
     const d = li.dataset, name = d.name.trim(), md = d.bday.match(/(\d{2})-(\d{2})$/);
-    return { li, tr: $(`tr[data-key="${CSS.escape(d.key)}"]`, wrap), given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
+    return { li, tr: rowOf.get(d.key) || null, given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
   });
   const groupOf = r => !r[sort] ? '-' : sort === 'bday' ? r.bday.slice(0, 2) : initial(r[sort]);
   const label = g => g === '-' ? SL.none : sort === 'bday' ? MONTHS[+g - 1] : g;
@@ -3097,7 +3141,7 @@
           case 'birthday': { const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/); body.birthday = m ? (m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`) : v; break; }
           case 'org': body.org = v; break;
         }
-        const r = await fetch('/api/contacts/' + key, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+        const r = await practical.send('/api/contacts/' + key, 'PUT', body);
         if (!r.ok) throw new Error(r.status);
         cell.style.outline = '2px solid var(--c2)'; setTimeout(() => cell.style.outline = '', 800);
       } catch (e) { cell.textContent = before; alert(T.err + ': ' + e.message); }
@@ -3130,20 +3174,17 @@
 (function () {
   const root = document.getElementById('taskroot');
   if (!root) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const csrf = document.querySelector('meta[name=csrf]').content;
-  const lang = document.body.dataset.lang || 'de';
+  const { $, $$, parseYmd: parse, ymd: iso } = practical, csrf = practical.csrf();
   const T = trs('js-tk-', ['open', 'doing', 'done', 'cancelled', 'nodate', 'overdue', 'today', 'week', 'later', 'del', 'err', 'sort', 'askDone', 'yes', 'no', 'asc', 'desc', 'done_at', 'due', 'wasdue', 'empty', 'prio', 'pct', 'count', 'keys', 'hist', 'histNone', 'nodateBox', 'loading', 'start', 'cats', 'edit']);
   const SORTL = trs('js-sort-', ['due', 'done', 'prio', 'pct', 'title', 'cal', 'created']);
 
   // the page ships every open task (the working set, bounded) and the first page of the finished
   // ones (unbounded by the lookback); the rest arrives as a view scrolls towards it
   const DATA = (() => { try { return JSON.parse($('#tasks-data').textContent); } catch (_) { return { open: [], done: [], done_total: 0, per_day: {} }; } })();
-  const OPEN = DATA.open || [], PER_DAY = DATA.per_day || {};
-  const COMPLETED_TOTAL = DATA.completed_total || 0, CANCELLED_TOTAL = DATA.cancelled_total || 0;
-  let DONE = DATA.done || [], DONE_TOTAL = DATA.done_total || 0;
-  let TASKS = OPEN.concat(DONE);
+  let OPEN, PER_DAY, COMPLETED_TOTAL, CANCELLED_TOTAL, DONE, DONE_TOTAL, TASKS, gen = 0; // gen: which data a pending page of finished tasks belongs to
   const rebuild = () => { TASKS = OPEN.concat(DONE); };
+  const setData = d => { OPEN = d.open || []; PER_DAY = d.per_day || {}; COMPLETED_TOTAL = d.completed_total || 0; CANCELLED_TOTAL = d.cancelled_total || 0; DONE = d.done || []; DONE_TOTAL = d.done_total || 0; rebuild(); gen++; };
+  setData(DATA);
   /* a page of the finished list is a valid prefix of these two sorts only; every other one
      needs the whole list, so it is fetched before the view draws */
   const PREFIX_SAFE = ['due', 'done'];
@@ -3153,14 +3194,16 @@
     if (DONE.length >= DONE_TOTAL) return null;
     const limit = all ? Math.min(500, DONE_TOTAL - DONE.length) : +root.dataset.chunk || 120;
     const u = `/api/tasks/done?back=${encodeURIComponent(root.dataset.back)}&offset=${DONE.length}&limit=${limit}` + (root.dataset.cals ? '&cals=' + encodeURIComponent(root.dataset.cals) : '');
+    const g = gen;
     loading = fetch(u).then(r => r.ok ? r.json() : null).then(d => {
+      if (g !== gen) return null; // the page's data was replaced meanwhile (reload)
       loading = null;
       if (!d) return null;
       DONE = DONE.concat(d.items);
       DONE_TOTAL = d.total;
       rebuild();
       return d;
-    }).catch(() => { loading = null; return null; });
+    }).catch(() => { if (g === gen) loading = null; return null; });
     return loading;
   }
   async function ensureAll() { while (DONE.length < DONE_TOTAL) { if (!await loadMore(true)) break; } }
@@ -3173,16 +3216,14 @@
   const TODAY = parse(root.dataset.today);
   let view = root.dataset.view, sort = localStorage.tkSort || 'due', desc = localStorage.tkDesc === '1', cur = null, act = null; // cur: the task in the editor; act: the picked one (marked in every view that shows it)
 
-  function parse(s) { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); }
   const dt = s => s ? new Date(String(s).replace(' ', 'T')) : null;
   const day = d => Math.round((d - TODAY) / 864e5);
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const ic = (n, cl) => `<svg class="ico ${cl || 's'}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const esc = practical.escN;
+  const ic = (n, cl) => practical.ico(n, cl || 's');
   const L = LOC;
   const de = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const deS = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit' }) : '';
   const deT = d => d ? d.toLocaleString(L, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const key = t => `${t.principal}/${t.cal_id}/${t.object_id}`;
 
   const isDone = t => t.status === 'COMPLETED' || (!t.status && !!t.completed_at);
@@ -3380,7 +3421,7 @@
   });
   $$('#tk-colpop input[data-col]').forEach(i => i.addEventListener('change', () => {
     render();
-    fetch('/settings/task-columns', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(shownCols()) });
+    practical.send('/settings/task-columns', 'POST', shownCols());
   }));
 
   // ---- C: board ----
@@ -3551,7 +3592,7 @@
 
   // ---- writing ----
   async function put(k, body) {
-    const r = await fetch('/api/tasks/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
+    const r = await practical.send('/api/tasks/' + k, 'PUT', body);
     if (!r.ok) { alert(T.err + ' ' + r.status); return false; }
     return true;
   }
@@ -3568,17 +3609,42 @@
     if (st !== 'COMPLETED') { d.completed_at = null; if (d.percent === 100) d.percent = 0; } else d.percent = 100;
     if (await put(k, d)) reload();
   }
-  function reload() { location.href = url(); }
+  /* after a write: the page as a navigation to url() would show it, without the navigation. The server's
+     render of that address brings the data, the counter and the finished total; the parts of the page this
+     does not carry over (filter, columns, rules, presets, snaps, calendars) must be unchanged, else it
+     navigates after all. Then the page starts again as after a load (nothing picked, first deck card). */
+  const fixedOf = d => ['#calfilter', '#tk-colpop', '#edform select[name=calendar]'].map(x => (d.querySelector(x) || {}).innerHTML).concat(['category-rules-data', 'alarm-presets-data', 'alarm-snaps-data'].map(x => (d.getElementById(x) || {}).textContent)).join('\u0001');
+  const FIXED = fixedOf(document);
+  let reloads = 0;
+  async function reload(hash = '') {
+    const u = url(), n = ++reloads;
+    let doc = null, data = null;
+    try {
+      const r = await fetch(u, { headers: { Accept: 'text/html' } });
+      if (r.ok && new URL(r.url).pathname === '/tasks') { doc = new DOMParser().parseFromString(await r.text(), 'text/html'); data = JSON.parse(doc.getElementById('tasks-data').textContent); }
+    } catch (_) { doc = null; }
+    if (n !== reloads) return;
+    if (!doc || !data || fixedOf(doc) !== FIXED) { location.href = u + hash; return; }
+    $('#tasks-data').textContent = doc.getElementById('tasks-data').textContent;
+    $('#task-count').textContent = doc.getElementById('task-count').textContent;
+    root.dataset.doneTotal = doc.getElementById('taskroot').dataset.doneTotal;
+    setData(data); loading = null;
+    if (location.href !== u) history.pushState(null, '', u);
+    deckI = 0; pick = null; act = cur = null; held = undefined; wantNew = false;
+    start();
+  }
   // ---- calendar filter: the calendar page's hidden set (localStorage.calHidden), sent as ?cals= like there ----
   const cf = $('#calfilter');
+  let refetch = false; // the filter kept in this browser differs from the page's: the page's data is not the one to show
   if (cf) {
     const hid = new Set(JSON.parse(localStorage.calHidden || '[]')), boxes = $$('input[data-cal]', cf);
     const param = () => { const on = boxes.filter(i => i.checked).map(i => i.dataset.cal); return on.length === boxes.length ? '' : on.join(',') || '-'; };
-    const apply = () => { boxes.forEach(i => { if (i.checked) hid.delete(i.dataset.cal); else hid.add(i.dataset.cal); }); localStorage.calHidden = JSON.stringify([...hid]); root.dataset.cals = param(); reload(); };
+    const apply = () => { boxes.forEach(i => { if (i.checked) hid.delete(i.dataset.cal); else hid.add(i.dataset.cal); }); localStorage.calHidden = JSON.stringify([...hid]); root.dataset.cals = param(); practical.keepCals('tasks', root.dataset.cals); reload(); };
     boxes.forEach(i => { i.checked = !hid.has(i.dataset.cal); i.addEventListener('change', apply); });
+    practical.keepCals('tasks', param());
     $$('[data-filter]', cf).forEach(a => a.addEventListener('click', e => { e.preventDefault(); boxes.forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); apply(); }));
     // a filter set on the calendar page applies here too; a rule link (?rule=) keeps its page
-    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); location.href = url() + location.hash; }
+    if (param() !== (root.dataset.cals || '') && !new URL(location.href).searchParams.has('rule')) { root.dataset.cals = param(); refetch = true; }
   }
   function url(v) { const u = new URL('/tasks', location.origin); u.searchParams.set('view', v || view); u.searchParams.set('back', root.dataset.back); if (root.dataset.cals) u.searchParams.set('cals', root.dataset.cals); return u.toString(); }
 
@@ -3623,7 +3689,6 @@
 
   // what the editor module asks of the page it runs on
   window.rusticalHost = {
-    kind: 'task',
     date: () => iso(TODAY),
     cals: () => root.dataset.cals || '',
     // after a save the docked pane shows the saved task again (the contacts page keeps it in the hash)
@@ -3667,21 +3732,23 @@
   window.rusticalTasks = { reveal };
   addEventListener('popstate', () => location.reload());
 
-  // back from a save in the docked pane: show what was saved
-  const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
-  if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
+  // the start, also after an in-place reload: back from a save in the docked pane, show what was saved
+  function start() {
+    const sel = sessionStorage.tkSel; delete sessionStorage.tkSel;
+    if (sel && docked() && find(sel)) open(sel); else { fit(); render(); }
+  }
   // a link to one task (#key, e.g. a search hit from another page)
-  const hk = decodeURIComponent(location.hash.slice(1)); if (hk) { history.replaceState(null, '', url()); reveal(hk); }
+  const hk = decodeURIComponent(location.hash.slice(1)), hash = location.hash;
+  const linked = () => { if (hk) { history.replaceState(null, '', url()); reveal(hk); } };
+  if (refetch) reload(hash).then(linked); else { start(); linked(); }
 })();
 
 /* ===== settings: import files, browser push ===== */
 (function () {
   const settings = document.querySelector('.settings');
   if (!settings) return;
-  const csrf = document.querySelector('meta[name=csrf]').content;
-  const lang = document.body.dataset.lang || 'de';
+  const { esc } = practical, csrf = practical.csrf();
   const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   // import: read the chosen file, POST its bytes (no multipart)
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;
@@ -3765,14 +3832,14 @@
       const key = (await (await fetch('/api/push/key')).json()).key;
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
       const j = sub.toJSON();
-      const r = await fetch('/api/push/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ endpoint: j.endpoint, keys: j.keys }) });
+      const r = await practical.send('/api/push/subscriptions', 'POST', { endpoint: j.endpoint, keys: j.keys });
       if (!r.ok) throw new Error(r.status);
       refresh();
     } catch (e) { st.textContent = T.err + ': ' + e.message; }
   };
   dis.onclick = async () => {
     const reg = await navigator.serviceWorker.getRegistration('/'); const sub = reg && await reg.pushManager.getSubscription();
-    if (sub) { await fetch('/api/push/subscriptions', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    if (sub) { await practical.send('/api/push/subscriptions', 'DELETE', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
     refresh();
   };
   refresh();

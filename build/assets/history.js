@@ -6,10 +6,8 @@
 (() => {
   const root = document.getElementById('hx');
   if (!root) return;
-  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const csrf = () => ($('meta[name=csrf]') || {}).content || '';
-  const LOC = window.LOC || 'de-DE';
+  const { $, $$, escN: esc, csrf } = practical; // app.js runs first (both deferred, in document order)
+  const LOC = window.LOC;
   const fmtDay = new Intl.DateTimeFormat(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
   const fmtShort = new Intl.DateTimeFormat(LOC, { weekday: 'short', day: 'numeric', month: 'numeric' });
   const fmtMonth = new Intl.DateTimeFormat(LOC, { month: 'short' });
@@ -58,7 +56,7 @@
   const avatar = c => c.who ? `<span class="hx-av" title="${esc(person(c.who).name)}">${esc(person(c.who).ini)}</span>` : `<span class="hx-av dev" title="${esc(srcLabel(c))}">${ico(srcIcon(c))}</span>`;
   const attrKeys = c => [...new Set(c.items.flatMap(it => it.attrs.map(a => a[0])))];
   const attrLabel = k => { for (const c of log) for (const it of c.items) for (const a of it.attrs) if (a[0] === k) return a[1]; return k; };
-  const dayKey = t => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const dayKey = practical.ymd;
   const now = () => new Date(D.now);
   const time = t => t.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' });
   const dayDiff = t => Math.round((new Date(dayKey(now())) - new Date(dayKey(t))) / 864e5);
@@ -125,7 +123,7 @@
     : tr('w-conflict', { label: w.label, by: w.by ? ` (#${w.by})` : '', cur: w.cur || S('empty'), old: w.old || S('empty') });
   const planText = p => [...p.warns.map(warnText), ...p.skips.map(s => tr('w-skip', { title: s.title, why: whyText(s.why, s.by) }))];
   async function post(id, confirm) {
-    const r = await fetch(`/api/history/${id}/undo`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() }, body: JSON.stringify({ confirm }) }).catch(() => null);
+    const r = await practical.send(`/api/history/${id}/undo`, 'POST', { confirm }).catch(() => null);
     if (!r) return { err: S('err') };
     if (r.status === 409) return { plan: await r.json() };
     if (!r.ok) return { err: (await r.text()) || S('err') };
@@ -144,9 +142,13 @@
     toast(tr('done', { ref: '#' + id, id: '#' + res.id }));
     emit({ added: res.id });
   }
+  // false: the document came back unchanged (the live echo of an undo made here) — nothing to redraw
+  let lastDoc = '';
   async function reload() {
     const r = await fetch('/api/history', { headers: { Accept: 'application/json' } }).catch(() => null);
-    if (r && r.ok) load(await r.json());
+    if (!r || !r.ok) return true;
+    const t = await r.text(); if (t === lastDoc) return false;
+    lastDoc = t; load(JSON.parse(t)); return true;
   }
   async function planOf(id) {
     if (!plans.has(id)) plans.set(id, fetch(`/api/history/${id}/plan`).then(r => r.ok ? r.json() : null).catch(() => null));
@@ -239,7 +241,7 @@
   // ---- view: line map ---------------------------------------------------------------------------
   const Map_ = (() => {
     const PPD = { 7: 150, 30: 38, 90: 13 }, ROWH = 64, LY = 38; // LY + 22 = the stop's number, inside the row
-    let zoom = +localStorage.hxZoom || 30, openId = null, host = null;
+    let zoom = +localStorage.hxZoom || 30, openId = null, host = null, resizeOn = false;
     // pixels per day: the zoom's minimum, stretched so the days fill the window's width
     let ppd = 38;
     const fit = () => {
@@ -330,7 +332,7 @@
       host = h;
       h.innerHTML = `${legend()}<div class="hxg-scroll" data-m="map"></div><div class="hxg-pop" data-m="pop" hidden></div><div class="hx-foot" data-m="foot"></div>`;
       $('[data-m="map"]', h).addEventListener('scroll', () => { if (openId) pop(); });
-      let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host === h) render(false); }, 150); });
+      if (!resizeOn) { resizeOn = true; let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host) render(false); }, 150); }); } // once: every mount used to add one more
       render(true);
     }
     const M = n => $(`[data-m="${n}"]`, host);
@@ -562,6 +564,6 @@
   const main = $('.main'); if (main) main.addEventListener('scroll', () => V().onScroll());
   // a change anywhere (another tab, a device): reload the document, keep what is open
   let rt;
-  document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { await reload(); chrome(); V().render(); }, 400); });
+  document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { if (await reload()) { chrome(); V().render(); } }, 400); });
   show();
 })();
