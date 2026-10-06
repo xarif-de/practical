@@ -139,8 +139,10 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
         if !cal.components.iter().any(|c| c == "VEVENT") {
             continue;
         }
+        // views' windows only: a year or more has its own caches (density, mentions, search corpus)
+        let cacheable = (end - start).num_days() <= INSTANCE_CACHE_MAX_DAYS;
         let key: WinKey = (cal.principal.clone(), cal.id.clone(), cal.synctoken, tz, start, end);
-        let part = match state.caches.instances.get(&key) {
+        let part = match state.caches.instances.get(&key).filter(|_| cacheable) {
             Some(p) => p,
             None => {
                 // without the calendar's name and colour: those change without the synctoken (filled in below)
@@ -148,8 +150,11 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
                 // sorted alone: the merged list below then sorts as runs, with the same (stable) result
                 let mut p = expand(state, &bare, start, end, tz, None).await?;
                 sort_instances(&mut p);
+                p.shrink_to_fit();
                 let p = std::sync::Arc::new(p);
-                state.caches.instances.put(key, p.clone());
+                if cacheable {
+                    state.caches.instances.put(key, p.clone());
+                }
                 p
             }
         };
@@ -223,10 +228,15 @@ pub struct InstEntries {
     tick: u64,
 }
 
-const INSTANCE_CACHE_BYTES: usize = 8 << 20;
+const INSTANCE_CACHE_BYTES: usize = 4 << 20;
+/// the longest window kept: the views ask for ≤ 84 days (week stream + month grid), the endless lists ≤ 120
+const INSTANCE_CACHE_MAX_DAYS: i64 = 120;
 
+/// Heap of a cached part: each non-empty String/Vec is one allocation, rounded up to 16 bytes plus
+/// 16 of allocator overhead (macOS `heap` size classes; synthetic DB: 6.0 MB estimated for 5.7 MB live-heap growth).
 fn est_bytes(v: &[Instance]) -> usize {
-    v.iter().map(|i| std::mem::size_of::<Instance>() + i.principal.len() + i.cal_id.len() + i.object_id.len() + i.uid.len() + i.summary.len() + i.location.len() + i.description.len() + i.color.len() + i.categories.iter().map(|c| c.len() + 24).sum::<usize>() + i.alarms.len() * 8).sum::<usize>() + 64
+    let a = |n: usize| if n == 0 { 0 } else { n.div_ceil(16) * 16 + 16 };
+    v.iter().map(|i| std::mem::size_of::<Instance>() + [&i.principal, &i.cal_id, &i.object_id, &i.uid, &i.summary, &i.location, &i.description, &i.color].iter().map(|s| a(s.len())).sum::<usize>() + a(i.categories.len() * 24) + i.categories.iter().map(|c| a(c.len())).sum::<usize>() + a(i.alarms.len() * 8)).sum::<usize>() + 64
 }
 
 impl InstanceCache {
@@ -644,7 +654,12 @@ pub async fn object_meta(state: &AppState, cal: &CalInfo) -> AppResult<std::sync
             }
             CalMeta { token: cal.synctoken, objs }
         }
-        None => CalMeta { token: cal.synctoken, objs: state.calendars.get_objects(&cal.principal, &cal.id).await?.into_iter().filter_map(|(id, obj)| meta_of(id, &obj)).collect() },
+        None => {
+            let mut objs: Vec<ObjMeta> = state.calendars.get_objects(&cal.principal, &cal.id).await?.into_iter().filter_map(|(id, obj)| meta_of(id, &obj)).collect();
+            // collected in place from the parsed objects' buffer: release what the records do not need
+            objs.shrink_to_fit();
+            CalMeta { token: cal.synctoken, objs }
+        }
     };
     let fresh = std::sync::Arc::new(fresh);
     let mut m = state.caches.obj_meta.0.lock().unwrap();
