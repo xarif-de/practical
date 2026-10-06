@@ -66,13 +66,23 @@ export const test = base.extend({
   page: async ({ page }, use) => {
     const inflight = new Set();
     const long = u => /\/api\/changes|\/dev\/reload/.test(u);
+    let nav = null; // the main frame's navigation request until its document commits
     page.on('request', r => {
       // a new document in the main frame: what the old one had in flight never reports an end
-      if (r.isNavigationRequest() && r.frame() === page.mainFrame()) inflight.clear();
+      if (r.isNavigationRequest() && r.frame() === page.mainFrame()) { inflight.clear(); nav = r; }
       if (!long(r.url())) inflight.add(r);
     });
-    page.on('requestfinished', r => inflight.delete(r));
-    page.on('requestfailed', r => inflight.delete(r));
+    // … nor what the old document requested after the navigation began: its icon sprite, seen between a reload's
+    // request and its commit, kept settle() waiting for its 15 s limit (twice per run of settings.spec's categories
+    // test). At the commit only the navigation itself can be the new document's.
+    page.on('framenavigated', f => {
+      if (f !== page.mainFrame() || !nav) return;
+      for (const r of inflight) if (r !== nav) inflight.delete(r);
+      nav = null;
+    });
+    const done = r => { inflight.delete(r); if (r === nav) nav = null; }; // a navigation without a commit (download)
+    page.on('requestfinished', done);
+    page.on('requestfailed', done);
     page.__inflight = inflight;
     page.__dialogs = [];
     page.on('dialog', d => { page.__dialogs.push(d.message()); d.dismiss().catch(() => {}); });
