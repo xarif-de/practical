@@ -5,6 +5,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { OUT } from './env.mjs';
 import { settle } from './test.mjs';
+import { recordThemeRules } from './theme-cover.mjs';
 import { clock, mark } from './timing.mjs';
 
 // the visual properties digested per element (and per ::before/::after with content)
@@ -151,6 +152,7 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
   fs.writeFileSync(base + '.dom.html.gz', zlib.gzipSync(html, { level: 9 }));
   fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(style, { level: 9 }));
   if (process.env.E2E_FULL_STYLE === '1') fs.writeFileSync(base + '.fullstyle.json.gz', zlib.gzipSync(JSON.stringify(await page.evaluate(fullDump)), { level: 6 }));
+  await recordThemeRules(page, testInfo, name);
   const c4 = clock();
   Object.assign(t, { settle: c1 - c0, shot: c2 - c1, dump: c3 - c2, write: c4 - c3, segs: 0, segSettle: 0, segShot: 0, restore: 0 });
   const main = page.locator('main.main');

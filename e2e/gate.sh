@@ -2,7 +2,8 @@
 # The checks a change passes, cheapest first; stops at the first failure.
 #   gate.sh quick            cargo test → server build (E2E_PROFILE, default e2e) → functional suite
 #   gate.sh full <ref-dir>   quick → visual baseline of this checkout → compare against <ref-dir> (or E2E_REF): a
-#                            baseline of the change's base commit, same fixture, same machine
+#                            baseline of the change's base commit, same fixture, same machine → every colour rule
+#                            shown by a dark state (theme-cover.mjs)
 # Env as for the suites: E2E_PORT (functional: E2E_PORT … +2×E2E_WORKERS−1), E2E_FIXTURE, E2E_WORKERS (default 4),
 # E2E_OUT (the new baseline, default ~/.cache/practical-e2e/<sha>[+dirty]). quick has no visual part: no rule
 # derives the states a change can reach from the files it touches (a CSS rule, a template, a locale string or a
@@ -42,5 +43,8 @@ if [ "$MODE" = full ]; then
   echo "== compare $REF → $OUT"
   node compare.mjs "$REF" "$OUT"
   step "compare"
+  echo "== colour rules shown in dark (theme-cover.mjs)"
+  node theme-cover.mjs "$OUT"
+  step "theme-cover"
 fi
 printf "gate %s passed in %s s:\n$SUMMARY" "$MODE" "$(( $(date +%s) - T0 ))"

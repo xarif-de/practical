@@ -61,6 +61,20 @@ shot('tasks board, timeline, history', async (page, snap) => {
   await snap('tk-history-day');
 });
 
+shot('tasks history: every heat level', async (page, snap) => {
+  // the fixture completed two tasks, on two days (level 1): the page's own data gets more per-day counts, which the
+  // heat map alone reads (app.js vHistory, level = min(3, count)) — the levels 2 and 3 had no state (e2e/theme-cover.mjs)
+  await page.route(u => u.pathname === '/tasks', async route => {
+    const r = await route.fetch();
+    const html = (await r.text()).replace(/"per_day":\{(\}?)/, (_, end) => `"per_day":{"2026-10-05":2,"2026-10-06":3,"2026-10-07":5${end || ','}`);
+    if (!html.includes('"2026-10-07":5')) throw new Error('tasks-data: no per_day to extend');
+    await route.fulfill({ response: r, body: html });
+  });
+  await view(page, 'history');
+  await expect(page.locator('.tkhm .dy[data-n="3"]')).toHaveCount(2);
+  await snap('tk-history-levels', dialog);
+});
+
 shot('tasks deck and its keys', async (page, snap) => {
   await view(page, 'deck');
   await expect(page.locator('.tkdeck')).toBeFocused();

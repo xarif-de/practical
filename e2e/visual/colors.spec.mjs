@@ -1,6 +1,7 @@
 // Colour picker family (inventory §2.4): popover (.cpk) from the editor and from the settings' collection
 // pages, the new-colour dialog (.cpk-ask) in each tab and slider mode, the settings colours page and the
 // optimiser dialog (.cfo-wrap). Read-only: nothing is picked for real (a pick in the editor stays in the form).
+import { expect } from '../lib/test.mjs';
 import { shot } from '../lib/visual.mjs';
 import { EV, ds, openEvent, unlock } from './_editor.mjs';
 
@@ -74,4 +75,32 @@ shot('colours page, a row popover and the optimiser @main', async (page, snap) =
     await page.locator('.cfo-wrap .cfo-dh [data-x]').click();
     await page.locator('.cfo-wrap').waitFor({ state: 'detached' });
   }
+});
+
+shot('colour optimiser: a group dragged onto another action, the manual result', async (page, snap) => {
+  // the drag's drop target, the split line, the manual marks and a hovered result had no state (e2e/theme-cover.mjs);
+  // nothing is applied (the dialog is closed with ×)
+  await page.goto('/settings#colors');
+  await page.locator('#colors-list .cfo-opt[data-opt="event"]').click();
+  await page.locator('.cfo-wrap .cfo-body .cfo-level').waitFor();
+  const lanes = page.locator('.cfo-wrap .cfo-lane');
+  await expect(lanes).toHaveCount(3);
+  const centre = async l => { const b = await l.boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2, b]; };
+  const [sx, sy] = await centre(lanes.nth(0).locator('.cfo-src'));
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  const [, ty, tb] = await centre(lanes.nth(2));
+  await page.mouse.move(sx, ty, { steps: 4 }); // onto the third action: joins it
+  await expect(lanes.nth(2)).toHaveClass(/\bdrop\b/);
+  await snap('cpk-cfo-drag-join', { segments: 0 });
+  await page.mouse.move(sx, tb.y + tb.height + 2, { steps: 2 }); // below its bottom edge: an action of its own
+  await page.locator('.cfo-wrap .cfo-sep').waitFor();
+  await snap('cpk-cfo-drag-split', { segments: 0 });
+  await page.mouse.move(sx, ty, { steps: 2 });
+  await page.mouse.up();
+  await expect(page.locator('.cfo-wrap .cfo-lane.manual')).not.toHaveCount(0);
+  await page.locator('.cfo-wrap .cfo-lane.manual .cfo-res').first().hover();
+  await snap('cpk-cfo-moved', { segments: 0 });
+  await page.locator('.cfo-wrap .cfo-dh [data-x]').click();
+  await page.locator('.cfo-wrap').waitFor({ state: 'detached' });
 });

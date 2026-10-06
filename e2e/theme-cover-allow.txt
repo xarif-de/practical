@@ -1,0 +1,136 @@
+# Colour rules of style.css/history.css no dark state shows (theme-cover.mjs, run by gate.sh full): <selector as listed>⇥<reason>.
+# The backlog of 2026-10-06 (133 rules): a state that shows one makes its line STALE — delete the line. A NEW colour rule
+# no dark state shows fails the gate: add a state that shows it (or, when no state can, a line here with the reason).
+.day:nth-child(7n+7) .ev.span.start	no dark state reaches it
+.day:nth-child(7n+7) .ev.span.mid	no dark state reaches it
+.day:nth-child(7n+1) .ev.span.mid, .day:nth-child(7n+1) .ev.span.end	no dark state reaches it
+.sres .r:hover	hover: no state hovers it
+.sres .r.more:hover, .sres .r.more.on	hover: no state hovers it
+.sres .r.hist .hx:hover	hover: no state hovers it
+.sres .r .why.sm	no dark state reaches it
+.dayblock:not(.sel):hover .dl	hover: no state hovers it
+#title:hover	hover: no state hovers it
+.orbit .mnode:hover circle, .orbit .ynode:hover circle, .orbit .ybtn:hover circle	hover: no state hovers it
+.picker .centre .day:hover	hover: no state hovers it
+.more .pop a:hover	hover: no state hovers it
+.more .pop a[aria-pressed="true"]	no dark state reaches it
+.toast.error	no dark state reaches it
+.filter .row-link:hover	hover: no state hovers it
+.v-month > .month > .day:not(.sel, .today):hover	hover: no state hovers it
+.doc article.lnk:hover h3	hover: no state hovers it
+.doc .meta	no dark state reaches it
+.doc .meta span	no dark state reaches it
+.doc .cp:hover, .doc .cp.ok	hover: no state hovers it
+.doc .cp:hover .ico, .doc .cp.ok .ico	hover: no state hovers it
+.sheet [contenteditable]:focus	keyboard focus: no state focuses it
+.sheet tr:hover td	hover: no state hovers it
+.list li:not(.on):hover	hover: no state hovers it
+.planner .c[data-date]:not(.sel):hover	hover: no state hovers it
+.brg small	no dark state reaches it
+.cd.over .ring	no dark state reaches it
+.cd.over .ring b	no dark state reaches it
+.cd.over	no dark state reaches it
+.list .note	no dark state reaches it
+.cardform .act:hover	hover: no state hovers it
+.cardform .rm:hover	hover: no state hovers it
+.cardform .addmenu .pop button:hover	hover: no state hovers it
+.ed .cardform .aldet input[data-w="n"].err	no dark state reaches it
+.ed .cardform .aldet .pset:hover:not(:disabled)	hover: no state hovers it
+.ed .cardform .aldet .pset:focus-visible	keyboard focus: no state focuses it
+.ed .cardform .rr .wrow b:hover	hover: no state hovers it
+.ed .cardform .rr .weeks.pick b:not(.past):hover	hover: no state hovers it
+.ed .cardform .rr .pickmsg	no dark state reaches it
+.rrpop button:hover	hover: no state hovers it
+.rrpop button.ok	no dark state reaches it
+.rrpop input	no dark state reaches it
+.ed .cardform .pchip.dec	no dark state reaches it
+.ed .cardform .pst.dec	no dark state reaches it
+.ed .cardform .pst.dec::before	no dark state reaches it
+.ed .cardform .pst.ten	no dark state reaches it
+.ed .cardform .pst.ten::before	no dark state reaches it
+.ed .cardform .pst.del::before	no dark state reaches it
+.ed .cardform .pdetail .act[data-n]::after	no dark state reaches it
+.rrpop .pk small	no dark state reaches it
+.ed .cardform .nt-view a	no dark state reaches it
+.ed .cardform .nt-view .nt-m[data-k="!"]	no dark state reaches it
+.ed .cardform .nt-found .pillbtn small	no dark state reaches it
+.ed .cardform .ct-row.over	no dark state reaches it
+.ed .cardform .ct-fx a	no dark state reaches it
+.ed .cardform .ct-tag:hover	hover: no state hovers it
+button.rbadge:hover	hover: no state hovers it
+.ed .cardform .lk-drop.over	no dark state reaches it
+.ed .cardform .lk-msg	no dark state reaches it
+.ed .cardform .lk-msg.err	no dark state reaches it
+.rrpop .lk-none	no dark state reaches it
+.ed .cardform .field .sync	no dark state reaches it
+.ed .cardform .field.stale input	no dark state reaches it
+.ed .cardform .field.stale .act.map, .ed .cardform .act.map.stale	no dark state reaches it
+.ed .cardform .locwrap .ctdown circle	no dark state reaches it
+.ed .cardform .sugg button:hover, .ed .cardform .sugg button[aria-selected="true"]	hover: no state hovers it
+.geomap footer .val.unknown	no dark state reaches it
+.geomap .btn.hot	no dark state reaches it
+.ed .cardform .field.loc.err input	no dark state reaches it
+.ed .cardform .locsub .chip b:hover	hover: no state hovers it
+.ed .cardform .locsub .chip.err	no dark state reaches it
+.ed .cardform .locsub .errtxt	no dark state reaches it
+.ed .cardform .act.map.hot	no dark state reaches it
+.tcb:hover	hover: no state hovers it
+.tkmain .sheet input:focus, .tkmain .sheet select:focus	keyboard focus: no state focuses it
+.sheet td.cardcell:hover	hover: no state hovers it
+.sheet td.cardcell .ico	no dark state reaches it
+.tkmain .sheet td.saved	no dark state reaches it
+.tkmain .sheet [contenteditable][data-f]:empty::after	no dark state reaches it
+.tkmain .sheet td:hover select	hover: no state hovers it
+.tkkc:hover	hover: no state hovers it
+.tkkc.sel	no dark state reaches it
+.tkdeck .cd h3.off	no dark state reaches it
+.tkdeck .cd .dsc	no dark state reaches it
+.tkdl .ri:hover	hover: no state hovers it
+.contacts .sheet tr[data-key]:not(.on):hover td, .tkmain .sheet tr[data-key]:not(.sel):hover td	hover: no state hovers it
+.tktl .bar2.sel	no dark state reaches it
+.tknd .tchip.sel, .tkdl .ri.sel	no dark state reaches it
+.tkdl .ri.sel	no dark state reaches it
+.tksent	no dark state reaches it
+.set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover	hover: no state hovers it
+.vac-tools .chip:hover	hover: no state hovers it
+.vac-note	no dark state reaches it
+.snp-es .snp-plus:hover, .snp-plus:focus-visible	hover: no state hovers it
+.set .snp-edit .snp-err	no dark state reaches it
+.set .toggle input:focus-visible + i	keyboard focus: no state focuses it
+.cpk-btn:hover:not(:disabled) i	hover: no state hovers it
+.cpk-btn:focus-visible	keyboard focus: no state focuses it
+.cpk-sw	no dark state reaches it
+.cpk-sw:focus-visible	keyboard focus: no state focuses it
+.cpk-sw.inh	no dark state reaches it
+.cpk-sw.inh[aria-checked="true"]	no dark state reaches it
+.cpk-sw.cpk-add:hover	hover: no state hovers it
+.cpk-near .bad	no dark state reaches it
+.cpk-near .meh	no dark state reaches it
+.cpk-near .same	no dark state reaches it
+.cpk-sugg button[aria-checked="true"]	no dark state reaches it
+.cfo-opt:hover	hover: no state hovers it
+.cfo-opt:focus-visible	keyboard focus: no state focuses it
+.cfo-notes .warn	no dark state reaches it
+.cfo-notes .info	no dark state reaches it
+.cfo-svg path.off	no dark state reaches it
+.cfo-src.excl	no dark state reaches it
+.cfo-mini:hover, .cfo-mini:focus-visible	hover: no state hovers it
+.cfo-mini.on	no dark state reaches it
+.cfo-mid.off	no dark state reaches it
+.cfo-mid:focus-visible, .cfo-res:focus-visible	keyboard focus: no state focuses it
+.cfo-mid.off .cfo-ck	no dark state reaches it
+.cfo-res.pinned	no dark state reaches it
+.cfo-res.warn	no dark state reaches it
+.hx-av.dev	no dark state reaches it
+.hx-act.move	no dark state reaches it
+.hx-el:hover	hover: no state hovers it
+.hx-kept	no dark state reaches it
+.hx-chip:hover	hover: no state hovers it
+.hx-chip.el	no dark state reaches it
+.hx-fg label:hover	hover: no state hovers it
+.hxg-l small	no dark state reaches it
+.hxg-n.h	no dark state reaches it
+.hxc-dot.inactive	no dark state reaches it
+.hxc-tab td.hxc-vx	no dark state reaches it
+.hxc-tab td.hxc-vg	no dark state reaches it
+.hxc-hist li button:hover	hover: no state hovers it
