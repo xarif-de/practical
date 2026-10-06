@@ -1,0 +1,57 @@
+{#- Markup written once (askama macros): `{% import "macros.html" as m %}`, then `{{ m::ico("x") }}`.
+    A call renders exactly the markup it replaced (bodies are trimmed at both ends only). The callers' `ctx` is in scope; labels are passed translated (`ctx.t(…)` with the key literal at the call site keeps
+    the key visible to the i18n key scan, src/i18n/pinned.rs). -#}
+
+{#- a sprite symbol (layout.html) as an inline icon; `ico_c` adds classes (only-new/only-edit, the scheme states) -#}
+{%- macro ico(name) -%}<svg class="ico" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro -%}
+{%- macro ico_c(name, cls) -%}<svg class="ico {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro -%}
+
+{%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}
+
+{#- the calendar filter popover of the calendar and tasks pages (contacts filters address books: data-ab) -#}
+{%- macro cal_filter() -%}<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}">{{ ico("filter") }}</button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
+{% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
+{{ filter_row() }}{%- endmacro -%}
+{%- macro filter_row() -%}<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a>{% if self.has_shared() %}<a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a>{% endif %}</div>{%- endmacro -%}
+
+{#- a toolbar popover trigger: the icon button of a `.filter` -#}
+{%- macro pop_btn(icon, label) -%}<button class="icon-btn" aria-haspopup="true" title="{{ label }}" aria-label="{{ label }}">{{ ico(icon) }}</button>{%- endmacro -%}
+
+{#- editor cards (contacts, events, tasks): the head with symbol, title and the edit-mode remove button -#}
+{%- macro card_h(icon, label) -%}<h3>{{ ico(icon) }}<span>{{ label }}</span><span class="grow"></span><button class="rm edits" type="button" data-card-rm title="{{ ctx.t("ct-remove-card") }}">×</button></h3>{%- endmacro -%}
+{%- macro rm_row() -%}<button class="rm" type="button" data-rm title="{{ ctx.t("ct-remove") }}">×</button>{%- endmacro -%}
+{%- macro act(kind, icon, title) -%}<button class="act" type="button" data-act="{{ kind }}" title="{{ title }}">{{ ico(icon) }}</button>{%- endmacro -%}
+{%- macro add_btn(list, label) -%}<button class="add edits" type="button" data-add="{{ list }}">{{ ico("plus") }} {{ label }}</button>{%- endmacro -%}
+
+{#- settings: the back link of a drill-in page, and a home/collection row that opens one -#}
+{%- macro back(href, label) -%}<a class="back" href="{{ href }}">‹ {{ label }}</a>{%- endmacro -%}
+{%- macro nav_cell(href, bg, icon) -%}<a class="cell link" href="{{ href }}"><span class="swatch" style="background:{{ bg }}">{{ ico(icon) }}</span>{{ caller() }}<span class="chev">›</span></span></a>{%- endmacro -%}
+
+{#- settings: the fields of a new or imported collection (calendar: with time zone); `nl` = the line break +
+    indent between the rows of the caller's markup -#}
+{%- macro coll_fields(nl, color, title, tz) -%}<label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" required></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-title="{{ title }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>{% if tz %}{{ nl }}<label class="cell noic"><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ default_timezone }}"></span></label>{% endif %}{%- endmacro -%}
+
+{#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
+    the calendar's own rows to the form -#}
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+  {{ back("#collections", ctx.t("tab-collections")) }}
+  <h2>{{ c.displayname }}</h2>
+  <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
+    {{ csrf() }}
+    <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ c.displayname }}" required></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ c.color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-kind="{{ kind }}" data-cpk-key="{{ c.principal }}/{{ c.id }}" data-cpk-title="{{ c.displayname }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
+    <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ c.description }}" placeholder="–"></span></label>
+    <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>{{ caller() }}
+  </form>
+  <p class="foot">ID <code>{{ c.id }}</code></p>
+  <div class="group sp">
+    <a class="cell btnrow" href="/settings/export/{{ kinds }}/{{ c.principal }}/{{ c.id }}">{{ ico("file-export") }}<span>{{ export_label }}</span></a>
+    <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept="{{ accept }}" hidden data-import="/settings/import/{{ kinds }}/{{ c.principal }}/{{ c.id }}"></label>
+  </div>
+  <form class="group sp" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/delete">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("group-delete-confirm") }}</button></form>
+</section>{%- endmacro -%}
+
+{#- settings trash: restore and purge of a deleted calendar or address book, the empty-list row -#}
+{%- macro restore(url) -%}<form method="post" action="{{ url }}/restore" class="inline">{{ csrf() }}<button class="link" type="submit">{{ ico("restore") }}<span>{{ ctx.t("restore") }}</span></button></form>{%- endmacro -%}
+{%- macro purge(url, name) -%}<form method="post" action="{{ url }}/purge" class="inline">{{ csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", name) }}">{{ ico("trash-2") }}<span>{{ ctx.t("purge") }}</span></button></form>{%- endmacro -%}
+{%- macro trash_empty() -%}<div class="cell noic"><span class="muted">{{ ctx.t("trash-empty") }}</span></div>{%- endmacro -%}

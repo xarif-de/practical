@@ -1,4 +1,4 @@
-<!doctype html>
+{% import "macros.html" as m %}{% let nav = [("/calendar", "calendar", ctx.t("nav-calendar")), ("/contacts", "contacts", ctx.t("nav-contacts")), ("/tasks", "tasks", ctx.t("nav-tasks")), ("/history", "history", ctx.t("nav-history")), ("/settings", "settings", ctx.t("nav-settings"))] %}{# the five pages: top bar (symbols) and tab bar (symbol + label) #}<!doctype html>
 <html lang="{{ ctx.lang }}" data-pref-scheme="{{ ctx.scheme }}"{% if ctx.scheme != "auto" %} data-scheme="{{ ctx.scheme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
@@ -131,15 +131,11 @@
 <header class="topbar">
   <a class="brand" href="/calendar">{{ ctx.t("app-name") }}</a>
   {% if ctx.user.is_some() %}
-  <nav class="nav">
-    <a href="/calendar"{% if ctx.is_active("/calendar") %} aria-current="page"{% endif %} title="{{ ctx.t("nav-calendar") }}" aria-label="{{ ctx.t("nav-calendar") }}"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></a>
-    <a href="/contacts"{% if ctx.is_active("/contacts") %} aria-current="page"{% endif %} title="{{ ctx.t("nav-contacts") }}" aria-label="{{ ctx.t("nav-contacts") }}"><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg></a>
-    <a href="/tasks"{% if ctx.is_active("/tasks") %} aria-current="page"{% endif %} title="{{ ctx.t("nav-tasks") }}" aria-label="{{ ctx.t("nav-tasks") }}"><svg class="ico" aria-hidden="true"><use href="#i-tasks"/></svg></a>
-    <a href="/history"{% if ctx.is_active("/history") %} aria-current="page"{% endif %} title="{{ ctx.t("nav-history") }}" aria-label="{{ ctx.t("nav-history") }}"><svg class="ico" aria-hidden="true"><use href="#i-history"/></svg></a>
-    <a href="/settings"{% if ctx.is_active("/settings") %} aria-current="page"{% endif %} title="{{ ctx.t("nav-settings") }}" aria-label="{{ ctx.t("nav-settings") }}"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></a>
+  <nav class="nav">{% for (href, icon, label) in nav %}
+    <a href="{{ href }}"{% if ctx.is_active(href) %} aria-current="page"{% endif %} title="{{ label }}" aria-label="{{ label }}">{{ m::ico(icon) }}</a>{% endfor %}
   </nav>
   <div class="usearch"><div class="sfield"><input id="q" type="search" placeholder="{{ ctx.t("search-placeholder") }}" autocomplete="off" spellcheck="false" aria-label="{{ ctx.t("search-placeholder") }}" aria-controls="sres" aria-autocomplete="list"><div class="ghost" id="q-ghost" aria-hidden="true"></div><div class="sres" id="sres" role="listbox" hidden></div></div>
-    <div class="filter shelp"><button class="icon-btn" type="button" aria-haspopup="true" title="{{ ctx.t("search-help") }}" aria-label="{{ ctx.t("search-help") }}"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg></button><div class="pop"><h4>{{ ctx.t("search-help") }}</h4><ul>
+    <div class="filter shelp"><button class="icon-btn" type="button" aria-haspopup="true" title="{{ ctx.t("search-help") }}" aria-label="{{ ctx.t("search-help") }}">{{ m::ico("info") }}</button><div class="pop"><h4>{{ ctx.t("search-help") }}</h4><ul>
       <li>{{ ctx.t("search-help-words") }}</li>
       <li>{{ ctx.t("search-help-scope") }} <code>{{ ctx.t("search-scope-ev") }}:</code>, <code>{{ ctx.t("search-scope-ct") }}:</code> {{ ctx.t("search-or") }} <code>{{ ctx.t("search-scope-tk") }}:</code></li>
       <li>{{ ctx.t("search-help-date") }}</li>
@@ -148,7 +144,7 @@
     </ul><p class="keys"><kbd>/</kbd> {{ ctx.t("search-key-focus") }} · <kbd>↑</kbd><kbd>↓</kbd> {{ ctx.t("search-key-move") }} · <kbd>Enter</kbd> {{ ctx.t("search-key-open") }} · <kbd>Tab</kbd> {{ ctx.t("search-key-tab") }} · <kbd>Esc</kbd> {{ ctx.t("search-key-esc") }}</p></div></div></div>
   {% block filter %}{% endblock %}
   {% endif %}
-  <button class="icon-btn" id="scheme" title="{{ ctx.t("pref-scheme") }}: {% if ctx.scheme == "light" %}{{ ctx.t("scheme-light") }}{% else if ctx.scheme == "dark" %}{{ ctx.t("scheme-dark") }}{% else %}{{ ctx.t("scheme-auto") }}{% endif %}" aria-label="{{ ctx.t("scheme-toggle") }}" data-t-auto="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-auto") }}" data-t-light="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-light") }}" data-t-dark="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-dark") }}"><svg class="ico s-auto" aria-hidden="true"><use href="#i-scheme-auto"/></svg><svg class="ico s-light" aria-hidden="true"><use href="#i-sun"/></svg><svg class="ico s-dark" aria-hidden="true"><use href="#i-moon"/></svg></button>
+  <button class="icon-btn" id="scheme" title="{{ ctx.t("pref-scheme") }}: {% if ctx.scheme == "light" %}{{ ctx.t("scheme-light") }}{% else if ctx.scheme == "dark" %}{{ ctx.t("scheme-dark") }}{% else %}{{ ctx.t("scheme-auto") }}{% endif %}" aria-label="{{ ctx.t("scheme-toggle") }}" data-t-auto="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-auto") }}" data-t-light="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-light") }}" data-t-dark="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-dark") }}">{{ m::ico_c("scheme-auto", "s-auto") }}{{ m::ico_c("sun", "s-light") }}{{ m::ico_c("moon", "s-dark") }}</button>
   {% if ctx.user.is_some() %}
   <div class="filter user">
     <button class="avatar" aria-haspopup="true" title="{{ ctx.user_id() }}">{{ ctx.initials() }}</button>
@@ -158,7 +154,7 @@
       {# AGPL-3.0 §13: the source of this service, offered to everyone who uses it #}
       <a class="row-link" href="{{ ctx.source_url() }}" target="_blank" rel="noopener">{{ ctx.t("source-code") }}</a>
       <p class="muted small src-note">PractiCal {{ ctx.version() }} · <a href="{{ ctx.rustical_source_url() }}" target="_blank" rel="noopener">RustiCal {{ ctx.rustical_version() }}</a> · AGPL-3.0</p>
-      <form method="post" action="/logout" class="row-form"><input type="hidden" name="csrf" value="{{ ctx.csrf }}"><button type="submit" class="btn"><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg><span>{{ ctx.t("logout") }}</span></button></form>
+      <form method="post" action="/logout" class="row-form">{{ m::csrf() }}<button type="submit" class="btn">{{ m::ico("logout") }}<span>{{ ctx.t("logout") }}</span></button></form>
     </div>
   </div>
   {% endif %}
@@ -169,12 +165,8 @@
 {# a toast, not a banner: fixed, so it never pushes the page down #}
 {% if let Some(f) = ctx.flash %}<div class="toast {{ f.kind }}" role="{% if f.kind == "error" %}alert{% else %}status{% endif %}"><span>{{ f.text }}</span><button type="button" class="toast-x" aria-label="{{ ctx.t("ed-close") }}">×</button></div>{% endif %}
 {% if ctx.user.is_some() %}
-<nav class="tabbar">
-  <a href="/calendar"{% if ctx.is_active("/calendar") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg><span>{{ ctx.t("nav-calendar") }}</span></a>
-  <a href="/contacts"{% if ctx.is_active("/contacts") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-contacts"/></svg><span>{{ ctx.t("nav-contacts") }}</span></a>
-  <a href="/tasks"{% if ctx.is_active("/tasks") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-tasks"/></svg><span>{{ ctx.t("nav-tasks") }}</span></a>
-  <a href="/history"{% if ctx.is_active("/history") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-history"/></svg><span>{{ ctx.t("nav-history") }}</span></a>
-  <a href="/settings"{% if ctx.is_active("/settings") %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span>{{ ctx.t("nav-settings") }}</span></a>
+<nav class="tabbar">{% for (href, icon, label) in nav %}
+  <a href="{{ href }}"{% if ctx.is_active(href) %} aria-current="page"{% endif %}>{{ m::ico(icon) }}<span>{{ label }}</span></a>{% endfor %}
 </nav>
 {% endif %}
 </div>
