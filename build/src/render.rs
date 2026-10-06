@@ -474,12 +474,12 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
 const BYDAY: [&str; 7] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
 pub fn ico(name: &str) -> String {
-    format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-{name}\"/></svg>")
+    format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"{}#i-{name}\"/></svg>", crate::routes::assets::icons())
 }
 
 /// Same icon, painted in a colour of its own — the calendar's, in the day document.
 fn ico_c(name: &str, color: &str) -> String {
-    format!("<svg class=\"ico\" aria-hidden=\"true\" style=\"color:{}\"><use href=\"#i-{name}\"/></svg>", e(color))
+    format!("<svg class=\"ico\" aria-hidden=\"true\" style=\"color:{}\"><use href=\"{}#i-{name}\"/></svg>", e(color), crate::routes::assets::icons())
 }
 
 /// An RRULE in words. Parts the sentence cannot carry (BYSETPOS, several ordinals, …) are left out

@@ -2,9 +2,9 @@
     A call renders exactly the markup it replaced (bodies are trimmed at both ends only). The callers' `ctx` is in scope; labels are passed translated (`ctx.t(…)` with the key literal at the call site keeps
     the key visible to the i18n key scan, src/i18n/pinned.rs). -#}
 
-{#- a sprite symbol (layout.html) as an inline icon; `ico_c` adds classes (only-new/only-edit, the scheme states) -#}
-{%- macro ico(name) -%}<svg class="ico" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro -%}
-{%- macro ico_c(name, cls) -%}<svg class="ico {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro -%}
+{#- a symbol of the icon sprite (assets/icons.svg) as an inline icon; `ico_c` adds classes (only-new/only-edit, the scheme states) -#}
+{%- macro ico(name) -%}<svg class="ico" aria-hidden="true"><use href="{{ ctx.icons()|safe }}#i-{{ name }}"/></svg>{%- endmacro -%}
+{%- macro ico_c(name, cls) -%}<svg class="ico {{ cls }}" aria-hidden="true"><use href="{{ ctx.icons()|safe }}#i-{{ name }}"/></svg>{%- endmacro -%}
 
 {%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}
 

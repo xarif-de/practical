@@ -27,6 +27,15 @@ const ASSETS: &[(&str, &str, Minify)] = &[
     ("history.css", "text/css; charset=utf-8", Minify::Css),
     ("sw.js", "text/javascript; charset=utf-8", Minify::Js),
     ("icon.svg", "image/svg+xml", Minify::No),
+    // the icon sprite of every <use> (layout.html carried it inline: 34 KB raw / 8 KB gzip per page)
+    ("icons.svg", "image/svg+xml", Minify::No),
+    // the colour scheme before the first paint (layout.html <head>, parser-blocking; was inline)
+    ("theme.js", "text/javascript; charset=utf-8", Minify::Js),
+    // app.js' strings (the js-* messages of locales/<lang>.ftl), one file per language (was a JSON block per page)
+    ("i18n-de.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-en.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-fr.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-es.js", "text/javascript; charset=utf-8", Minify::I18n),
     // Leaflet 1.9.4 (BSD-2), vendored; fetched by the browser only when the map dialog opens.
     // Shipped as vendored (leaflet.js is upstream's minified build; both keep their licence header).
     ("leaflet.js", "text/javascript; charset=utf-8", Minify::No),
@@ -38,6 +47,8 @@ enum Minify {
     Js,
     Css,
     No,
+    /// generated from locales/ (i18n_js), not a file in assets/
+    I18n,
 }
 
 /// Parser-based (oxc): a syntax error fails the build instead of shipping broken code. Classic
@@ -57,8 +68,34 @@ fn minify_js(name: &str, src: &str) -> String {
     Codegen::new().with_options(CodegenOptions { minify: true, comments, ..CodegenOptions::default() }).with_scoping(ret.scoping).build(&program).code
 }
 
+/// `var I18N={…};` — what src/i18n.rs `js_json(lang)` formats (test `i18n_assets_are_the_runtime_strings`):
+/// every `js-*` message id of de.ftl, formatted in `lang`, else English, else German.
+fn i18n_js(lang: &str) -> String {
+    use fluent_bundle::FluentResource;
+    use fluent_bundle::concurrent::FluentBundle;
+    let ftl = |l: &str| fs::read_to_string(format!("locales/{l}.ftl")).unwrap_or_else(|e| panic!("locales/{l}.ftl: {e}"));
+    let bundle = |l: &str| {
+        let mut b = FluentBundle::new_concurrent(vec![l.parse::<unic_langid::LanguageIdentifier>().expect("language id")]);
+        b.set_use_isolating(false); // as src/i18n.rs
+        b.add_resource(FluentResource::try_new(ftl(l)).unwrap_or_else(|(_, e)| panic!("locales/{l}.ftl: {e:?}"))).expect("duplicate message ids");
+        b
+    };
+    let chain = [bundle(lang), bundle("en"), bundle("de")];
+    let mut m = serde_json::Map::new();
+    // message ids as src/i18n.rs `keys_of` reads them (continuation lines and comments skipped)
+    for k in ftl("de").lines().filter(|l| !l.starts_with(' ') && !l.starts_with('#')).filter_map(|l| l.split_once(" = ").or_else(|| l.strip_suffix(" =").map(|k| (k, ""))).map(|(k, _)| k.trim())).filter(|k| k.starts_with("js-") && !k.contains(' ')) {
+        let b = chain.iter().find(|b| b.get_message(k).and_then(|m| m.value()).is_some()).unwrap_or_else(|| panic!("{k}: no value"));
+        let mut errors = vec![];
+        let v = b.format_pattern(b.get_message(k).unwrap().value().unwrap(), None, &mut errors).into_owned();
+        assert!(errors.is_empty(), "{lang}/{k}: {errors:?} (app.js fills %name placeholders, not Fluent variables)");
+        m.insert(k.to_string(), serde_json::Value::String(v));
+    }
+    format!("var I18N={};", serde_json::Value::Object(m))
+}
+
 fn assets() {
     println!("cargo:rerun-if-changed=assets");
+    println!("cargo:rerun-if-changed=locales");
     let out = std::env::var("OUT_DIR").expect("OUT_DIR");
     // one thread per file: brotli 11 is the slow part (app.js ≈ 1 s), the files are independent
     let lens: Vec<usize> = std::thread::scope(|s| {
@@ -66,8 +103,9 @@ fn assets() {
         jobs.into_iter().map(|j| j.join().expect("asset build panicked")).collect()
     });
     let mut table = String::from("&[\n");
-    for (&(name, mime, _), len) in ASSETS.iter().zip(lens) {
-        writeln!(table, "    Asset {{ name: {name:?}, mime: {mime:?}, len: {len}, gzip: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.gz\")), br: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.br\")) }},").unwrap();
+    for (&(name, mime, how), len) in ASSETS.iter().zip(lens) {
+        let generated = how == Minify::I18n;
+        writeln!(table, "    Asset {{ name: {name:?}, mime: {mime:?}, len: {len}, generated: {generated}, gzip: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.gz\")), br: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.br\")) }},").unwrap();
     }
     table.push(']');
     fs::write(format!("{out}/assets.rs"), table).unwrap();
@@ -76,9 +114,10 @@ fn assets() {
 /// Writes OUT_DIR/<name>{,.gz,.br}; returns the minified size.
 fn build_asset(name: &str, how: Minify) -> usize {
     let out = std::env::var("OUT_DIR").expect("OUT_DIR");
-    let src = fs::read(format!("assets/{name}")).unwrap_or_else(|e| panic!("assets/{name}: {e}"));
+    let lang = name.strip_prefix("i18n-").and_then(|n| n.strip_suffix(".js"));
+    let src = if how == Minify::I18n { i18n_js(lang.expect("i18n-<lang>.js")).into_bytes() } else { fs::read(format!("assets/{name}")).unwrap_or_else(|e| panic!("assets/{name}: {e}")) };
     let body = match how {
-        Minify::No => src,
+        Minify::No | Minify::I18n => src,
         Minify::Js => minify_js(name, std::str::from_utf8(&src).expect("UTF-8")).into_bytes(),
         Minify::Css => css_min::minify_css(std::str::from_utf8(&src).expect("UTF-8")).into_bytes(),
     };

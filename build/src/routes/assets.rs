@@ -1,8 +1,11 @@
-//! Static assets compiled into the binary (eight files; no rust-embed needed). build.rs minifies
-//! them and stores a gzip and a brotli form, so no request compresses anything: a br client gets
-//! the brotli bytes, a gzip client the gzip bytes, any other client the gzip form decoded once.
-//! `?v=<asset_version()>` URLs (every <link>/<script> the pages write) are cached as immutable.
-//! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached.
+//! Static assets compiled into the binary (the files of assets/ and the per-language i18n scripts
+//! build.rs generates; no rust-embed needed). build.rs minifies them and stores a gzip and a brotli
+//! form, so no request compresses anything: a br client gets the brotli bytes, a gzip client the gzip
+//! bytes, any other client the gzip form decoded once. `?v=<asset_version()>` URLs (the <link>/<script>
+//! tags of the pages) and `url()`s (`?v=` of the file's own hash: the icon sprite, the i18n scripts) are
+//! cached as immutable.
+//! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached
+//! (a generated file the directory lacks: the embedded one).
 
 use crate::state::SharedState;
 use axum::Router;
@@ -17,6 +20,8 @@ struct Asset {
     mime: &'static str,
     /// size of the minified file (the identity form)
     len: usize,
+    /// made by build.rs (i18n-<lang>.js), no file in assets/
+    generated: bool,
     gzip: &'static [u8],
     br: &'static [u8],
 }
@@ -42,9 +47,34 @@ fn etags() -> &'static Vec<String> {
 }
 
 pub fn asset_version() -> &'static str {
-    // cache-busting query for <link>/<script> tags: changes whenever any asset changes
+    // cache-busting query for <link>/<script> tags: changes whenever any asset changes (16 base64url
+    // characters of a hash over every asset's ETag base)
     static V: OnceLock<String> = OnceLock::new();
-    V.get_or_init(|| etags().iter().map(|e| &e[..4]).collect::<String>())
+    V.get_or_init(|| {
+        use base64ct::Encoding;
+        use sha2::{Digest, Sha256};
+        let h = Sha256::digest(etags().concat());
+        base64ct::Base64UrlUnpadded::encode_string(&h[..12])
+    })
+}
+
+/// `?v=` of one file: 8 characters of its own ETag base (48 bits), so its URL stays while other files change.
+fn own_version(i: usize) -> &'static str {
+    &etags()[i][..8]
+}
+
+/// `/assets/<name>?v=<own version>`, immutable: for a file a page names many times (the icon sprite in every
+/// `<use>`) or that a change of another file must not invalidate (one i18n script per language). None for
+/// an unknown name.
+pub fn url(name: &str) -> Option<&'static str> {
+    static U: OnceLock<Vec<String>> = OnceLock::new();
+    let urls = U.get_or_init(|| ASSETS.iter().enumerate().map(|(i, a)| format!("/assets/{}?v={}", a.name, own_version(i))).collect());
+    ASSETS.iter().position(|a| a.name == name).map(|i| urls[i].as_str())
+}
+
+/// The icon sprite's URL: `<use href="{icons()}#i-x">` (macros.html, render.rs; app.js reads it from <meta name=icons>).
+pub fn icons() -> &'static str {
+    url("icons.svg").expect("icons.svg is an asset")
 }
 
 /// The identity form, decoded from the gzip bytes the first time a client asks for it.
@@ -117,12 +147,15 @@ async fn serve(State(state): State<SharedState>, Path(name): Path<String>, RawQu
     if let Some(dir) = &state.config.dev_assets_dir {
         return match tokio::fs::read(std::path::Path::new(dir).join(a.name)).await {
             Ok(body) => finish(body.into_response(), a, "no-store"),
+            // build.rs made it from locales/ (`mise run dev` rebuilds on a locale edit): no file to read
+            Err(e) if a.generated && e.kind() == std::io::ErrorKind::NotFound => finish(identity(i).into_response(), a, "no-store"),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{dir}/{}: {e}", a.name)).into_response(),
         };
     }
     // The exact current version only: a page of an older (or newer) process asking for its own
     // version gets today's bytes, which must not be pinned for a year under that URL.
-    let versioned = query.as_deref().and_then(|q| q.strip_prefix("v=")) == Some(asset_version());
+    let v = query.as_deref().and_then(|q| q.strip_prefix("v="));
+    let versioned = v == Some(asset_version()) || v == Some(own_version(i));
     let cache = if versioned { "public, max-age=31536000, immutable" } else { "public, max-age=86400, must-revalidate" };
     let coding = if accepts(&headers, "br") {
         Coding::Br

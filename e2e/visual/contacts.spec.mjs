@@ -37,7 +37,7 @@ shot('contacts list: sort by birthday, descending', async (page, snap) => {
   await list(page);
   await page.selectOption('#ct-sort', 'bday');
   await page.click('#ct-dir');
-  await expect(page.locator('#ct-dir use')).toHaveAttribute('href', '#i-sort-desc');
+  await expect(page.locator('#ct-dir use')).toHaveAttribute('href', /#i-sort-desc$/); // the sprite file's URL + the symbol
   await snap('ct-list-sort-bday-desc');
 });
 

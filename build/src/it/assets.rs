@@ -1,4 +1,4 @@
-//! /assets: the eight embedded files (minified + precompressed by build.rs), their types, caching,
+//! /assets: the embedded files (minified + precompressed by build.rs), their types, caching,
 //! ETag/304, content coding, the layers they bypass, and the development mode that reads them from disk.
 
 use crate::testkit::TestApp;
@@ -12,6 +12,12 @@ const FILES: &[(&str, &str)] = &[
     ("history.css", "text/css; charset=utf-8"),
     ("sw.js", "text/javascript; charset=utf-8"),
     ("icon.svg", "image/svg+xml"),
+    ("icons.svg", "image/svg+xml"),
+    ("theme.js", "text/javascript; charset=utf-8"),
+    ("i18n-de.js", "text/javascript; charset=utf-8"),
+    ("i18n-en.js", "text/javascript; charset=utf-8"),
+    ("i18n-fr.js", "text/javascript; charset=utf-8"),
+    ("i18n-es.js", "text/javascript; charset=utf-8"),
     ("leaflet.js", "text/javascript; charset=utf-8"),
     ("leaflet.css", "text/css; charset=utf-8"),
 ];
@@ -40,8 +46,8 @@ async fn embedded_assets_with_etag_and_304() {
         assert_eq!(r.header("content-encoding"), None, "{name}: no Accept-Encoding → identity");
         assert_eq!(r.header("vary").as_deref(), Some("accept-encoding"), "{name}");
         assert_eq!(r.bytes, built(name, ""), "{name}: the identity form is build.rs' minified file");
-        let on_disk = std::fs::read(format!("{}/assets/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap();
-        if name.starts_with("leaflet") || *name == "icon.svg" {
+        let on_disk = if name.starts_with("i18n-") { r.bytes.clone() } else { std::fs::read(format!("{}/assets/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap() };
+        if name.starts_with("leaflet") || name.ends_with(".svg") || name.starts_with("i18n-") {
             assert_eq!(r.bytes, on_disk, "{name}: vendored/tiny files ship as they are");
         } else {
             assert!(r.bytes.len() < on_disk.len() * 9 / 10, "{name}: minified {} of {}", r.bytes.len(), on_disk.len());
@@ -68,10 +74,58 @@ async fn embedded_assets_with_etag_and_304() {
 #[tokio::test]
 async fn asset_version_is_stable_and_used_in_pages() {
     let v = crate::routes::assets::asset_version();
-    assert_eq!(v.len(), 8 * 4, "four ETag characters per asset");
+    assert_eq!(v.len(), 16, "12 bytes of a hash over every asset, base64url");
     assert_eq!(v, crate::routes::assets::asset_version());
     let app = TestApp::new().await;
-    app.anonymous().get("/login").await.ok().has(&format!("/assets/style.css?v={v}")).has(&format!("/assets/app.js?v={v}"));
+    let page = app.anonymous().get("/login").await;
+    page.ok().has(&format!("/assets/style.css?v={v}")).has(&format!("/assets/app.js?v={v}")).has(&format!("/assets/theme.js?v={v}"));
+    // the sprite and the strings by their own version (the language: German, the default)
+    let (icons, i18n) = (crate::routes::assets::icons(), crate::routes::assets::url("i18n-de.js").unwrap());
+    assert!(icons.starts_with("/assets/icons.svg?v=") && icons.len() == "/assets/icons.svg?v=".len() + 8, "{icons}");
+    page.has(&format!("<meta name=\"icons\" content=\"{icons}\">")).has(&format!("<use href=\"{icons}#i-")).has(&format!("<script src=\"{i18n}\" defer></script>"));
+    // nothing inline any more: no sprite, no JSON strings block, no script body (the Content-Security-Policy forbids inline script)
+    assert!(!page.body.contains("<symbol") && !page.body.contains("id=\"i18n\"") && !page.body.contains("href=\"#i-"));
+    assert_eq!(page.body.matches("<script").count(), page.body.matches("<script src=").count(), "{}", page.body);
+    assert_eq!(crate::routes::assets::url("nope.js"), None);
+}
+
+/// Every symbol the pages and scripts name exists in the sprite (templates, render.rs, app.js, history.js):
+/// a missing one would render an empty icon.
+#[test]
+fn every_named_icon_is_in_the_sprite() {
+    let sprite = std::fs::read_to_string(format!("{}/assets/icons.svg", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let have: std::collections::BTreeSet<&str> = sprite.split("<symbol id=\"").skip(1).map(|s| &s[..s.find('"').unwrap()]).collect();
+    assert!(have.len() > 100, "{}", have.len());
+    let re = regex::Regex::new(r##"['"#]i-([a-z0-9-]+)['"]|ico(?:_c)?\(["']([a-z0-9-]+)["']"##).unwrap();
+    let mut missing = vec![];
+    for dir in ["templates", "assets", "src"] {
+        for e in std::fs::read_dir(format!("{}/{dir}", env!("CARGO_MANIFEST_DIR"))).unwrap() {
+            let p = e.unwrap().path();
+            if !p.is_file() || p.extension().is_some_and(|x| x == "svg") { continue; }
+            let text = std::fs::read_to_string(&p).unwrap_or_default();
+            for c in re.captures_iter(&text) {
+                let n = c.get(1).or(c.get(2)).unwrap().as_str();
+                // history.js' `ico` takes the symbol id itself ('i-restore'), everything else the name
+                let n = if n.starts_with("i-") { n.to_string() } else { format!("i-{n}") };
+                if !have.contains(n.as_str()) && !missing.contains(&n) { missing.push(n); }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "not in assets/icons.svg: {missing:?}");
+}
+
+/// build.rs formats the js-* strings itself (no runtime JSON any more): they must be exactly what the
+/// runtime bundles say, for every language.
+#[test]
+fn i18n_assets_are_the_runtime_strings() {
+    let i = crate::i18n::I18n::load();
+    for l in crate::i18n::LANGS {
+        let js = String::from_utf8(built(&format!("i18n-{l}.js"), "")).unwrap();
+        let json = js.strip_prefix("var I18N=").and_then(|j| j.strip_suffix(';')).unwrap_or_else(|| panic!("{l}: {js:.40}"));
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(v, i.js_json(l), "{l}");
+        assert!(v.as_object().unwrap().len() > 300, "{l}");
+    }
 }
 
 #[tokio::test]
@@ -84,6 +138,13 @@ async fn the_current_version_is_immutable_anything_else_revalidates() {
     // a page of another build asks for its own version: today's bytes must not be pinned under it
     for q in ["", "?v=0000", &format!("?v={v}x"), &format!("?x=1&v={v}")] {
         assert_eq!(cc(&mut a, q).await.as_deref(), Some("public, max-age=86400, must-revalidate"), "{q:?}");
+    }
+    // a file's own version (`url`) is immutable for that file only
+    let icons = crate::routes::assets::icons();
+    let own = icons.split("?v=").nth(1).unwrap();
+    for (path, want) in [(icons.to_string(), "public, max-age=31536000, immutable"), (format!("/assets/app.js?v={own}"), "public, max-age=86400, must-revalidate")] {
+        let r = a.send(Method::GET, &path, &[("accept-encoding", "br")], Body::empty()).await;
+        assert_eq!((r.status, r.header("cache-control").as_deref()), (StatusCode::OK, Some(want)), "{path}");
     }
     // unversioned by design (service worker script, notification icon)
     for name in ["sw.js", "icon.svg"] {
@@ -159,9 +220,12 @@ async fn development_mode_reads_assets_from_disk_uncached() {
     assert_eq!((r.status, r.body.as_str()), (StatusCode::OK, "body{color:red}"));
     assert_eq!(r.header("cache-control").as_deref(), Some("no-store"));
     assert_eq!(r.header("etag"), None);
-    // a known name missing on disk is a 500 naming the path
+    // a known name missing on disk is a 500 naming the path …
     let r = a.send(Method::GET, "/assets/app.js", &[], Body::empty()).await;
     assert_eq!(r.status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(r.body.contains("app.js"));
+    // … unless build.rs made it (no source file): the embedded one, uncached
+    let r = a.send(Method::GET, "/assets/i18n-fr.js", &[], Body::empty()).await;
+    assert_eq!((r.status, r.header("cache-control").as_deref(), r.bytes), (StatusCode::OK, Some("no-store"), built("i18n-fr.js", "")));
     std::fs::remove_dir_all(&dir).unwrap();
 }

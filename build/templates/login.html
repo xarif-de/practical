@@ -6,11 +6,11 @@
   <h1>{{ ctx.t("login-title") }}</h1>
   {% if error %}<div class="flash error">{{ ctx.t("login-failed") }}</div>{% endif %}
   {% if let Some(name) = oidc_name %}
-  <form method="post" action="/login/oidc" id="oidc-form">
+  <form method="post" action="/login/oidc" id="oidc-form"{% if auto_oidc %} data-auto{% endif %}>
     {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}
     <button type="submit" class="btn btn-primary wide">{{ ctx.t1("login-with", "name", name) }}</button>
   </form>
-  {% if auto_oidc %}<script>document.getElementById('oidc-form').submit();</script>
+  {% if auto_oidc %}{# app.js submits a form#oidc-form[data-auto] (no inline script: CSP) #}
   <p class="muted">{{ ctx.t("login-redirecting") }}</p>{% endif %}
   {% endif %}
   {% if allow_password_login %}

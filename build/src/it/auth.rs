@@ -80,8 +80,8 @@ async fn logout_hands_over_to_the_identity_provider_portal() {
     assert_eq!(r.location().as_deref(), Some("https://auth.example.org/logout?rd=http%3A%2F%2Flocalhost%3A4001"));
     // with both methods the login page offers both and does not jump to the IdP
     let page = app.anonymous().get("/login").await;
-    page.ok().has("id=\"oidc-form\"").has("class=\"pwform\"");
-    assert!(!page.body.contains("getElementById('oidc-form').submit()"));
+    page.ok().has("id=\"oidc-form\">").has("class=\"pwform\"");
+    assert!(!page.body.contains("data-auto"));
 }
 
 #[tokio::test]
@@ -92,10 +92,11 @@ async fn oidc_only_login_page_submits_itself_unless_asked_not_to() {
     })
     .await;
     let mut a = app.anonymous();
-    a.get("/login").await.ok().has("getElementById('oidc-form').submit()").has("Authelia");
+    // app.js submits a form marked data-auto (an inline script would break the Content-Security-Policy)
+    a.get("/login").await.ok().has("id=\"oidc-form\" data-auto>").has("Authelia");
     let manual = a.get("/login?manual=1").await;
     manual.ok();
-    assert!(!manual.body.contains(".submit()") && !manual.body.contains("pwform"));
+    assert!(!manual.body.contains("data-auto") && !manual.body.contains("pwform"));
     let csrf = manual.meta_csrf();
     let r = a.post_form_raw("/login", &[("username", "x"), ("password", "y"), ("csrf", &csrf)]).await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::FORBIDDEN, "forbidden"), "password login is off");

@@ -45,10 +45,9 @@ fn page_context_helpers() {
     assert_eq!(c.rustical_source_url(), format!("https://github.com/lennart-k/rustical/tree/v{}", env!("RUSTICAL_TAG")));
     assert_eq!(c.t1("login-with", "name", "SSO"), "Anmelden mit SSO");
     assert_eq!(c.tn("set-regions-n", "n", 4), "4 Regionen");
-    let js = c.js_i18n();
-    assert!(!js.contains('<'));
-    let v: serde_json::Value = serde_json::from_str(&js).unwrap();
-    assert!(v.as_object().unwrap().keys().all(|k| k.starts_with("js-")));
+    assert_eq!(c.i18n_src(), crate::routes::assets::url("i18n-de.js").unwrap());
+    assert_eq!(PageCtx { lang: "xx".into(), ..c.clone() }.i18n_src(), crate::routes::assets::url("i18n-en.js").unwrap(), "a language without a file reads English");
+    assert!(c.icons().starts_with("/assets/icons.svg?v="));
     assert_eq!(c.languages().len(), 4);
     assert_eq!(PageCtx { user: None, ..c }.user_id(), "");
 }

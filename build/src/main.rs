@@ -21,6 +21,7 @@ mod testkit;
 mod it;
 
 use axum::Router;
+use axum::http::header;
 use axum::routing::get;
 use config::Config;
 use rustical_store::auth::middleware::AuthenticationLayer;
@@ -93,6 +94,29 @@ async fn healthz(axum::extract::State(state): axum::extract::State<SharedState>)
     }
 }
 
+/// The Content-Security-Policy of every HTML response. No inline script at all (layout.html loads
+/// theme.js and the i18n script; app.js submits the auto-login form); style attributes stay
+/// (`'unsafe-inline'` for style-src only); images: the map dialog's OpenStreetMap tiles (app.js
+/// `L.tileLayer`) and `data:` (Leaflet sets its 1×1 GIF `emptyImageUrl` on every tile it unloads); forms post here, and the two that are answered with a redirect to the identity
+/// provider (POST /login/oidc → its authorization endpoint, on the issuer's host; POST /logout → the
+/// portal logout URL) need that origin too — browsers apply form-action to the redirect.
+pub fn content_security_policy(cfg: &config::Config) -> String {
+    let mut form = vec!["'self'".to_string()];
+    for u in [cfg.oidc.as_ref().map(|o| o.issuer.as_str()), Some(cfg.logout_url.as_str())].into_iter().flatten() {
+        if let Ok(u) = url::Url::parse(u)
+            && let o = u.origin().ascii_serialization()
+            && o != "null"
+            && !form.contains(&o)
+        {
+            form.push(o);
+        }
+    }
+    format!(
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action {}; frame-ancestors 'none'",
+        form.join(" ")
+    )
+}
+
 fn build_router(state: &SharedState) -> Result<Router, String> {
     let session_store = sessions::MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
@@ -102,6 +126,7 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         .with_http_only(true)
         .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::hours(state.config.session_hours)));
 
+    let csp = axum::http::HeaderValue::from_str(&content_security_policy(&state.config)).map_err(|e| format!("Content-Security-Policy: {e}"))?;
     let protected = Router::new()
         .merge(routes::calendar::router())
         .merge(routes::contacts::router())
@@ -126,6 +151,15 @@ fn build_router(state: &SharedState) -> Result<Router, String> {
         // (assets come precompressed from build.rs).
         .merge(routes::assets::router())
         .route("/healthz", get(healthz))
+        .layer(axum::middleware::map_response(move |mut r: axum::response::Response| {
+            let csp = csp.clone();
+            async move {
+                if r.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/html")) {
+                    r.headers_mut().entry(header::CONTENT_SECURITY_POLICY).or_insert(csp);
+                }
+                r
+            }
+        }))
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone()))
 }
@@ -227,6 +261,22 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::check_rustical_image;
+
+    /// form-action names the identity provider's origin (login and logout redirect there), once
+    #[test]
+    fn content_security_policy_allows_the_identity_provider() {
+        let mut c = crate::testkit::config("/nonexistent.sqlite3");
+        assert!(super::content_security_policy(&c).contains("; form-action 'self'; frame-ancestors 'none'"));
+        c.oidc = Some(crate::config::OidcSettings { name: "A".into(), issuer: "https://auth.example.org/realm/x".into(), client_id: "c".into(), client_secret: None, scopes: vec![] });
+        c.logout_url = "https://auth.example.org/logout?rd={url}".into();
+        assert!(super::content_security_policy(&c).contains("; form-action 'self' https://auth.example.org; "));
+        c.logout_url = "https://sso.example.net:8443/bye".into();
+        let p = super::content_security_policy(&c);
+        assert!(p.contains("; form-action 'self' https://auth.example.org https://sso.example.net:8443; "), "{p}");
+        for d in ["default-src 'self'", "script-src 'self';", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: https://tile.openstreetmap.org;", "connect-src 'self'", "worker-src 'self'", "object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'"] {
+            assert!(p.contains(d), "{d}: {p}");
+        }
+    }
 
     #[test]
     fn image_tag_check() {

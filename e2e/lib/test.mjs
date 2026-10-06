@@ -31,6 +31,8 @@ function initScript([css]) {
   document.addEventListener('DOMContentLoaded', add);
   // window.open/alert never leave the page: record instead
   window.__opened = []; window.open = (u, t) => { window.__opened.push(String(u)); return null; };
+  // Content-Security-Policy (B19): every violation is reported to the test (the page fixture fails on one)
+  document.addEventListener('securitypolicyviolation', e => console.error(`CSP violation: ${e.violatedDirective} blocked ${e.blockedURI || '(inline)'} at ${e.sourceFile}:${e.lineNumber}`), true);
 }
 
 export const test = base.extend({
@@ -48,6 +50,10 @@ export const test = base.extend({
     page.__inflight = inflight;
     page.__dialogs = [];
     page.on('dialog', d => { page.__dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+    // the server's Content-Security-Policy is enforced (no bypassCSP): a violation event or the browser's own
+    // "Refused to … Content Security Policy" console error fails the test
+    const csp = [];
+    page.on('console', m => { if (m.type() === 'error' && /CSP violation|Content Security Policy/i.test(m.text())) csp.push(m.text()); });
     await page.clock.setFixedTime(new Date(NOW));
     await page.addInitScript(initScript, [FREEZE_CSS]);
     await page.route(u => !u.href.startsWith(BASE) && !u.href.startsWith('http://127.0.0.1:') && !u.href.startsWith('data:') && !u.href.startsWith('blob:'), route => {
@@ -56,6 +62,7 @@ export const test = base.extend({
       return route.abort('blockedbyclient');
     });
     await use(page);
+    expect(csp, 'Content-Security-Policy violations').toEqual([]);
   },
 });
 export { expect };

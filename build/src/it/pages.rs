@@ -23,10 +23,8 @@ async fn calendar_views_render_their_body() {
         let r = c.get(&format!("/calendar?view={view}&date=2026-10-14")).await;
         r.ok().has(title).has(marker).has("<meta name=\"csrf\" content=\"").has("id=\"picker\"").has("data-user=\"alice\"");
         assert!(r.header("content-type").unwrap().starts_with("text/html"), "{view}");
-        // the page's JSON islands parse
-        for island in ["i18n"] {
-            r.island(island);
-        }
+        // app.js' strings come as the language's script (no JSON block in the page any more)
+        r.has(&format!("<script src=\"{}\" defer></script>", crate::routes::assets::url("i18n-de.js").unwrap()));
     }
 }
 
@@ -149,7 +147,7 @@ async fn history_settings_and_login_pages() {
     assert!(d["colls"].as_object().unwrap().len() >= 5);
     let st = c.get("/settings").await;
     st.ok().has("<title>Einstellungen · PractiCal</title>").has("Sachsen").has("Familie").has("Freunde").has("action=\"/settings/prefs\"").has("action=\"/settings/tokens\"");
-    st.island("i18n");
+    st.has(&format!("<script src=\"{}\" defer></script>", crate::routes::assets::url("i18n-de.js").unwrap()));
     // logged in, /login sends to the calendar
     let l = c.get("/login").await;
     assert_eq!((l.status, l.location().as_deref()), (StatusCode::SEE_OTHER, Some("/calendar")));
@@ -198,4 +196,24 @@ async fn html_fragments_for_the_endless_lists() {
     assert_eq!(c.get_json("/api/weeks?start=2026-10-12&count=99").await.body.matches("<div class=\"week").count(), 16);
     // a missing parameter is axum's 400
     assert_eq!(c.get_json("/api/days").await.status, StatusCode::BAD_REQUEST);
+}
+
+/// B19: every HTML answer (pages, fragments, the login page, errors) carries the Content-Security-Policy;
+/// JSON and the static files do not need it.
+#[tokio::test]
+async fn html_responses_carry_the_content_security_policy() {
+    let s = seed().await;
+    let want = crate::content_security_policy(&s.app.state.config);
+    assert!(want.contains("script-src 'self';") && !want.contains("unsafe-eval") && want.contains("form-action 'self';"), "{want}");
+    let mut c = s.app.login("alice").await;
+    for p in ["/calendar", "/calendar?view=week&date=2026-10-14&fragment=1", "/contacts", "/tasks", "/history", "/settings"] {
+        let r = c.get(p).await;
+        assert!(r.header("content-type").unwrap().starts_with("text/html"), "{p}");
+        assert_eq!(r.header("content-security-policy").as_deref(), Some(want.as_str()), "{p}");
+    }
+    for p in ["/api/events?start=2026-10-01&end=2026-11-01", "/assets/app.js", "/assets/icons.svg", "/healthz"] {
+        assert_eq!(c.get(p).await.header("content-security-policy"), None, "{p}");
+    }
+    let login = s.app.anonymous().get("/login").await;
+    assert_eq!(login.header("content-security-policy").as_deref(), Some(want.as_str()));
 }

@@ -45,6 +45,22 @@ const keys = [...new Set([...SA.keys(), ...SB.keys()])].sort();
 
 const gunzip = f => zlib.gunzipSync(fs.readFileSync(f)).toString('utf8');
 
+/** The page shell moved what it carried inline into cached files (2026-10, package build): the icon sprite
+ *  (`<svg class="sprite">` → assets/icons.svg, `href="#i-x"` → `href="/assets/icons.svg?v=…#i-x"` + <meta
+ *  name=icons>), app.js' strings (`<script id="i18n">` → /assets/i18n-<lang>.js) and the colour-scheme script
+ *  (inline → /assets/theme.js). Both forms normalise to one, so a baseline from before compares with one
+ *  from after; their contents are pinned by cargo tests (it/assets.rs) and the functional suite. */
+function normDom(html) {
+  return html
+    .replace(/href="\/assets\/icons\.svg\?v=<v>#/g, 'href="#')
+    .replace(/^<meta name="icons" content="\/assets\/icons\.svg\?v=<v>">\n/m, '')
+    .replace(/^<script src="\/assets\/i18n-[a-z]+\.js\?v=<v>" defer="">\n<\/script>\n/m, '')
+    .replace(/^<script src="\/assets\/theme\.js\?v=<v>">\n<\/script>\n/m, '')
+    .replace(/^<script>\(function\(\)\{const h=document\.documentElement,m=matchMedia[^\n]*<\/script>\n/m, '')
+    .replace(/^<script type="application\/json" id="i18n">\n<!-- e2e: content hash [0-9a-f]+ -->\n<\/script>\n/m, '')
+    .replace(/^<svg class="sprite" aria-hidden="true" xmlns="http:\/\/www\.w3\.org\/2000\/svg">\n<!-- e2e: content hash [0-9a-f]+ -->\n<\/svg>\n/m, '');
+}
+
 /** Line diff: common prefix/suffix trimmed, then an LCS on the (bounded) middle → hunks of -/+ lines. */
 function lineDiff(a, b, max = 80) {
   const x = a.split('\n'), y = b.split('\n');
@@ -117,7 +133,7 @@ for (const key of keys) {
     }
   }
   if (ea.has('.dom.html.gz') && eb.has('.dom.html.gz')) {
-    const a = gunzip(path.join(A, key + '.dom.html.gz')), b = gunzip(path.join(B, key + '.dom.html.gz'));
+    const a = normDom(gunzip(path.join(A, key + '.dom.html.gz'))), b = normDom(gunzip(path.join(B, key + '.dom.html.gz')));
     r.dom = a === b ? { count: 0, lines: [] } : lineDiff(a, b);
   }
   if (ea.has('.style.json.gz') && eb.has('.style.json.gz')) {

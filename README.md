@@ -87,7 +87,18 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   names kept), CSS by `src/css_min.rs` (no dependency), each stored as gzip-9 + brotli-11 at BUILD time and served by
   `Accept-Encoding` — no request compresses. `?v=<asset_version>` URLs are `immutable` for a year;
   sw.js, icon.svg and any other version revalidate daily (ETag per coding, 304). `/assets` and
-  `/healthz` sit outside the session, authentication, CSRF and compression layers.
+  `/healthz` sit outside the session, authentication, CSRF and compression layers. The page shell
+  carries nothing inline: the icon sprite (`assets/icons.svg`, `<use href="/assets/icons.svg?v=<own
+  hash>#i-x">`), app.js' strings (`/assets/i18n-<lang>.js`, generated from the `.ftl` files) and the
+  colour-scheme script (`assets/theme.js`, parser-blocking) are cached files — 13 KB less gzip per page
+  (26.3 → 13.5 KB for the month view; raw −48 KB, less on icon-heavy pages: each `<use>` now names the
+  file). Only the very first visit can show icons a frame late (the sprite arrives after the first
+  paint; cached afterwards, also across browser restarts — measured in Chromium and WebKit; a
+  `<link rel=preload>` would cure Chromium's first visit but makes WebKit refetch on every page).
+- **Content-Security-Policy** (`main.rs` `content_security_policy`, every HTML response): scripts and
+  everything else from this origin only (no inline script anywhere), style attributes allowed, images
+  also from `tile.openstreetmap.org` and `data:` (map dialog: Leaflet's empty-tile GIF), form targets this origin plus the identity
+  provider's (OIDC issuer, `LOGOUT_URL`: login and logout redirect there), no framing.
 - **First paint**: `app.js` sits in `<head>` with `defer blocking="render"`, so a page is painted only
   once app.js has drawn it (task views, sort boxes); the browser keeps the old page meanwhile —
   no empty frame (Chromium; others ignore the attribute). **Tasks** are parsed once per calendar and
@@ -318,8 +329,9 @@ and the UI built on its crates are always one release. Deployed on xarif.de in t
   (`practical_alarms_sent`) and drops subscriptions the push service reports gone (404/410).
 - **i18n**: Fluent `.ftl` files (`build/locales/{de,en,fr,es}.ftl`), embedded at compile time; a
   missing key falls back to English, then German, and a test keeps all files complete. Language =
-  user preference → session → `Accept-Language`. app.js gets its `js-*` strings as JSON from the
-  page (placeholders `%name`); month/weekday names and date formats come from `Intl`. A new
+  user preference → session → `Accept-Language`. app.js gets its `js-*` strings from
+  `/assets/i18n-<lang>.js` (`window.I18N`, build.rs formats them with the same Fluent bundles;
+  placeholders `%name`); month/weekday names and date formats come from `Intl`. A new
   language: its `.ftl`, `LANGS`/`NATIVE`/`LOCALE` in `src/i18n.rs`, `LANGS` in `tools/gen_regions.py`.
 
 ## Configuration
@@ -435,7 +447,7 @@ registry and `target/` in BuildKit cache mounts, so a build recompiles only what
 `registry.gitlab.com/xarif/docker/practical:main` (built and pushed by Forgejo Actions,
 pulled from the gitlab.com registry like every xarif image).
 
-**Icons** (`templates/layout.html`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
+**Icons** (`build/assets/icons.svg`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings
 plus single SVGs copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT),
 Iconoir (MIT), Bootstrap Icons (MIT), Material Design Icons (Apache-2.0) and Material Symbols
 (Apache-2.0); `i-al-*` are drawn from Lucide `log-in`/`log-out`. `i-sort` dims one arrow via

@@ -91,8 +91,11 @@ oxc_compat = "0.153"
 # brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
 brotli = "9"
 flate2 = "1.1"
-# regions(): reads src/data/regions.json (a dependency of the binary already, same version)
+# regions(): reads src/data/regions.json; i18n_js(): formats the js-* messages of locales/ exactly as the
+# binary does — all three are dependencies of the binary already (same versions)
 serde_json = "1.0"
+fluent-bundle = "0.16"
+unic-langid = "0.9"
 
 # Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, one codegen unit.
 # `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
