@@ -7,7 +7,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { NOW, REPO } from './env.mjs';
+import { NOW, POLL_MS, REPO } from './env.mjs';
 
 const BLOCK = 'http://127.0.0.1:9';
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -42,7 +42,7 @@ function start(bin, runDir, port, db, dev, tag) {
     PRACTICAL__DEFAULT_LANG: 'de',
     HTTP_PROXY: BLOCK, HTTPS_PROXY: BLOCK, http_proxy: BLOCK, https_proxy: BLOCK, ALL_PROXY: BLOCK, NO_PROXY: '', no_proxy: '',
   };
-  if (dev) Object.assign(env, { PRACTICAL__DEV_ASSETS_DIR: process.env.E2E_ASSETS === 'source' ? path.join(REPO, 'build', 'assets') : `${bin}.assets`, PRACTICAL__DEV_LOGIN: 'alice', PRACTICAL__DEV_NOW: NOW });
+  if (dev) Object.assign(env, { PRACTICAL__DEV_ASSETS_DIR: process.env.E2E_ASSETS === 'source' ? path.join(REPO, 'build', 'assets') : `${bin}.assets`, PRACTICAL__DEV_LOGIN: 'alice', PRACTICAL__DEV_NOW: NOW, PRACTICAL__DEV_POLL_MS: String(POLL_MS) });
   const out = fs.openSync(log, 'w');
   const child = spawn(bin, ['serve'], { env, stdio: ['ignore', out, out] });
   fs.closeSync(out);

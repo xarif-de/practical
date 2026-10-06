@@ -2,7 +2,7 @@
 // own save, in-place task updates (DOM equal to a full reload), the calendar filter in the first render.
 // Own data only ("F5 …"); bob writes into the shared group calendar.
 import { test, expect, api, settle } from '../lib/test.mjs';
-import { BASE } from '../lib/env.mjs';
+import { BASE, POLL_MS } from '../lib/env.mjs';
 
 const GROUP = 'group.familie/5eed0000-0000-4000-8000-000000000004';
 const PRIVAT = 'alice/5eed0000-0000-4000-8000-000000000002';
@@ -67,7 +67,7 @@ test('the own save redraws once; the echo of the change does not redraw again, a
   const key = (await api(page, 'POST', '/api/events', { principal: 'alice', cal_id: PRIVAT.split('/')[1], summary: 'F5 Echo', start: '2026-11-12T09:00:00', end: '2026-11-12T10:00:00' })).id;
   await page.reload();
   await settle(page);
-  await page.waitForTimeout(3500); // the creation's own live event is through
+  await page.waitForTimeout(POLL_MS + 1500); // the creation's own live event is through (one poll round + 1.5 s)
   await countSwaps(page);
   await page.locator(`#viewroot .ev[data-key$="/${key}"]`).first().click();
   await page.click('#ed-lock');

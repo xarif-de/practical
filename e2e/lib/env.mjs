@@ -7,6 +7,9 @@ export const REPO = path.dirname(E2E);
 export const NOW = '2026-10-14T08:00:00Z'; // 10:00 Europe/Berlin, a Wednesday with rich fixture data
 export const TODAY = '2026-10-14';
 export const TZ = 'Europe/Berlin';
+// the dev servers' change-poller period (PRACTICAL__DEV_POLL_MS, development only; production polls every 2 s): the
+// live-update tests wait for its rounds
+export const POLL_MS = Number(process.env.E2E_POLL_MS || 250);
 // E2E_PORT = the first port of a run. The visual and perf suites share one server pair (dev server on E2E_PORT, login
 // server on +1; global-setup.mjs). The functional suite gives every Playwright worker a pair of its own on
 // E2E_PORT + 2 × its parallel index (lib/servers.mjs, restarted on fresh fixture copies for every spec file):

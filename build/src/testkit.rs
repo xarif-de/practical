@@ -87,6 +87,7 @@ pub fn config(db_path: &str) -> Config {
         dev_assets_dir: None,
         dev_login: None,
         dev_now: None,
+        dev_poll_ms: None,
     }
 }
 

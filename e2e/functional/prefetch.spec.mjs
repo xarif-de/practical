@@ -2,7 +2,7 @@
 // click will show while the pointer rests on it; the click uses that answer once. Changes (own writes, live
 // events) drop it, Save-Data and a pending flash keep the server's session untouched. Own data only ("F6 …").
 import { test, expect, settle } from '../lib/test.mjs';
-import { BASE } from '../lib/env.mjs';
+import { BASE, POLL_MS } from '../lib/env.mjs';
 
 const GROUP = 'group.familie/5eed0000-0000-4000-8000-000000000004';
 const PRIVAT = 'alice/5eed0000-0000-4000-8000-000000000002';
@@ -75,7 +75,7 @@ test('an own write and a live change from elsewhere drop the prefetched fragment
   expect(seen.slice(n).some(s => s.url.includes('view=week'))).toBe(true); // fetched again (the press prefetches anew)
   // a change by bob after the prefetch: the live event drops it
   await open(page, '/calendar?view=month&date=2026-11-10');
-  await page.waitForTimeout(3000); // the own write's live event is through
+  await page.waitForTimeout(POLL_MS + 1000); // the own write's live event is through (one poll round + 1 s)
   pre = prefetchDone(page, 'view=week');
   await page.hover('.toolbar [data-view=week]');
   await pre;

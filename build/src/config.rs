@@ -47,6 +47,9 @@ pub struct Config {
     /// Development only, requires `dev_assets_dir`: the fixed "now" (RFC 3339) of every server-side
     /// clock read (clock.rs) — reproducible pages for the e2e suite.
     pub dev_now: Option<chrono::DateTime<chrono::Utc>>,
+    /// Development only, requires `dev_assets_dir`: the change poller's period in ms (tasks.rs `change_poll`;
+    /// unset = 2 s, as in production) — the e2e suite's live-update tests wait for it.
+    pub dev_poll_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +76,15 @@ fn var_bool(key: &str, default: bool) -> Result<bool, String> {
         Some("false" | "0" | "no") => Ok(false),
         Some(other) => Err(format!("PRACTICAL__{key}: expected true/false, got {other:?}")),
     }
+}
+
+/// `PRACTICAL__DEV_POLL_MS` → the change poller's period; rejected outside development mode, and below 50 ms.
+fn parse_dev_poll_ms(raw: Option<&str>, dev: bool) -> Result<Option<u64>, String> {
+    let Some(raw) = raw else { return Ok(None) };
+    if !dev {
+        return Err("PRACTICAL__DEV_POLL_MS is only honoured together with PRACTICAL__DEV_ASSETS_DIR (development)".into());
+    }
+    raw.parse::<u64>().ok().filter(|ms| *ms >= 50).map(Some).ok_or_else(|| format!("PRACTICAL__DEV_POLL_MS: expected milliseconds ≥ 50, got {raw:?}"))
 }
 
 impl Config {
@@ -106,6 +118,7 @@ impl Config {
             return Err("PRACTICAL__DEV_LOGIN is only honoured together with PRACTICAL__DEV_ASSETS_DIR (development)".into());
         }
         let dev_now = crate::clock::parse_dev_now(var("DEV_NOW").as_deref(), var("DEV_ASSETS_DIR").is_some())?;
+        let dev_poll_ms = parse_dev_poll_ms(var("DEV_POLL_MS").as_deref(), var("DEV_ASSETS_DIR").is_some())?;
         let session_hours: i64 = var_or("SESSION_HOURS", "12")
             .parse()
             .map_err(|e| format!("PRACTICAL__SESSION_HOURS: {e}"))?;
@@ -131,6 +144,7 @@ impl Config {
             dev_assets_dir: var("DEV_ASSETS_DIR"),
             dev_login: var("DEV_LOGIN"),
             dev_now,
+            dev_poll_ms,
         })
     }
 
@@ -142,5 +156,23 @@ impl Config {
 
     pub fn cookie_secure(&self) -> bool {
         self.public_url.starts_with("https://")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_poll_period_is_2_s_unless_development_shortens_it() {
+        // production: no variable, or the variable without development mode (an error, not a silent change)
+        assert_eq!(parse_dev_poll_ms(None, false), Ok(None));
+        assert!(parse_dev_poll_ms(Some("250"), false).unwrap_err().contains("DEV_ASSETS_DIR"));
+        assert_eq!(crate::tasks::change_poll(None), std::time::Duration::from_secs(2));
+        assert_eq!(crate::tasks::change_poll(crate::testkit::config("unused.sqlite3").dev_poll_ms), std::time::Duration::from_secs(2));
+        // development
+        assert_eq!(parse_dev_poll_ms(Some("250"), true), Ok(Some(250)));
+        assert_eq!(crate::tasks::change_poll(Some(250)), std::time::Duration::from_millis(250));
+        assert!(parse_dev_poll_ms(Some("10"), true).is_err() && parse_dev_poll_ms(Some("x"), true).is_err());
     }
 }

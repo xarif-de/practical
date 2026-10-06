@@ -20,8 +20,13 @@ pub async fn guarded<T>(name: &str, round: impl std::future::Future<Output = T>)
     }
 }
 
+/// The change poller's period: 2 s; `PRACTICAL__DEV_POLL_MS` (development only, config.rs) sets another.
+pub fn change_poll(dev_poll_ms: Option<u64>) -> Duration {
+    dev_poll_ms.map_or(Duration::from_secs(2), Duration::from_millis)
+}
+
 /// Polls the collections' synctokens (26 µs per query measured on the real store)
-/// and broadcasts the ones that moved — the SSE source for live updates. Every 2 s, but the six
+/// and broadcasts the ones that moved — the SSE source for live updates. Every 2 s (`change_poll`), but the six
 /// queries (history + synctokens) only run when `db::Watch` saw a commit since the last round that
 /// succeeded: without a write nothing they read can have moved.
 pub fn spawn_change_poller(state: SharedState) {
@@ -30,7 +35,7 @@ pub fn spawn_change_poller(state: SharedState) {
         let mut first = true;
         let mut watch = crate::db::Watch::new(state.db.clone());
         let mut last: Option<(u64, i64)> = None;
-        let mut tick = tokio::time::interval(Duration::from_secs(2));
+        let mut tick = tokio::time::interval(change_poll(state.config.dev_poll_ms));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
