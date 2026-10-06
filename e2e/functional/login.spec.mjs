@@ -13,6 +13,7 @@ test('wrong password: back to the form with the error', async ({ page }) => {
   await login(page, 'alice', 'falsch');
   await expect(page).toHaveURL(/\/login\?error=1/);
   await expect(page.locator('.login .flash.error')).toBeVisible();
+  await expect(page.locator('.login .flash.error')).toHaveAttribute('role', 'alert'); // announced by screen readers
   // in the error tint (--err), not the blue info tint of a plain .flash
   const [r, g, b] = (await page.locator('.login .flash.error').evaluate(el => getComputedStyle(el).backgroundColor)).match(/[\d.]+/g).map(Number);
   expect(r > b && r > g, `rgb ${r} ${g} ${b}`).toBe(true);

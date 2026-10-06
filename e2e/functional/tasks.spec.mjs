@@ -193,6 +193,7 @@ test('editor: a status the user picks for a task without STATUS is written', asy
   await tile.click();
   await page.click('.rrpop button[data-v="IN-PROCESS"]');
   await expect(tile.locator('b')).toHaveText('In Arbeit');
+  await expect(page.locator('#ed-error')).toHaveAttribute('role', 'alert'); // a failed save is announced
   const saved = waitFor(page, 'PUT', /^\/api\/tasks\//);
   await page.click('#ed-save');
   expect((await saved).ok()).toBe(true);
