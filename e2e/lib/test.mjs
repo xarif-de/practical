@@ -29,6 +29,15 @@ function initScript([css]) {
   };
   if (document.documentElement) add(); else document.addEventListener('DOMContentLoaded', add);
   document.addEventListener('DOMContentLoaded', add);
+  // phone emulation: the document starts at the 980 px default layout width, the viewport meta then sets 390 →
+  // one `resize` per page load, dispatched in the first frame — before the deferred scripts ran when a frame came
+  // first (host load), else ~1 ms after DOMContentLoaded. app.js/history.js fit popovers, re-render the history
+  // map and extend the week list on resize, so the order decided e.g. `.hx-fpop`'s translate (empty-history-list:
+  // 1 of 3 idle runs had the resize before history.js mounted). An early one is held and re-dispatched after
+  // DOMContentLoaded: the order of the common case, every time.
+  let loaded = false, held = false;
+  addEventListener('resize', e => { if (!loaded) { e.stopImmediatePropagation(); held = true; } }, true);
+  document.addEventListener('DOMContentLoaded', () => { loaded = true; if (held) setTimeout(() => dispatchEvent(new Event('resize'))); });
   // window.open/alert never leave the page: record instead
   window.__opened = []; window.open = (u, t) => { window.__opened.push(String(u)); return null; };
   // Content-Security-Policy (B19): every violation is reported to the test (the page fixture fails on one)

@@ -18,13 +18,28 @@ function writeCssCoverage(testInfo, title, entries) {
   fs.writeFileSync(path.join(dir, title.replace(/[^\w@+-]+/g, '_') + '.csscov.json'), JSON.stringify(out));
 }
 
+/** Holds the icon sprite's response until the requesting document has painted once after DOMContentLoaded.
+ *  Chromium paints a page whose external `<use>` sprite arrived before its first paint differently from one
+ *  whose sprite arrived after it (phone-dark/tk-timeline: 26 px of a dotted lane line one colour unit apart,
+ *  DOM + style identical, not undone by a repaint; hiding the tab bar's icons removes the difference). Which
+ *  came first depended on host load (the route below disables the HTTP cache: every document fetches the
+ *  sprite); held, it is always "after" — the order a 400 ms delay of this response produced in 12 of 12 runs. */
+async function spriteAfterFirstPaint(request) {
+  const painted = request.frame().evaluate(() => new Promise(r => {
+    const go = () => requestAnimationFrame(() => requestAnimationFrame(r));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  })).catch(() => {}); // the document went away: nothing left to order
+  await Promise.race([painted, new Promise(r => setTimeout(r, 5000))]);
+}
+
 export function shot(title, body, opts = {}) {
   test(title, async ({ page }, testInfo) => {
     // read-only: the visual projects share one DB across parallel workers, so nothing may be written —
     // a write is aborted here (the app then shows its error, the test fails on the dialog/assert)
     const writes = [];
-    await page.route(u => u.href.startsWith(BASE), route => {
+    await page.route(u => u.href.startsWith(BASE), async route => {
       const r = route.request();
+      if (r.method() === 'GET' && new URL(r.url()).pathname === '/assets/icons.svg') await spriteAfterFirstPaint(r);
       if (r.method() === 'GET' || r.method() === 'HEAD') return route.fallback();
       // signing another user in (loginAs: empty states of carol) only changes this context's session
       if (r.method() === 'POST' && new URL(r.url()).pathname === '/login') return route.fallback();
