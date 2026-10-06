@@ -13,7 +13,7 @@
   const fmtMonth = new Intl.DateTimeFormat(LOC, { month: 'short' });
   const fmtMonthL = new Intl.DateTimeFormat(LOC, { month: 'long' });
   const fmtWd = new Intl.DateTimeFormat(LOC, { weekday: 'short' });
-  const ico = (id, cls = '') => `<svg class="ico ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const ico = (id, cls = '') => `<svg class="ico ${cls}" aria-hidden="true"><use href="${practical.sprite}#${id}"/></svg>`;
 
   let D, log, byId, els;
   const S = k => (D.t && D.t[k]) || k;

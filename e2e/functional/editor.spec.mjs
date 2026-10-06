@@ -230,6 +230,11 @@ test('location map dialog opens and cancels', async ({ page }) => {
   await page.locator('#ed-locp [data-geo="map"]').click();
   await expect(page.locator('#geomap')).toBeVisible();
   await expect(page.locator('#gm-map .leaflet-container, #gm-map.leaflet-container')).toHaveCount(1);
+  // its tiles load under the Content-Security-Policy (img-src names the tile host; lib/test.mjs serves a gray PNG)
+  await expect.poll(() => page.locator('#gm-map img.leaflet-tile').evaluateAll(t => t.filter(i => i.complete && i.naturalWidth === 256).length)).toBeGreaterThan(0);
+  // zooming unloads tiles: Leaflet gives each its data: GIF (img-src allows data:)
+  await page.locator('#gm-map .leaflet-control-zoom-in').click();
+  await expect.poll(() => page.locator('#gm-map img.leaflet-tile').evaluateAll(t => t.filter(i => i.complete && i.naturalWidth === 256).length)).toBeGreaterThan(0);
   await page.keyboard.press('Escape'); // the map closes first, the editor stays
   await expect(page.locator('#geomap')).toBeHidden();
   await expect(page.locator('#ed')).toBeVisible();

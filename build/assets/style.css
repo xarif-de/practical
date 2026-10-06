@@ -524,8 +524,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .list .note { color: var(--fg-3); font-style: italic; }
 .list .off { display: none; }
 
-/* ---- icon buttons: the sprite in layout.html, currentColor, text kept in title/aria-label ---- */
-.sprite { display: none; } /* outside .app; `hidden` alone lost against the generic svg display rule */
+/* ---- icon buttons: the sprite assets/icons.svg, currentColor, text kept in title/aria-label ---- */
 .ico { width: 18px; height: 18px; display: block; flex: none; }
 .nav a { display: grid; place-items: center; padding: 6px 9px; }
 .tabbar .ico { width: 22px; height: 22px; }

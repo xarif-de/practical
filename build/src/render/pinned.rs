@@ -172,7 +172,7 @@ fn small_helpers() {
     assert_eq!(short_uri("mailto:x@example.org"), "mailto:x@example.org");
     assert_eq!(short_uri("https://www.example.org/a/very/long/path/that/goes/on/and/on"), "www.example.org/a/very/long/path/that/goe…");
     assert_eq!(e("<a href=\"x\">'&'</a>"), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
-    assert_eq!(ico("pin"), "<svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-pin\"/></svg>");
+    assert_eq!(ico("pin"), format!("<svg class=\"ico\" aria-hidden=\"true\"><use href=\"{}#i-pin\"/></svg>", crate::routes::assets::icons()));
     assert_eq!(monday_of(date("2026-10-18")), date("2026-10-12"));
     assert_eq!(monday_of(date("2026-10-12")), date("2026-10-12"));
     // every month: 4 to 6 rows, Monday first, the 1st in the first row

@@ -1,9 +1,11 @@
 /* PractiCal — shared behaviour (vanilla ES2020, no framework). */
-/* i18n: the page ships its js-* strings (layout.html, from locales/*.ftl; placeholders %name);
+/* i18n: the page loads its js-* strings first (window.I18N: /assets/i18n-<lang>.js, build.rs from locales/*.ftl; placeholders %name);
    month and weekday names and date formats come from Intl in the page's locale */
+// login: the single sign-on form submits itself when it is the only way in (login.html `data-auto`; was an
+// inline script, which the Content-Security-Policy forbids)
+{ const f = document.getElementById('oidc-form'); if (f && f.hasAttribute('data-auto')) f.submit(); }
 (function () {
-  let S = {};
-  try { S = JSON.parse(document.getElementById('i18n').textContent); } catch (_) {}
+  const S = window.I18N || {};
   const LOC = window.LOC = document.body.dataset.locale || 'de-DE';
   // a plural message (i18n.rs plural_forms: {"one": …, "other": …}, as an object or as a data attribute's JSON):
   // the form for n by the page locale's CLDR rules, the one the server would pick
@@ -18,7 +20,7 @@
   window.WEEKDAYS = days('short'); window.WEEKDAYS_LONG = days('long');
   // helpers of every block below and of history.js (loaded after this file): one definition each
   const $ = (s, r = document) => r.querySelector(s), ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  const pad = n => String(n).padStart(2, '0');
+  const pad = n => String(n).padStart(2, '0'), SPRITE = ($('meta[name=icons]') || {}).content || '';
   window.practical = {
     $, $$: (s, r = document) => [...r.querySelectorAll(s)],
     csrf: () => ($('meta[name=csrf]') || {}).content || '',
@@ -29,7 +31,9 @@
     pad,
     ymd: d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, // the local calendar day
     parseYmd: s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); },
-    ico: (n, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`,
+    // the icon sprite (<meta name=icons>, a cached file): every <use href> is `${practical.sprite}#i-…`
+    sprite: SPRITE,
+    ico: (n, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="${SPRITE}#i-${n}"/></svg>`,
     // a JSON request with the CSRF header
     /* the calendar filter kept in this browser (localStorage.calHidden) is a ?cals= list of the shown calendars,
        which only the calendar and the tasks page can compute (each lists its own calendars): each records its
@@ -134,7 +138,7 @@
   window.askYesNo = (text, yes, no, modal) => new Promise(done => {
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
-    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn icon-btn" type="button" data-a="0"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-a="1"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></button></div></div>';
+    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn icon-btn" type="button" data-a="0"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-a="1"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-check"/></svg></button></div></div>';
     d.querySelector('p').textContent = text;
     for (const [a, t] of [['0', no], ['1', yes]]) { const b = d.querySelector(`[data-a="${a}"]`); b.title = t; b.setAttribute('aria-label', t); }
     const prev = document.activeElement;
@@ -261,7 +265,7 @@
     const nameOf = c => (names[c] || [c])[0];
     const summary = kind => { const l = listOf(kind); $('#v-regions-' + kind).textContent = !l.length ? tr('js-regions-none') : l.length < 3 ? l.map(nameOf).join(', ') : tr('js-regions-n', { n: l.length }); };
     const setList = (kind, l) => { commit(kind + '_regions', l.join(',')); summary(kind); $('#v-sources').hidden = true; /* the sources line is the server's; it returns with the next visit */ };
-    const icoBtn = (attr, ico, label) => `<button type="button" class="btn icon-btn" ${attr} title="${esc2(label)}" aria-label="${esc2(label)}"><svg class="ico" aria-hidden="true"><use href="#${ico}"/></svg></button>`;
+    const icoBtn = (attr, ico, label) => `<button type="button" class="btn icon-btn" ${attr} title="${esc2(label)}" aria-label="${esc2(label)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${ico}"/></svg></button>`;
     const drawRegions = kind => {
       const l = listOf(kind);
       $(`#regions-${kind} .rlist`).innerHTML = l.length ? l.map((c, i) => `<div class="cell noic" data-code="${esc2(c)}"><span>${esc2(nameOf(c))}${(names[c] || [])[1] ? `<span class="sub">${esc2(names[c][1])}</span>` : ''}</span><span class="val">${kind === 'public' ? (i ? icoBtn('data-first', 'i-star', tr('js-region-first')) : `<span class="badge">${esc2(tr('js-region-own'))}</span>`) : ''}${icoBtn('data-rm', 'i-x', tr('js-region-remove'))}</span></div>`).join('')
@@ -306,7 +310,7 @@
         const shown = src.filter(hit).filter((r, i, a) => !r.head || (a[i + 1] && !a[i + 1].head));
         box.innerHTML = shown.length ? shown.map(r => { if (r.head) return `<div class="cell noic head"><span class="label">${esc2(r.head)}</span></div>`;
           const sel = on(r.v), n = count(r.v);
-          return `<button type="button" class="cell noic link${sel ? ' on' : ''}" data-v="${esc2(r.v)}"${r.more ? ' data-more="1"' : ''} role="option" aria-selected="${sel}"><span>${esc2(r.name)}${r.sub && (f || route !== 'tz') ? `<span class="sub">${esc2(r.sub)}</span>` : ''}</span><span class="val">${n ? `<span class="badge">${n}</span>` : ''}${sel ? '<svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>' : ''}${r.more ? '<span class="chev">›</span>' : ''}</span></button>`; }).join('')
+          return `<button type="button" class="cell noic link${sel ? ' on' : ''}" data-v="${esc2(r.v)}"${r.more ? ' data-more="1"' : ''} role="option" aria-selected="${sel}"><span>${esc2(r.name)}${r.sub && (f || route !== 'tz') ? `<span class="sub">${esc2(r.sub)}</span>` : ''}</span><span class="val">${n ? `<span class="badge">${n}</span>` : ''}${sel ? `<svg class="ico" aria-hidden="true"><use href="${practical.sprite}#i-check"/></svg>` : ''}${r.more ? '<span class="chev">›</span>' : ''}</span></button>`; }).join('')
           : `<div class="cell noic"><span class="muted">${esc2(tr('js-pick-none'))}</span></div>`;
       };
       q.value = ''; q.oninput = draw; draw();
@@ -343,7 +347,7 @@
       const form = $('form', d), inp = $('input[name=confirm]', form), go = $('button[type=submit]', form), want = inp.placeholder;
       const w = document.createElement('div');
       w.className = 'ask'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-modal', 'true');
-      w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn icon-btn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button><button class="btn danger icon-btn" type="submit" disabled><svg class="ico" aria-hidden="true"><use href="#i-trash-2"/></svg></button></div></form>';
+      w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn icon-btn" type="button"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-x"/></svg></button><button class="btn danger icon-btn" type="submit" disabled><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-trash-2"/></svg></button></div></form>';
       $('p', w).textContent = ($('p', form) || {}).textContent || ''; $('.ask-type span', w).textContent = form.dataset.tType; $('.ask-type b', w).textContent = want;
       const [no, yes] = $$('.ask-acts button', w); const goText = go.textContent.trim(); no.title = form.dataset.tCancel; no.setAttribute('aria-label', no.title); yes.title = goText; yes.setAttribute('aria-label', goText);
       const typed = $('.ask-type input', w); // no placeholder: a greyed copy of the answer reads as already filled in
@@ -868,7 +872,7 @@
     // what the picker offers: most used first, then name, colour; a row recolours everything of its colour
     offers = pal.map(p => ({ ...p, text: srcText(p.src) })).sort((a, b) => b.src.length - a.src.length || coll.compare(a.text, b.text) || byHue(a.hex, b.hex));
     const row = (s, i) => {
-      const sw = `<span class="swatch" style="background:${s.hex}"><svg class="ico" aria-hidden="true"><use href="#${ICON[s.kind]}"/></svg></span>`;
+      const sw = `<span class="swatch" style="background:${s.hex}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${ICON[s.kind]}"/></svg></span>`;
       const name = VAR[s.kind] ? kindText(s.kind) : s.name || '–';
       const sub = VAR[s.kind] ? (s.color ? tr('js-color-own') : tr('js-color-std')) : s.cal ? tr('js-color-src', { kind: kindText('calendar'), name: s.cal }) + (s.editable ? '' : ' · ' + tr('js-color-ro')) : s.kind.startsWith('category') ? tr('js-color-in-rule') : '';
       const n = s.keys.length > 1 ? `<span class="badge" title="${esc(tr('js-color-count', { n: s.keys.length }))}">${s.keys.length}×</span>` : '';
@@ -1785,7 +1789,7 @@
   // effect line of a category row: one item per setting, struck through when an upper category wins ("überstimmt");
   // deviation from a template is shown in the card footers, not here
   const ctFx = (c, over) => { const r = RULES[c]; if (!r) return `<div class="ct-l"><span class="ct-t full">${esc(CTT.tNorule)}</span></div>`; const out = [];
-    const item = (key, mode, label) => { const by = over[c] && over[c][key]; out.push(`<div class="ct-l${mode === 'lock' ? ' lock' : ''}${by ? ' over' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg><span class="ct-t">${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}</div>`); }; /* one rule per line: icon | text, "überschrieben von" below the text */
+    const item = (key, mode, label) => { const by = over[c] && over[c][key]; out.push(`<div class="ct-l${mode === 'lock' ? ' lock' : ''}${by ? ' over' : ''}" title="${esc(mode === 'lock' ? CTT.tLock : CTT.tDefault)}"><svg class="ico"><use href="${practical.sprite}#${mode === 'lock' ? 'i-lock' : 'i-tag'}"/></svg><span class="ct-t">${label}</span>${by ? `<span class="ct-by">${esc(CTT.tOver.replace('{n}', by))}</span>` : ''}</div>`); }; /* one rule per line: icon | text, "überschrieben von" below the text */
     SCALARS.forEach(fld => { const st = ruleSetting(r, fld); if (st) item(fld, st.mode, `${esc(CTF[FLD[fld][1]])}: ${fxVal(fld, st.value)}`); });
     ((r.alarm || {}).alarms || []).forEach(a => item('alarm:' + alarmKey(a), a.mode, `${esc(CTF[4])}: ${esc(alarmText(a))}`));
     ((r.links || {}).links || []).forEach(l => item('link:' + l.uri, l.mode, `${esc(CTF[10])}: ${esc(l.label || lkHost(l.uri) || l.uri)}`));
@@ -1793,12 +1797,12 @@
   function ctRender() {
     ctMirror();
     const { over } = effective();
-    ctRows.innerHTML = CATS.map((c, i) => `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="ct-head"><span class="chip">${esc(c)}</span><button class="add edits ct-rule" type="button" data-ct-rule="${esc(c)}"><svg class="ico"><use href="#i-settings"/></svg> ${esc(CTT.tRule)}</button></span><button class="ct-x edits" type="button" data-ct-rm="${i}">×</button><span class="ct-fx">${ctFx(c, over)}</span></div>`).join('');
+    ctRows.innerHTML = CATS.map((c, i) => `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="ct-head"><span class="chip">${esc(c)}</span><button class="add edits ct-rule" type="button" data-ct-rule="${esc(c)}"><svg class="ico"><use href="${practical.sprite}#i-settings"/></svg> ${esc(CTT.tRule)}</button></span><button class="ct-x edits" type="button" data-ct-rm="${i}">×</button><span class="ct-fx">${ctFx(c, over)}</span></div>`).join('');
     ctCloudRender();
   }
   const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories?scope=' + ED_SCOPE).then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
   const ctInvalidate = () => { CT_IDX = null; };
-  async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ' <svg class="ico" style="width:10px;height:10px"><use href="#i-tag"/></svg>' : ''}</button>`).join(''); }
+  async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ` <svg class="ico" style="width:10px;height:10px"><use href="${practical.sprite}#i-tag"/></svg>` : ''}</button>`).join(''); }
   function catsInit(list) { CATS = (list || []).map(c => String(c).trim()).filter(Boolean); ctRender(); }
   function catAdd(v) { v = String(v).replace(/,/g, '').trim(); if (!v || CATS.includes(v)) return; addCard('cats'); CATS.push(v); ctRender(); rulesApply('add'); refresh(); }
   const ctClosePop = () => { if (ctPop) { ctPop.remove(); ctPop = null; } };
@@ -1821,7 +1825,7 @@
   const modeIcon = m => m === 'lock' ? 'i-lock' : m === 'default' ? 'i-tag' : 'i-dots';
   const modeText = m => m === 'lock' ? CTT.tLock : m === 'default' ? CTT.tDefault : CTT.tAny;
   // badge "Vorlage · Kat" / "Vorgabe · Kat"; `extra` appended with " · "; `changed` = the event deviates from a template → orange, " (geändert)"
-  const ruleBadgeHtml = (e, extra, changed) => `<span class="rb${changed ? ' changed' : ''}"><span class="rbadge ${e.mode}"><svg class="ico"><use href="#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}</span>${extra ? `<span class="rb-x">${esc(extra)}</span>` : ''}${changed ? `<span class="rb-x">(${esc(CTT.tChanged)})</span>` : ''}</span>`;
+  const ruleBadgeHtml = (e, extra, changed) => `<span class="rb${changed ? ' changed' : ''}"><span class="rbadge ${e.mode}"><svg class="ico"><use href="${practical.sprite}#${modeIcon(e.mode)}"/></svg>${esc(modeText(e.mode))} · ${esc(e.cat)}</span>${extra ? `<span class="rb-x">${esc(extra)}</span>` : ''}${changed ? `<span class="rb-x">(${esc(CTT.tChanged)})</span>` : ''}</span>`;
   const ruleBadge = (fld, cur) => { const e = RFX[fld]; if (!e) return ''; const same = cur === undefined || sameVal(fld, e.value); return ruleBadgeHtml(e, fld === 'calendar' && !form.classList.contains('new') ? CTT.tNewonly : '', !same && e.mode === 'default'); }; /* a lock shows no "adjusted": the forced value is visible in the field */
   // disabled looks for locked settings (event: locks; rule editor: settings on "beliebig")
   function applyLocks() {
@@ -1857,7 +1861,7 @@
   function rulesMark() {
     const foot = {}; const add = (card, name, chip) => { (foot[card] ||= []).push(`<div class="rf-row"><span class="rf-name">${esc(name)}</span>${chip}</div>`); };
     if (ruleMode) {
-      const chip = (key, mode) => `<button type="button" class="rbadge ${mode}" data-rmode="${esc(key)}" title="${esc(CTT.tRulemode)}"><svg class="ico"><use href="#${modeIcon(mode)}"/></svg>${esc(modeText(mode))}</button>`;
+      const chip = (key, mode) => `<button type="button" class="rbadge ${mode}" data-rmode="${esc(key)}" title="${esc(CTT.tRulemode)}"><svg class="ico"><use href="${practical.sprite}#${modeIcon(mode)}"/></svg>${esc(modeText(mode))}</button>`;
       add('title', CTF[11], chip('summary', RM.summary || 'off'));
       WHEN_KEYS.filter(k => k === 'color' || f[k]).forEach(k => add('when', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       add('where', CTF[3], chip('location', RM.location || 'off'));
@@ -1954,7 +1958,7 @@
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
   const alarmText = a => { let t = whenText(a); const acts = D.tActs.split('|'); if (a.action === 'AUDIO') t += ' · ' + acts[1]; if (a.action === 'EMAIL') t += ' · ' + acts[2]; if (a.repeat > 0) t += ' · ' + D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : ''); if (a.proximity) t += ' · ' + proxText(a); if (a.action === 'EMAIL' && a.attendees.length) t += ' · ' + AT.tToTxt + ' ' + a.attendees.join(', '); if (a.description && a.description !== f.summary.value) t += ' – ' + a.description; return t; };
   const extrasOf = a => [a.repeat > 0 ? D.tRepeat.replace('{n}', a.repeat) + (a.duration_minutes ? ' ' + AT.tRepeatEvery + ' ' + amount(a.duration_minutes) : '') : '', proxText(a), a.action === 'EMAIL' ? (a.attendees.length ? AT.tToTxt + ' ' + a.attendees.join(', ') : AT.tToMissing) : '', a.description ? '„' + a.description + '“' : ''].filter(Boolean).join(' · ');
-  const alIco = id => `<svg class="ico" aria-hidden="true"><use href="${id}"/></svg>`;
+  const alIco = id => `<svg class="ico" aria-hidden="true"><use href="${practical.sprite}${id}"/></svg>`;
   const unitOf = m => { m = Math.abs(m); for (const u of [...AL_UNITS].reverse()) if (m && m % u === 0) return u; return 1; };
   const fmtNum = n => String(Math.round(n * 100) / 100).replace('.', ',');
   // the event on the strip: start and length in minutes from the "when" card
@@ -2052,7 +2056,7 @@
     $$('.row', alBox).forEach(r => r.remove());
     for (const a of ALARMS) {
       const r = addRow('alarms'); r.classList.toggle('open', !!a._open); r._alarm = a;
-      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', AL_ICO[a.action] || AL_ICO.DISPLAY); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a); r.classList.toggle('locked', !!a._locked); if (a._locked && !ruleMode) $$('[data-rm]', r).forEach(x => x.hidden = true); /* a rule entry on "beliebig" is greyed but removable */
+      const tx = $('.txt', r); tx.textContent = alarmText(a); tx.classList.toggle('ack', !!a.acknowledged); $('.sum use', r).setAttribute('href', practical.sprite + (AL_ICO[a.action] || AL_ICO.DISPLAY)); const t = $('.sum .t', r); t.textContent = whenText(a); t.classList.toggle('ack', !!a.acknowledged); $('.extra', r).textContent = extrasOf(a); r.classList.toggle('locked', !!a._locked); if (a._locked && !ruleMode) $$('[data-rm]', r).forEach(x => x.hidden = true); /* a rule entry on "beliebig" is greyed but removable */
       $('.pdot', r).classList.toggle('on', matchesPreset(a)); $('.act', r).setAttribute('aria-pressed', a._open ? 'true' : 'false');
       const d = $('.aldet', r); d.hidden = !a._open; if (a._open) alDetails(a, r);
     }
@@ -2075,7 +2079,7 @@
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, sel.selectedIndex)] || ic[0]; };
   const stText = sel => sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value;
   function stRender() {
-    $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); box.innerHTML = sels.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
+    $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); box.innerHTML = sels.map(sel => `<button class="stile${sel.value === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
     if (TASK) return;
     const t = SC.dataset, parts = [];
     if (f.status.value) parts.push(stText(f.status));
@@ -2137,7 +2141,7 @@
     [...tags].filter(t => !have.has(t.toLowerCase())).slice(0, 4).forEach(t => chips.push({ k: 'cat', icon: 'i-tag', text: t, sub: NT.tCats, data: t }));
     [...new Set(text.match(RE_TEL) || [])].slice(0, 2).forEach(t => chips.push({ k: 'tel', icon: 'i-phone', text: t.trim(), sub: NT.tCall, data: 'tel:' + t.replace(/[^\d+]/g, ''), ghost: true }));
     [...new Set(text.match(RE_MAIL) || [])].filter(m => !present.has(m.toLowerCase())).slice(0, 2).forEach(m => chips.push({ k: 'mail', icon: 'i-mail', text: m, sub: NT.tMail, data: 'mailto:' + m, ghost: true }));
-    ntFound.innerHTML = chips.map((c, i) => `<button class="pillbtn${c.ghost ? ' ghost' : ''}" type="button" data-nt="${i}"><svg class="ico"><use href="#${c.icon}"/></svg><span>${esc(c.text)}</span><small>${esc(c.sub)}</small></button>`).join('');
+    ntFound.innerHTML = chips.map((c, i) => `<button class="pillbtn${c.ghost ? ' ghost' : ''}" type="button" data-nt="${i}"><svg class="ico"><use href="${practical.sprite}#${c.icon}"/></svg><span>${esc(c.text)}</span><small>${esc(c.sub)}</small></button>`).join('');
     ntFound._chips = chips;
   }
   ntFound.addEventListener('click', e => { const b = e.target.closest('[data-nt]'); if (!b) return; const c = ntFound._chips[+b.dataset.nt];
@@ -2169,12 +2173,12 @@
   const peShort = uri => { const e = uri.replace(/^mailto:/i, ''); const q = peAll().find(x => x.email === e); return q ? peName(q).split(' ')[0] : e; };
   const peDeleg = p => { const f = p.extra.find(x => x[0] === 'DELEGATED-FROM'), t = p.extra.find(x => x[0] === 'DELEGATED-TO'); return f ? PT.tFrom.replace('{n}', peShort(f[1])) : t ? PT.tTo.replace('{n}', peShort(t[1])) : ''; };
   const peAv = p => { const ic = p.cutype === 'GROUP' ? 'i-users' : p.cutype === 'ROOM' ? 'i-room' : p.cutype === 'RESOURCE' ? 'i-res' : null; const ini = peName(p).split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'; const c = p.contacts && p.contacts.length === 1 ? p.contacts[0] : null;
-    return ic ? `<span class="pav none" title="${esc(peType(p))}"><svg class="ico"><use href="#${ic}"/></svg></span>` : c ? `<span class="pav" style="background:var(--c${c.color_index})" title="${esc(PT.tKnown)}">${esc(ini)}</span>` : `<span class="pav none" title="${esc(PT.tUnknown)}">${esc(ini)}</span>`; };
+    return ic ? `<span class="pav none" title="${esc(peType(p))}"><svg class="ico"><use href="${practical.sprite}#${ic}"/></svg></span>` : c ? `<span class="pav" style="background:var(--c${c.color_index})" title="${esc(PT.tKnown)}">${esc(ini)}</span>` : `<span class="pav none" title="${esc(PT.tUnknown)}">${esc(ini)}</span>`; };
   function peopleInit(organizer, attendees) { PEOPLE = { organizer: organizer || null, attendees: attendees || [] }; peopleRender(); }
   function peopleRender() { const all = peAll(); $('#ed-people-n').textContent = all.length || ''; $x('#ed-people-detail').innerHTML = ''; f.people_json.value = all.length ? JSON.stringify(all.map(p => [p.role, p.email])) : '';
     $x('#ed-people').innerHTML = all.map((p, i) => `<button class="pchip ${p.role === 'ORGANIZER' ? '' : peStatus(p)}" type="button" data-i="${i}" title="${esc(p.email)}">${peAv(p)}<span>${esc(peName(p))}</span>${p.role === 'ORGANIZER' ? `<small>${esc(PT.tOrgShort)}</small>` : p.role === 'OPT-PARTICIPANT' ? `<small>${esc(PT.tOptShort)}</small>` : ''}</button>`).join(''); }
   function peopleDetail(i) { const p = peAll()[i]; const n = (p.contacts || []).length; const status = p.role === 'ORGANIZER' ? '' : `<span class="pst ${peStatus(p)}">${esc(statusText(p) || D.tStatus.split('|')[0])}</span>`;
-    $x('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
+    $x('#ed-people-detail').innerHTML = `<div class="pdetail">${peAv(p)}<div><div class="nm">${esc(peName(p))}</div><div class="ml">${esc(p.email)}</div></div><span class="acts">${n ? `<button class="act" type="button" data-pact="book" ${n > 1 ? `data-n="${n}"` : ''} title="${esc(n > 1 ? PT.tBookN.replace('{n}', n) : PT.tBook)}"><svg class="ico"><use href="${practical.sprite}#i-user"/></svg></button>` : ''}<button class="act" type="button" data-pact="mail" title="${esc(PT.tMail)}"><svg class="ico"><use href="${practical.sprite}#i-mail"/></svg></button><button class="act" type="button" data-pact="copy" title="${esc(PT.tCopy)}"><svg class="ico"><use href="${practical.sprite}#i-copy"/></svg></button></span><div class="kv"><span>${esc(PT.tRole)}</span><span>${esc(peRole(p))}${peType(p) ? ' · ' + esc(peType(p)) : ''}</span>${status ? `<span>${esc(PT.tReply)}</span><span>${status}${peDeleg(p) ? ' · ' + esc(peDeleg(p)) : ''}</span>` : ''}${p.extra.some(x => x[0] === 'RSVP' && /true/i.test(x[1])) ? `<span>${esc(PT.tRsvp)}</span><span>${esc(PT.tYes)}</span>` : ''}</div></div>`;
     $$('.pchip', PC).forEach(b => b.setAttribute('aria-expanded', b.dataset.i === String(i))); }
   PC.addEventListener('click', e => { const chip = e.target.closest('.pchip'); const act = e.target.closest('[data-pact]');
     if (chip) { const i = +chip.dataset.i; const open = chip.getAttribute('aria-expanded') === 'true'; if (open) { $x('#ed-people-detail').innerHTML = ''; chip.setAttribute('aria-expanded', 'false'); } else peopleDetail(i); return; }
@@ -2207,10 +2211,10 @@
   const lkSync = () => { lkMirror(); lkRender(); refresh(); };
   const linksOf = () => ({ links: LK.links.map(({ _rule, _mode, ...l }) => ({ ...l, features: l.features || [], extra: l.extra || [] })), related: LK.related.map(({ target, ...r }) => ({ ...r, extra: r.extra || [] })) });
   const lkMeeting = u => { const p = lkProvider(u); let id = '', pwd = false; try { const x = new URL(u); pwd = x.searchParams.has('pwd') || x.searchParams.has('passcode'); const m = x.pathname.match(/\/j\/(\d{9,11})/) || x.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})$/) || x.pathname.match(/\/([A-Za-z0-9._-]{6,})$/); if (m) id = m[1].replace(/^(\d{3})(\d{4})(\d{4})$/, '$1 $2 $3'); } catch {} return { provider: p || LKT.tConf, id, pwd }; };
-  const lkActs = (i, kind) => { const l = LK.links[i]; const locked = !!l._locked && !ruleMode; const view = l.embedded ? (f.key.value && l.bin_index != null ? [['download', 'i-download', LKT.tDownload]] : []) : [['open', 'i-ext', LKT.tOpen], ['copy', 'i-copy', LKT.tCopy]]; return `<span class="lk-acts">${view.map(([a, ic, t]) => `<button class="act views" type="button" data-lact="${a}" data-i="${i}" title="${esc(t)}"><svg class="ico"><use href="#${ic}"/></svg></button>`).join('')}${locked ? '' : `<button class="act edits${lkSel === i ? ' on' : ''}" type="button" data-lact="edit" data-i="${i}" title="${esc(LKT.tEdit)}"><svg class="ico"><use href="#i-dots"/></svg></button><button class="act edits" type="button" data-lact="rm" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button>`}</span>`; };
-  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}${l._locked ? ' locked' : ''}"><svg class="ico"><use href="#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}</span>${lkActs(i)}</div>`; };
-  const lkRelRow = i => { const r = LK.related[i], t = r.target; return `<div class="lk-row"><svg class="ico"><use href="#${t && t.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span class="lk-t">${esc(t ? t.summary || r.uid : r.uid)}</span><span class="lk-s">${esc(t ? [t.kind === 'task' ? LKT.tTask : LKT.tEvent, t.date ? fmtD(t.date) : '', t.done ? LKT.tDone : ''].filter(Boolean).join(' · ') : LKT.tNotfound)}</span><span class="lk-acts">${t ? `<button class="act views" type="button" data-lact="goto" data-i="${i}" title="${esc(LKT.tOpen)}"><svg class="ico"><use href="#i-ext"/></svg></button>` : ''}<button class="act edits" type="button" data-lact="rmrel" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="#i-x"/></svg></button></span></div>`; };
-  const lkSec = (icon, title, body) => body ? `<div class="lk-sec"><h4><svg class="ico"><use href="#${icon}"/></svg> ${esc(title)}</h4>${body}</div>` : '';
+  const lkActs = (i, kind) => { const l = LK.links[i]; const locked = !!l._locked && !ruleMode; const view = l.embedded ? (f.key.value && l.bin_index != null ? [['download', 'i-download', LKT.tDownload]] : []) : [['open', 'i-ext', LKT.tOpen], ['copy', 'i-copy', LKT.tCopy]]; return `<span class="lk-acts">${view.map(([a, ic, t]) => `<button class="act views" type="button" data-lact="${a}" data-i="${i}" title="${esc(t)}"><svg class="ico"><use href="${practical.sprite}#${ic}"/></svg></button>`).join('')}${locked ? '' : `<button class="act edits${lkSel === i ? ' on' : ''}" type="button" data-lact="edit" data-i="${i}" title="${esc(LKT.tEdit)}"><svg class="ico"><use href="${practical.sprite}#i-dots"/></svg></button><button class="act edits" type="button" data-lact="rm" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="${practical.sprite}#i-x"/></svg></button>`}</span>`; };
+  const lkRow = i => { const l = LK.links[i]; return `<div class="lk-row${lkSel === i ? ' sel' : ''}${l._locked ? ' locked' : ''}"><svg class="ico"><use href="${practical.sprite}#${lkIcon(l)}"/></svg><span class="lk-t" title="${esc(l.uri || l.filename)}">${esc(lkTitle(l))}</span><span class="lk-s">${esc(lkSub(l))}</span>${lkActs(i)}</div>`; };
+  const lkRelRow = i => { const r = LK.related[i], t = r.target; return `<div class="lk-row"><svg class="ico"><use href="${practical.sprite}#${t && t.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span class="lk-t">${esc(t ? t.summary || r.uid : r.uid)}</span><span class="lk-s">${esc(t ? [t.kind === 'task' ? LKT.tTask : LKT.tEvent, t.date ? fmtD(t.date) : '', t.done ? LKT.tDone : ''].filter(Boolean).join(' · ') : LKT.tNotfound)}</span><span class="lk-acts">${t ? `<button class="act views" type="button" data-lact="goto" data-i="${i}" title="${esc(LKT.tOpen)}"><svg class="ico"><use href="${practical.sprite}#i-ext"/></svg></button>` : ''}<button class="act edits" type="button" data-lact="rmrel" data-i="${i}" title="${esc(LKT.tRemove)}"><svg class="ico"><use href="${practical.sprite}#i-x"/></svg></button></span></div>`; };
+  const lkSec = (icon, title, body) => body ? `<div class="lk-sec"><h4><svg class="ico"><use href="${practical.sprite}#${icon}"/></svg> ${esc(title)}</h4>${body}</div>` : '';
   function lkRender() {
     lkMirror();
     const idx = LK.links.map((l, i) => i);
@@ -2218,7 +2222,7 @@
     let c = '';
     if (web.length) { const l = LK.links[web[0]], m = lkMeeting(l.uri); c += `<div class="lk-join"><button class="btn" type="button" data-lact="open" data-i="${web[0]}">${ico('headset')}<span>${esc(LKT.tJoin)}</span></button><b>${esc(l.label && l.label !== m.provider ? l.label : LKT.tMeeting.replace('{provider}', m.provider))}</b><small>${esc([m.id ? LKT.tId + ' ' + m.id : '', m.pwd ? LKT.tPwd : '', (l.features || []).map(x => x.toLowerCase()).join(' + ')].filter(Boolean).join(' · ') || lkHost(l.uri))}</small></div>`; const kv = [[LKT.tLink, l.uri.replace(/^https?:\/\//, '').slice(0, 40) + (l.uri.length > 48 ? '…' : '')], ...tel.map(i => [LKT.tPhone, LK.links[i].uri.replace(/^tel:/i, '') + (LK.links[i].label ? ' · ' + LK.links[i].label : '')])]; c += `<div class="lk-kv">${kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`; }
     c += conf.filter(i => i !== web[0] && !tel.includes(i)).map(lkRow).join('') + (web.length ? lkRow(web[0]) .replace('class="lk-row', 'class="lk-row edits') : '');
-    if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
+    if (!conf.length) c = `<button class="lk-pill edits" type="button" data-lact="jitsi"><svg class="ico"><use href="${practical.sprite}#i-plus"/></svg> ${esc(LKT.tJitsi)}</button>`;
     const internal = LK.related.map((r, i) => lkRelRow(i)).join('');
     const internet = idx.filter(i => LK.links[i].kind !== 'conference').map(lkRow).join('');
     const total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0);
@@ -2231,13 +2235,13 @@
     const l = lkSel != null ? LK.links[lkSel] : null;
     lkDetail.hidden = !l;
     if (!l) { lkDetail.innerHTML = ''; return; }
-    lkDetail.innerHTML = `<div class="lk-dh"><span>${esc(LKT.tEdit)}: ${esc(lkTitle(l))}</span><button type="button" data-lact="rm" data-i="${lkSel}">${esc(LKT.tRemove)}</button></div>` + (l.embedded ? `<div class="lk-kv" style="margin:0"><span>${esc(LKT.tAttach)}</span><span>${esc(l.filename || '')}</span><span>${esc(l.fmt ? 'Typ' : '')}</span><span>${esc(l.fmt || '')}</span></div>` : `<div class="field"><input type="url" class="aux mirror" data-lk="uri" value="${esc(l.uri)}"><span>${esc(LKT.tAddress)}</span></div><div class="field"><input type="text" class="aux mirror" data-lk="label" value="${esc(l.label || '')}" placeholder="${esc(lkHost(l.uri))}"><span>${esc(LKT.tLabel)}</span></div><span class="seg">${[['url', 'i-ext', LKT.tUrl], ['attach', 'i-download', LKT.tAttach], ['conference', 'i-chat', LKT.tConfk]].map(([k, ic, t]) => `<button type="button" data-lk-kind="${k}" aria-pressed="${l.kind === k}"><svg class="ico"><use href="#${ic}"/></svg> ${esc(t)}</button>`).join('')}</span>`);
+    lkDetail.innerHTML = `<div class="lk-dh"><span>${esc(LKT.tEdit)}: ${esc(lkTitle(l))}</span><button type="button" data-lact="rm" data-i="${lkSel}">${esc(LKT.tRemove)}</button></div>` + (l.embedded ? `<div class="lk-kv" style="margin:0"><span>${esc(LKT.tAttach)}</span><span>${esc(l.filename || '')}</span><span>${esc(l.fmt ? 'Typ' : '')}</span><span>${esc(l.fmt || '')}</span></div>` : `<div class="field"><input type="url" class="aux mirror" data-lk="uri" value="${esc(l.uri)}"><span>${esc(LKT.tAddress)}</span></div><div class="field"><input type="text" class="aux mirror" data-lk="label" value="${esc(l.label || '')}" placeholder="${esc(lkHost(l.uri))}"><span>${esc(LKT.tLabel)}</span></div><span class="seg">${[['url', 'i-ext', LKT.tUrl], ['attach', 'i-download', LKT.tAttach], ['conference', 'i-chat', LKT.tConfk]].map(([k, ic, t]) => `<button type="button" data-lk-kind="${k}" aria-pressed="${l.kind === k}"><svg class="ico"><use href="${practical.sprite}#${ic}"/></svg> ${esc(t)}</button>`).join('')}</span>`);
   }
   const lkAddUri = (uri, label) => { uri = uri.trim(); if (!uri) return; if (!/^[a-z][a-z0-9+.-]*:/i.test(uri)) uri = 'https://' + uri; const kind = lkKind(uri); if (LK.links.some(l => l.uri === uri)) return; LK.links.push({ kind, uri, label: label || '', embedded: false, filename: '', fmt: '', size: null, features: kind === 'conference' && /^https?:/i.test(uri) ? ['AUDIO', 'VIDEO'] : [], extra: [], keep: false }); lkSel = null; lkSync(); };
   const lkAddFiles = files => { let total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0); const errs = []; [...files].forEach(file => { if (file.size > 2 * 1024 * 1024 || total + file.size > 6 * 1024 * 1024) { errs.push(LKT.tToobig.replace('{name}', file.name)); return; } total += file.size; const rd = new FileReader(); rd.onload = () => { LK.links.push({ kind: 'attach', uri: '', label: '', embedded: true, filename: file.name, fmt: file.type || 'application/octet-stream', size: file.size, features: [], extra: [], keep: false, data: String(rd.result).replace(/^data:[^,]*,/, '') }); lkSync(); }; rd.readAsDataURL(file); }); lkMsg.className = 'lk-msg' + (errs.length ? ' err' : ''); lkMsg.textContent = errs.join(' · '); };
   const lkClosePop = () => { if (lkPop) { lkPop.remove(); lkPop = null; } };
   let lkSearchT = 0;
-  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await fetch('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = await r.json(); const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; document.body.appendChild(lkPop); placeUnder(lkPop, e.target); lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
+  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await fetch('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = await r.json(); const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="${practical.sprite}#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; document.body.appendChild(lkPop); placeUnder(lkPop, e.target); lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
   $('#ed-lk-search').addEventListener('blur', () => setTimeout(lkClosePop, 150));
   $('#ed-lk-addbtn').onclick = () => { lkAddUri($('#ed-lk-url').value); $('#ed-lk-url').value = ''; };
   $('#ed-lk-url').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#ed-lk-addbtn').click(); } });
@@ -2296,7 +2300,7 @@
     $('#ed-loc-swap').hidden = !LOC[O];
     $('[data-geo=map]', form).classList.toggle('hot', LOC.errAddr || LOC.errCoords);
     let h = '';
-    if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LT.tAddr : LT.tGeo}"><svg class="ico" aria-hidden="true"><use href="#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LT.tRmAddr : LT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LT.tErrAddr : LT.tErrCoords}</span>` : ''); }
+    if (LOC[O]) { const e = O === 'addr' ? LOC.errAddr : LOC.errCoords, v = O === 'addr' ? f.location.value : coordsText(); h = `<span class="chip${e ? ' err' : ''}" title="${O === 'addr' ? LT.tAddr : LT.tGeo}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${O === 'addr' ? 'i-pin' : 'i-target'}"/></svg><span class="txt">${(v || (LOC.pending ? '…' : '–')).replace(/</g, '&lt;')}</span><b data-locrm="${O}" title="${O === 'addr' ? LT.tRmAddr : LT.tRmCoords}">×</b></span>` + (e ? `<span class="errtxt">${O === 'addr' ? LT.tErrAddr : LT.tErrCoords}</span>` : ''); }
     else h = `<button class="chip ghost" type="button" data-locadd="${O}">${ico('plus')} ${O === 'addr' ? LT.tAddAddr : LT.tAddCoords}</button>`;
     locsub.innerHTML = h;
     const addr = f.location.value.trim(); $('#ed-loc-view').hidden = !addr; $('#ed-geo-view').hidden = !geoOf();
@@ -2347,7 +2351,7 @@
     const at = $('#gm-addr-txt'); at.textContent = gmAddrErr ? gm.dataset.tNone : gmAddrKnown ? gmAddr : ''; at.classList.toggle('unknown', gmAddrErr || !gmAddrKnown);
     const b = $('#gm-ok'), determine = LOC.addr && !gmAddrKnown;
     $('#gm-ok-txt').textContent = determine ? b.dataset.tDetermine : b.dataset.tApply;
-    $('#gm-ok-ico').setAttribute('href', determine ? '#i-pin' : '#i-check');
+    $('#gm-ok-ico').setAttribute('href', practical.sprite + (determine ? '#i-pin' : '#i-check'));
     const changed = LOC.addr ? gmMoved : (map ? coordsChanged() : false);
     b.classList.toggle('hot', determine); b.classList.toggle('good', !determine && changed);
     b.disabled = gmBusy || (!determine && !changed);
@@ -2642,7 +2646,7 @@
   function tplShow(hits) {
     if (tplPop) tplPop.remove(); tplPop = null; tplSel = -1; tplHits = hits; if (!hits.length) return;
     tplPop = document.createElement('div'); tplPop.className = 'rrpop tplpop'; tplPop.setAttribute('role', 'listbox');
-    tplPop.innerHTML = `<div class="q">${esc(D.tTplHead)}</div>` + hits.map((h, i) => `<button type="button" class="lk-hit" role="option" data-h="${i}" aria-selected="false"><svg class="ico" style="color:${esc(h.color)}"><use href="#i-calendar"/></svg><span>${esc(h.summary)}</span><small>${esc([D.tTplCount.replace('{n}', h.count), D.tTplLast.replace('{date}', fmtD(h.last) + (h.time ? ' ' + h.time : '')), h.cal_name].filter(Boolean).join(' · '))}</small></button>`).join('');
+    tplPop.innerHTML = `<div class="q">${esc(D.tTplHead)}</div>` + hits.map((h, i) => `<button type="button" class="lk-hit" role="option" data-h="${i}" aria-selected="false"><svg class="ico" style="color:${esc(h.color)}"><use href="${practical.sprite}#i-calendar"/></svg><span>${esc(h.summary)}</span><small>${esc([D.tTplCount.replace('{n}', h.count), D.tTplLast.replace('{date}', fmtD(h.last) + (h.time ? ' ' + h.time : '')), h.cal_name].filter(Boolean).join(' · '))}</small></button>`).join('');
     document.body.appendChild(tplPop);
     placeUnder(tplPop, f.summary);
     tplPop.addEventListener('mousedown', e => e.preventDefault()); // the title keeps the focus
@@ -3068,12 +3072,12 @@
     }
     $('.ct-rail', wrap).innerHTML = rail;
     sortSel.value = sort;
-    sortDir.innerHTML = `<svg class="ico s" aria-hidden="true"><use href="#i-${desc ? 'sort-desc' : 'sort-asc'}"/></svg>`;
+    sortDir.innerHTML = `<svg class="ico s" aria-hidden="true"><use href="${practical.sprite}#i-${desc ? 'sort-desc' : 'sort-asc'}"/></svg>`;
     sortDir.title = desc ? TS.desc : TS.asc; sortDir.setAttribute('aria-label', sortDir.title);
     applyFilter();
   }
   const sortBox = $('#ct-sortbox');
-  sortBox.innerHTML = `<span class="sel" title="${hesc(TS.sort)}"><svg class="ico s" aria-hidden="true"><use href="#i-swap"/></svg><select id="ct-sort" aria-label="${hesc(TS.sort)}">${FIELDS.map(v => `<option value="${v}">${hesc(SL[v])}</option>`).join('')}</select></span><button class="btn icon-btn" id="ct-dir" type="button"></button>`;
+  sortBox.innerHTML = `<span class="sel" title="${hesc(TS.sort)}"><svg class="ico s" aria-hidden="true"><use href="${practical.sprite}#i-swap"/></svg><select id="ct-sort" aria-label="${hesc(TS.sort)}">${FIELDS.map(v => `<option value="${v}">${hesc(SL[v])}</option>`).join('')}</select></span><button class="btn icon-btn" id="ct-dir" type="button"></button>`;
   const sortSel = $('#ct-sort'), sortDir = $('#ct-dir');
   const resorted = () => { resort(); if (activeKey) reveal(activeKey); };
   sortSel.onchange = () => { sort = sortSel.value; localStorage.ctSort = sort; resorted(); };

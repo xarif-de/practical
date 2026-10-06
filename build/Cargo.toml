@@ -68,7 +68,8 @@ unic-langid = { version = "0.9", features = ["macros"] }
 # the browser gets every form (i18n.rs `plural_forms`) and picks one with Intl.PluralRules.
 fluent-syntax = "0.12"
 # Already linked through tower-http's gzip (same version, same default backend): decodes an embedded
-# .gz asset once for a client that accepts no compression (routes/assets.rs).
+# .gz asset once for a client that accepts no compression (routes/assets.rs) and the region-name tables
+# build.rs embeds gzip-compressed (domain/holidays.rs).
 flate2 = "1.1"
 # Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06
 # (arm64 musl image build, 1 CPU / 192 MiB container like prod, synthetic 3,920-object DB, 20 requests
@@ -91,6 +92,13 @@ oxc_compat = "0.153"
 # brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
 brotli = "9"
 flate2 = "1.1"
+# regions(): reads src/data/regions.json; i18n_js(): runs src/i18n.rs itself (`#[path]`) — all of these are
+# dependencies of the binary already, same versions (tracing: i18n.rs' log lines, no subscriber here)
+serde_json = "1.0"
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+unic-langid = "0.9"
+tracing = "0.1"
 
 # Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, one codegen unit.
 # `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
@@ -111,8 +119,23 @@ lto = false
 codegen-units = 1
 opt-level = 3
 
-# Release tags only (dagger-ci.yaml release-build-args: CARGO_PROFILE=dist on `v*` tags): the whole program
-# optimised as one unit — smallest, fastest binary, single-threaded link.
+# Release tags only (dagger-ci.yaml release-build-args: CARGO_PROFILE=dist on `v*` tags) — what ships
+# officially: the whole program optimised as one unit. Measured 2026-10-06 (arm64 musl, the Dockerfile's
+# builder image, each a cold build in an 8-CPU container; each binary in an alpine container with 1 CPU /
+# 192 MiB and the image's MIMALLOC_* env, synthetic 3,920-object DB, 10 paths (pages + APIs): CPU of the
+# first request and of 20 warm ones, summed over the paths, median of 3 interleaved rounds):
+#                        first requests   warm     binary    cold build
+#   release (lto false)  646 ms           121 ms   21.1 MB   355 s
+#   dist: fat, O3        620 (−4 %)       116      20.8 MB   666 s (other jobs on the host) / ~380 s
+#   fat, opt-level 2     631              119      19.5 MB   411 s
+#   thin LTO, O3         625              116      21.8 MB   587 s
+#   fat, opt-level "s"   717 (+11 %)      131      16.1 MB   295 s
+#   fat, mimalloc v2     628              120      20.7 MB   377 s    RSS −2.4 MB in 2 rounds, +0.4 in 1
+# dist was lowest in every round (first requests 6.1-6.3 s vs release 6.4-6.6 s in total); RSS after the
+# run 64-66 MB for all. Kept: fat LTO, opt-level 3, mimalloc's default (v3). `panic` stays `unwind`:
+# tasks::guarded keeps the background loops alive through a panic (catch_unwind). No target-cpu: the
+# image ships from CI's amd64 build to a Hetzner CX53 (Intel; infra group_vars); x86-64-v2/v3 could not
+# be measured on this arm64 host, and v3 (AVX2) would not start on AVX-less CPUs a self-hoster may own.
 [profile.dist]
 inherits = "release"
 lto = true

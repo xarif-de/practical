@@ -12,6 +12,12 @@ use std::io::Write as _;
 
 #[path = "src/css_min.rs"]
 mod css_min;
+#[path = "src/i18n.rs"]
+#[allow(dead_code)] // build.rs needs `js_json` only
+mod i18n;
+#[path = "src/domain/holidays/names.rs"]
+#[allow(dead_code)] // the reader half is for the binary
+mod names;
 
 /// name, MIME type, how it is minified. The sources in assets/ stay readable; the binary embeds
 /// only the gzip and brotli forms (assets.rs decodes the gzip form once for the rare client that
@@ -24,6 +30,15 @@ const ASSETS: &[(&str, &str, Minify)] = &[
     ("history.css", "text/css; charset=utf-8", Minify::Css),
     ("sw.js", "text/javascript; charset=utf-8", Minify::Js),
     ("icon.svg", "image/svg+xml", Minify::No),
+    // the icon sprite of every <use> (layout.html carried it inline: 34 KB raw / 8 KB gzip per page)
+    ("icons.svg", "image/svg+xml", Minify::No),
+    // the colour scheme before the first paint (layout.html <head>, parser-blocking; was inline)
+    ("theme.js", "text/javascript; charset=utf-8", Minify::Js),
+    // app.js' strings (the js-* messages of locales/<lang>.ftl), one file per language (was a JSON block per page)
+    ("i18n-de.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-en.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-fr.js", "text/javascript; charset=utf-8", Minify::I18n),
+    ("i18n-es.js", "text/javascript; charset=utf-8", Minify::I18n),
     // Leaflet 1.9.4 (BSD-2), vendored; fetched by the browser only when the map dialog opens.
     // Shipped as vendored (leaflet.js is upstream's minified build; both keep their licence header).
     ("leaflet.js", "text/javascript; charset=utf-8", Minify::No),
@@ -35,6 +50,8 @@ enum Minify {
     Js,
     Css,
     No,
+    /// generated from locales/ (i18n_js), not a file in assets/
+    I18n,
 }
 
 /// Parser-based (oxc): a syntax error fails the build instead of shipping broken code. Classic
@@ -54,8 +71,16 @@ fn minify_js(name: &str, src: &str) -> String {
     Codegen::new().with_options(CodegenOptions { minify: true, comments, ..CodegenOptions::default() }).with_scoping(ret.scoping).build(&program).code
 }
 
+/// `var I18N={…};` — `I18n::js_json(lang)` of src/i18n.rs itself (`mod i18n` above): the very code the
+/// binary would run, so plural messages reach the browser as their forms (`{"$": var, "one": …}`) here too.
+fn i18n_js(lang: &str) -> String {
+    format!("var I18N={};", i18n::I18n::load().js_json(lang))
+}
+
 fn assets() {
     println!("cargo:rerun-if-changed=assets");
+    println!("cargo:rerun-if-changed=locales");
+    println!("cargo:rerun-if-changed=src/i18n.rs");
     let out = std::env::var("OUT_DIR").expect("OUT_DIR");
     // one thread per file: brotli 11 is the slow part (app.js ≈ 1 s), the files are independent
     let lens: Vec<usize> = std::thread::scope(|s| {
@@ -63,8 +88,9 @@ fn assets() {
         jobs.into_iter().map(|j| j.join().expect("asset build panicked")).collect()
     });
     let mut table = String::from("&[\n");
-    for (&(name, mime, _), len) in ASSETS.iter().zip(lens) {
-        writeln!(table, "    Asset {{ name: {name:?}, mime: {mime:?}, len: {len}, gzip: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.gz\")), br: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.br\")) }},").unwrap();
+    for (&(name, mime, how), len) in ASSETS.iter().zip(lens) {
+        let generated = how == Minify::I18n;
+        writeln!(table, "    Asset {{ name: {name:?}, mime: {mime:?}, len: {len}, generated: {generated}, gzip: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.gz\")), br: include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.br\")) }},").unwrap();
     }
     table.push(']');
     fs::write(format!("{out}/assets.rs"), table).unwrap();
@@ -73,9 +99,10 @@ fn assets() {
 /// Writes OUT_DIR/<name>{,.gz,.br}; returns the minified size.
 fn build_asset(name: &str, how: Minify) -> usize {
     let out = std::env::var("OUT_DIR").expect("OUT_DIR");
-    let src = fs::read(format!("assets/{name}")).unwrap_or_else(|e| panic!("assets/{name}: {e}"));
+    let lang = name.strip_prefix("i18n-").and_then(|n| n.strip_suffix(".js"));
+    let src = if how == Minify::I18n { i18n_js(lang.expect("i18n-<lang>.js")).into_bytes() } else { fs::read(format!("assets/{name}")).unwrap_or_else(|e| panic!("assets/{name}: {e}")) };
     let body = match how {
-        Minify::No => src,
+        Minify::No | Minify::I18n => src,
         Minify::Js => minify_js(name, std::str::from_utf8(&src).expect("UTF-8")).into_bytes(),
         Minify::Css => css_min::minify_css(std::str::from_utf8(&src).expect("UTF-8")).into_bytes(),
     };
@@ -94,8 +121,46 @@ fn build_asset(name: &str, how: Minify) -> usize {
     body.len()
 }
 
+/// src/data/regions.json (tools/gen_regions.py, 566 KB) as the two tables of names.rs, each
+/// gzip-9 (decoded by flate2, which the binary links anyway; a brotli decoder would add ≈180 KB): what the app reads and nothing else (no `source`/`generated`/`langs`, positional
+/// fields, a name shared by several languages once). holidays.rs decodes a table when first needed.
+fn regions() {
+    println!("cargo:rerun-if-changed=src/data/regions.json");
+    let out = std::env::var("OUT_DIR").expect("OUT_DIR");
+    let src = fs::read_to_string("src/data/regions.json").expect("src/data/regions.json");
+    let data: serde_json::Value = serde_json::from_str(&src).expect("src/data/regions.json: JSON");
+    let rows = |kind: &str, meta: &dyn Fn(&str, &serde_json::Value) -> String| -> Vec<names::Src> {
+        data[kind].as_object().unwrap_or_else(|| panic!("regions.json: no {kind}")).iter().map(|(code, v)| {
+            let n = v["n"].as_object().unwrap_or_else(|| panic!("regions.json: {code} has no names"));
+            let s = |x: &serde_json::Value| x.as_str().expect("a name is a string").to_string();
+            for l in n.keys() {
+                assert!(names::LANGS.contains(&l.as_str()), "regions.json: {code} has a name in {l}, not a column of names.rs");
+            }
+            names::Src { code: code.clone(), meta: meta(code, v), names: names::LANGS.map(|l| n.get(l).map(s)), any: n.values().next().map(s) }
+        }).collect()
+    };
+    let countries = rows("countries", &|_, v| (v["oh"].as_u64().unwrap_or(0) + 2 * v["ng"].as_u64().unwrap_or(0)).to_string());
+    let subs = rows("subs", &|code, v| {
+        let p = v["p"].as_str().expect("regions.json: a subdivision without parent");
+        if p == &code[..2] { String::new() } else { p.to_string() }
+    });
+    std::thread::scope(|s| {
+        for (name, rows) in [("countries", countries), ("subs", subs)] {
+            let out = &out;
+            s.spawn(move || {
+                let text = names::encode(rows);
+                let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+                gz.write_all(text.as_bytes()).unwrap();
+                fs::write(format!("{out}/regions-{name}.gz"), gz.finish().unwrap()).unwrap();
+            });
+        }
+    });
+    fs::write(format!("{out}/regions-cldr.txt"), data["cldr"].as_str().expect("regions.json: cldr")).unwrap();
+}
+
 fn main() {
     assets();
+    regions();
     println!("cargo:rerun-if-changed=Cargo.toml");
     let manifest = fs::read_to_string("Cargo.toml").expect("read Cargo.toml");
     let mut tags = manifest

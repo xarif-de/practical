@@ -30,10 +30,12 @@ pub fn lines_of_html(html: &str) -> String {
     html.replace("><", ">\n<")
 }
 
-/// Compares `actual` with `tests/snapshots/<name>`; `UPDATE_SNAPSHOTS=1` writes it instead.
+/// Compares `actual` with `tests/snapshots/<name>`; `UPDATE_SNAPSHOTS=1` writes it instead. The icon
+/// sprite's version is masked (`?v=<v>`): it changes with every icon, not with the markup under test.
 pub fn assert_snapshot(name: &str, actual: &str) {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots").join(name);
-    let actual = if actual.ends_with('\n') { actual.to_string() } else { format!("{actual}\n") };
+    let actual = actual.replace(crate::routes::assets::icons(), "/assets/icons.svg?v=<v>");
+    let actual = if actual.ends_with('\n') { actual } else { format!("{actual}\n") };
     if std::env::var("UPDATE_SNAPSHOTS").is_ok_and(|v| v == "1") {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &actual).unwrap();

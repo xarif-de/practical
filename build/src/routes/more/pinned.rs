@@ -95,11 +95,11 @@ fn countdown_golden() {
     assert!(html.contains("Anna Schmidt · 41"), "the age it turns: {html}");
     // a 29 February birthday in a common year is on the 28th; this year's is past, so the next one
     // (28 February 2027) — never a negative count
-    assert!(html.contains("<b>137</b><small>Tage</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-cake\"/></svg></div><h3>Lea Schaltjahr</h3><span>Sonntag, 28. Februar 2027</span>"), "{html}");
+    assert!(html.contains(&format!("<b>137</b><small>Tage</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"{}#i-cake\"/></svg></div><h3>Lea Schaltjahr</h3><span>Sonntag, 28. Februar 2027</span>", crate::routes::assets::icons())), "{html}");
     assert!(!html.contains("<b>-"), "{html}");
     // the unit under the count is a plural: one day is "Tag"
     let tomorrow = countdown(&year("2026-10-19"), &lang("de"));
-    assert!(tomorrow.contains("<b>1</b><small>Tag</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"#i-cake\"/></svg></div><h3>Anna Schmidt · 41</h3>"), "{tomorrow}");
+    assert!(tomorrow.contains(&format!("<b>1</b><small>Tag</small></div><div><div class=\"ic\"><svg class=\"ico\" aria-hidden=\"true\"><use href=\"{}#i-cake\"/></svg></div><h3>Anna Schmidt · 41</h3>", crate::routes::assets::icons())), "{tomorrow}");
 }
 
 #[test]

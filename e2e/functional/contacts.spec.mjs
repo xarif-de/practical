@@ -205,7 +205,7 @@ test('sort field/direction and the view switch are kept (localStorage)', async (
   await page.click('#ct-dir'); // descending
   await page.reload();
   await expect(page.locator('#ct-sort')).toHaveValue('family');
-  await expect(page.locator('#ct-dir use')).toHaveAttribute('href', '#i-sort-desc');
+  await expect(page.locator('#ct-dir use')).toHaveAttribute('href', /#i-sort-desc$/); // the sprite file's URL + the symbol
   const desc = await letters();
   expect(desc.indexOf('Z')).toBeLessThan(desc.indexOf('A')); // Zimmermann before Albrecht
   await page.click('[data-ctview=table]');

@@ -23,7 +23,7 @@ shot('tasks groups: default lookback, sort by priority descending, filter popove
   await snap('tk-groups-month');
   await page.selectOption('#tk-sort', 'prio');
   await page.click('#tk-dir');
-  await expect(page.locator('#tk-dir use')).toHaveAttribute('href', '#i-sort-desc');
+  await expect(page.locator('#tk-dir use')).toHaveAttribute('href', /#i-sort-desc$/); // the sprite file's URL + the symbol
   await snap('tk-groups-prio-desc');
   await page.click('.topbar .filter:has(#calfilter) > button');
   await expect(page.locator('#calfilter')).toBeVisible();

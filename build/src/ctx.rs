@@ -70,9 +70,14 @@ impl PageCtx {
     pub fn tn<V: std::borrow::Borrow<i64>>(&self, key: &str, name: &str, value: V) -> String {
         self.i18n.t1(&self.lang, key, name, FluentValue::from(*value.borrow()))
     }
-    /// The js-* strings of the page language as JSON for app.js (`<` escaped for the <script> block).
-    pub fn js_i18n(&self) -> String {
-        crate::render::script_json(self.i18n.js_json(&self.lang))
+    /// The script with app.js' strings (js-*) in the page language (build.rs `i18n_js`; a language
+    /// without a file reads English, as `I18n::t` does).
+    pub fn i18n_src(&self) -> &'static str {
+        crate::routes::assets::url(&format!("i18n-{}.js", self.lang)).or_else(|| crate::routes::assets::url("i18n-en.js")).expect("i18n-en.js")
+    }
+    /// The icon sprite (`<use href="{icons}#i-…">`, macros.html `ico`).
+    pub fn icons(&self) -> &'static str {
+        crate::routes::assets::icons()
     }
     pub fn locale(&self) -> &'static str {
         crate::i18n::locale(&self.lang)
