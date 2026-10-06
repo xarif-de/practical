@@ -118,10 +118,19 @@ function fullDump() {
   return { names, vecs, el };
 }
 
-async function stableShot(page, name, opts, t = {}) {
+// E2E_SHOT_REF (gate.sh: the reference baseline): a first screenshot byte-identical to the reference's PNG of the same
+// state is taken as stable without a second one. The reference was itself confirmed by two agreeing screenshots;
+// equal bytes = the look the state settled to there. Any other first shot is confirmed as before.
+const SHOT_REF = process.env.E2E_SHOT_REF || '';
+async function stableShot(page, name, opts, t = {}, ref = null) {
   // the screenshot is taken until two agree: a late repaint must not land in the baseline
   let png = await page.screenshot(opts);
   t.shots = (t.shots || 0) + 1;
+  if (ref) {
+    let want = null;
+    try { want = fs.readFileSync(ref); } catch (_) { /* a state the reference does not have */ }
+    if (want && png.equals(want)) { t.refHits = (t.refHits || 0) + 1; return png; }
+  }
   for (let i = 0; i < 5; i++) {
     const again = await page.screenshot(opts);
     t.shots++;
@@ -143,7 +152,8 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
   fs.mkdirSync(dir, { recursive: true });
   const base = path.join(dir, name);
   const shotOpts = { fullPage, animations: 'disabled', caret: 'hide', scale: 'device', mask, maskColor: '#ff00ff' };
-  const png = await stableShot(page, name, shotOpts, t);
+  const refOf = n => SHOT_REF ? path.join(SHOT_REF, testInfo.project.name, n + '.png') : null;
+  const png = await stableShot(page, name, shotOpts, t, refOf(name));
   fs.writeFileSync(base + '.png', png);
   const c2 = clock();
   const { html, style, t: inPage } = await page.evaluate(dump, STYLE_PROPS);
@@ -168,7 +178,7 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
       const s0 = clock();
       await settle(page);
       const s1 = clock();
-      fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts, t));
+      fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts, t, refOf(`${name}~s${i}`)));
       t.segs++; t.segSettle += s1 - s0; t.segShot += clock() - s1;
     }
     // back where the test left it (nothing to undo when no segment scrolled)

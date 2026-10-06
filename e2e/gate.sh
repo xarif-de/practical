@@ -38,7 +38,7 @@ if [ "$MODE" = full ]; then
   REV="$(git -C "$E2E/.." rev-parse --short HEAD)$( [ -n "$(git -C "$E2E/.." status --porcelain -- build)" ] && echo +dirty || true)"
   OUT="${E2E_OUT:-$HOME/.cache/practical-e2e/$REV}"
   echo "== visual baseline → $OUT"
-  ./baseline.sh "$OUT"
+  E2E_SHOT_REF="$REF" ./baseline.sh "$OUT" # a first screenshot equal to the reference's needs no second (lib/capture.mjs)
   step "visual"
   echo "== compare $REF → $OUT"
   node compare.mjs "$REF" "$OUT"
