@@ -91,6 +91,7 @@ pub fn config(db_path: &str) -> Config {
 pub struct TestApp {
     pub state: SharedState,
     pub router: axum::Router,
+    pub sessions: crate::sessions::MemoryStore,
     dir: PathBuf,
 }
 
@@ -175,8 +176,9 @@ impl TestApp {
                 .await
                 .unwrap();
         }
-        let router = crate::build_router(&state).expect("router");
-        Self { state, router, dir }
+        let sessions = crate::sessions::MemoryStore::default();
+        let router = crate::build_router_with(&state, sessions.clone()).expect("router");
+        Self { state, router, sessions, dir }
     }
 
     /// An individual principal whose password is `pw` (the hash is made by the store's own app-token
