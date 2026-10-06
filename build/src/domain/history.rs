@@ -84,12 +84,14 @@ impl Guard<'_> {
     }
 }
 
-/// Polls for DAV changes (the change poller's tick).
-pub async fn poll(state: &AppState) {
+/// Polls for DAV changes (the change poller's tick); `false` when the read failed.
+pub async fn poll(state: &AppState) -> bool {
     let _lock = state.history.lock.lock().await;
     if let Err(e) = ingest(state, None).await {
         tracing::warn!("history: {e}");
+        return false;
     }
+    true
 }
 
 fn hash(text: &str) -> String {

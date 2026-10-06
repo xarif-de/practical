@@ -54,10 +54,42 @@ struct Fire {
     tag: String,
 }
 
-async fn tick(state: &SharedState) -> Result<usize, String> {
+/// One subscriber's reminders that can fire while `today` (in `tz`) lasts.
+struct Planned {
+    principal: String,
+    subs: Vec<Sub>,
+    tz: chrono_tz::Tz,
+    today: NaiveDate,
+    fires: Vec<Fire>,
+}
+
+/// What the reminder loop keeps between rounds. The reminders a round can fire depend on the
+/// database and on each subscriber's day — not on the minute — so they are computed again only when
+/// `db::Watch` saw a commit or a subscriber's day changed; every other round only checks the fire
+/// window. (Before: every minute a full parse of every task calendar plus a 6-day expansion per
+/// subscriber, ≈ 80 % of the pod's idle CPU — perf-baseline.md §1.)
+#[derive(Default)]
+pub struct Plan {
+    stamp: Option<(u64, i64)>,
+    users: Vec<Planned>,
+    /// rounds that computed the reminders (not only checked the window)
+    pub builds: usize,
+}
+
+/// A reminder a round recorded as sent: principal, tag, trigger (RFC 3339), payload.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fired {
+    pub principal: String,
+    pub tag: String,
+    pub trigger: String,
+    pub payload: String,
+}
+
+/// Every subscriber's reminders anchored around their `today` — what each minute's round of old
+/// computed afresh, unchanged. On an error `out` keeps the subscribers before it: they still fire,
+/// as they did when the round failed at that subscriber.
+async fn build(state: &AppState, now: chrono::DateTime<Utc>, out: &mut Vec<Planned>) -> Result<(), String> {
     let subs = subscriptions(state).await.map_err(|e| e.to_string())?;
-    let now = crate::clock::now();
-    let mut sent = 0;
     for (principal, subs) in subs {
         let Some(user) = state.principals.get_principal(&principal).await.map_err(|e| e.to_string())? else { continue };
         let p = prefs::get(&state.db, &principal).await.map_err(|e| e.to_string())?;
@@ -100,20 +132,43 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
                 tag: r.key(),
             });
         }
-        for fire in fires {
+        out.push(Planned { principal, subs, tz, today, fires });
+    }
+    Ok(())
+}
+
+/// One minute's round at `now`; `stamp` = `db::Watch::stamp` taken before it. Returns the reminders
+/// recorded as sent and how many deliveries succeeded.
+async fn tick(state: &SharedState, plan: &mut Plan, stamp: Option<(u64, i64)>, now: chrono::DateTime<Utc>) -> Result<(Vec<Fired>, usize), String> {
+    let current = stamp.is_some() && plan.stamp == stamp && plan.users.iter().all(|u| now.with_timezone(&u.tz).date_naive() == u.today);
+    let mut failed = None;
+    if !current {
+        plan.stamp = None;
+        plan.users.clear();
+        plan.builds += 1;
+        match build(state, now, &mut plan.users).await {
+            Ok(()) => plan.stamp = stamp,
+            Err(e) => failed = Some(e),
+        }
+    }
+    let mut fired = vec![];
+    let mut sent = 0;
+    for u in &plan.users {
+        let (principal, subs) = (&u.principal, &u.subs);
+        for fire in &u.fires {
             // fire window: trigger within [now-2min, now+1min] (the poll runs every minute)
             if fire.trigger < now - Duration::minutes(2) || fire.trigger > now + Duration::minutes(1) {
                 continue;
             }
             let key_trigger = fire.trigger.to_rfc3339();
             let already: i64 = sqlx::query("SELECT count(*) AS n FROM practical_alarms_sent WHERE principal = ? AND cal_id = ? AND object_id = ? AND trigger_at = ?")
-                .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
+                .bind(principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .fetch_one(&state.db).await.map_err(|e| e.to_string())?.get("n");
             if already > 0 {
                 continue;
             }
             let payload = serde_json::json!({ "title": fire.title, "body": fire.body, "url": fire.url, "tag": fire.tag }).to_string();
-            for s in &subs {
+            for s in subs {
                 match send(state, s, &payload).await {
                     Ok(()) => sent += 1,
                     Err(e) => {
@@ -125,13 +180,21 @@ async fn tick(state: &SharedState) -> Result<usize, String> {
                 }
             }
             sqlx::query("INSERT OR IGNORE INTO practical_alarms_sent (principal, cal_id, object_id, trigger_at) VALUES (?, ?, ?, ?)")
-                .bind(&principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
+                .bind(principal).bind(&fire.cal_id).bind(&fire.object_id).bind(&key_trigger)
                 .execute(&state.db).await.map_err(|e| e.to_string())?;
+            fired.push(Fired { principal: principal.clone(), tag: fire.tag.clone(), trigger: key_trigger, payload });
         }
     }
-    // housekeeping: sent-log older than 30 days
-    let _ = sqlx::query("DELETE FROM practical_alarms_sent WHERE sent_at < datetime('now', '-30 days')").execute(&state.db).await;
-    Ok(sent)
+    match failed {
+        Some(e) => Err(e),
+        None => Ok((fired, sent)),
+    }
+}
+
+/// Housekeeping of the sent-log (the hourly purger, `tasks::spawn_trash_purger`): a row only guards
+/// its trigger's fire window of minutes, 30 days is a wide margin.
+pub async fn purge_sent(state: &AppState) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("DELETE FROM practical_alarms_sent WHERE sent_at < datetime('now', '-30 days')").execute(&state.db).await?.rows_affected())
 }
 
 pub fn spawn_reminder_loop(state: SharedState) {
@@ -142,13 +205,22 @@ pub fn spawn_reminder_loop(state: SharedState) {
     tokio::spawn(async move {
         let mut t = tokio::time::interval(StdDuration::from_secs(60));
         t.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut plan = Plan::default();
+        let mut watch = crate::db::Watch::new(state.db.clone());
         loop {
             t.tick().await;
-            match tick(&state).await {
-                Ok(0) => {}
-                Ok(n) => tracing::info!("push reminders sent: {n}"),
-                Err(e) => tracing::warn!("push reminder loop: {e}"),
+            // the stamp BEFORE the reads: a commit racing them moves it, so the next round rebuilds
+            let stamp = watch.stamp().await;
+            match crate::tasks::guarded("push reminder loop", tick(&state, &mut plan, stamp, crate::clock::now())).await {
+                Some(Ok((_, 0))) => {}
+                Some(Ok((_, n))) => tracing::info!("push reminders sent: {n}"),
+                Some(Err(e)) => tracing::warn!("push reminder loop: {e}"),
+                // half-built after a panic: start over
+                None => plan = Plan::default(),
             }
         }
     });
 }
+
+#[cfg(test)]
+mod pinned;
