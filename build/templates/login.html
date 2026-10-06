@@ -4,7 +4,7 @@
 {% block content %}
 <div class="login">
   <h1>{{ ctx.t("login-title") }}</h1>
-  {% if error %}<div class="flash error">{{ ctx.t("login-failed") }}</div>{% endif %}
+  {% if error %}<div class="flash error" role="alert">{{ ctx.t("login-failed") }}</div>{% endif %}
   {% if let Some(name) = oidc_name %}
   <form method="post" action="/login/oidc" id="oidc-form"{% if auto_oidc %} data-auto{% endif %}>
     {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}

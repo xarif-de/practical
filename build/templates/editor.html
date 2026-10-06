@@ -29,7 +29,7 @@
 <button class="btn btn-primary icon-btn edits" type="submit" id="ed-save">{{ m::ico_c("plus", "only-new") }}{{ m::ico_c("check", "only-edit") }}</button>
 <button class="btn icon-btn edits" type="button" id="ed-reset" title="{{ ctx.t("ed-reset") }}" aria-label="{{ ctx.t("ed-reset") }}">{{ m::ico("reset") }}</button>
 <span class="views muted small">{{ ctx.t("ed-view-hint") }}</span>
-<span class="muted small" id="ed-error"></span>
+<span class="muted small" id="ed-error" role="alert"></span>
 <span class="grow"></span>
 <button class="btn danger icon-btn" type="button" id="ed-delete" data-del title="{{ ctx.t("delete") }}" aria-label="{{ ctx.t("delete") }}">{{ m::ico("trash") }}</button>
 </div></footer>

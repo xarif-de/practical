@@ -272,4 +272,5 @@ test('the display name is the editor\'s title: 20 px semibold like the event tit
   await expect(page.locator('#ctform')).toHaveClass(/mode-edit/);
   expect(await font()).toEqual(['20px', '600', '0px']);
   expect(await name.evaluate(el => getComputedStyle(el).borderBottomStyle)).toBe('solid'); // the edit underline stays
+  await expect(page.locator('#ct-error')).toHaveAttribute('role', 'alert'); // a failed save is announced
 });
