@@ -225,9 +225,11 @@
   <div class="hx-chips" data-r="chips"></div>
   <div data-r="view"></div>`;
   const R = n => $(`[data-r="${n}"]`, root);
-  // the filter popover is drawn after app.js placed every popover on the page: placed here, the same way
+  // the filter popover is drawn after app.js placed every popover on the page: placed here, the same way —
+  // by chrome() once the toolbar holds its final count/badge/zoom (fitted before, the list view's hidden zoom
+  // moved the button and left it 7.75 px past a 390 px screen until a resize) and on open
   const hxf = $('.hx-filter', root), fit = () => practical.fitPop(R('panel'));
-  fit(); ['pointerenter', 'focusin', 'click'].forEach(t => hxf.addEventListener(t, fit));
+  ['pointerenter', 'focusin', 'click'].forEach(t => hxf.addEventListener(t, fit));
   const subs = [];
   const emit = (info = {}) => { for (const fn of subs) fn(info); };
   const flash = id => { const n = $(`[data-cid="${id}"]`, root); if (n) { n.classList.remove('hx-flash'); void n.getBoundingClientRect(); n.classList.add('hx-flash'); } };
@@ -239,6 +241,7 @@
     R('chips').innerHTML = activeChips();
     $$('[data-view]', root).forEach(b => b.setAttribute('aria-pressed', b.dataset.view === view));
     R('zoom').hidden = view !== 'map';
+    fit();
   }
 
   // ---- view: line map ---------------------------------------------------------------------------

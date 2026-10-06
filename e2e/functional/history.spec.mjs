@@ -111,4 +111,16 @@ test.describe('phone', () => {
     expect(b.x, 'left edge').toBeGreaterThanOrEqual(8);
     expect(b.x + b.width, 'right edge').toBeLessThanOrEqual(390 - 8);
   });
+  test('the closed filter popover is placed for the drawn toolbar, without a resize after load', async ({ page }) => {
+    // a slow phone dispatches its one `resize` before the deferred scripts ran: no listener sees it, so the
+    // placement history.js makes is the only one. The list view hides the zoom buttons, which moves the button
+    // (fitted before that: right edge at 397.75 px of 390 until a resize or an open)
+    await page.addInitScript(() => addEventListener('resize', e => e.stopImmediatePropagation(), true));
+    await page.goto('/history?view=list');
+    await page.locator('.hxc-list').waitFor();
+    const b = await page.locator('.hx-fpop').evaluate(p => { const r = p.getBoundingClientRect(); return { left: r.left, right: r.right, visibility: getComputedStyle(p).visibility }; });
+    expect(b.visibility, 'closed').toBe('hidden');
+    expect(b.left, 'left edge').toBeGreaterThanOrEqual(8);
+    expect(b.right, 'right edge').toBeLessThanOrEqual(390 - 8);
+  });
 });
