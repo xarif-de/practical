@@ -746,6 +746,7 @@ js-ed-del = Delete this event?
 js-ed-delRule = Delete this rule? Events keep their values.
 js-ed-series = This is a recurring event; the whole series is changed.
 js-ed-newEv = New event
+js-ed-newTask = New task
 js-ed-editEv = Edit event
 js-ed-conflict = Changed elsewhere — reload.
 js-ed-copied = Copied

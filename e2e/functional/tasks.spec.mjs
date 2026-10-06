@@ -152,6 +152,13 @@ test('a task without STATUS is open on the board and in the table; a save does n
   await expect(row.locator('select[data-f=status] option[value=""]')).toHaveCount(0);
 });
 
+test('a new task names itself "Neue Aufgabe" in the colour picker until it has a title', async ({ page }) => {
+  await view(page, 'groups');
+  await expect(page.locator('#ed.docked #edform.new')).toBeVisible();
+  await page.click('#ed-color-btn');
+  await expect(page.locator('.cpk .cpk-h b')).toHaveText('Neue Aufgabe');
+});
+
 test('board: drag a card into another column sets its status', async ({ page }) => {
   const key = await seedTask(page, 'F3 Ziehen', { status: 'NEEDS-ACTION' });
   await view(page, 'board');

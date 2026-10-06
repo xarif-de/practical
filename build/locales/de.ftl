@@ -746,6 +746,7 @@ js-ed-del = Diesen Termin löschen?
 js-ed-delRule = Diese Regel löschen? Termine behalten ihre Werte.
 js-ed-series = Serientermin — Änderungen gelten für die ganze Serie.
 js-ed-newEv = Neuer Termin
+js-ed-newTask = Neue Aufgabe
 js-ed-editEv = Termin bearbeiten
 js-ed-conflict = Anderswo geändert — bitte neu laden.
 js-ed-copied = Kopiert

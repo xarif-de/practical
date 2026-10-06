@@ -1640,7 +1640,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = MONTHS;
   const DOW = WEEKDAYS;
-  const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'conflict', 'delTask']);
+  const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'newTask', 'conflict', 'delTask']);
   const HOST = () => window.rusticalHost || {};
   let refreshQ = 0; // a refresh() waiting for the next frame (typing, see the form's input listener)
   const flush = () => { if (refreshQ) refresh(); };
