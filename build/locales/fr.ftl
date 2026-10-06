@@ -853,6 +853,7 @@ js-ed-del = Supprimer cet événement ?
 js-ed-delRule = Supprimer cette règle ? Les événements conservent leurs valeurs.
 js-ed-series = Événement récurrent : toute la série est modifiée.
 js-ed-newEv = Nouvel événement
+js-ed-newTask = Nouvelle tâche
 js-ed-editEv = Modifier l'événement
 js-ed-conflict = Modifié ailleurs — rechargez.
 js-ed-copied = Copié

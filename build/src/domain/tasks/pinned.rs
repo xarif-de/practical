@@ -149,3 +149,25 @@ async fn cache_follows_the_store() {
     assert_eq!(r.iter().map(|x| (x.summary.as_str(), x.at)).collect::<Vec<_>>(), [("Erinnern", dt("2026-10-20T11:00"))]);
     assert!(reminders(&app.state, &cals().await, tz(), date("2026-10-21"), date("2026-10-30")).await.unwrap().is_empty());
 }
+
+/// A VTODO without STATUS is listed as open (the board's NEEDS-ACTION column, the table's status cell, the
+/// search's status words), or as done with a COMPLETED stamp; the editor and a save keep it without one.
+#[tokio::test]
+async fn a_task_without_status_is_listed_open_and_saved_without_one() {
+    let app = TestApp::new().await;
+    app.user("alice", "Alice").await;
+    let cal = app.calendar("alice", "T", "#ff9f0a", &["VTODO"]).await;
+    let user = app.principal("alice").await;
+    app.put_ics("alice", &cal, "n", &vtodo("n", "Ohne", "DUE;VALUE=DATE:20261020")).await;
+    app.put_ics("alice", &cal, "s", &vtodo("s", "Gestempelt", "COMPLETED:20261001T100000Z")).await;
+    let cals = crate::domain::collections::calendars_for(&app.state, &user, false).await.unwrap();
+    let list = tasks_for(&app.state, &cals, tz()).await.unwrap();
+    assert_eq!(list.iter().map(|t| (t.summary.as_str(), t.status.as_str(), t.open())).collect::<Vec<_>>(), [("Ohne", "NEEDS-ACTION", true), ("Gestempelt", "COMPLETED", false)]);
+    let d = get_task(&app.state, &user, "alice", &cal, "n", tz()).await.unwrap();
+    assert_eq!(d.status, "", "the editor sees what is stored");
+    let i = TaskInput { principal: "alice".into(), cal_id: cal.clone(), summary: "Ohne, umbenannt".into(), due: d.due, due_all_day: true, status: d.status, ..Default::default() };
+    update_task(&app.state, &user, "n", i, Some(&d.etag), tz()).await.unwrap();
+    let obj = app.state.calendars.get_object("alice", &cal, "n", false).await.unwrap();
+    let ics = obj.get_ics();
+    assert!(ics.contains("SUMMARY:Ohne\\, umbenannt") && !ics.contains("STATUS"), "a save adds no STATUS the user did not pick:\n{ics}");
+}

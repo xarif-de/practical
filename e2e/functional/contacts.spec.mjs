@@ -261,3 +261,15 @@ test('view-mode row actions: chat/WhatsApp open, copy, related goto', async ({ p
   expect(page.__dialogs).toEqual([]);
   expect(await page.locator(`.list li[data-key="${ANNA}"].on`).count()).toBe(0);
 });
+
+test('the display name is the editor\'s title: 20 px semibold like the event title, in view and edit mode', async ({ page }) => {
+  await list(page);
+  await openContact(page, 'Anna Albrecht');
+  const name = page.locator('#ctform input[name=full_name]');
+  const font = () => name.evaluate(el => { const s = getComputedStyle(el); return [s.fontSize, s.fontWeight, s.paddingTop]; });
+  expect(await font()).toEqual(['20px', '600', '0px']);
+  await page.locator('#ct-lock').click();
+  await expect(page.locator('#ctform')).toHaveClass(/mode-edit/);
+  expect(await font()).toEqual(['20px', '600', '0px']);
+  expect(await name.evaluate(el => getComputedStyle(el).borderBottomStyle)).toBe('solid'); // the edit underline stays
+});

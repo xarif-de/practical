@@ -97,3 +97,18 @@ test('live: a change made elsewhere appears without a reload', async ({ page, br
   await ctx.close();
   await expect(page.locator('.hxc-list .hxc-it', { hasText: 'F4 Live von Bob' })).toBeVisible({ timeout: 15000 });
 });
+
+test.describe('phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  test('the filter popover opens inside the screen, without a resize first', async ({ page }) => {
+    // a phone sends `resize` at random (visual/history.spec.mjs), and a resize used to fit the popover: none here
+    await page.addInitScript(() => addEventListener('resize', e => e.stopImmediatePropagation(), true));
+    await page.goto('/history');
+    await page.locator('.hx-filter > button').click();
+    const panel = page.locator('.hx-filter.open .hx-fpop');
+    await expect(panel).toBeVisible();
+    const b = await panel.boundingBox();
+    expect(b.x, 'left edge').toBeGreaterThanOrEqual(8);
+    expect(b.x + b.width, 'right edge').toBeLessThanOrEqual(390 - 8);
+  });
+});

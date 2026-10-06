@@ -40,6 +40,23 @@
     // a suggestion list (body-level .rrpop) under `anchor`, kept inside the dialog box; `r` = the anchor's rect
     placeUnder: (pop, anchor, r = anchor.getBoundingClientRect()) => { const box = anchor.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
       pop.style.left = `${Math.max(8, Math.min(r.left, maxRight - pop.offsetWidth)) + scrollX}px`; pop.style.top = `${r.bottom + scrollY + 4}px`; },
+    // what a note (DESCRIPTION) links and mentions; the editor's note card reads and detects them (noteHtml, ntDetect)
+    noteRe: { RE_URL: /\bhttps?:\/\/[^\s<>"')\]]+/gi, RE_MAIL: /(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, RE_TEL: /(?<![\w@.+-])\+?\d[\d ()\/-]{6,}\d(?![\w@])/g, RE_MENTION: /(?<![\w.])([@#!])(\p{L}[\p{L}\p{N}.-]*(?: \p{Lu}[\p{L}\p{N}.-]*){0,2})/gu },
+    /* a note as the view's HTML. Each pattern runs over the plain text, in this order: URLs, e-mail addresses,
+       phone numbers, @/#/! mentions; a later one only where no earlier one matched, so a URL that holds
+       `x@y.de` or `#tag` stays one link. Every piece of the text is escaped once. Shared (not inside the
+       editor) so e2e/functional can test it directly. */
+    noteHtml: t => {
+      const { esc: e, noteRe: R } = window.practical, hits = [];
+      const take = (re, html) => { for (const m of t.matchAll(re)) { const a = m.index, b = a + m[0].length; if (!hits.some(h => a < h.b && h.a < b)) hits.push({ a, b, html: html(m) }); } };
+      take(R.RE_URL, ([u]) => `<a href="${e(u)}" target="_blank" rel="noopener">${e(u)}</a>`);
+      take(R.RE_MAIL, ([m]) => `<a href="mailto:${e(m)}">${e(m)}</a>`);
+      take(R.RE_TEL, ([m]) => `<a href="tel:${m.replace(/[^\d+]/g, '')}">${e(m)}</a>`);
+      take(R.RE_MENTION, ([, p, v]) => { const name = v.replace(/[.,;:!?]+$/, ''); return `<span class="nt-m" data-k="${p}" data-v="${e(name)}">${e(name)}</span>${e(v.slice(name.length))}`; });
+      let h = '', i = 0;
+      for (const x of hits.sort((x, y) => x.a - y.a)) { h += e(t.slice(i, x.a)) + x.html; i = x.b; }
+      return (h + e(t.slice(i))).replace(/^- (.*)$/gm, '• $1');
+    },
   };
 })();
 
@@ -479,6 +496,7 @@
     if (r.left + dx < 8) dx = 8 - r.left;
     if (dx) pop.style.translate = dx + 'px 0';
   };
+  practical.fitPop = fitPop; // history.js draws its filter popover after this runs
   const fitPops = () => $$('.filter > .pop, .more > .pop').forEach(fitPop);
   fitPops(); addEventListener('resize', fitPops);
   $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));
@@ -1644,7 +1662,7 @@
   const lang = document.body.dataset.lang || 'de';
   const MON = MONTHS;
   const DOW = WEEKDAYS;
-  const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'conflict', 'delTask']);
+  const T = trs('js-ed-', ['suggNone', 'err', 'del', 'delRule', 'newEv', 'newTask', 'conflict', 'delTask']);
   const HOST = () => window.rusticalHost || {};
   let refreshQ = 0; // a refresh() waiting for the next frame (typing, see the form's input listener)
   const flush = () => { if (refreshQ) refresh(); };
@@ -2025,7 +2043,7 @@
   let NTX = null, ntLoading = null, ntPop = null, ntTimer = 0;
   const ntIndex = () => NTX ? Promise.resolve(NTX) : (ntLoading ||= fetch('/api/mentions').then(r => r.ok ? r.json() : { contacts: [], categories: [], events: [], tasks: [] }).then(d => (NTX = d)).catch(() => { ntLoading = null; return { contacts: [], categories: [], events: [], tasks: [] }; }));
   const ntInvalidate = () => { NTX = null; ntLoading = null; };
-  const RE_URL = /\bhttps?:\/\/[^\s<>"')\]]+/gi, RE_MAIL = /(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, RE_TEL = /(?<![\w@.+-])\+?\d[\d ()\/-]{6,}\d(?![\w@])/g, RE_MENTION = /(?<![\w.])([@#!])(\p{L}[\p{L}\p{N}.-]*(?: \p{Lu}[\p{L}\p{N}.-]*){0,2})/gu;
+  const { RE_URL, RE_MAIL, RE_TEL, RE_MENTION } = practical.noteRe;
   const ntWordAtCaret = () => { const t = f.description, v = t.value.slice(0, t.selectionStart); const m = /(^|\s)([@#!]?)([^\s@#!]{1,60})$/.exec(v); return m ? { prefix: m[2], word: m[3], start: v.length - m[2].length - m[3].length } : null; };
   const ntClosePop = () => { if (ntPop) { ntPop.remove(); ntPop = null; } };
   async function ntSuggest() {
@@ -2078,12 +2096,7 @@
     else { location.href = c.data; return; }
     refresh(); ntDetect(); });
   // view mode: links, phone numbers, e-mail addresses and @ # ! mentions become clickable; "- " lines are bullets
-  function ntRender() {
-    const t = f.description.value;
-    let h = esc(t).replace(RE_URL, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(RE_MAIL, m => `<a href="mailto:${m}">${m}</a>`).replace(RE_TEL, m => `<a href="tel:${m.replace(/[^\d+]/g, '')}">${m}</a>`);
-    h = h.replace(RE_MENTION, (_, p, v) => { const name = v.replace(/[.,;:!?]+$/, ''), rest = v.slice(name.length); return `<span class="nt-m" data-k="${p}" data-v="${esc(name)}">${esc(name)}</span>${rest}`; }).replace(/^- (.*)$/gm, '• $1');
-    ntView.innerHTML = h;
-  }
+  function ntRender() { ntView.innerHTML = practical.noteHtml(f.description.value); }
   const ntSearch = v => { const q = $('#q'); if (q) { q.value = v; q.focus(); q.dispatchEvent(new Event('input', { bubbles: true })); } };
   ntView.addEventListener('click', async e => { const m = e.target.closest('.nt-m'); if (!m) return; const k = m.dataset.k, v = m.dataset.v.toLowerCase();
     if (k === '#') { ntSearch(m.dataset.v); return; }
@@ -3319,7 +3332,7 @@
   }
 
   // ---- B: table — the sheet is the editor: each cell saves on its own, like the contacts table ----
-  const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled, '': '—' };
+  const STL = { 'NEEDS-ACTION': T.open, 'IN-PROCESS': T.doing, COMPLETED: T.done, CANCELLED: T.cancelled };
   // the choices come from the editor's own selects, so both speak the same words
   const optsOf = name => $$(`#ed select[name=${name}] option`).map(o => [o.value, o.textContent]);
   const shownCols = () => $$('#tk-colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col);
@@ -3342,7 +3355,7 @@
     cal: t => `<td class="ro"><span class="sw" style="--c:${esc(t.color)}"></span> ${esc(t.cal_name)}</td>`,
     start: t => `<td>${dtIn(t, 'start')}</td>`,
     due: t => `<td>${dtIn(t, 'due')}</td>`,
-    status: t => `<td>${selIn('status', t.status || '', Object.entries(STL).filter(([v]) => v).map(([v, l]) => [v, l]).concat(t.status ? [] : [['', '—']]))}</td>`,
+    status: t => `<td>${selIn('status', t.status, Object.entries(STL))}</td>`,
     percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent" value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
     priority: t => `<td>${selIn('priority', t.priority ? String(t.priority) : '', optsOf('priority'))}</td>`,
     completed: t => `<td>${dtIn(t, 'completed_at')}</td>`,
@@ -3386,7 +3399,7 @@
     const d = await (await fetch('/api/tasks/' + k)).json(), t = find(k);
     if (!t) return;
     ['summary', 'description', 'location', 'start', 'start_all_day', 'due', 'due_all_day', 'status', 'percent', 'completed_at', 'class', 'categories'].forEach(f => { t[f] = d[f]; });
-    t.priority = d.priority || 0;
+    t.priority = d.priority || 0; if (!t.status) t.status = d.completed_at ? 'COMPLETED' : 'NEEDS-ACTION'; // the list rows' rule (tasks.rs shown_status); the editor's answer keeps a missing STATUS missing
     t.alarms = (d.alarms || []).length; t.links = (d.links || []).length;
     $('#task-count').textContent = $('#task-count').textContent.replace(/^\d+/, TASKS.filter(isOpen).length);
     redrawRow(k);

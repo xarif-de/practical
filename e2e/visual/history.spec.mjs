@@ -2,9 +2,8 @@
 import { shot, isPhone } from '../lib/visual.mjs';
 import { BASE } from '../lib/env.mjs';
 
-// app.js fits the toolbar popovers into the screen at start and on `resize` — but history.js draws its toolbar
-// after app.js started, so whether the filter popover is fitted depends on a resize event arriving (it does at
-// random on a phone). One resize after load makes every run the same (the state after a rotation).
+// a phone sends `resize` at random, and history.js re-renders the map 150 ms after one (the filter popover is
+// fitted when it opens, see functional/history.spec.mjs). One resize after load makes every run the same.
 async function open(page, url) {
   await page.goto(url);
   await page.locator('#hx .toolbar').waitFor();

@@ -337,6 +337,7 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 
 /* ---- app: generic pieces the prototype did not need ---- */
 .flash { margin: 8px 0; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 14px; }
+.flash.error { background: color-mix(in srgb, var(--err) 12%, transparent); } /* the login error: the error tint of .cardform .rm:hover and .act.map.hot */
 .toast { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); font-size: 14px; transition: opacity .3s; }
 .toast.error { background: var(--today); color: #fff; }
 .toast.gone { opacity: 0; pointer-events: none; }
@@ -563,7 +564,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .cardform .photo { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
 .cardform .photo .av { width: 56px; height: 56px; border-radius: 16px; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 18px; flex: none; }
 .cardform .names { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.cardform .names input { font: 600 20px/1.2 var(--font-display); border: 0; background: transparent; color: var(--fg); padding: 0; width: 100%; }
+.cardform .names input:not([type=hidden]) { font: 600 20px/1.2 var(--font-display); padding: 0; } /* the display name, like the event title (.ed header .names input); the :not() outweighs the generic .cardform input rule below, which brings the rest and the edit-mode underline */
 .cardform .names small { color: var(--fg-3); font-size: 12px; }
 .cardform .cards { columns: 1; column-gap: 12px; }
 @container (min-width: 640px) { .cardform .cards { columns: 2; } }
