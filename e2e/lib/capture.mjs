@@ -72,7 +72,9 @@ function dump(props) {
   // the scroll positions of scrolled boxes change what a screenshot shows
   const scroll = {};
   for (const el of document.querySelectorAll('*')) if (el.scrollTop || el.scrollLeft) scroll[pathOf(el)] = [Math.round(el.scrollLeft), Math.round(el.scrollTop)];
-  return { html, style: { props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out }, t: [t1 - t0, performance.now() - t1, Object.keys(out).length] };
+  // the digest leaves the page as one JSON string: Playwright's value serialisation of the object (~60 values per
+  // element) took ~80 ms per state, more than DOM + digest themselves
+  return { html, style: JSON.stringify({ props, url: location.pathname + location.search + location.hash, scroll: { win: [scrollX, scrollY], ...scroll }, el: out }), t: [t1 - t0, performance.now() - t1, Object.keys(out).length] };
 }
 
 /** In the page: EVERY standard computed property (custom properties excluded) of html, body and each rendered
@@ -147,7 +149,7 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
   [t.domIn, t.styleIn, t.els] = inPage;
   const c3 = clock();
   fs.writeFileSync(base + '.dom.html.gz', zlib.gzipSync(html, { level: 9 }));
-  fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(JSON.stringify(style), { level: 9 }));
+  fs.writeFileSync(base + '.style.json.gz', zlib.gzipSync(style, { level: 9 }));
   if (process.env.E2E_FULL_STYLE === '1') fs.writeFileSync(base + '.fullstyle.json.gz', zlib.gzipSync(JSON.stringify(await page.evaluate(fullDump)), { level: 6 }));
   const c4 = clock();
   Object.assign(t, { settle: c1 - c0, shot: c2 - c1, dump: c3 - c2, write: c4 - c3, segs: 0, segSettle: 0, segShot: 0, restore: 0 });
@@ -167,10 +169,13 @@ export async function capture(page, testInfo, name, { fullPage = true, mask = []
       fs.writeFileSync(`${base}~s${i}.png`, await stableShot(page, `${name}~s${i}`, shotOpts, t));
       t.segs++; t.segSettle += s1 - s0; t.segShot += clock() - s1;
     }
-    const r0 = clock();
-    await main.evaluate((m, t) => { m.scrollTop = t; }, start);
-    await settle(page);
-    t.restore = clock() - r0;
+    // back where the test left it (nothing to undo when no segment scrolled)
+    if (t.segs) {
+      const r0 = clock();
+      await main.evaluate((m, t) => { m.scrollTop = t; }, start);
+      await settle(page);
+      t.restore = clock() - r0;
+    }
   }
   t.total = clock() - c0;
   mark(t);
