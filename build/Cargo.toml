@@ -67,6 +67,9 @@ unic-langid = { version = "0.9", features = ["macros"] }
 # Already linked through tower-http's gzip (same version, same default backend): decodes an embedded
 # .gz asset once for a client that accepts no compression (routes/assets.rs).
 flate2 = "1.1"
+# Decodes the region-name tables build.rs embeds brotli-compressed (domain/holidays.rs: 566 KB of JSON →
+# 74 KB); the decoder half of the `brotli` build dependency (same version, already in Cargo.lock), pure Rust.
+brotli-decompressor = "6"
 # Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06
 # (arm64 musl image build, 1 CPU / 192 MiB container like prod, synthetic 3,920-object DB, 20 requests
 # per path, 2 rounds, vs the musl build of e74c076): CPU per request −23…30 % (/calendar month 109.5 →
@@ -88,6 +91,8 @@ oxc_compat = "0.153"
 # brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
 brotli = "9"
 flate2 = "1.1"
+# regions(): reads src/data/regions.json (a dependency of the binary already, same version)
+serde_json = "1.0"
 
 # Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, one codegen unit.
 # `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container

@@ -3265,6 +3265,7 @@ dependencies = [
  "axum-extra",
  "base64ct",
  "brotli",
+ "brotli-decompressor",
  "caldata",
  "chrono",
  "chrono-tz",

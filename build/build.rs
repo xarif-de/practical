@@ -12,6 +12,9 @@ use std::io::Write as _;
 
 #[path = "src/css_min.rs"]
 mod css_min;
+#[path = "src/domain/holidays/names.rs"]
+#[allow(dead_code)] // the reader half is for the binary
+mod names;
 
 /// name, MIME type, how it is minified. The sources in assets/ stay readable; the binary embeds
 /// only the gzip and brotli forms (assets.rs decodes the gzip form once for the rare client that
@@ -94,8 +97,47 @@ fn build_asset(name: &str, how: Minify) -> usize {
     body.len()
 }
 
+/// src/data/regions.json (tools/gen_regions.py, 566 KB) as the two tables of names.rs, each
+/// brotli-compressed: what the app reads and nothing else (no `source`/`generated`/`langs`, positional
+/// fields, a name shared by several languages once). holidays.rs decodes a table when first needed.
+fn regions() {
+    println!("cargo:rerun-if-changed=src/data/regions.json");
+    let out = std::env::var("OUT_DIR").expect("OUT_DIR");
+    let src = fs::read_to_string("src/data/regions.json").expect("src/data/regions.json");
+    let data: serde_json::Value = serde_json::from_str(&src).expect("src/data/regions.json: JSON");
+    let rows = |kind: &str, meta: &dyn Fn(&str, &serde_json::Value) -> String| -> Vec<names::Src> {
+        data[kind].as_object().unwrap_or_else(|| panic!("regions.json: no {kind}")).iter().map(|(code, v)| {
+            let n = v["n"].as_object().unwrap_or_else(|| panic!("regions.json: {code} has no names"));
+            let s = |x: &serde_json::Value| x.as_str().expect("a name is a string").to_string();
+            for l in n.keys() {
+                assert!(names::LANGS.contains(&l.as_str()), "regions.json: {code} has a name in {l}, not a column of names.rs");
+            }
+            names::Src { code: code.clone(), meta: meta(code, v), names: names::LANGS.map(|l| n.get(l).map(s)), any: n.values().next().map(s) }
+        }).collect()
+    };
+    let countries = rows("countries", &|_, v| (v["oh"].as_u64().unwrap_or(0) + 2 * v["ng"].as_u64().unwrap_or(0)).to_string());
+    let subs = rows("subs", &|code, v| {
+        let p = v["p"].as_str().expect("regions.json: a subdivision without parent");
+        if p == &code[..2] { String::new() } else { p.to_string() }
+    });
+    std::thread::scope(|s| {
+        for (name, rows) in [("countries", countries), ("subs", subs)] {
+            let out = &out;
+            s.spawn(move || {
+                let text = names::encode(rows);
+                let mut br = Vec::new();
+                let params = brotli::enc::BrotliEncoderParams { quality: 11, lgwin: 22, ..Default::default() };
+                brotli::BrotliCompress(&mut text.as_bytes(), &mut br, &params).unwrap();
+                fs::write(format!("{out}/regions-{name}.br"), br).unwrap();
+            });
+        }
+    });
+    fs::write(format!("{out}/regions-cldr.txt"), data["cldr"].as_str().expect("regions.json: cldr")).unwrap();
+}
+
 fn main() {
     assets();
+    regions();
     println!("cargo:rerun-if-changed=Cargo.toml");
     let manifest = fs::read_to_string("Cargo.toml").expect("read Cargo.toml");
     let mut tags = manifest

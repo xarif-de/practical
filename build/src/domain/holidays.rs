@@ -100,6 +100,8 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 
 // ---- built-in region data (CLDR) ----
 
+/// CLDR's names as fetched (`fetch_cldr`) and saved (`practical_holidays` "cldr-data"; the
+/// format of src/data/regions.json, which build.rs packs into names.rs tables).
 #[derive(serde::Deserialize, serde::Serialize)]
 struct DataCountry {
     #[serde(default)]
@@ -122,21 +124,53 @@ struct Data {
     subs: HashMap<String, DataSub>,
 }
 
-static BUILT_IN: LazyLock<Data> = LazyLock::new(|| serde_json::from_str(include_str!("../data/regions.json")).expect("src/data/regions.json"));
-/// the names in use: the built-in ones, replaced by a newer CLDR release once `check_cldr` got one
-static NEWER: std::sync::RwLock<Option<std::sync::Arc<Data>>> = std::sync::RwLock::new(None);
+mod names;
+use names::Table;
 
-fn with_data<T>(f: impl FnOnce(&Data) -> T) -> T {
-    let newer = NEWER.read().unwrap().clone();
-    match newer {
-        Some(d) => f(&d),
-        None => f(&BUILT_IN),
-    }
+/// the CLDR release of the built-in names (src/data/regions.json)
+const BUILT_IN_CLDR: &str = include_str!(concat!(env!("OUT_DIR"), "/regions-cldr.txt"));
+/// build.rs output, brotli: 4.5 KB for 257 countries, 70 KB for 5,046 subdivisions (decoded
+/// 11 / 262 KB); each table is decoded once, when first needed — the subdivisions only by the settings
+/// page (names, `cldr_tree`), not by the calendar views.
+fn unpack(br: &[u8]) -> Table {
+    let mut text = Vec::new();
+    brotli_decompressor::BrotliDecompress(&mut &br[..], &mut text).expect("embedded region names");
+    text.shrink_to_fit();
+    Table::new(String::from_utf8(text).expect("region names: UTF-8"))
+}
+static BUILT_IN_COUNTRIES: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-countries.br"))));
+static BUILT_IN_SUBS: LazyLock<Table> = LazyLock::new(|| unpack(include_bytes!(concat!(env!("OUT_DIR"), "/regions-subs.br"))));
+
+/// A newer CLDR release's names, packed like the built-in ones.
+struct Names {
+    cldr: String,
+    countries: Table,
+    subs: Table,
 }
 
-/// a name in `lang`, else English, else any
-fn name_in(n: &HashMap<String, String>, lang: &str) -> Option<String> {
-    n.get(lang).or_else(|| n.get("en")).or_else(|| n.values().next()).cloned()
+fn pack(d: &Data) -> Names {
+    let src = |code: &String, meta: String, n: &HashMap<String, String>| names::Src { code: code.clone(), meta, names: names::LANGS.map(|l| n.get(l).cloned()), any: n.values().next().cloned() };
+    let countries = d.countries.iter().map(|(code, c)| src(code, (c.oh + 2 * c.ng).to_string(), &c.n)).collect();
+    let subs = d.subs.iter().map(|(code, s)| src(code, if s.p == code[..2.min(code.len())] { String::new() } else { s.p.clone() }, &s.n)).collect();
+    Names { cldr: d.cldr.clone(), countries: Table::new(names::encode(countries)), subs: Table::new(names::encode(subs)) }
+}
+
+/// the names in use: the built-in ones, replaced by a newer CLDR release once `check_cldr` got one
+static NEWER: std::sync::RwLock<Option<std::sync::Arc<Names>>> = std::sync::RwLock::new(None);
+
+fn cldr_in_use() -> String {
+    NEWER.read().unwrap().as_ref().map_or_else(|| BUILT_IN_CLDR.to_string(), |n| n.cldr.clone())
+}
+
+/// `f` on the country (`subs` false) or subdivision table in use
+fn with_table<T>(subs: bool, f: impl FnOnce(&Table) -> T) -> T {
+    let newer = NEWER.read().unwrap().clone();
+    match (newer, subs) {
+        (Some(n), false) => f(&n.countries),
+        (Some(n), true) => f(&n.subs),
+        (None, false) => f(&BUILT_IN_COUNTRIES),
+        (None, true) => f(&BUILT_IN_SUBS),
+    }
 }
 
 /// Which countries each source covers: the built-in snapshot until `refresh_coverage` knows better.
@@ -147,8 +181,9 @@ struct Coverage {
 }
 
 static COVERAGE: LazyLock<std::sync::RwLock<Coverage>> = LazyLock::new(|| {
-    let pick = |f: fn(&DataCountry) -> bool| BUILT_IN.countries.iter().filter(|(_, c)| f(c)).map(|(k, _)| k.clone()).collect();
-    std::sync::RwLock::new(Coverage { oh: pick(|c| c.oh == 1), ng: pick(|c| c.ng == 1) })
+    // META of a country row: oh + 2·ng (names.rs)
+    let pick = |bit: u8| BUILT_IN_COUNTRIES.rows().filter(|r| r.meta.parse::<u8>().unwrap_or(0) & bit != 0).map(|r| r.code.to_string()).collect();
+    std::sync::RwLock::new(Coverage { oh: pick(1), ng: pick(2) })
 });
 
 fn covered_by_openholidays(country: &str) -> bool {
@@ -224,10 +259,10 @@ pub async fn maintain(state: &AppState, first: bool) -> AppResult<()> {
         }
         if let Some((j, _)) = cache_aged(state, "", "", 0, "cldr-data").await?
             && let Ok(saved) = serde_json::from_str::<Data>(&j)
-            && newer(&saved.cldr, &BUILT_IN.cldr)
+            && newer(&saved.cldr, BUILT_IN_CLDR)
         {
-            tracing::info!("region names: {} (saved) over {} (built in)", saved.cldr, BUILT_IN.cldr);
-            *NEWER.write().unwrap() = Some(std::sync::Arc::new(saved));
+            tracing::info!("region names: {} (saved) over {} (built in)", saved.cldr, BUILT_IN_CLDR);
+            *NEWER.write().unwrap() = Some(std::sync::Arc::new(pack(&saved)));
         }
     }
     if !state.config.holidays_enabled {
@@ -289,14 +324,14 @@ async fn check_cldr(state: &AppState) -> AppResult<()> {
             return Ok(());
         }
     };
-    let current = with_data(|d| d.cldr.clone());
+    let current = cldr_in_use();
     tracing::info!("cldr check: latest {}, in use {current}", check.tag);
     if newer(&check.tag, &current) {
         match fetch_cldr(state, &check.tag).await {
             Ok(d) => {
                 tracing::info!("region names: CLDR {} replaces {current}", check.tag);
                 cache_put(state, "", "", 0, "cldr-data", &serde_json::to_string(&d).unwrap()).await?;
-                *NEWER.write().unwrap() = Some(std::sync::Arc::new(d));
+                *NEWER.write().unwrap() = Some(std::sync::Arc::new(pack(&d)));
             }
             Err(e) => {
                 tracing::warn!("cldr {}: {e}", check.tag);
@@ -442,7 +477,7 @@ pub async fn describe(state: &AppState, code: &str, lang: &str) -> AppResult<(St
 
 /// The CLDR name of a country or subdivision code in `lang` (None for unknown codes).
 pub fn region_name(code: &str, lang: &str) -> Option<String> {
-    with_data(|d| if code.len() == 2 { d.countries.get(code).and_then(|c| name_in(&c.n, lang)) } else { d.subs.get(code).and_then(|s| name_in(&s.n, lang)) })
+    with_table(code.len() != 2, |t| t.find(code).and_then(|r| r.name(lang)).map(str::to_string))
 }
 
 // ---- cache ----
@@ -827,11 +862,11 @@ fn flatten(items: Vec<ApiRegion>, lang: &str, parent: &str, depth: u8, out: &mut
 
 /// CLDR's hierarchy below `parent`, flattened the same way (countries OpenHolidays lacks).
 fn cldr_tree(parent: &str, lang: &str, depth: u8, out: &mut Vec<Region>) {
-    let mut level: Vec<Region> = with_data(|d| {
-        d.subs
-            .iter()
-            .filter(|(_, s)| s.p == parent)
-            .map(|(code, s)| Region { code: code.clone(), name: name_in(&s.n, lang).unwrap_or_else(|| code.clone()), parent: parent.to_string(), depth, category: String::new(), school: false })
+    // an ISO 3166-2 code starts with its country's: only that country's run of the sorted table
+    let mut level: Vec<Region> = with_table(true, |t| {
+        t.with_prefix(&format!("{}-", &parent[..2.min(parent.len())]))
+            .filter(|r| r.parent() == parent)
+            .map(|r| Region { code: r.code.to_string(), name: r.name(lang).unwrap_or(r.code).to_string(), parent: parent.to_string(), depth, category: String::new(), school: false })
             .collect()
     });
     sort(&mut level);
@@ -918,13 +953,44 @@ mod tests {
         assert!(us.iter().any(|r| r.code == "US-TX" && r.name == "Texas"));
     }
 
+    /// The packed tables answer every read exactly as the JSON maps did (`name_in` of before: own
+    /// language, else English, else any), for every region, UI language and an unknown language;
+    /// parents and source flags too; and `pack` (run time, a newer CLDR) writes the very bytes build.rs wrote.
+    #[test]
+    fn packed_names_read_like_the_json() {
+        let d: Data = serde_json::from_str(include_str!("../data/regions.json")).unwrap();
+        let name_in = |n: &HashMap<String, String>, lang: &str| n.get(lang).or_else(|| n.get("en")).or_else(|| n.values().next()).cloned();
+        let langs = ["de", "en", "fr", "es", "pt"];
+        for (code, c) in &d.countries {
+            let r = BUILT_IN_COUNTRIES.find(code).unwrap_or_else(|| panic!("{code}"));
+            assert_eq!(r.meta, (c.oh + 2 * c.ng).to_string(), "{code}");
+            for l in langs {
+                assert_eq!(region_name(code, l), name_in(&c.n, l), "{code} {l}");
+            }
+        }
+        for (code, s) in &d.subs {
+            assert_eq!(BUILT_IN_SUBS.find(code).unwrap_or_else(|| panic!("{code}")).parent(), s.p, "{code}");
+            for l in langs {
+                assert_eq!(region_name(code, l), name_in(&s.n, l), "{code} {l}");
+            }
+        }
+        assert_eq!((BUILT_IN_COUNTRIES.rows().count(), BUILT_IN_SUBS.rows().count()), (d.countries.len(), d.subs.len()));
+        assert_eq!(region_name("XX-1", "de"), None);
+        assert_eq!(region_name("XX", "de"), None);
+        let p = pack(&d);
+        assert!(p.countries.rows().zip(BUILT_IN_COUNTRIES.rows()).all(|(a, b)| (a.code, a.meta, a.name("de"), a.name("en"), a.name("fr"), a.name("es")) == (b.code, b.meta, b.name("de"), b.name("en"), b.name("fr"), b.name("es"))));
+        assert!(p.subs.rows().zip(BUILT_IN_SUBS.rows()).all(|(a, b)| (a.code, a.parent(), a.name("de"), a.name("en"), a.name("fr"), a.name("es")) == (b.code, b.parent(), b.name("de"), b.name("en"), b.name("fr"), b.name("es"))));
+        assert_eq!((p.countries.heap_bytes() > 0, p.subs.rows().count()), (true, d.subs.len()));
+        assert_eq!(names::LANGS, crate::i18n::LANGS, "names_columns_are_the_ui_languages");
+    }
+
     #[test]
     fn cldr_versions_and_xml() {
         assert!(newer("release-49", "release-48-2"));
         assert!(newer("release-48-2", "release-48"));
         assert!(!newer("release-48", "release-48-2"));
         assert!(!newer("", "release-48"));
-        assert_eq!(BUILT_IN.cldr, "release-48-2");
+        assert_eq!(BUILT_IN_CLDR, "release-48-2");
         let xml = r#"<territories><territory type="DE">Deutschland</territory><territory type="US" alt="short">USA</territory><territory type="US">Vereinigte Staaten</territory><territory type="BA">Bosnien &amp; Herzegowina</territory></territories>
 <subdivision type="desn" draft="contributed">Sachsen</subdivision>
 <subgroup type="DE" contains="debb desn"/><subgroup type="frara" contains="fr01 fr69m"/>"#;
