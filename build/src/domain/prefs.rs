@@ -83,8 +83,11 @@ impl Prefs {
     }
 }
 
+/// The columns are named, never `*`: sqlx keeps a prepared statement's column list per connection,
+/// and after a column was dropped from the live table `SELECT *` read past the end of the shorter
+/// row — the panic that ended the push reminder loop on 2026-10-05 (perf-baseline.md §0).
 pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error> {
-    let row = sqlx::query("SELECT * FROM practical_user_settings WHERE principal = ?")
+    let row = sqlx::query("SELECT lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?;

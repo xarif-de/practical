@@ -464,7 +464,7 @@ fn row_item(r: &sqlx::sqlite::SqliteRow) -> Item {
 /// other collections left out), oldest first. `before`/`after` of the items are blob hashes.
 pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change>> {
     let mut by_id: BTreeMap<i64, Change> = BTreeMap::new();
-    for r in sqlx::query("SELECT * FROM practical_history_changes ORDER BY id").fetch_all(&state.db).await? {
+    for r in sqlx::query("SELECT id, at, src, who, device, label, reverts, undone_by, inactive_by, tech FROM practical_history_changes ORDER BY id").fetch_all(&state.db).await? {
         let id: i64 = r.get("id");
         by_id.insert(id, Change {
             id,
@@ -480,7 +480,7 @@ pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change
             items: vec![],
         });
     }
-    for r in sqlx::query("SELECT * FROM practical_history_items ORDER BY change_id, idx").fetch_all(&state.db).await? {
+    for r in sqlx::query("SELECT change_id, store, principal, coll, object_id, uid, kind, act, from_principal, from_coll, from_object, before_hash, after_hash, title, attrs FROM practical_history_items ORDER BY change_id, idx").fetch_all(&state.db).await? {
         let it = row_item(&r);
         if !user.is_principal(&it.principal) && !it.from.as_ref().is_some_and(|f| user.is_principal(&f.0)) {
             continue;
