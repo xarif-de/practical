@@ -337,6 +337,7 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 
 /* ---- app: generic pieces the prototype did not need ---- */
 .flash { margin: 8px 0; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 14px; }
+.flash.error { background: color-mix(in srgb, var(--err) 12%, transparent); } /* the login error: the error tint of .cardform .rm:hover and .act.map.hot */
 .toast { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); font-size: 14px; transition: opacity .3s; }
 .toast.error { background: var(--today); color: #fff; }
 .toast.gone { opacity: 0; pointer-events: none; }
