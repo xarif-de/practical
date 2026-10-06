@@ -10,9 +10,9 @@ musl image limited to 1 CPU / 192 MiB like the pod.
 
 | layer | what | run |
 |---|---|---|
-| Rust | 60 → 233 tests: domain characterisation tests, golden HTML (`build/tests/snapshots`, `UPDATE_SNAPSHOTS=1`), in-process router tests on a RustiCal-migrated temp DB (`src/testkit.rs`, `src/it/`), cache invalidation tests | `mise run test` |
-| e2e | 124 Playwright tests, every action of the UI (two-user live update, password login, instant updates, prefetch, CSP enforced: any violation fails the test) | `mise run e2e-seed`, `mise run e2e` |
-| visual | 964 UI states × desktop/phone × light/dark (+ en) = 1134 screenshots, each with a normalised DOM dump and a 58-property computed-style digest; `compare.mjs` = pixel threshold 0 | `mise run e2e-baseline -- <dir>`, `mise run e2e-compare -- <a> <b>` |
+| Rust | 60 → 235 tests (2026-10-07: + every plural form of every language pinned, `i18n/plurals.txt`): domain characterisation tests, golden HTML (`build/tests/snapshots`, `UPDATE_SNAPSHOTS=1`), in-process router tests on a RustiCal-migrated temp DB (`src/testkit.rs`, `src/it/`), cache invalidation tests | `mise run test` |
+| e2e | 125 Playwright tests, every action of the UI (two-user live update, password login, instant updates, prefetch, CSP enforced: any violation fails the test) | `mise run e2e-seed`, `mise run e2e` |
+| visual | UI states × desktop/phone × light/dark (+ en desktop/phone light) = 945 states + 162 segments (was 964 + 170, 2026-10-07: duplicates and en-desktop-dark dropped, 4 states per project added), each with a normalised DOM dump and a 58-property computed-style digest; `compare.mjs` = pixel threshold 0; `theme-cover.mjs`: 645 of 778 colour rules shown by a dark state, the other 133 a listed backlog | `mise run e2e-baseline -- <dir>`, `mise run e2e-compare -- <a> <b>` |
 | clock | `PRACTICAL__DEV_NOW` freezes server time (dev mode only) | — |
 
 Proof of round 1: 1132/1132 states identical to the 0.11.1 baseline; 38 pages/APIs × 15 mutation
@@ -21,6 +21,10 @@ differing state mapped to its item. Determinism: 3 consecutive full runs on one 
 pairwise after two harness fixes (phone emulation's load-time `resize` re-dispatched after
 DOMContentLoaded; icon sprite response held until the first paint — both in `e2e/lib`).
 CI runs neither `cargo test` nor e2e — both are local gates.
+Test net, mutation-tested (study of 2026-10-06, 45 mutants; gaps closed 2026-10-07): 38/45 killed; of the
+7 survivors two sat on dead CSS (removed), the other five are now killed (plural golden, history chip test, three
+dark states found by theme-cover); 5/5 new random holdout mutants of the same kinds killed. Warm gate without an edit:
+visual 116 s → 96 s median (5 runs each, shared host), functional 30 → 29 s; 3 consecutive runs pairwise 0 differences.
 
 ## Results (round 1)
 

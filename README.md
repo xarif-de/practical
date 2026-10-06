@@ -432,7 +432,8 @@ mise run gate -- <ref-dir>              # gate-quick → visual baseline → com
   across checkouts.
 - **Server** (`e2e/lib/servers.mjs`): development mode with `PRACTICAL__DEV_LOGIN=alice` and
   `PRACTICAL__DEV_NOW=2026-10-14T08:00:00Z` — the dev-only fixed clock (`build/src/clock.rs`), serving
-  the minified assets that build embeds (`E2E_ASSETS=source`: `build/assets` as written) — plus a
+  the minified assets that build embeds (`E2E_ASSETS=source`: `build/assets` as written), and
+  `PRACTICAL__DEV_POLL_MS=250` (the change poller's period, dev only; production polls every 2 s) — plus a
   non-dev server on port+1 for the login page; egress blocked (`HTTP(S)_PROXY=127.0.0.1:9`), each on
   a fresh copy of the fixture. The visual suite's workers share one pair on `E2E_PORT` (default
   4101); the functional suite gives each worker its own pair on `E2E_PORT + 2 × worker` (a run uses
@@ -444,8 +445,10 @@ mise run gate -- <ref-dir>              # gate-quick → visual baseline → com
   request is in flight, the page's timers due within 300 ms have run (the app's debounces start their
   requests from timers), frame chains have ended (at most 300 ms), fonts are ready and two frames
   passed, and no request started meanwhile; the visual capture then takes screenshots until two
-  agree. `E2E_TIMING=1` logs the harness' phases to `e2e/.work/timing-<port>/`.
-- **Visual projects**: desktop 1440×900 and phone 390×844 × light/dark (de) + `@main` states in en.
+  agree — in a gate (`E2E_SHOT_REF` = the reference) a first one byte-identical to the reference's PNG
+  of that state counts as stable. `E2E_TIMING=1` logs the harness' phases to `e2e/.work/timing-<port>/`.
+- **Visual projects**: desktop 1440×900 and phone 390×844 × light/dark (de) + `@main` states in en
+  (desktop and phone, light): 945 states + 162 scrolled segments.
   Visual tests are read-only (writes are aborted), so they run in parallel (`E2E_WORKERS`, default 4)
   on one DB. `compare.mjs` takes byte-identical files as equal and diffs the rest on 4 threads.
 - Pixel baselines depend on the host's fonts and Chromium build (`@playwright/test` pinned in
@@ -456,11 +459,14 @@ mise run gate -- <ref-dir>              # gate-quick → visual baseline → com
 1. Reference first: a baseline of the change's base commit (same fixture, same machine), e.g. in a
    worktree of the base: `mise run e2e-baseline -- ~/.cache/practical-e2e/<base-sha>` — or reuse one
    that is already there for that commit.
-2. While iterating: `mise run gate-quick` (cargo test, server build, functional suite; ~80 s warm).
+2. While iterating: `mise run gate-quick` (cargo test, server build, functional suite; ~50–80 s warm).
    It has no visual part — no rule maps the files a change touches to the states it can reach (a
    CSS rule, a template, a locale string or a Rust value can show anywhere).
 3. Before a commit: `mise run gate -- ~/.cache/practical-e2e/<base-sha>` → 0 states with
-   differences (or each difference explained). ~3 min warm on an idle host (was ~10 min).
+   differences (or each difference explained), then every colour rule of style.css/history.css shown by a
+   dark state (`e2e/theme-cover.mjs`; a new rule no dark state shows fails — add a state, or a line with
+   the reason in `e2e/theme-cover-allow.txt`, whose backlog only shrinks). ~2.5 min warm without an edit
+   on an idle host (visual ~95 s: a state equal to the reference is screenshotted once).
 4. Parallel checkouts: own `E2E_PORT` each (a functional run takes `E2E_PORT` … `E2E_PORT + 7` with
    4 workers), never two heavy suites at once on a shared host.
 5. Release candidates and profile changes: `E2E_PROFILE=release mise run gate -- <ref-dir>`.
