@@ -30,11 +30,8 @@ exec cargo deny --manifest-path build/Cargo.toml check advisories bans sources
 """
 
 [tasks.test]
-description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust version — one Renovate group moves both)"
-# An exported RUSTUP_TOOLCHAIN in the shell silently overrides rust-toolchain.toml → re-derive it.
-run = '''
-cd build && export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" && cargo test
-'''
+description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust version — one Renovate group moves both); this checkout's own target dir, content-checked freshness, sccache if installed (e2e/cargo.sh)"
+run = "e2e/cargo.sh test"
 
 [tasks.dev]
 description = "Feedback loop: watchexec rebuilds+restarts on src/templates/locales edits (~3-10 s), CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db`"

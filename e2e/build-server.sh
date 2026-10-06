@@ -1,22 +1,21 @@
 #!/bin/sh
-# Release build of THIS checkout's server into a target dir of its own (E2E_TARGET_DIR, default
-# ~/.cache/practical-e2e/target-<hash of the checkout path>, ~2.5 GB each): build/.cargo/config.toml's
-# target dir is shared by all worktrees, and cargo judges freshness by the dep-info of whichever
-# checkout built last — it then reports ANOTHER worktree's binary as up to date (seen 2026-10-06).
-# Also copies build.rs' minified assets (what the binary embeds) to <dest-binary>.assets/: the e2e dev
-# server serves THOSE, so the suites test the shipped JS/CSS (global-setup.mjs, E2E_ASSETS).
+# Builds THIS checkout's server with cargo.sh (per-checkout target dir, content-checked freshness, sccache) in the
+# E2E_PROFILE cargo profile, default `e2e` (build/Cargo.toml: release + 256 codegen units + incremental; an edit
+# rebuilds in ~6-14 s instead of ~100 s). E2E_PROFILE=release builds what ships (same opt-level; e2e differs only
+# in codegen units and incremental compilation): use it for a release candidate and for a change to the profiles.
+# Also copies build.rs' minified assets (what the binary embeds) to <dest-binary>.assets/: the e2e dev server
+# serves THOSE, so the suites test the shipped JS/CSS (lib/servers.mjs, E2E_ASSETS).
 # Usage: build-server.sh <dest-binary>
 set -eu
 case "$1" in /*) DEST=$1 ;; *) DEST="$PWD/$1" ;; esac
-cd "$(dirname "$0")/../build"
-export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
-export CARGO_TARGET_DIR="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(pwd -P | shasum | cut -c1-12)}"
 mkdir -p "$(dirname "$DEST")"
-if ! cargo build --release --message-format=json-render-diagnostics > "$DEST.cargo.json" 2> "$DEST.cargo.log"; then
+if ! "$(dirname "$0")/cargo.sh" build --profile "${E2E_PROFILE:-e2e}" --message-format=json-render-diagnostics > "$DEST.cargo.json" 2> "$DEST.cargo.log"; then
   cat "$DEST.cargo.log" >&2; exit 1
 fi
+# the gate's "no new warnings": cargo's summary line for the practical crate (replayed when nothing was rebuilt)
+echo "build-server.sh: ${E2E_PROFILE:-e2e} profile, $(sed -n 's/^warning: `practical` (bin "practical") generated \([0-9]*\) warning.*/\1/p' "$DEST.cargo.log" | tail -1 | grep . || echo 0) warning(s) in practical" >&2
 rm -f "$DEST.cargo.log"
-# the executable cargo reported for THIS build (not whatever lies in the shared dir later)
+# the executable cargo reported for THIS build (not whatever lies in the target dir later)
 BIN="$(sed -n 's/.*"executable":"\([^"]*\/practical\)".*/\1/p' "$DEST.cargo.json" | tail -1)"
 # the OUT_DIR of THIS build's practical build script (assets.rs lists the files)
 OUT="$(sed -n 's/.*"reason":"build-script-executed","package_id":"[^"]*practical[#@][^"]*".*"out_dir":"\([^"]*\)".*/\1/p' "$DEST.cargo.json" | tail -1)"
