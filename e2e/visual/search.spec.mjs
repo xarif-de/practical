@@ -20,9 +20,11 @@ shot('search drop-down', async (page, snap) => {
     await typeQ(page, v);
     await snap(n, { segments: 0 });
   }
-  await typeQ(page, 'termin');
+  // on the settled drop-down of sr-many: typing `termin` again first started app.js' 180 ms input debounce, whose
+  // redraw (`draw`: sel = -1) dropped the pick the arrows had just made — the capture equalled sr-many byte for byte
   await page.locator('#q').press('ArrowDown');
   await page.locator('#q').press('ArrowDown');
+  await page.locator('#sres .r.on').waitFor();
   await snap('sr-keyboard-pick', { segments: 0 });
 });
 

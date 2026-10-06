@@ -2,7 +2,7 @@
 //   functional            — e2e/functional, desktop, de; spec files in parallel (E2E_WORKERS, default 4), the tests of
 //                           a file in order on one worker, each file on fresh servers + DB copies (lib/test.mjs)
 //   visual-<vp>-<scheme>  — e2e/visual, every surface; de; desktop 1440×900 / phone 390×844 × light / dark
-//   visual-en-*           — the @main states again in en
+//   visual-en-*           — the @main states again in en (desktop light, phone light)
 // E2E_SUITE=visual selects the visual projects, otherwise the functional one runs.
 // global-setup.mjs builds the server and starts the visual/perf suites' shared pair (the functional workers start
 // their own); artifacts of the visual suite go to E2E_OUT.
@@ -20,7 +20,9 @@ const visual = [];
 for (const [vp, dev] of [['desktop', desktop], ['phone', phone]])
   for (const scheme of ['light', 'dark'])
     visual.push({ name: `visual-${vp}-${scheme}`, testDir: './visual', use: { ...common, ...dev, colorScheme: scheme, locale: 'de-DE' } });
-for (const [vp, dev, scheme] of [['desktop', desktop, 'light'], ['desktop', desktop, 'dark'], ['phone', phone, 'light']])
+// no en-desktop-dark: its checks = en text (en-desktop-light) × dark colours (desktop-dark); en and de share the element
+// skeleton and no CSS depends on the language — 0 of 45 mutants were caught by it alone (mutation study, 2026-10-06)
+for (const [vp, dev, scheme] of [['desktop', desktop, 'light'], ['phone', phone, 'light']])
   visual.push({ name: `visual-en-${vp}-${scheme}`, testDir: './visual', grep: /@main/, use: { ...common, ...dev, colorScheme: scheme, locale: 'en-GB' } });
 
 export default defineConfig({

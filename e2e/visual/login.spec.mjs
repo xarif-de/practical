@@ -1,9 +1,10 @@
 // The login page — only reachable without development mode: the second server (LOGIN_BASE, password login,
-// no DEV_NOW; the page shows no date). Nothing is posted.
+// no DEV_NOW; the page shows no date). Nothing is posted. No `?manual=1` state: without OIDC (e2e) the page ignores
+// it (auth.rs reads it behind `oidc_name`), the capture equalled login-page byte for byte; it/auth.rs tests that path.
 import { shot } from '../lib/visual.mjs';
 import { LOGIN_BASE } from '../lib/env.mjs';
 
-const states = [['', 'login-page'], ['?error=1', 'login-error'], ['?manual=1', 'login-manual'], ['?redirect_uri=%2Ftasks', 'login-redirect']];
+const states = [['', 'login-page'], ['?error=1', 'login-error'], ['?redirect_uri=%2Ftasks', 'login-redirect']];
 
 shot('login page states @main', async (page, snap) => {
   for (const [q, n] of states) {
