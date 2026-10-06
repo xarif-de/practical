@@ -39,6 +39,46 @@
   };
 })();
 
+/* prefetch on intent: what a navigation will fetch (practical.prefetch(url)) is fetched on hover (after HOVER_MS),
+   focus or press of its control (practical.intent) and handed to that navigation once (practical.prefetched(url)),
+   if it is younger than TTL and nothing happened since that could change it: every live change (`rustical:change`),
+   every own write (a non-GET fetch, of this tab or — localStorage 'practical.write' — another one) and the live
+   stream closing drop all entries, those still in flight included. Only while the stream is open
+   (practical.stream) and never on Save-Data. The server answers a prefetch (Purpose: prefetch) without touching
+   the session's data and with 204 while a flash is pending (sessions.rs): only a 200 is kept. */
+(function () {
+  const P = window.practical, f0 = window.fetch.bind(window), TTL = 30000, MAX = 8, HOVER_MS = 65;
+  const m = new Map(); let gen = 0, live = false;
+  const drop = () => { gen++; m.clear(); };
+  const wrote = () => { drop(); try { localStorage['practical.write'] = gen + ' ' + Math.random(); } catch (_) {} };
+  window.fetch = (input, init) => { if (!init || !init.method || /^(GET|HEAD)$/i.test(init.method)) return f0(input, init); wrote(); return f0(input, init).finally(wrote); };
+  addEventListener('storage', e => { if (e.key === 'practical.write') drop(); });
+  document.addEventListener('rustical:change', drop);
+  const on = () => live && !(navigator.connection && navigator.connection.saveData);
+  P.stream = open => { live = open; if (!open) drop(); };
+  P.prefetch = url => {
+    const k = String(url), e = m.get(k);
+    if (!on() || (e && Date.now() - e.t < TTL)) return;
+    if (m.size >= MAX) m.delete(m.keys().next().value);
+    m.set(k, { t: Date.now(), g: gen, p: f0(k, { headers: { Accept: 'text/html', Purpose: 'prefetch' } }).then(r => r.status === 200 ? r.text() : null).catch(() => null) });
+  };
+  P.prefetched = async url => {
+    const k = String(url), e = m.get(k); if (!e) return null;
+    m.delete(k);
+    if (e.g !== gen || Date.now() - e.t > TTL || !on()) return null;
+    const html = await e.p; return e.g === gen ? html : null;
+  };
+  // `urls()`: what a click on `el` would fetch, asked at the moment of intent; `hovered`: a pointer already
+  // resting on `el` counts (a control that replaced the one under it, which gets no pointerenter)
+  P.intent = (el, urls, hovered) => {
+    let t = 0; const now = () => { clearTimeout(t); t = 0; if (el.isConnected) urls().forEach(P.prefetch); }, rest = () => { if (!t) t = setTimeout(now, HOVER_MS); };
+    if (hovered && el.matches(':hover')) rest();
+    el.addEventListener('pointerenter', rest);
+    el.addEventListener('pointerleave', () => { clearTimeout(t); t = 0; });
+    el.addEventListener('pointerdown', now); el.addEventListener('focus', now); el.addEventListener('touchstart', now, { passive: true });
+  };
+})();
+
 (function () {
   const { $, $$, csrf, ico } = practical;
 
@@ -501,11 +541,11 @@
     const fire = detail => document.dispatchEvent(new CustomEvent('rustical:change', { detail }));
     const connect = () => {
       retryT = 0; es = new EventSource('/api/changes');
-      es.onopen = () => { fails = 0; };
+      es.onopen = () => { fails = 0; practical.stream(true); };
       es.addEventListener('change', ev => { let d; try { d = JSON.parse(ev.data); } catch (_) { return; } if (document.hidden) missed = true; else fire(d); });
-      es.onerror = () => { es.close(); es = null; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
+      es.onerror = () => { practical.stream(false); es.close(); es = null; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
     };
-    const sleep = () => { away = true; missed = true; clearTimeout(retryT); retryT = 0; if (es) { es.close(); es = null; } };
+    const sleep = () => { away = true; missed = true; clearTimeout(retryT); retryT = 0; practical.stream(false); if (es) { es.close(); es = null; } };
     document.addEventListener('visibilitychange', () => {
       clearTimeout(graceT); graceT = 0;
       if (document.hidden) { graceT = setTimeout(sleep, HIDE_GRACE); return; }
@@ -1215,7 +1255,7 @@
   // month / week view has on screen once scrolling left the picked day's — scrolling never changes the picked day
   const q0 = new URL(location.href).searchParams;
   let state = { view: root.dataset.view, date: root.dataset.date, cals: root.dataset.cals || '', month: q0.get('month'), week: q0.get('week') };
-  const shown = () => state.view === 'month' && state.month ? state.month + '-01' : state.view === 'week' && state.week ? state.week : state.date; // the date whose month or week is on screen
+  const shown = (s = state) => s.view === 'month' && s.month ? s.month + '-01' : s.view === 'week' && s.week ? s.week : s.date; // the date whose month or week is on screen
   root.dataset.date = shown();
   let loading = null; // before the filter setup below: a filter kept in localStorage calls load() right away
   // the fragment on screen as fetched ({ href, html }) while nothing was added to it since (week blocks,
@@ -1243,7 +1283,7 @@
   }));
 
   // ---- navigation / fragment loading ----
-  function url(fragment) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', state.view); u.searchParams.set('date', state.date); if (state.view === 'month' && state.month && state.month !== state.date.slice(0, 7)) u.searchParams.set('month', state.month); if (state.view === 'week' && state.week && state.week !== localIso(weekStart(parse(state.date)))) u.searchParams.set('week', state.week); if (state.cals) u.searchParams.set('cals', state.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
+  function url(fragment, s = state) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', s.view); u.searchParams.set('date', s.date); if (s.view === 'month' && s.month && s.month !== s.date.slice(0, 7)) u.searchParams.set('month', s.month); if (s.view === 'week' && s.week && s.week !== localIso(weekStart(parse(s.date)))) u.searchParams.set('week', s.week); if (s.cals) u.searchParams.set('cals', s.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
   async function load(push = true) {
     const u = url(true);
     loading = u;
@@ -1252,10 +1292,9 @@
     const from0 = root.dataset.date, between0 = turnOf(from0) ? monthsBetween(from0, shown()) : [];
     const midsP = between0.length && between0.length <= FLIP_FETCH && !reducedMotion() ? fetchMonths(between0) : Promise.resolve(null);
     try {
-      const r = await fetch(u, { headers: { Accept: 'text/html' } });
+      let html = await practical.prefetched(u);
+      if (html === null) { const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (loading !== u) return; if (!r.ok) throw new Error(r.status); html = await r.text(); }
       if (loading !== u) return;
-      if (!r.ok) throw new Error(r.status);
-      const html = await r.text();
       if (!push && onScreen && onScreen.href === u.href && onScreen.html === html) return;
       const mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
@@ -1270,16 +1309,24 @@
     } catch (e) { console.error(e); }
   }
   addEventListener('popstate', e => { if (e.state) { state = e.state; load(false); } });
-  function shift(dir) {
-    const d = parse(state.date);
-    if (state.view === 'day') d.setDate(d.getDate() + dir);
-    else if (state.view === 'week') d.setDate(d.getDate() + 7 * dir);
-    else if (state.view === 'month') { const m = parse(shown()); m.setDate(1); m.setMonth(m.getMonth() + dir); state.month = localIso(m).slice(0, 7); return load(); }
+  // the state shift() / go() lead to, without going there (also what a prefetch asks for)
+  function shifted(dir) {
+    const s = { ...state }, d = parse(s.date);
+    if (s.view === 'day') d.setDate(d.getDate() + dir);
+    else if (s.view === 'week') d.setDate(d.getDate() + 7 * dir);
+    else if (s.view === 'month') { const m = parse(shown(s)); m.setDate(1); m.setMonth(m.getMonth() + dir); s.month = localIso(m).slice(0, 7); return s; }
     else d.setFullYear(d.getFullYear() + dir);
-    state.date = ymd(d);
-    load();
+    s.date = ymd(d); return s;
   }
-  function go(view, date) { if (date || (view && view !== state.view)) state.month = state.week = null; if (view) state.view = view; if (date) state.date = date; load(); } // a picked day or another view shows the picked day's month again
+  function gone(view, date) { const s = { ...state }; if (date || (view && view !== s.view)) s.month = s.week = null; if (view) s.view = view; if (date) s.date = date; return s; } // a picked day or another view shows the picked day's month again
+  function shift(dir) { state = shifted(dir); load(); }
+  function go(view, date) { state = gone(view, date); load(); }
+  // the fragments a navigation to `s` fetches: the target and the months a page turn glides past (load())
+  function fetches(s) {
+    const out = [url(true, s)].filter(u => !onScreen || u.href !== onScreen.href), from = root.dataset.date, to = shown(s); // not the view on screen
+    if (root.dataset.view === 'month' && s.view === 'month' && from.slice(0, 7) !== to.slice(0, 7) && !reducedMotion()) { const b = monthsBetween(from, to); if (b.length <= FLIP_FETCH) out.push(...b.map(m => monthUrl(m, s))); }
+    return out;
+  }
   function pickDay(date) { // a click picks the day; the month or week on screen stays
     if (state.view === 'month') { state.month = shown().slice(0, 7); state.date = date; load(false); } // the agenda beside the grid shows it
     else { state.date = date; markPicked(); }
@@ -1316,7 +1363,8 @@
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const localIso = ymd;
   function monthsBetween(a, b) { const out = [], d = parse(a.slice(0, 7) + '-01'), dir = b > a ? 1 : -1; for (;;) { d.setMonth(d.getMonth() + dir); const m = localIso(d); if (m.slice(0, 7) === b.slice(0, 7)) return out; out.push(m); } } // first days of the months strictly between, in travel order
-  const fetchMonths = list => Promise.all(list.map(async m => { try { const u = url(true); u.searchParams.set('month', m.slice(0, 7)); const r = await fetch(u, { headers: { Accept: 'text/html' } }); return r.ok ? new DOMParser().parseFromString(await r.text(), 'text/html').querySelector('.month') : null; } catch { return null; } }));
+  const monthUrl = (m, s) => { const u = url(true, s); u.searchParams.set('month', m.slice(0, 7)); return u; };
+  const fetchMonths = list => Promise.all(list.map(async m => { try { const u = monthUrl(m); let html = await practical.prefetched(u); if (html === null) { const r = await fetch(u, { headers: { Accept: 'text/html' } }); html = r.ok ? await r.text() : null; } return html === null ? null : new DOMParser().parseFromString(html, 'text/html').querySelector('.month'); } catch { return null; } }));
   function skeleton(m, dows) { const d = parse(m), y = d.getFullYear(), mo = d.getMonth(), first = new Date(y, mo, 1), c = new Date(y, mo, 1 - ((first.getDay() + 6) % 7)); let h = dows.map(x => `<div class="dow">${esc(x)}</div>`).join('');
     for (let i = 0; ; i++, c.setDate(c.getDate() + 1)) { if (i && i % 7 === 0 && (c.getMonth() !== mo || c.getFullYear() !== y)) break; h += `<div class="day${c.getMonth() !== mo ? ' other' : ''}"><span class="n">${c.getDate()}</span></div>`; }
     const el = document.createElement('div'); el.className = 'month'; el.innerHTML = h; return el; } // same week rule as render.rs month_weeks
@@ -1590,11 +1638,14 @@
     $$('.add', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const d = b.closest('[data-date]'); edOpen(null, d ? d.dataset.date : state.date); });
   }
   function wire() {
-    $$('[data-nav]', root).forEach(b => b.onclick = () => { if (b.dataset.nav === 'today') { tlHome = true; go(null, today); } else shift(b.dataset.nav === 'next' ? 1 : -1); });
-    $$('.toolbar [data-view]', root).forEach(b => b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); });
+    $$('[data-nav]', root).forEach(b => { b.onclick = () => { if (b.dataset.nav === 'today') { tlHome = true; go(null, today); } else shift(b.dataset.nav === 'next' ? 1 : -1); };
+      practical.intent(b, () => fetches(b.dataset.nav === 'today' ? gone(null, today) : shifted(b.dataset.nav === 'next' ? 1 : -1))); });
+    $$('.toolbar [data-view]', root).forEach(b => { b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); }; practical.intent(b, () => fetches(gone(b.dataset.view, null))); });
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
-    if (state.view === 'month') { const m = $('.month', root); if (m) m.addEventListener('wheel', monthWheel, { passive: false }); }
+    if (state.view === 'month') { const m = $('.month', root); if (m) { m.addEventListener('wheel', monthWheel, { passive: false });
+      // the wheel turns to a neighbour month: the pointer over the grid is the intent (also right after a turn, unmoved)
+      practical.intent(m, () => [...fetches(shifted(1)), ...fetches(shifted(-1))], true); } }
     wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root));
     const title = $('#title', root); if (title) title.onclick = openPicker;
   }

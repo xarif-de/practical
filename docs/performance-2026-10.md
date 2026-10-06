@@ -70,11 +70,25 @@ before it and the same hour one day earlier): CPU **6.0 → 0.38 mcores** (−94
 
 ## Deliberately not done
 
-- Flash `session.remove` only when present: the remove marks the session modified, and that save is
-  what extends the inactivity expiry (tower-sessions 0.15) — users would be logged out 12 h after login.
 - Icon sprite / i18n JSON as separate cached files: first paint would show empty icons.
-- Optimistic task state, link prefetch (prefetch consumes the flash), thin/fat LTO (no gain for the
-  build time), compressing regions.json (no gain on the compressed image).
+- Optimistic task state, thin/fat LTO (no gain for the build time), compressing regions.json (no gain
+  on the compressed image).
+- Prefetch of full-page links (calendar/contacts/tasks/settings): a document navigation can only reuse
+  a prefetch through the HTTP cache, which the change stream cannot invalidate (stale page after a
+  change; a form POST's redirect target would come from the cache without its flash).
+
+## Round 2 (session expiry, prefetch on intent)
+
+- Session expiry explicit (`sessions::activity`): requests with a page context extend the 12 h
+  inactivity window as before, by an expiry-only store write at most once per 60 s (it never
+  overwrites a concurrent write, never resurrects a logged-out session); the flash is removed only
+  when present. Set-Cookie + store writes in a scripted minute of calendar use: 9 → 0 (≤ 1/min).
+- Calendar fragments prefetched on intent (hover 65 ms, focus, press; the month grid under the
+  pointer = the wheel's neighbours), used once by the click, dropped on any live change, own write
+  (any tab) or closed stream; none on Save-Data. The server answers `Purpose: prefetch` with 204
+  while a flash/new app token is pending and never writes session data for it. Click → settled DOM
+  with the pointer rested (Playwright, median 10 × 3): 17–29 → 10–20 ms local, 61–64 → 10–19 ms at
+  40 ms RTT. Requests in the scripted minute: 9 → 14 (all prefetches, 9 of 9 navigations served).
 
 ## Known bugs pinned by tests, not fixed (each changes visible behaviour — needs a decision)
 

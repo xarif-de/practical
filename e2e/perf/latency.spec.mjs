@@ -42,6 +42,16 @@ async function measure(page, name, { prep, act, done, arg = i => i }) {
   console.log(JSON.stringify({ name, ...results[name] }));
 }
 
+// E2E_LAT_SAVEDATA=1: the browser asks for reduced data use, so app.js prefetches nothing (the A/B of prefetching)
+if (process.env.E2E_LAT_SAVEDATA === '1') test.beforeEach(({ page }) => page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'connection', { configurable: true, get: () => ({ saveData: true }) })));
+// E2E_LAT_RTT=<ms>: every request takes that much longer (Chromium's network emulation), like a phone on the move
+if (Number(process.env.E2E_LAT_RTT)) test.beforeEach(async ({ page }) => { const cdp = await page.context().newCDPSession(page); await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: Number(process.env.E2E_LAT_RTT), downloadThroughput: -1, uploadThroughput: -1 }); });
+/** Rests the pointer on `loc` (a user's hover before the click); measure() then settles for 200 ms. */
+async function rest(page, loc) {
+  const b = await loc.boundingBox({ timeout: 10000 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+}
+
 const month = async (page, date = '2026-10-14') => { await page.goto(`/calendar?view=month&date=${date}`); await expect(page.locator('#viewroot .month')).toBeVisible(); };
 
 test('calendar: next / previous / today / view switch / pick a day', async ({ page }) => {
@@ -50,6 +60,19 @@ test('calendar: next / previous / today / view switch / pick a day', async ({ pa
   await measure(page, 'cal-today', { prep: () => month(page, '2026-06-10'), act: () => rawClick(page, page.locator('[data-nav=today]')), done: () => !!document.querySelector('#viewroot .month .day[data-date="2026-10-14"]') && document.querySelector('#viewroot').dataset.date.startsWith('2026-10') });
   await measure(page, 'cal-view-week', { prep: () => month(page), act: () => rawClick(page, page.locator('.toolbar [data-view=week]')), done: () => !!document.querySelector('#viewroot .stream .week.focus') });
   await measure(page, 'cal-pick-day', { prep: () => month(page), act: () => rawClick(page, page.locator('.v-month .day[data-date="2026-10-21"] .n')), done: () => !!document.querySelector('#viewroot .v-month .day.sel[data-date="2026-10-21"]') });
+});
+
+// the same navigations after the pointer rested on the control (≥ 200 ms: measure() settles), as a hand does
+// before it clicks — the time app.js prefetches in (practical.intent)
+test('calendar: navigation after the pointer rested on the control', async ({ page }) => {
+  const live = async date => { const s = page.waitForResponse(r => r.url().endsWith('/api/changes')); await month(page, date); await s; };
+  const at = (sel, date) => async () => { await live(date); await rest(page, page.locator(sel)); };
+  await measure(page, 'rest-cal-today', { prep: at('[data-nav=today]', '2026-06-10'), act: () => rawClick(page, page.locator('[data-nav=today]')), done: () => !!document.querySelector('#viewroot .month .day[data-date="2026-10-14"]') && document.querySelector('#viewroot').dataset.date.startsWith('2026-10') });
+  await measure(page, 'rest-cal-view-week', { prep: at('.toolbar [data-view=week]'), act: () => rawClick(page, page.locator('.toolbar [data-view=week]')), done: () => !!document.querySelector('#viewroot .stream .week.focus') });
+  await measure(page, 'rest-cal-view-day', { prep: at('.toolbar [data-view=day]'), act: () => rawClick(page, page.locator('.toolbar [data-view=day]')), done: () => !!document.querySelector('#viewroot .v-day') });
+  await measure(page, 'rest-cal-view-year', { prep: at('.toolbar [data-view=planner]'), act: () => rawClick(page, page.locator('.toolbar [data-view=planner]')), done: () => document.querySelector('#viewroot').dataset.view === 'planner' && !document.querySelector('#viewroot .v-month') });
+  await measure(page, 'rest-cal-next-month', { prep: at('#viewroot .month'), act: () => page.mouse.wheel(0, 120), done: () => document.querySelector('#viewroot')?.dataset.date?.startsWith('2026-11') && !!document.querySelector('#viewroot .month .day[data-date="2026-11-18"]') });
+  await measure(page, 'rest-cal-prev-month', { prep: at('#viewroot .month'), act: () => page.mouse.wheel(0, -120), done: () => document.querySelector('#viewroot')?.dataset.date?.startsWith('2026-09') && !!document.querySelector('#viewroot .month .day[data-date="2026-09-16"]') });
 });
 
 test('calendar: open the editor, save an edit', async ({ page }) => {
