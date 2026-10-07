@@ -50,6 +50,63 @@ pub fn assert_snapshot(name: &str, actual: &str) {
     }
 }
 
+// ---- memory: bytes the current thread holds (mimalloc underneath, as in production) ----
+
+pub struct Counting;
+
+thread_local! {
+    /// (held now, highest since the last `peak_of` began); a Cell needs no allocation and no destructor
+    static HELD: std::cell::Cell<(isize, isize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+fn count(delta: isize) {
+    let _ = HELD.try_with(|h| {
+        let (now, peak) = h.get();
+        h.set((now + delta, peak.max(now + delta)));
+    });
+}
+
+unsafe impl std::alloc::GlobalAlloc for Counting {
+    unsafe fn alloc(&self, l: std::alloc::Layout) -> *mut u8 {
+        let p = unsafe { std::alloc::GlobalAlloc::alloc(&mimalloc::MiMalloc, l) };
+        if !p.is_null() {
+            count(l.size() as isize);
+        }
+        p
+    }
+    unsafe fn alloc_zeroed(&self, l: std::alloc::Layout) -> *mut u8 {
+        let p = unsafe { std::alloc::GlobalAlloc::alloc_zeroed(&mimalloc::MiMalloc, l) };
+        if !p.is_null() {
+            count(l.size() as isize);
+        }
+        p
+    }
+    unsafe fn dealloc(&self, p: *mut u8, l: std::alloc::Layout) {
+        unsafe { std::alloc::GlobalAlloc::dealloc(&mimalloc::MiMalloc, p, l) };
+        count(-(l.size() as isize));
+    }
+    unsafe fn realloc(&self, p: *mut u8, l: std::alloc::Layout, new: usize) -> *mut u8 {
+        let q = unsafe { std::alloc::GlobalAlloc::realloc(&mimalloc::MiMalloc, p, l, new) };
+        if !q.is_null() {
+            count(new as isize - l.size() as isize);
+        }
+        q
+    }
+}
+
+/// `f`'s result and the most bytes this thread held during it beyond what it held before. A `#[tokio::test]`
+/// runs the router on its own thread (current-thread runtime), so this is the request's own peak; what the
+/// SQLite worker thread allocates for the rows is not in it.
+pub async fn peak_of<F: std::future::Future>(f: F) -> (F::Output, usize) {
+    let base = HELD.with(|h| {
+        let (now, _) = h.get();
+        h.set((now, now));
+        now
+    });
+    let out = f.await;
+    (out, HELD.with(|h| (h.get().1 - base).max(0) as usize))
+}
+
 // ---- a running app ----
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);

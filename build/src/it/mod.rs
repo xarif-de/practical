@@ -8,6 +8,7 @@ mod auth;
 mod caches;
 mod history;
 mod pages;
+mod poison;
 pub mod seed;
 mod sessions;
 mod settings;
