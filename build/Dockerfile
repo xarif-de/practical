@@ -28,14 +28,14 @@ COPY src ./src
 COPY assets ./assets
 COPY locales ./locales
 COPY templates ./templates
-# `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): it runs in the background of the SAME
-# step as the release build, own target/ (dev profile, own cache id), log printed after the build. A separate stage
-# would add its whole time: dagger v0.21.10 evaluates Dockerfile stages one after another (measured: a test stage
-# started the release build only after the 134 s it took). Measured 2026-10-07, local engine (12 CPUs), a one-line
-# change: step 147 s with the 291 tests (10 s compile + 17 s run, beside the single-threaded release compile) vs
-# 150-157 s without, peak 2.5 vs 2.1 GB, CPU 271 vs 153 s; both targets cold at 8 jobs each (the CI runner's 8 CPUs)
-# 331 s, 5.3 GB; the test target holds ~2 GB. No `-D warnings` (e2e/cargo.sh adds it locally): a toolchain bump
-# with a new lint must not fail CI. No debuginfo: CI needs the verdict and the panic message.
+# `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): same step, AFTER the release build, own
+# target/ (dev profile, own cache id). Not a stage: dagger v0.21.10 evaluates stages one after another anyway. Not
+# beside the build: the two compiles' memory would add up, and in the 8 GiB CI dind an OOM wipes the whole engine
+# cache. CARGO_BUILD_JOBS=4 bounds the cold test compile. Measured 2026-10-07, local engine (12 CPUs), a one-line
+# change: step 172 s (release 146 + tests 26) vs 150-157 s without, cgroup peak 2.14 GB with and without; both
+# targets cold: release 336 s + tests 133 s, peak 3.59 GB in the release build, 5.03 GB in the tests incl. >= 1.46 GB
+# page cache the build left (tests' own anon <= 3.57 GB). No `-D warnings` (e2e/cargo.sh adds it locally): a
+# toolchain bump with a new lint must not fail CI. No debuginfo: CI needs the verdict and the panic message.
 COPY tests ./tests
 # the_image_license_is_the_repository_license compares ./LICENSE with ../LICENSE, which is outside this build
 # context: the same copy stands in, so that one test is vacuous here and stays real in `mise run test`.
@@ -45,11 +45,10 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=practical-target,target=/src/target,sharing=locked \
     --mount=type=cache,id=practical-test-target,target=/test-target,sharing=locked \
-    find . -path ./target -prune -o -type f -exec touch {} + || exit 1; \
-    (CARGO_PROFILE_DEV_DEBUG=0 cargo test --locked --target-dir /test-target >/tmp/cargo-test.log 2>&1) & \
-    cargo build --profile "$CARGO_PROFILE" --locked && cp "target/$CARGO_PROFILE/practical" /practical; \
-    build=$?; wait $!; test=$?; cat /tmp/cargo-test.log; \
-    echo "cargo build: exit $build, cargo test: exit $test"; [ "$build" = 0 ] && [ "$test" = 0 ]
+    find . -path ./target -prune -o -type f -exec touch {} + \
+ && cargo build --profile "$CARGO_PROFILE" --locked \
+ && cp "target/$CARGO_PROFILE/practical" /practical \
+ && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=4 cargo test --locked --target-dir /test-target
 
 # renovate: datasource=docker packageName=alpine
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
