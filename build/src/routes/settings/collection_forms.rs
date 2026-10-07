@@ -23,8 +23,7 @@ pub(super) struct CalendarForm {
 }
 
 pub(super) async fn calendar_create(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<CalendarForm>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         let mut comps = vec![];
         if f.comp_event.is_some() { comps.push("VEVENT".to_string()); }
         if f.comp_todo.is_some() { comps.push("VTODO".to_string()); }
@@ -43,9 +42,8 @@ pub(super) async fn calendar_create(State(state): State<SharedState>, user: Prin
         )
         .await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 #[derive(Deserialize)]
@@ -60,43 +58,35 @@ pub(super) struct CalendarUpdateForm {
 }
 
 pub(super) async fn calendar_update(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<CalendarUpdateForm>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         collections::update_calendar(&state, &user, &owner, &id, &f.name, &f.color, &f.description).await?;
         Ok(Some("flash-saved"))
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 pub(super) async fn calendar_delete(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         collections::delete_calendar(&state, &user, &owner, &id, false).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 pub(super) async fn calendar_restore(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "trash", async {
         collections::restore_calendar(&state, &user, &owner, &id).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "trash").await
+    })
+    .await
 }
 
 pub(super) async fn calendar_purge(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "trash", async {
         collections::delete_calendar(&state, &user, &owner, &id, true).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "trash").await
+    })
+    .await
 }
 
 #[derive(Deserialize)]
@@ -111,13 +101,11 @@ pub(super) struct AddressbookForm {
 }
 
 pub(super) async fn addressbook_create(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<AddressbookForm>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         collections::create_addressbook(&state, &user, &f.owner, &f.name, &f.color, &f.description).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 #[derive(Deserialize)]
@@ -131,41 +119,33 @@ pub(super) struct AddressbookUpdateForm {
 }
 
 pub(super) async fn addressbook_update(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<AddressbookUpdateForm>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         collections::update_addressbook(&state, &user, &owner, &id, &f.name, &f.color, &f.description).await?;
         Ok(Some("flash-saved"))
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 pub(super) async fn addressbook_delete(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "collections", async {
         collections::delete_addressbook(&state, &user, &owner, &id, false).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "collections").await
+    })
+    .await
 }
 
 pub(super) async fn addressbook_restore(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "trash", async {
         collections::restore_addressbook(&state, &user, &owner, &id).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "trash").await
+    })
+    .await
 }
 
 pub(super) async fn addressbook_purge(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
-    let r = async {
-        csrf::check(&session, &f.csrf).await?;
+    form(&state, &session, &ctx, &f.csrf, "trash", async {
         collections::delete_addressbook(&state, &user, &owner, &id, true).await?;
         Ok(None)
-    }
-    .await;
-    finish(&state, &session, &ctx, r, "trash").await
+    })
+    .await
 }

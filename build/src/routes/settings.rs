@@ -254,6 +254,16 @@ async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: A
     Redirect::to(&format!("/settings#{anchor}")).into_response()
 }
 
+/// A settings form action: the form's CSRF field, then `op` (an async block does nothing before it is
+/// awaited, so nothing of it runs on a bad token), answered by `finish`.
+async fn form(state: &SharedState, session: &Session, ctx: &PageCtx, token: &str, anchor: &str, op: impl Future<Output = AppResult<Option<&'static str>>>) -> Response {
+    let r = match csrf::check(session, token).await {
+        Ok(()) => op.await,
+        Err(e) => Err(e),
+    };
+    finish(state, session, ctx, r, anchor).await
+}
+
 /// The user's message for a failed settings action (`AppError::user_message`); a server-side failure is
 /// logged with its own text, which the user does not see.
 fn failed(state: &SharedState, ctx: &PageCtx, e: &AppError) -> String {
