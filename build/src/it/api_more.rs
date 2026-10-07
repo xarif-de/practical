@@ -222,6 +222,12 @@ async fn push_with_vapid() {
     assert_eq!(two["user_agent"].as_str().unwrap().len(), 300);
     // the page offers push now
     c.get("/settings").await.ok();
+    // logout drops what this session subscribed (audit3-security #11), not alice's other devices
+    sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('o', 'alice', 'https://web.push.apple.com/other-device', ?, ?)").bind(p256dh).bind(auth).execute(&app.state.db).await.unwrap();
+    let csrf = c.csrf.clone();
+    assert_eq!(c.post_form_raw("/logout", &[("csrf", &csrf)]).await.location().as_deref(), Some("/login?manual=1"));
+    let left: Vec<String> = sqlx::query_scalar("SELECT endpoint FROM practical_push_subscriptions").fetch_all(&app.state.db).await.unwrap();
+    assert_eq!(left, ["https://web.push.apple.com/other-device"]);
 }
 
 #[tokio::test]

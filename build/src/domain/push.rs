@@ -199,7 +199,6 @@ pub async fn remember_in_session(session: &tower_sessions::Session, endpoint: &s
 /// subscriptions made in this session, so a shared device stops showing the previous user's reminders.
 /// (app.js also deletes the browser's own subscription before it submits the logout form; this covers a
 /// logout without that script.) Never fails the logout: errors go to the log. Returns the rows deleted.
-#[allow(dead_code)] // until auth::post_logout calls it (W3 package `http`)
 pub async fn forget_on_logout(state: &AppState, session: &tower_sessions::Session) -> u64 {
     let user: Option<String> = session.get(crate::ctx::SESSION_USER).await.ok().flatten();
     let list: Vec<String> = session.get(SESSION_ENDPOINTS).await.ok().flatten().unwrap_or_default();
