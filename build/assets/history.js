@@ -20,7 +20,8 @@
   const tr = (k, vars = {}) => { const s = S(k); return (typeof s === 'object' ? plural(s, +vars[s.$]) : s).replace(/%(\w+)/g, (m, n) => n in vars ? vars[n] : m); }; // plural: app.js
   function load(doc) {
     D = doc;
-    log = D.changes.map(c => ({ ...c, t: new Date(c.at) }));
+    // fields at their default come without them (routes/history.rs `data`)
+    log = D.changes.map(c => ({ dev: null, prodid: null, label: null, reverts: null, undoneBy: null, inactiveBy: null, tech: false, ...c, undo: { why: null, by: null, warn: 0, ...c.undo }, t: new Date(c.at) }));
     byId = Object.fromEntries(log.map(c => [c.id, c]));
     els = D.els;
     plans.clear();

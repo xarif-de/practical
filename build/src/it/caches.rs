@@ -255,3 +255,84 @@ async fn year_views_follow_writes_renames_recolours_and_zones() {
     let gone = both(&app, &mut c, &views).await;
     assert!(!gone[2].contains("Urlaub Meer"));
 }
+
+/// The history document's cached part (`routes::history::HistoryCache`): after every kind of change that
+/// shows in it — a UI write, a DAV write before and after the poll finds it, an undo, a collection rename,
+/// a principal's new name, a group membership, a purge, a zone or language switch — the answer equals the
+/// uncached one; an unchanged second request is served from the cache.
+#[tokio::test]
+async fn history_document_follows_every_change() {
+    let s = crate::it::seed::seed().await;
+    let app = &s.app;
+    let mut c = app.login("alice").await;
+    crate::domain::history::poll(&app.state).await;
+    async fn check(app: &TestApp, c: &mut crate::testkit::Client, what: &str) -> serde_json::Value {
+        let strip = |mut v: serde_json::Value| {
+            v.as_object_mut().unwrap().remove("now");
+            v
+        };
+        let cached = strip(c.get_json("/api/history").await.ok().json());
+        app.state.caches.history.clear();
+        let fresh = strip(c.get_json("/api/history").await.ok().json());
+        assert_eq!(cached, fresh, "{what}: cached = uncached");
+        // the page carries the same document
+        let page = c.get("/history").await;
+        assert_eq!(strip(page.island("history-data")), fresh, "{what}: page");
+        fresh
+    }
+    let input = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Yoga", "start": "2026-10-23T18:00:00", "end": "2026-10-23T19:00:00" });
+    let id = c.json(Method::POST, "/api/events", input.clone()).await.ok().json()["id"].as_str().unwrap().to_string();
+    let h = check(app, &mut c, "UI write").await;
+    assert_eq!(app.state.caches.history.len(), 1);
+    let before = app.state.history.generation();
+    assert_eq!(check(app, &mut c, "nothing changed").await, h);
+    assert_eq!(app.state.history.generation(), before, "reading moves nothing");
+    // defaults are left out (history.js puts them back)
+    let ch = &h["changes"][0];
+    for k in ["dev", "prodid", "label", "reverts", "undoneBy", "inactiveBy", "tech"] {
+        assert!(ch.get(k).is_none(), "{k}: {ch}");
+    }
+    assert_eq!(ch["undo"], json!({ "ok": true }));
+    assert_eq!(ch["who"], "alice");
+    // a DAV write: seen at once in the objects (synctoken), then as a change after the poll
+    let path = format!("/api/events/alice/{}/{id}", s.privat);
+    let mut upd = input.clone();
+    upd["summary"] = json!("Yoga im Park");
+    c.json(Method::PUT, &path, upd).await.ok();
+    app.put_ics("alice", &s.privat, "dav1", &vevent("dav1", "Vom Telefon", "DTSTART;TZID=Europe/Berlin:20261024T090000\nDTEND;TZID=Europe/Berlin:20261024T100000")).await;
+    check(app, &mut c, "DAV write before the poll").await;
+    crate::domain::history::poll(&app.state).await;
+    let h = check(app, &mut c, "DAV write after the poll").await;
+    let dav = h["changes"].as_array().unwrap().last().unwrap();
+    assert_eq!((dav["src"].as_str(), dav["who"].is_null(), dav["prodid"].as_str()), (Some("dav"), true, Some("-//test//test//EN")));
+    // an undo: the undone change names its undo, the plan of the others changes
+    let upd_id = h["changes"][1]["id"].as_i64().unwrap();
+    let u = c.json(Method::POST, &format!("/api/history/{upd_id}/undo"), json!({ "confirm": true })).await.ok().json()["id"].as_i64().unwrap();
+    let h = check(app, &mut c, "undo").await;
+    assert_eq!(h["changes"][1]["undoneBy"], u);
+    // a rename moves no synctoken; a principal's new name; a new group member sees the group's changes
+    let user = app.principal("alice").await;
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &s.privat, "Freizeit", "#123456", "").await.unwrap();
+    assert_eq!(check(app, &mut c, "rename").await["colls"][format!("alice/{}", s.privat)]["name"], "Freizeit");
+    sqlx::query("UPDATE principals SET displayname = 'Alice Neu' WHERE id = 'alice'").execute(&app.state.db).await.unwrap();
+    assert_eq!(check(app, &mut c, "principal name").await["people"]["alice"]["name"], "Alice Neu");
+    let mut carol = app.login("carol").await;
+    assert_eq!(check(app, &mut carol, "carol").await["changes"], json!([]));
+    app.put_ics("group.familie", &s.familie, "fam1", &vevent("fam1", "Grillen", "DTSTART;VALUE=DATE:20261025\nDTEND;VALUE=DATE:20261026")).await;
+    crate::domain::history::poll(&app.state).await;
+    check(app, &mut carol, "carol, group change").await;
+    rustical_store::auth::AuthenticationProvider::add_membership(&*app.state.principals, "carol", "group.familie").await.unwrap();
+    let mut carol = app.login("carol").await;
+    assert!(check(app, &mut carol, "carol joined").await["changes"].as_array().unwrap().iter().any(|x| x["items"][0]["title"] == "Grillen"));
+    // zone and language
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York"), ("lang", "en")]).await.ok();
+    let ny = check(app, &mut c, "zone + language").await;
+    assert_ne!(ny["changes"][0]["at"], h["changes"][0]["at"]);
+    // a purge
+    sqlx::query("UPDATE practical_history_changes SET at = '2000-01-01 00:00:00' WHERE id = ?").bind(h["changes"][0]["id"].as_i64()).execute(&app.state.db).await.unwrap();
+    // (that SQL write bypasses the history module: the entry made now is stale until the purge moves the generation)
+    c.get_json("/api/history").await.ok();
+    let first = h["changes"][0]["id"].clone();
+    assert!(crate::domain::history::purge(&app.state).await.unwrap() > 0);
+    assert!(!check(app, &mut c, "purge").await["changes"].as_array().unwrap().iter().any(|x| x["id"] == first));
+}
