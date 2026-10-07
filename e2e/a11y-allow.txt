@@ -18,46 +18,13 @@ color-contrast	dark #ffffff on #bf5af2	P3 white initials/text on a palette or us
 color-contrast	dark #ffffff on #bf7dff	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
 color-contrast	dark #ffffff on #ff6b6b	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
 color-contrast	dark #ffffff on #ffb340	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #0a84ff on #ddeeff	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #0a84ff on #f5f5f7	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #0a84ff on #f8f8fa	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #0a84ff on #ffffff	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #30b46c on #e2f4ea	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #30b46c on #e2f5ea	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #30b46c on #f8f8fa	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #32ade6 on #cbe7fc	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #32ade6 on #e2f4fc	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #6e6e73 on #c9e4ff	P4 --fg-2 on a selection tint (4.2–4.4:1)
-color-contrast	light #6e6e73 on #efeff0	P4 --fg-2 on a selection tint (4.2–4.4:1)
-color-contrast	light #83807c on #fff8ee	P4 a cancelled entry (struck through, dimmed on purpose)
-color-contrast	light #a1a1a6 on #e4f1ff	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #e9e9ee	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #f2f2f5	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #f5f5f7	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #f8f8fa	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #f9e8cf	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #facece	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #ffefee	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #fff3f3	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #fff8ee	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #a1a1a6 on #ffffff	P1 light --fg-3 #a1a1a6 (2.1–2.6:1): 4.5:1 needs #6e6e72 = --fg-2, the third grey level would go
-color-contrast	light #bb7810 on #f8f8fa	P4 a school-holiday name in its --fer text colour (3.4:1)
-color-contrast	light #bb7810 on #fff8ee	P4 a school-holiday name in its --fer text colour (3.4:1)
-color-contrast	light #bb7810 on #ffffff	P4 a school-holiday name in its --fer text colour (3.4:1)
-color-contrast	light #daedff on #0a84ff	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #ff3b30 on #f8f8fa	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #ff3b30 on #ffe4e2	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #ff3b30 on #ffefee	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #ff3b30 on #fff8ee	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #ff3b30 on #ffffff	P4 a status/palette colour as text on its own tint (1.8–3.5:1)
-color-contrast	light #ffffff on #0a84ff	P2 light --accent #0a84ff (3.4–3.6:1 as text and under white): 4.5:1 needs #0971da
-color-contrast	light #ffffff on #30b46c	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #32ade6	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #8e8e93	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #af52de	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #bf5af2	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #ff3b30	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
-color-contrast	light #ffffff on #ff9f0a	P3 white initials/text on a palette or user colour (avatars, contact chips, history people)
+color-contrast	light #13709b on #c6ddee	P4 a status colour as text on its own tint inside a selected row (3.9:1)
+color-contrast	light #6e6e73 on #c7dff8	P4 --fg-2 on a selection tint (3.7–4.3:1)
+color-contrast	light #6e6e73 on #ececed	P4 --fg-2 on the undo chip's --hx-undo tint (4.3:1)
+color-contrast	light #6e6e75 on #e3effb	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a selection tint or --bg-3 (4.2–4.3:1)
+color-contrast	light #6e6e75 on #e9e9ee	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a selection tint or --bg-3 (4.2–4.3:1)
+color-contrast	light #6e6e75 on #f9e8cf	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a strong planner holiday tint (3.6–4.2:1)
+color-contrast	light #6e6e75 on #facece	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a strong planner holiday tint (3.6–4.2:1)
 empty-table-header	th	P7 the contacts table's last column (row actions) has no header text
 heading-order	.heat > h4	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules
 heading-order	.hxc-list > h4	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules

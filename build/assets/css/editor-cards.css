@@ -12,9 +12,9 @@
 .ed .cardform .pchip.acc { --ring: var(--c2); } .ed .cardform .pchip.dec { --ring: var(--c3); } .ed .cardform .pchip.ten { --ring: var(--c4); } .ed .cardform .pchip.nee { --ring: var(--line); }
 .ed .cardform .pst { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-3); }
 .ed .cardform .pst::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fg-3); flex: none; box-sizing: border-box; }
-.ed .cardform .pst.acc { color: var(--c2); } .ed .cardform .pst.acc::before { background: var(--c2); }
-.ed .cardform .pst.dec { color: var(--c3); } .ed .cardform .pst.dec::before { background: var(--c3); }
-.ed .cardform .pst.ten { color: var(--c4); } .ed .cardform .pst.ten::before { background: var(--c4); }
+.ed .cardform .pst.acc { color: var(--c2-text); } .ed .cardform .pst.acc::before { background: var(--c2); }
+.ed .cardform .pst.dec { color: var(--c3-text); } .ed .cardform .pst.dec::before { background: var(--c3); }
+.ed .cardform .pst.ten { color: var(--c4-text); } .ed .cardform .pst.ten::before { background: var(--c4); }
 .ed .cardform .pst.del::before { background: transparent; border: 2px solid var(--fg-3); }
 .ed .cardform .pdetail { margin: 8px 0 0 26px; background: var(--bg); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: 30px 1fr auto; gap: 2px 10px; align-items: center; }
 .ed .cardform .pdetail .pav { width: 30px; height: 30px; border-radius: 10px; font-size: 11.5px; box-shadow: none; }
@@ -43,7 +43,7 @@
 .ed .cardform .nt-view { padding: 2px 0 4px 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ed .cardform .nt-view a { color: var(--accent); text-decoration: none; }
 .ed .cardform .nt-view .nt-m { cursor: pointer; border-radius: 5px; padding: 0 3px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.ed .cardform .nt-view .nt-m[data-k="#"] { color: var(--c2); background: color-mix(in srgb, var(--c2) 12%, transparent); }
+.ed .cardform .nt-view .nt-m[data-k="#"] { color: var(--c2-text); background: color-mix(in srgb, var(--c2) 12%, transparent); }
 .ed .cardform .nt-view .nt-m[data-k="!"] { color: var(--c5); background: color-mix(in srgb, var(--c5) 12%, transparent); }
 .ed .cardform .nt-found { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0 26px; }
 .ed .cardform .nt-found:empty { display: none; }
@@ -84,7 +84,7 @@
 .rbadge .ico { width: 11px; height: 11px; }
 .rbadge.off { color: var(--fg-3); background: var(--tile); }
 .rb { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .rb .rb-x { font-size: 10.5px; color: var(--fg-3); } /* chip + plain text after it ("angepasst", "gilt für neue Termine", "(geändert)") */
-.rb.changed .rbadge { color: var(--c4); background: color-mix(in srgb, var(--c4) 14%, transparent); } .rb.changed .rb-x { color: var(--c4); } /* the event deviates from this template */
+.rb.changed .rbadge { color: var(--c4-text); background: color-mix(in srgb, var(--c4) 14%, transparent); } .rb.changed .rb-x { color: var(--c4-text); } /* the event deviates from this template */
 .ed .cardform.mode-view .rfoot { display: none; } /* rule footers belong to editing */
 .ed .cardform .rfoot { margin-top: 8px; padding: 6px 0 0 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: fit-content(40%) 1fr; gap: 3px 6px; align-items: start; font-size: 11.5px; color: var(--fg-3); } /* label column as wide as the longest label (at most half, then ellipsis), chips right behind it, aligned; minmax(0, 50%) would always grow to 50% */ /* templates and locks of the card (event) / mode chips (rule editor) */
 .ed .cardform .rfoot:empty { display: none; }

@@ -7,7 +7,7 @@
 .lrow b { grid-area: d; font-size: 15px; font-weight: 600; } .lrow span { grid-area: w; font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
 .lrow i { grid-area: bar; height: 3px; border-radius: 2px; background: var(--accent); width: calc(var(--n) * 10px); max-width: 100%; opacity: .7; }
 .lrow em { grid-area: t; font-style: normal; color: var(--fg-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
-.lrow.we { background: var(--tile-weekend); } .lrow.today { background: color-mix(in srgb, var(--today) 8%, transparent); } .lrow.today b { color: var(--today); }
+.lrow.we { background: var(--tile-weekend); } .lrow.today { background: color-mix(in srgb, var(--today-tint) 8%, transparent); } .lrow.today b { color: var(--today); }
 .lrow.sel { box-shadow: inset 3px 0 0 var(--accent); }
 .doc { padding: 28px 40px; max-width: 720px; } .doc .sub { color: var(--fg-3); margin-bottom: 24px; }
 .doc article { display: grid; grid-template-columns: 90px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }

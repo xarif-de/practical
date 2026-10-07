@@ -1,7 +1,9 @@
 /* /history — the change history (history.js): shared marks, the line map (.hxg-*), the list with
    details (.hxc-*) and its day ruler (.hxf-*). Loaded on this page only, after style.css. */
-:root { --hx-ui: var(--accent); --hx-dav: var(--warn); --hx-import: #bf5af2; --hx-undo: #8e8e93;
-  --hx-create: var(--ok); --hx-update: var(--accent); --hx-delete: var(--err); --hx-restore: #32ade6; --hx-move: #af52de; }
+:root { --hx-ui: var(--accent); --hx-dav: var(--c4-text); --hx-import: #b137ef; --hx-undo: #76767c;
+  --hx-create: var(--ok); --hx-update: var(--accent); --hx-delete: var(--err); --hx-restore: #13709b; --hx-move: #9d2bd6;
+  --hx-create-text: #207848; --hx-delete-text: #cd0b00; } /* light: 4.5:1 as text / under white (base.css twins); -text: on its own 14 % chip tint */
+html[data-scheme=dark] { --hx-dav: var(--warn); --hx-import: #bf5af2; --hx-undo: #8e8e93; --hx-restore: #32ade6; --hx-move: #af52de; --hx-create-text: var(--hx-create); --hx-delete-text: var(--hx-delete); }
 .hxpage { min-width: 0; max-width: 100vw; overflow-x: clip; }
 .hxpage .toolbar { z-index: 5; } /* sticky and opaque: style.css .toolbar */
 
@@ -14,7 +16,7 @@
 .hx-src { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-2); white-space: nowrap; }
 .hx-src .ico { width: 14px; height: 14px; }
 .hx-act { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); white-space: nowrap; }
-.hx-act.create { --c: var(--hx-create); } .hx-act.update { --c: var(--hx-update); } .hx-act.delete { --c: var(--hx-delete); }
+.hx-act.create { --c: var(--hx-create); color: var(--hx-create-text); } .hx-act.update { --c: var(--hx-update); color: var(--accent-chip); } .hx-act.delete { --c: var(--hx-delete); color: var(--hx-delete-text); }
 .hx-act.restore { --c: var(--hx-restore); } .hx-act.move { --c: var(--hx-move); }
 .hx-num { font: 600 11px/1 var(--font); color: var(--fg-3); font-variant-numeric: tabular-nums; }
 a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
