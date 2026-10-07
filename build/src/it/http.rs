@@ -92,7 +92,7 @@ async fn the_schema_check_refuses_a_foreign_schema() {
     let app = TestApp::new().await;
     let db = &app.state.db;
     let mut conn = db.acquire().await.unwrap();
-    crate::db::check_schema(db).await.expect("a freshly migrated database passes");
+    assert_eq!(crate::db::check_schema(db).await, Ok(vec![]), "a freshly migrated database passes");
     sqlx::raw_sql("ALTER TABLE practical_user_settings DROP COLUMN alarm_snaps_json").execute(&mut *conn).await.unwrap();
     let e = crate::db::check_schema(db).await.unwrap_err();
     assert!(e.contains("missing practical_user_settings.alarm_snaps_json"), "{e}");
@@ -101,10 +101,17 @@ async fn the_schema_check_refuses_a_foreign_schema() {
     assert!(e.contains("practical_user_settings.alarm_snaps_json is INTEGER"), "{e}");
     sqlx::raw_sql("ALTER TABLE practical_user_settings DROP COLUMN alarm_snaps_json").execute(&mut *conn).await.unwrap();
     sqlx::raw_sql("ALTER TABLE practical_user_settings ADD COLUMN alarm_snaps_json TEXT").execute(&mut *conn).await.unwrap();
-    crate::db::check_schema(db).await.expect("repaired");
+    assert_eq!(crate::db::check_schema(db).await, Ok(vec![]), "repaired");
     sqlx::raw_sql("CREATE TABLE practical_extra (x)").execute(&mut *conn).await.unwrap();
     assert!(crate::db::check_schema(db).await.unwrap_err().contains("unexpected practical_extra.x"));
     sqlx::raw_sql("DROP TABLE practical_extra").execute(&mut *conn).await.unwrap();
+    // production's drift (2026-10-05 copy): category_rules keyed (principal, category) + a unique index —
+    // reported, not refused
+    sqlx::raw_sql("CREATE TABLE cr (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, scope TEXT NOT NULL DEFAULT 'event', PRIMARY KEY (principal, category));
+        DROP TABLE practical_category_rules; ALTER TABLE cr RENAME TO practical_category_rules;
+        CREATE UNIQUE INDEX practical_category_rules_scope ON practical_category_rules (principal, scope, category);").execute(&mut *conn).await.unwrap();
+    let drift = crate::db::check_schema(db).await.unwrap();
+    assert!(drift.len() == 2 && drift[0].starts_with("practical_category_rules.category is TEXT notnull=1 default=None pk=2"), "{drift:?}");
     sqlx::query("INSERT INTO practical_migrations (version) VALUES (9999)").execute(&mut *conn).await.unwrap();
     assert!(crate::db::check_schema(db).await.unwrap_err().contains("has practical migration 9999"));
 }

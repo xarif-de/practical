@@ -204,7 +204,9 @@ async fn serve() -> Result<(), String> {
         return Err(format!("{} is not a migrated RustiCal database", config.db_path));
     }
     db::migrate(&db).await.map_err(|e| format!("migrations: {e}"))?;
-    db::check_schema(&db).await?;
+    for d in db::check_schema(&db).await? {
+        tracing::error!("schema drift (the service runs; repair by hand): {d}");
+    }
 
     let (cal_tx, _cal_rx) = tokio::sync::mpsc::channel(64);
     let (ab_tx, _ab_rx) = tokio::sync::mpsc::channel(64);

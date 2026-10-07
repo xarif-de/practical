@@ -242,10 +242,14 @@ pub async fn rustical_schema_present(db: &SqlitePool) -> Result<bool, sqlx::Erro
 }
 
 /// The `practical_*` schema as the code expects it: every table and column a replay of `MIGRATIONS` on an
-/// empty database creates, and no migration newer than this binary. A start against anything else is
-/// refused — on 2026-10-05 a hand-applied change (table prefix, a dropped column) left a schema the
-/// migrations did not describe, and that showed only as 500s at runtime while /healthz stayed green.
-pub async fn check_schema(db: &SqlitePool) -> Result<(), String> {
+/// empty database creates, and no migration newer than this binary. A start against a missing, unexpected or
+/// retyped column or a newer migration is refused (`Err`) — on 2026-10-05 a hand-applied change (table
+/// prefix, a dropped column) left a schema the migrations did not describe, and that showed only as 500s at
+/// runtime while /healthz stayed green. Other differences (primary key, NOT NULL, default) come back as
+/// `Ok(drift)` for the log: the copy of production of 2026-10-05 has one (practical_category_rules' key is
+/// (principal, category) plus a unique index with scope, not migration 7's (principal, scope, category)),
+/// and refusing it would stop the service.
+pub async fn check_schema(db: &SqlitePool) -> Result<Vec<String>, String> {
     let newest = MIGRATIONS.last().map_or(0, |m| m.0);
     let applied: Option<i64> = sqlx::query_scalar("SELECT max(version) FROM practical_migrations").fetch_one(db).await.map_err(|e| e.to_string())?;
     if let Some(v) = applied.filter(|v| *v > newest) {
@@ -258,16 +262,17 @@ pub async fn check_schema(db: &SqlitePool) -> Result<(), String> {
     let want = practical_columns(&mut expected).await.map_err(|e| e.to_string())?;
     let mut live = db.acquire().await.map_err(|e| e.to_string())?;
     let have = practical_columns(&mut *live).await.map_err(|e| e.to_string())?;
-    let mut diff = vec![];
+    let (mut fatal, mut drift) = (vec![], vec![]);
     for (col, def) in &want {
         match have.get(col) {
-            None => diff.push(format!("missing {}.{}", col.0, col.1)),
-            Some(d) if d != def => diff.push(format!("{}.{} is {d}, expected {def}", col.0, col.1)),
+            None => fatal.push(format!("missing {}.{}", col.0, col.1)),
+            Some(d) if d.split(' ').next() != def.split(' ').next() => fatal.push(format!("{}.{} is {d}, expected {def}", col.0, col.1)),
+            Some(d) if d != def => drift.push(format!("{}.{} is {d}, expected {def}", col.0, col.1)),
             Some(_) => {}
         }
     }
-    diff.extend(have.keys().filter(|c| !want.contains_key(*c)).map(|c| format!("unexpected {}.{}", c.0, c.1)));
-    if diff.is_empty() { Ok(()) } else { Err(format!("the practical_* schema differs from its migrations — refusing to start: {}", diff.join("; "))) }
+    fatal.extend(have.keys().filter(|c| !want.contains_key(*c)).map(|c| format!("unexpected {}.{}", c.0, c.1)));
+    if fatal.is_empty() { Ok(drift) } else { Err(format!("the practical_* schema differs from its migrations — refusing to start: {}", fatal.join("; "))) }
 }
 
 /// (table, column) → "type notnull=… default=… pk=…" of every `practical_*` table but the migration log.
