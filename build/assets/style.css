@@ -19,6 +19,7 @@ button, .btn { font: inherit; color: var(--fg); border: 1px solid var(--line); p
 /* App frame */
 .app { display: grid; min-height: 100dvh; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr; height: 100dvh; }
 .topbar { display: flex; align-items: center; padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); gap: 10px; }
+html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [aria-busy="true"] { cursor: progress; } /* a navigation or a write that takes longer than 300 ms (practical.progress) */
 .brand { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
 .nav { display: none; gap: 4px; margin-left: 8px; }
 .nav a { border-radius: var(--radius-s); color: var(--fg-2); }
@@ -340,6 +341,7 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 .toast { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); font-size: 14px; transition: opacity .3s; }
 .toast.error { background: var(--today); color: #fff; }
 .toast.gone { opacity: 0; pointer-events: none; }
+.toast.net { top: 8px; bottom: auto; padding: 8px 16px; font-size: 13px; } /* the offline notice (practical.online): at the top, so a toast below never covers it */
 .toast-x { border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; opacity: .7; }
 @media (min-width: 900px) { .toast { bottom: 24px; } }
 .muted { color: var(--fg-3); } .small { font-size: 13px; }
@@ -839,6 +841,7 @@ html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(
 .ed .cardform .ct-tag:hover { border-color: var(--accent); }
 .rrpop .ct-hit small { color: var(--fg-3); margin-left: 8px; font-size: 11px; }
 .rrpop .ct-hit.new { color: var(--accent); }
+.rrpop .ct-hit { max-width: min(480px, calc(100vw - 32px)); overflow: hidden; text-overflow: ellipsis; } /* a very long name (3,000 characters) widened the page to 21,711 px: the chaos monkey */
 .rbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--fg-2); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 999px; padding: 1px 7px 1px 4px; white-space: nowrap; vertical-align: middle; } /* template and lock chips look alike */
 .rbadge .ico { width: 11px; height: 11px; }
 .rbadge.off { color: var(--fg-3); background: var(--tile); }

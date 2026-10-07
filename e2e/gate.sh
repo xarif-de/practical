@@ -1,7 +1,8 @@
 #!/bin/sh
 # The checks a change passes, cheapest first; stops at the first failure.
 #   gate.sh quick            cargo test → server build (E2E_PROFILE, default e2e) → functional suite
-#   gate.sh full <ref-dir>   quick → visual baseline of this checkout → compare against <ref-dir> (or E2E_REF): a
+#   gate.sh full <ref-dir>   quick → chaos (the seeded UI monkey, e2e/chaos, ~60 s) → visual baseline of this checkout →
+#                            compare against <ref-dir> (or E2E_REF): a
 #                            baseline of the change's base commit, same fixture, same machine → every colour rule
 #                            shown by a dark state (theme-cover.mjs)
 # Env as for the suites: E2E_PORT (functional: E2E_PORT … +2×E2E_WORKERS−1), E2E_FIXTURE, E2E_WORKERS (default 4),
@@ -35,6 +36,9 @@ echo "== functional suite"
 npx playwright test
 step "functional"
 if [ "$MODE" = full ]; then
+  echo "== chaos (seeded UI monkey + network chaos, one worker)"
+  E2E_SUITE=chaos npx playwright test
+  step "chaos"
   REV="$(git -C "$E2E/.." rev-parse --short HEAD)$( [ -n "$(git -C "$E2E/.." status --porcelain -- build)" ] && echo +dirty || true)"
   OUT="${E2E_OUT:-$HOME/.cache/practical-e2e/$REV}"
   echo "== visual baseline → $OUT"

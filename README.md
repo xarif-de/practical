@@ -412,8 +412,9 @@ mise run e2e-seed                       # fixture DB → e2e/.work/fixture.sqlit
 mise run e2e                            # functional suite (e2e/functional), spec files on 4 workers
 mise run e2e-baseline -- <dir>          # visual suite → <dir> (default ~/.cache/practical-e2e/<sha>)
 mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>/compare-report; exit 1 on any difference
+mise run chaos                          # seeded UI monkey + network chaos (e2e/chaos, one worker, ~60 s)
 mise run gate-quick                     # cargo test → server build → functional suite
-mise run gate -- <ref-dir>              # gate-quick → visual baseline → compare against <ref-dir>
+mise run gate -- <ref-dir>              # gate-quick → chaos → visual baseline → compare against <ref-dir>
 mise run bench                          # performance bench of this checkout → ~/.cache/practical-e2e/bench-<sha>
 mise run bench-compare -- <bench-dir>   # A/B against a former bench dir, interleaved; exit 1 on a regression
 ```
@@ -504,7 +505,8 @@ of this checkout's server build (`E2E_PROFILE`, default `e2e`: relative numbers 
 2. While iterating: `mise run gate-quick` (cargo test, server build, functional suite; ~50–80 s warm).
    It has no visual part — no rule maps the files a change touches to the states it can reach (a
    CSS rule, a template, a locale string or a Rust value can show anywhere).
-3. Before a commit: `mise run gate -- ~/.cache/practical-e2e/<base-sha>` → 0 states with
+3. Before a commit: `mise run gate -- ~/.cache/practical-e2e/<base-sha>` → the chaos suite green (a finding names
+   seed, page, step and the last six actions: rerun it with `CHAOS_SEEDS=<seed> mise run chaos`), 0 states with
    differences (or each difference explained), then every colour rule of style.css/history.css shown by a
    dark state (`e2e/theme-cover.mjs`; a new rule no dark state shows fails — add a state, or a line with
    the reason in `e2e/theme-cover-allow.txt`, whose backlog only shrinks). ~2.5 min warm without an edit

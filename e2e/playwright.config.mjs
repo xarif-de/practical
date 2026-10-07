@@ -3,7 +3,8 @@
 //                           a file in order on one worker, each file on fresh servers + DB copies (lib/test.mjs)
 //   visual-<vp>-<scheme>  — e2e/visual, every surface; de; desktop 1440×900 / phone 390×844 × light / dark
 //   visual-en-*           — the @main states again in en (desktop light, phone light)
-// E2E_SUITE=visual selects the visual projects, otherwise the functional one runs.
+//   chaos                 — e2e/chaos, the seeded UI monkey with network chaos (Tier 1), one worker, desktop, de
+// E2E_SUITE=visual selects the visual projects, E2E_SUITE=chaos the chaos one, otherwise the functional one runs.
 // global-setup.mjs builds the server and starts the visual/perf suites' shared pair (the functional workers start
 // their own); artifacts of the visual suite go to E2E_OUT.
 import { defineConfig } from '@playwright/test';
@@ -37,7 +38,8 @@ export default defineConfig({
   workers: Number(process.env.E2E_WORKERS || 4),
   // one suite per run: the visual suite's workers share one server (read-only), the functional suite's write to their own
   // perf: interaction latency (e2e/perf), opt-in, never part of the gate
-  projects: process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
+  projects: process.env.E2E_SUITE === 'chaos' ? [{ name: 'chaos', testDir: './chaos', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
+    : process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
     : process.env.E2E_SUITE === 'visual' ? visual : [
     { name: 'functional', testDir: './functional', fullyParallel: false, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } },
   ],
