@@ -130,7 +130,7 @@ IIFE(editor/setup … wiring, 18 parts), search.js, contacts.js, tasks.js, setti
 chrome, dialogs, generic, views, icon-buttons, card-form, reminders, recurrence, editor-cards, links-location, tasks,
 settings, color-picker, color-optimiser. A Wrap part is a fragment of one function scope (no script alone).
 Client contract: `window.practical` (core.js: `$ $$ csrf esc escN escQ pad ymd parseYmd sprite ico keepCals send
-placeUnder noteRe noteHtml wheelTouch wheelAxis wheelPages swipeViews`; req.js: `req tell progress online keep authLost stash unstash guard writer copy`;
+placeUnder noteRe noteHtml wheelTouch wheelAxis wheelPages swipeViews slide`; req.js: `req tell progress online keep authLost stash unstash guard writer copy`;
 prefetch.js: `prefetch prefetched intent intend stream`; shell: `fitPop leaving`), `window.{ask,askYesNo,toast,colorPicker,
 plural,tr,trs,MONTHS,WEEKDAYS,rusticalCal,rusticalEd,rusticalTasks,rusticalContacts}`; strings `window.I18N` from
 /assets/i18n-<lang>.js (placeholders `%name`, plurals via `Intl.PluralRules`). history.js loads after app.js.
@@ -141,6 +141,7 @@ No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
 |---|---|---|
 | views | render/, routes/calendar.rs, js/calendar.js | server-rendered; client swaps `?fragment=1`, refetches on SSE; `?week=<Monday>`/`?month=YYYY-MM` scroll; `date` shared by all views; tasks never show in the calendar (VEVENTs only); app frame = viewport, `.main` scrolls, toolbar sticky, scrollbars hidden |
 | view swipe | core.js `swipeViews` (+ `wheelAxis`/`wheelPages`), calendar/tasks/contacts/history.js | sideways wheel touch or touch swipe = click on the neighbouring view button (calendar: day…year only, no wrap); axis per touch (x iff > 2× vertical after 12 px); a horizontal scroller that can still move takes the whole touch; e2e functional/swipe.spec.mjs |
+| view slide | core.js `slide`, frame.css `pc-view` | every switch between a page's views (button, swipe, calendar back/forward among day…year) = same-document view transition of `.main` only (root not captured), transform-only 240 ms; none without the API or with reduced motion (all e2e suites); cost: e2e/perf/slide.spec.mjs |
 | event editor | templates/editor.html, js/editor/*, domain/events/* | view mode behind a lock; cards only where data is; generated instances get the master's VALARMs (caldata builds none) |
 | status card | js/editor/status.js | TRANSP/CLASS defaults (OPAQUE/PUBLIC) shown as "default", unset stays unset; PRIORITY outside 1/5/9 keeps its number |
 | links/attachments | js/editor/links.js, events/props.rs | conference hosts → join card; RELATED-TO resolved to title+date; FMTTYPE/FILENAME/SIZE/FEATURE modelled, other params ride along |

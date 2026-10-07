@@ -55,16 +55,19 @@
       if (html === null) { const r = await practical.req(u, { headers: { Accept: 'text/html' }, as: 'text' }); if (loading !== u) return; if (!r.ok) { if (prev) state = prev; practical.tell(r); return; } html = r.data; }
       if (loading !== u) return;
       if (!push && onScreen && onScreen.href === u.href && onScreen.html === html) return;
-      const mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
+      const mids = await midsP, s = state, dir = Math.sign(SLIDE.indexOf(s.view) - SLIDE.indexOf(root.dataset.view)); // another of the four views: it slides in
+      await practical.slide(SLIDE.includes(s.view) && SLIDE.includes(root.dataset.view) ? dir : 0, () => {
+      if (loading !== u) return; // a later load took over while the slide took its snapshot
+      tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
       ledScroll = ledNode ? ledNode.scrollTop : null; // the ledger is carried over, and a detached node forgets where it stood
       if (flip) flip.end(); const from = root.dataset.date, turn = turnOf(from), oldMonth = $('.month', root);
       const between = !turn ? [] : from === from0 ? between0 : monthsBetween(from, shown()); // another load swapped meanwhile: the prefetched months no longer fit
       root.innerHTML = html;
-      root.dataset.view = state.view; root.dataset.date = shown();
+      root.dataset.view = s.view; root.dataset.date = shown();
       const h1 = root.querySelector('#title'); if (h1) document.title = h1.textContent.trim() + ' · ' + document.title.split(' · ').slice(1).join(' · ');
-      if (push) history.pushState(state, '', url(false).pathname + url(false).search);
+      if (push) history.pushState(s, '', url(false).pathname + url(false).search);
       onScreen = { href: u.href, html };
-      wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
+      wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null); });
     } catch (e) { console.error(e); } finally { done(); }
   }
   addEventListener('popstate', e => { if (e.state) { state = e.state; load(false); } });
@@ -94,6 +97,7 @@
   // the month grid and the year planner own the wheel: one touch of the trackpad (or one spin of a wheel) turns
   // exactly one page, however far it goes and however long its momentum runs (practical.wheelPages). The planner
   // leaves the wheel to the page where that scrolls (a narrow window); a sideways touch belongs to the view switch below
+  const SLIDE = ['day', 'week', 'month', 'planner']; // the views of the switch, in its order: a change between them slides (load)
   const monthWheel = practical.wheelPages(shift);
   const yearWheel = practical.wheelPages(shift, () => document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight);
   // a sideways swipe steps through day | week | month | year (practical.swipeViews), not into or out of the "more" views

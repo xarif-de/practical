@@ -10,6 +10,15 @@ html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [ar
 .spacer { flex: 1; }
 .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; padding: 0; font-size: 13px; font-weight: 600; } /* padding: the base button padding (12px a side) left 6px for the initials */
 .main { display: grid; grid-template-rows: auto 1fr; align-content: start; min-width: 0; overflow-x: hidden; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+/* a view switch slides (core.js practical.slide): while html[data-slide], .main is the one captured element (the root
+   is not: the top bar and tab bar stay live); old and new snapshot move by transform only, clipped to .main's box */
+html[data-slide] { view-transition-name: none; } html[data-slide] .main { view-transition-name: pc-view; }
+::view-transition-group(pc-view) { animation: none; overflow: clip; }
+::view-transition-old(pc-view), ::view-transition-new(pc-view) { animation: 240ms cubic-bezier(.2, .7, .3, 1) both; mix-blend-mode: normal; }
+html[data-slide=next]::view-transition-old(pc-view) { animation-name: pc-to-l; } html[data-slide=next]::view-transition-new(pc-view) { animation-name: pc-from-r; }
+html[data-slide=prev]::view-transition-old(pc-view) { animation-name: pc-to-r; } html[data-slide=prev]::view-transition-new(pc-view) { animation-name: pc-from-l; }
+@keyframes pc-to-l { to { transform: translateX(-100%); } } @keyframes pc-from-r { from { transform: translateX(100%); } }
+@keyframes pc-to-r { to { transform: translateX(100%); } } @keyframes pc-from-l { from { transform: translateX(-100%); } }
 .tabbar { display: flex; justify-content: space-around; border-top: 1px solid var(--line); background: var(--bg); position: sticky; bottom: 0; padding: 6px 0 max(6px, env(safe-area-inset-bottom)); }
 .tabbar a { display: grid; justify-items: center; gap: 2px; font-size: 11px; color: var(--fg-2); padding: 4px 10px; }
 .tabbar a[aria-current] { color: var(--accent); }

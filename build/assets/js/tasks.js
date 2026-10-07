@@ -556,7 +556,8 @@
     cur = null; wantNew = false; held = undefined;
     deckTo(); render(); fit();
   }
-  $$('#tk-views button').forEach(b => b.onclick = () => { setView(b.dataset.tkview); showAct(); });
+  const tkAt = v => $$('#tk-views button').findIndex(b => b.dataset.tkview === v);
+  $$('#tk-views button').forEach(b => b.onclick = () => practical.slide(Math.sign(tkAt(b.dataset.tkview) - tkAt(view)), () => { setView(b.dataset.tkview); showAct(); })); // it slides in from its side of the switch
   practical.swipeViews($('.main'), () => $$('#tk-views button')); // a sideways swipe steps through them in the switch's order
   async function reveal(k) {
     act = k;

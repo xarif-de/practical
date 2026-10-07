@@ -564,7 +564,7 @@
     const u = t.closest('[data-undo]'); if (u) { e.preventDefault(); if (!u.disabled) undo(+u.dataset.undo); return; }
     const g = t.closest('.hx-go'); if (g) { e.preventDefault(); go(+g.dataset.go); return; }
     const el = t.closest('.hx-el'); if (el) { e.preventDefault(); F.el = el.dataset.el; emit(); return; }
-    const vb = t.closest('[data-view]'); if (vb) { view = vb.dataset.view; show(); return; }
+    const vb = t.closest('[data-view]'); if (vb) { const v = vb.dataset.view; practical.slide(Math.sign(VIEWS.indexOf(v) - VIEWS.indexOf(view)), () => { view = v; show(); }); return; } // it slides in from its side
     const fs = t.closest('[data-fs]'); if (fs) { F.status = fs.dataset.fs; emit(); return; }
     const un = t.closest('[data-unf]'); if (un) { const k = un.dataset.unf; if (facet[k]) F[k].delete(un.dataset.v); else if (k === 'status') F.status = 'all'; else if (k === 'period') { F.period = 'all'; F.from = F.to = ''; } else if (k === 'q') { F.q = ''; $('[data-f="q"]', root).value = ''; } else if (k === 'el') F.el = null; else if (k === 'tech') F.tech = false; emit(); return; }
     if (t.closest('[data-reset]')) { e.preventDefault(); resetF(); $('[data-f="q"]', root).value = ''; emit(); return; }

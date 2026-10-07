@@ -38,8 +38,10 @@
     const v = b.dataset.ctview; want = v;
     if (remember) { localStorage.ctview = v; document.cookie = `ctview=${v}; path=/contacts; max-age=31536000; SameSite=Lax`; }
     if (!await load(v) || want !== v) return;
-    const table = v === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== v); segPress(b); if (activeKey) reveal(activeKey);
-    railTick();
+    const table = v === 'table'; // the table is the view to the right: it slides in from there, the list from the left
+    practical.slide(table === wrap.classList.contains('view-table') ? 0 : table ? 1 : -1, () => {
+      wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== v); segPress(b); if (activeKey) reveal(activeKey);
+      railTick(); });
   }
   $$('[data-ctview]').forEach(b => { b.onclick = () => setView(b); practical.intent(b, () => { const v = b.dataset.ctview; if (has[v]) return []; setTimeout(() => load(v, true)); return [partUrl(v)]; }); }); // the load takes the prefetch made right after this
   // a sideways swipe: list | table, the one asked for last counts (its entries may still be on their way)

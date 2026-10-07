@@ -230,3 +230,73 @@ test.describe('phone touch', () => {
     await expect(on).toHaveAttribute('data-tkview', 'groups');
   });
 });
+
+// a view switch slides (core.js practical.slide, frame.css pc-view): the side follows the switch's order, for clicks and
+// swipes alike; nothing of it stays behind; with reduced motion (the suite's default) there is none
+test.describe('slide', () => {
+  test.use({ reducedMotion: 'no-preference' });
+  test.beforeEach(({ page }) => page.addInitScript(() => {
+    window.__slides = []; window.__anims = [];
+    const vt = Document.prototype.startViewTransition; // what runs once the transition is ready
+    if (vt) Document.prototype.startViewTransition = function (...a) { const t = vt.apply(this, a); t.ready.then(() => { window.__anims.push(document.getAnimations().filter(x => x.effect && x.effect.pseudoElement).map(x => `${x.animationName} ${x.effect.pseudoElement}`).sort().join(', ')); }, () => {}); return t; };
+    new MutationObserver(() => { const v = document.documentElement.dataset.slide; if (v) window.__slides.push(v); }).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-slide'] }); // the document: an init script runs before <html> exists
+  }));
+  const slides = page => page.evaluate(() => window.__slides);
+  const clean = async page => {
+    await expect.poll(() => page.evaluate(() => document.documentElement.hasAttribute('data-slide'))).toBe(false);
+    expect(await page.evaluate(() => [getComputedStyle(document.querySelector('.main')).viewTransitionName, document.getAnimations().length])).toEqual(['none', 0]);
+  };
+  test('calendar: buttons and swipes slide towards the view, one per switch; a page turn does not', async ({ page }) => {
+    await page.goto(cal('month'));
+    await page.locator('.toolbar [data-view=week]').click();
+    await expect(calView(page)).toHaveAttribute('data-view', 'week');
+    await clean(page);
+    expect(await slides(page)).toEqual(['prev']);
+    expect(await page.evaluate(() => window.__anims[0])).toBe('pc-from-l ::view-transition-new(pc-view), pc-to-r ::view-transition-old(pc-view)');
+    await over(page, '.stream'); await page.mouse.wheel(120, 0);
+    await expect(calView(page)).toHaveAttribute('data-view', 'month');
+    await clean(page);
+    await over(page, '.v-month .month'); await rest(page); await page.mouse.wheel(0, 120); // a page turn: the month glide, no slide
+    await expect(page.locator('#title')).toHaveText(/November 2026/);
+    await page.locator('.toolbar [data-view=planner]').click();
+    await expect(calView(page)).toHaveAttribute('data-view', 'planner');
+    await clean(page);
+    expect(await slides(page)).toEqual(['prev', 'next', 'next']);
+    await page.goBack(); // back to the month: from the left
+    await expect(calView(page)).toHaveAttribute('data-view', 'month');
+    await clean(page);
+    expect(await slides(page)).toEqual(['prev', 'next', 'next', 'prev']);
+  });
+  test('tasks, contacts, history: the button and the swipe slide; the same view again does not', async ({ page }) => {
+    await page.goto('/tasks?view=groups&back=all');
+    await page.locator('#tk-views [data-tkview=board]').click();
+    await expect(page.locator('#tk-views [data-tkview=board]')).toHaveAttribute('aria-pressed', 'true');
+    await clean(page);
+    await page.locator('#tk-views [data-tkview=board]').click();
+    await page.locator('#tk-views [data-tkview=table]').click();
+    await expect(page.locator('#tk-views [data-tkview=table]')).toHaveAttribute('aria-pressed', 'true');
+    await clean(page);
+    expect(await slides(page)).toEqual(['next', 'prev']);
+    await page.goto('/contacts');
+    await expect(page.locator('.list li[data-key]').first()).toBeVisible();
+    await over(page, '.panels'); await page.mouse.wheel(120, 0);
+    await expect(page.locator('#contacts.view-table')).toBeVisible();
+    await clean(page);
+    await page.locator('[data-ctview=list]').click();
+    await expect(page.locator('#contacts:not(.view-table)')).toBeVisible();
+    await clean(page);
+    expect(await slides(page)).toEqual(['next', 'prev']);
+    await page.goto('/history?view=map');
+    await page.locator('.toolbar [data-view=list]').click();
+    await expect(page.locator('.hxc-list')).toBeVisible();
+    await clean(page);
+    expect(await slides(page)).toEqual(['next']);
+  });
+  test('reduced motion: no slide', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/tasks?view=groups&back=all');
+    await page.locator('#tk-views [data-tkview=board]').click();
+    await expect(page.locator('#tk-views [data-tkview=board]')).toHaveAttribute('aria-pressed', 'true');
+    expect(await slides(page)).toEqual([]);
+  });
+});
