@@ -20,6 +20,7 @@ login-username = Username
 login-password = Password
 login-submit = Sign in
 login-failed = Sign-in failed.
+login-too-many = Too many failed attempts – please wait a minute and try again.
 login-hint = Every RustiCal account can sign in. A new account is created on first sign-in at { $dav }.
 phase-calendar-soon = The calendar view arrives in the next build step. Your calendars:
 phase-contacts-soon = The contacts view arrives in the next build step. Your address books:

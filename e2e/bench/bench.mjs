@@ -141,7 +141,8 @@ function request(side, method, p, { body, headers = {}, raw = false } = {}) {
   });
 }
 const text = r => { const e = r.headers['content-encoding']; return (e === 'gzip' ? zlib.gunzipSync(r.buf) : e === 'br' ? zlib.brotliDecompressSync(r.buf) : r.buf).toString(); };
-const cookieOf = r => (r.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith('practical_session='));
+// every cookie the answer sets (the login form's token is a cookie of its own since w3/http; a Max-Age=0 one is a deletion)
+const cookieOf = r => (r.headers['set-cookie'] || []).filter(c => !/;\s*max-age=0/i.test(c)).map(c => c.split(';')[0]).join('; ') || undefined;
 
 async function get(side, p) {
   const r = await request(side, 'GET', p, { headers: { Accept: p.startsWith('/api/') ? '*/*' : 'text/html' } });

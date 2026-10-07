@@ -81,8 +81,8 @@ async fn poll_changes(state: &SharedState, seen: &mut HashMap<(String, String, S
     ok
 }
 
-/// Final deletion of trashed groups after the retention period (plan D6), the change history's and
-/// the push sent-log's housekeeping.
+/// Final deletion of trashed groups after the retention period (plan D6), the change history's,
+/// the push sent-log's and the expired sessions' housekeeping.
 pub fn spawn_trash_purger(state: SharedState) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
@@ -101,6 +101,9 @@ pub fn spawn_trash_purger(state: SharedState) {
                 }
                 if let Err(e) = crate::domain::push::purge_sent(&state).await {
                     tracing::error!("push sent-log purge: {e}");
+                }
+                if let Err(e) = crate::sessions::purge(&state.db).await {
+                    tracing::error!("session purge: {e}");
                 }
             })
             .await;

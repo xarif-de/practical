@@ -20,6 +20,7 @@ login-username = Nom d'utilisateur
 login-password = Mot de passe
 login-submit = Se connecter
 login-failed = Échec de la connexion.
+login-too-many = Trop de tentatives échouées – veuillez patienter une minute puis réessayer.
 login-hint = Tout compte RustiCal peut se connecter. Un nouveau compte est créé lors de la première connexion sur { $dav }.
 phase-calendar-soon = La vue calendrier arrive à la prochaine étape. Vos calendriers :
 phase-contacts-soon = La vue contacts arrive à la prochaine étape. Vos carnets d'adresses :

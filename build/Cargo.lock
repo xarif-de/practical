@@ -3282,6 +3282,7 @@ dependencies = [
  "oxc_minifier",
  "oxc_parser",
  "oxc_span",
+ "password-auth",
  "rand 0.10.3",
  "regex",
  "reqwest 0.13.1",

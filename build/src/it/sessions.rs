@@ -1,6 +1,6 @@
 //! The session's inactivity expiry and prefetches (sessions::activity): which requests extend the
 //! session, how far, and that a prefetch never consumes a one-shot value or writes session data.
-//! Time passes through `MemoryStore::pass` (every stored instant moves back by the same amount).
+//! Time passes through `DbStore::pass` (every stored instant moves back by the same amount).
 
 use crate::testkit::{Client, Resp, TestApp};
 use axum::body::Body;
@@ -143,12 +143,11 @@ async fn a_prefetch_extends_the_session_but_never_writes_its_data() {
     assert!(sets_cookie(&r), "hovering is use");
     assert!((LIFETIME.whole_seconds() - left(&app, &id)).abs() <= 2);
     assert_eq!(app.sessions.data(&id).unwrap(), before, "an expiry-only save");
-    // a request that would write the session (no CSRF token yet: a Basic-auth client has no session)
-    // is dropped with a 503, after which the session layer saves nothing
+    // a Basic-auth client has no session, and a page view no longer makes one for a CSRF token
     let mut b = app.basic("alice").await;
     let n = app.sessions.ids().len();
     let r = prefetch(&mut b, Method::GET, "/calendar?fragment=1").await;
-    assert_eq!((r.status, r.header("set-cookie")), (StatusCode::SERVICE_UNAVAILABLE, None));
+    assert_eq!((r.status, r.header("set-cookie")), (StatusCode::OK, None));
     assert_eq!(app.sessions.ids().len(), n, "no session created");
 }
 

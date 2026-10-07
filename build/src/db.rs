@@ -195,6 +195,13 @@ CREATE TABLE practical_holidays (
          CREATE INDEX practical_history_heads_uid ON practical_history_heads (store, principal, coll, uid);
          CREATE TABLE practical_history_cursors (store TEXT NOT NULL, principal TEXT NOT NULL, coll TEXT NOT NULL, synctoken INTEGER NOT NULL, PRIMARY KEY (store, principal, coll));",
     ),
+    (
+        14,
+        // the login sessions (sessions::DbStore), so a restart logs nobody out: id = SHA-256 of the cookie's
+        // session id, data = JSON, expiry = Unix seconds (the hourly purge deletes by it)
+        "CREATE TABLE practical_sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expiry INTEGER NOT NULL);
+         CREATE INDEX practical_sessions_expiry ON practical_sessions (expiry);",
+    ),
 ];
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {

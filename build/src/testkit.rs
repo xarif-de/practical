@@ -94,7 +94,7 @@ pub fn config(db_path: &str) -> Config {
 pub struct TestApp {
     pub state: SharedState,
     pub router: axum::Router,
-    pub sessions: crate::sessions::MemoryStore,
+    pub sessions: crate::sessions::DbStore,
     dir: PathBuf,
 }
 
@@ -180,7 +180,7 @@ impl TestApp {
                 .await
                 .unwrap();
         }
-        let sessions = crate::sessions::MemoryStore::default();
+        let sessions = crate::sessions::DbStore::new(state.db.clone());
         let router = crate::build_router_with(&state, sessions.clone()).expect("router");
         Self { state, router, sessions, dir }
     }

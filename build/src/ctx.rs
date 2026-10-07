@@ -134,7 +134,9 @@ impl FromRequestParts<SharedState> for PageCtx {
         let mut flash = None;
         if let Some(session) = &session {
             csrf = session.get::<String>(SESSION_CSRF).await.ok().flatten();
-            if csrf.is_none() {
+            // only a logged-in session gets a token: an anonymous request starts no session (the login
+            // form has its own token, auth::LOGIN_CSRF)
+            if csrf.is_none() && session.get::<String>(SESSION_USER).await.ok().flatten().is_some() {
                 let t = random_token();
                 let _ = session.insert(SESSION_CSRF, &t).await;
                 csrf = Some(t);

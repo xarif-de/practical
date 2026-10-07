@@ -65,6 +65,8 @@ pub struct Guards {
     /// one lock per user around the read-modify-write of `practical_user_settings` (`prefs::get` → change
     /// a field → `prefs::set` writes the whole row): two saves at once otherwise lose one of them
     pub prefs: std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
+    /// failed password logins (`auth::LoginThrottle`)
+    pub login: crate::auth::LoginThrottle,
 }
 
 impl Guards {

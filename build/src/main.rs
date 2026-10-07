@@ -122,11 +122,11 @@ pub fn content_security_policy(cfg: &config::Config) -> String {
 }
 
 fn build_router(state: &SharedState) -> Result<Router, String> {
-    build_router_with(state, sessions::MemoryStore::default())
+    build_router_with(state, sessions::DbStore::new(state.db.clone()))
 }
 
 /// `session_store`: a test keeps a handle on it (testkit).
-fn build_router_with(state: &SharedState, session_store: sessions::MemoryStore) -> Result<Router, String> {
+fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> Result<Router, String> {
     let lifetime = tower_sessions::cookie::time::Duration::hours(state.config.session_hours);
     let activity = sessions::Activity::new(session_store.clone(), lifetime);
     let session_layer = SessionManagerLayer::new(session_store)

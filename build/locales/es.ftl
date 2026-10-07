@@ -20,6 +20,7 @@ login-username = Usuario
 login-password = Contraseña
 login-submit = Iniciar sesión
 login-failed = No se ha podido iniciar sesión.
+login-too-many = Demasiados intentos fallidos: espera un minuto y vuelve a intentarlo.
 login-hint = Cualquier cuenta de RustiCal puede iniciar sesión. En el primer inicio de sesión se crea una cuenta nueva en { $dav }.
 phase-calendar-soon = La vista de calendario llegará en el próximo paso de desarrollo. Tus calendarios:
 phase-contacts-soon = La vista de contactos llegará en el próximo paso de desarrollo. Tus libretas de direcciones:

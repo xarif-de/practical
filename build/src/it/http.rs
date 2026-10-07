@@ -152,3 +152,124 @@ async fn pages_and_json_are_private_and_revalidated_assets_stay_immutable() {
     let r = c.get(asset).await;
     assert!(r.header("cache-control").is_some_and(|v| v.contains("immutable")), "{:?}", r.header("cache-control"));
 }
+
+/// Fails on the code before (in-memory store): every restart — deploy, OOM kill, node reboot — logged
+/// everybody out. A new process (new store, new router) on the same database keeps the session.
+#[tokio::test]
+async fn a_session_survives_a_restart() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    c.get("/calendar").await.ok();
+    let restarted = crate::build_router(&s.app.state).unwrap();
+    let mut c2 = crate::testkit::Client::for_router(restarted);
+    c2.cookie("practical_session", c.cookie_header().split("practical_session=").nth(1).unwrap().split(';').next().unwrap());
+    let r = c2.get("/settings").await;
+    r.ok().has("data-user=\"alice\"");
+    // and its CSRF token: a write from the open tab still passes
+    c2.csrf = c.csrf.clone();
+    c2.json(Method::PUT, "/api/alarm-presets", json!([])).await.ok();
+    // a logout ends it in the database too
+    let csrf = c.csrf.clone();
+    c.post_form_raw("/logout", &[("csrf", &csrf)]).await;
+    let mut c3 = crate::testkit::Client::for_router(crate::build_router(&s.app.state).unwrap());
+    c3.cookie("practical_session", c2.cookie_header().split("practical_session=").nth(1).unwrap().split(';').next().unwrap());
+    assert_eq!(c3.get("/settings").await.status, StatusCode::SEE_OTHER);
+}
+
+/// The database write rate of a busy session: a page view every 10 s for an hour writes at most once a minute
+/// (`sessions::REFRESH_AFTER`) — 360 page views, ≤ 61 writes.
+#[tokio::test]
+async fn an_active_session_writes_the_database_at_most_once_a_minute() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let before = s.app.sessions.writes();
+    for _ in 0..360 {
+        s.app.sessions.pass(tower_sessions::cookie::time::Duration::seconds(10));
+        c.get("/calendar?fragment=1").await.ok();
+    }
+    let n = s.app.sessions.writes() - before;
+    assert!((55..=61).contains(&n), "{n} writes for 360 page views in an hour");
+}
+
+/// Fails on the code before (TESTED there: 30 wrong attempts all answered, no slow-down): failed password
+/// logins are throttled per client and name; the answer is the same for known and unknown names.
+#[tokio::test]
+async fn failed_password_logins_are_throttled_and_answer_the_same_for_any_name() {
+    let app = TestApp::new().await;
+    app.user("alice", "Alice").await;
+    app.user("bob", "Bob").await;
+    let mut a = app.anonymous();
+    let csrf = a.get("/login").await.meta_csrf();
+    let mut login = async |user: &str, pw: &str| a.post_form_raw("/login", &[("username", user), ("password", pw), ("csrf", &csrf)]).await.location().unwrap_or_default();
+    // an unknown name and a wrong password: one answer
+    assert_eq!(login("nobody", "x").await, login("alice", "x").await);
+    for _ in 0..4 {
+        assert_eq!(login("alice", "x").await, "/login?error=1&redirect_uri=%2Fcalendar");
+    }
+    // the 6th try for this name is refused even with the right password; another name still gets in
+    assert_eq!(login("alice", crate::testkit::PASSWORD).await, "/login?error=2&redirect_uri=%2Fcalendar");
+    assert_eq!(login("bob", crate::testkit::PASSWORD).await, "/calendar");
+    let mut a = app.anonymous();
+    a.get("/login?error=2").await.ok().has("Zu viele Fehlversuche");
+    // a minute later one more try
+    app.state.guards.login.pass(std::time::Duration::from_secs(61));
+    let csrf = a.get("/login").await.meta_csrf();
+    let r = a.post_form_raw("/login", &[("username", "alice"), ("password", crate::testkit::PASSWORD), ("csrf", &csrf)]).await;
+    assert_eq!(r.location().as_deref(), Some("/calendar"));
+}
+
+/// The login form's token: cookie and field must match (double submit); a logged-in session's own token
+/// also signs a switch of users (e2e loginAs).
+#[tokio::test]
+async fn the_login_form_needs_its_cookie_or_the_sessions_token() {
+    let app = TestApp::new().await;
+    app.user("alice", "Alice").await;
+    app.user("bob", "Bob").await;
+    let mut a = app.anonymous();
+    let csrf = a.get("/login").await.meta_csrf();
+    let mut b = app.anonymous(); // the token without its cookie
+    let r = b.post_form_raw("/login", &[("username", "alice"), ("password", crate::testkit::PASSWORD), ("csrf", &csrf)]).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    let mut c = app.login("alice").await;
+    let token = c.csrf.clone();
+    let r = c.post_form_raw("/login", &[("username", "bob"), ("password", crate::testkit::PASSWORD), ("csrf", &token)]).await;
+    assert_eq!(r.location().as_deref(), Some("/calendar"));
+    c.get("/settings").await.ok().has("data-user=\"bob\"");
+}
+
+/// Fails on the code before (no cycling): the OIDC callback put the user into the session id the browser
+/// brought (fixation). Here a stand-in for rustical_oidc's callback behind the same middleware.
+#[tokio::test]
+async fn an_oidc_login_gets_a_new_session_id() {
+    use tower_sessions::Session;
+    let app = TestApp::new().await;
+    let store = crate::sessions::DbStore::new(app.state.db.clone());
+    let router = axum::Router::new()
+        .route("/start", axum::routing::get(|s: Session| async move { s.insert("oidc_state", "x").await.unwrap(); "started" }))
+        .route("/callback", axum::routing::get(|s: Session| async move { s.insert(crate::ctx::SESSION_USER, "alice").await.unwrap(); "in" }))
+        .layer(axum::middleware::from_fn(crate::auth::cycle_on_login))
+        .layer(tower_sessions::SessionManagerLayer::new(store.clone()).with_name("practical_session"));
+    let mut c = crate::testkit::Client::for_router(router);
+    c.get("/start").await;
+    let planted = c.cookie_header();
+    c.get("/callback").await;
+    let after = c.cookie_header();
+    assert!(planted.starts_with("practical_session=") && after.starts_with("practical_session=") && planted != after, "{planted} → {after}");
+    let old: tower_sessions::session::Id = planted["practical_session=".len()..].parse().unwrap();
+    assert_eq!(tower_sessions::SessionStore::load(&store, &old).await.unwrap(), None, "the planted id is gone");
+}
+
+/// Logout with this device's push endpoint removes that subscription (and only that one).
+#[tokio::test]
+async fn logout_ends_this_devices_push_subscription() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    for (who, ep) in [("alice", "https://push.example.org/this"), ("alice", "https://push.example.org/other"), ("bob", "https://push.example.org/bob")] {
+        sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES (?, ?, ?, 'k', 'a')").bind(ep).bind(who).bind(ep).execute(&s.app.state.db).await.unwrap();
+    }
+    let csrf = c.csrf.clone();
+    let r = c.post_form_raw("/logout", &[("csrf", &csrf), ("push_endpoint", "https://push.example.org/this")]).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER);
+    let left: Vec<String> = sqlx::query_scalar("SELECT endpoint FROM practical_push_subscriptions ORDER BY endpoint").fetch_all(&s.app.state.db).await.unwrap();
+    assert_eq!(left, ["https://push.example.org/bob", "https://push.example.org/other"]);
+}
