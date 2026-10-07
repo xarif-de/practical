@@ -28,7 +28,7 @@ test('language choice reloads the page in that language; none again via the seed
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
   await Promise.all([page.waitForEvent('load'), page.locator('select[name=lang]').selectOption('en')]);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.locator('#home h2')).toHaveText('Settings');
+  await expect(page.locator('#home h1')).toHaveText('Settings');
   await expect(page.locator('.toast')).toBeVisible(); // the "saved" toast survives the reload (sessionStorage)
   await savePrefs(page); // lang "" in the DB
   const fresh = await page.context().browser().newContext({ locale: 'de-DE' });

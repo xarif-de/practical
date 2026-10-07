@@ -83,7 +83,7 @@ button.rbadge:hover	hover: no state hovers it
 .tkmain .sheet td:hover select	hover: no state hovers it
 .tkkc:hover	hover: no state hovers it
 .tkkc.sel	no dark state reaches it
-.tkdeck .cd h3.off	no dark state reaches it
+.tkdeck .cd h2.off	no dark state reaches it
 .tkdeck .cd .dsc	no dark state reaches it
 .tkdl .ri:hover	hover: no state hovers it
 .contacts .sheet tr[data-key]:not(.on):hover td, .tkmain .sheet tr[data-key]:not(.sel):hover td	hover: no state hovers it

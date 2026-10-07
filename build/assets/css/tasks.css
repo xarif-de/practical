@@ -102,8 +102,8 @@
 .tkdeck { position: relative; height: 420px; display: flex; align-items: flex-start; justify-content: center; outline: none; }
 .tkdeck .cd { position: absolute; top: 34px; width: min(460px, 92%); background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px;
   box-shadow: 0 10px 34px rgba(0, 0, 0, .14); transform-origin: top center; }
-.tkdeck .cd h3 { margin: 0 0 6px; font-size: 18px; }
-.tkdeck .cd h3.off { text-decoration: line-through; color: var(--fg-3); }
+.tkdeck .cd h2 { margin: 0 0 6px; font-size: 18px; }
+.tkdeck .cd h2.off { text-decoration: line-through; color: var(--fg-3); }
 .tkdeck .cd .dsc { color: var(--fg-2); font-size: 13px; margin: 0 0 14px; }
 .tkdeck .cd .fx { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .tkdeck .cd .act { display: flex; gap: 8px; }

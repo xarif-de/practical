@@ -34,7 +34,7 @@ test('avatar menu: user, versions, settings link', async ({ page }) => {
   await page.locator('.filter.user > .avatar').click();
   const pop = page.locator('.filter.user .pop');
   await expect(pop).toBeVisible();
-  await expect(pop.locator('h4')).toHaveText('alice');
+  await expect(pop.locator('h2')).toHaveText('alice');
   await expect(pop.locator('.src-note')).toContainText(/PractiCal \d+\.\d+\.\d+ · RustiCal \d+\.\d+\.\d+/);
   await pop.locator('a[href="/settings#prefs"]').click();
   await expect(page).toHaveURL(/\/settings#prefs$/);
@@ -42,7 +42,7 @@ test('avatar menu: user, versions, settings link', async ({ page }) => {
   // a click elsewhere closes the menu
   await page.locator('.filter.user > .avatar').click();
   await expect(page.locator('.filter.user.open')).toHaveCount(1);
-  await page.locator('#home h2').click();
+  await page.locator('#home h1').click();
   await expect(page.locator('.filter.user.open')).toHaveCount(0);
 });
 

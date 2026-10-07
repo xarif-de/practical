@@ -1,8 +1,6 @@
 # Accepted axe findings of the a11y suite (e2e/a11y, a11y-check.mjs): <rule>⇥<key>⇥<reason>. The key: for color-contrast
 # "<scheme> <fg> on <bg>", else the target without positions and attribute values (lib/axe.mjs keyOf). A finding not
 # listed fails the suite; a line no state shows is STALE and fails a11y-check.mjs — delete it: the list only shrinks.
-aria-required-children	#sres	P8 the search listbox holds its group headings (h5) between the options — needs role=group per category
-aria-required-children	.sd-list	P8 the search listbox holds its group headings (h5) between the options — needs role=group per category
 color-contrast	dark #4f7cff on #182036	P2 dark --accent #4f7cff (3.1–3.7:1 under white text)
 color-contrast	dark #7d858f on #161d2f	P1 dark --fg-3 (raised to #7d858f: 4.5:1 on every plain surface) on a tint or --bg-3
 color-contrast	dark #7d858f on #21252d	P1 dark --fg-3 (raised to #7d858f: 4.5:1 on every plain surface) on a tint or --bg-3
@@ -25,12 +23,6 @@ color-contrast	light #6e6e75 on #e3effb	P1 light --fg-3 #6e6e75 (4.5:1 on every 
 color-contrast	light #6e6e75 on #e9e9ee	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a selection tint or --bg-3 (4.2–4.3:1)
 color-contrast	light #6e6e75 on #f9e8cf	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a strong planner holiday tint (3.6–4.2:1)
 color-contrast	light #6e6e75 on #facece	P1 light --fg-3 #6e6e75 (4.5:1 on every plain surface and holiday/today tint) on a strong planner holiday tint (3.6–4.2:1)
-empty-table-header	th	P7 the contacts table's last column (row actions) has no header text
-heading-order	.heat > h4	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules
-heading-order	.hxc-list > h4	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules
-heading-order	.sd-list > h5	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules
-heading-order	section > h3	P6 heading levels skip (the page h1, then h3/h4 in cards and lists) — renumbering touches the heading rules
-page-has-heading-one	html	P6 settings drill-in pages: their title is an h2 (the h1 is the hidden home page's)
 scrollable-region-focusable	.calscroll	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
 scrollable-region-focusable	.tl	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
 target-size	.cancelled	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout

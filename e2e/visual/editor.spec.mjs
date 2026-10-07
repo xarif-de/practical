@@ -33,7 +33,7 @@ shot('editor view+edit: series occurrence', async (page, snap) => {
   await page.locator('.rrpop').waitFor();
   await ds(page, snap)('ed-standup-repeat-interval');
   // Escape would close the dialog: a click elsewhere closes the popover
-  await page.locator('#ed-repeat-card h3').click();
+  await page.locator('#ed-repeat-card h2').click();
   await page.locator('.rrpop').waitFor({ state: 'detached' });
   await page.locator('#ed-rr .pillbtn[data-s="e"]').click();
   await page.locator('.rrpop').waitFor();
@@ -119,7 +119,7 @@ shot('editor edit: alarm details, people, status, links, categories, note', asyn
   await page.locator('#ed-status-tiles .stile[data-sel="status"]').click();
   await page.locator('.rrpop').waitFor();
   await ds(page, snap)('ed-review-status-pop');
-  await page.locator('#ed-status-card h3').click();
+  await page.locator('#ed-status-card h2').click();
   await page.locator('.rrpop').waitFor({ state: 'detached' });
   // a link's detail and the paste field's kind detection
   await edScrollTo(page, '#ed-links-card');

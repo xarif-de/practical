@@ -1,7 +1,7 @@
 /* css/color-optimiser.css — "Farben optimieren" (settings "Farben"): a block head with the button, and the flow-chart dialog —
    elements today → action → colour after, lines drawn in an SVG under the boxes */
 .cfo-block { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 4px 2px; }
-.cfo-block h3 { margin: 0; font: 600 16px/1.3 var(--font-display); }
+.cfo-block h2 { margin: 0; font: 600 16px/1.3 var(--font-display); }
 .cfo-opt { all: unset; cursor: pointer; white-space: nowrap; font: 600 13px/1 var(--font); color: var(--accent); padding: 6px 8px; border-radius: 7px; }
 .cfo-opt:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .cfo-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

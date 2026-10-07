@@ -21,7 +21,7 @@
   <span class="tksort" id="tk-sortbox"></span>
   <span class="tbsep" aria-hidden="true"></span>
   {# table view only: the same column picker as the contacts table #}
-  <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}>{{ m::pop_btn("eye", ctx.t("tk-columns")) }}<div class="pop" id="tk-colpop"><h4>{{ ctx.t("tk-columns") }}</h4>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
+  <div class="filter" id="tk-colpick"{% if view != "table" %} hidden{% endif %}>{{ m::pop_btn("eye", ctx.t("tk-columns")) }}<div class="pop" id="tk-colpop"><h2>{{ ctx.t("tk-columns") }}</h2>{% for (c, k) in self.column_list() %}<label><input type="checkbox" data-col="{{ c }}" data-label="{{ ctx.t(k) }}"{% if self.col(c) %} checked{% endif %}> {{ ctx.t(k) }}</label>{% endfor %}</div></div>
   <span class="seg" role="group" id="tk-views">{% let views = [("groups", "list", ctx.t("tk-v-groups")), ("table", "table", ctx.t("tk-v-table")), ("board", "columns", ctx.t("tk-v-board")), ("timeline", "gantt", ctx.t("tk-v-timeline")), ("deck", "layers", ctx.t("tk-v-deck")), ("history", "check", ctx.t("tk-v-history"))] %}{% for (v, icon, label) in views %}
     <button data-tkview="{{ v }}"{% if view == *v %} aria-pressed="true"{% endif %} title="{{ label }}" aria-label="{{ label }}">{{ m::ico(icon) }}</button>{% endfor %}
   </span>

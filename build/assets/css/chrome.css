@@ -54,7 +54,7 @@
    delay can be a transition. */
 .filter .pop, .more .pop { visibility: hidden; opacity: 0; transition: opacity .15s .5s, visibility 0s .65s; }
 .filter:hover .pop, .filter:focus-within .pop, .filter.open .pop, .more:hover .pop, .more:focus-within .pop, .more.open .pop { visibility: visible; opacity: 1; transition: opacity .12s 0s, visibility 0s 0s; }
-.filter h4 { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
+.filter h2 { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
 .filter label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 14px; }
 .filter label:hover { background: var(--tile); } .filter label small { margin-left: auto; color: var(--fg-3); }
 .filter .row { display: flex; gap: 12px; padding: 8px 6px 2px; font-size: 12px; color: var(--accent); }
@@ -90,7 +90,7 @@
 .heat .hw { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 2px; border-radius: 7px; }
 .heat .hw b { aspect-ratio: 1; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: var(--fg-3); font-variant-numeric: tabular-nums; }
 .heat .hw.focus { box-shadow: inset 0 0 0 1.5px var(--accent); } /* the week in focus, like .week.focus in the stream */ .heat i.o { opacity: .35; } .heat i.t { outline: 2px solid var(--today); outline-offset: -2px; }
-.heat h4 { margin: 0; font-size: 12px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.heat h2 { margin: 0; font-size: 12px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
 .stream { max-width: 820px; overflow-anchor: none; } /* app.js `mountWeeks` restores the position itself when it prepends */ .week { border-radius: 14px; padding: 4px 12px 8px; margin-bottom: 10px; }
 .week.now { background: var(--tile); } /* the real current week */
 .week.focus { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 14%, transparent); } /* the week in focus follows the scroll (app.js `mountWeeks`): only a guide, fainter than a hovered day's ring */
@@ -132,7 +132,7 @@
 /* contacts: letter panels, working table */
 .panels { grid-area: list; display: grid; gap: 12px; }
 .lpanel { background: var(--tile); border-radius: 14px; padding: 6px 8px 8px; }
-.lpanel h3 { margin: 4px 8px 4px; font-size: 13px; color: var(--fg-3); font-weight: 700; letter-spacing: .04em; }
+.lpanel h2 { margin: 4px 8px 4px; font-size: 13px; color: var(--fg-3); font-weight: 700; letter-spacing: .04em; }
 .lpanel .list { border: 0; background: transparent; } .lpanel .list li { background: var(--bg); border: 0; border-radius: 10px; margin-bottom: 4px; }
 
 

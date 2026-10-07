@@ -44,6 +44,6 @@
 .ed .cardform .aldet .pset:hover:not(:disabled) { color: var(--fg-2); } .ed .cardform .aldet .pset:focus-visible { outline: 2px solid var(--accent); }
 .ed .cardform .aldet .pset .ico { width: 18px; height: 18px; }
 .ed .cardform .aldet .pset[aria-pressed=true] { color: var(--accent); --ico-fill: currentColor; } /* i-star-h fills through --ico-fill */
-.ed .cardform .card h3 .n { font: 400 12px/1 var(--font); }
+.ed .cardform .card h2 .n { font: 400 12px/1 var(--font); }
 .ed .cardform .row .txt { grid-area: v; font-size: 15px; }
 .ed .cardform.mode-edit .row .txt { display: none; }

@@ -476,6 +476,7 @@ col-birthday = Birthday
 col-address = Address
 col-note = Note
 col-org = Company
+col-open = Open
 ct-none = No contacts yet. Create an address book or import a .vcf file in the settings.
 ct-new-row = New contact …
 ct-given = First name

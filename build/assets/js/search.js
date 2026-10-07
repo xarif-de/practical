@@ -51,8 +51,12 @@
      tint and move the pick — measured as nearly all the paint work while scrolling. While a list scrolls
      its rows ignore the pointer (`.scrolling`), 150 ms after the last scroll they react again. */
   function calmScroll(list) { let t; list.addEventListener('scroll', () => { list.classList.add('scrolling'); clearTimeout(t); t = setTimeout(() => list.classList.remove('scrolling'), 150); }, { passive: true }); }
-  // the pick moves between two rows only; the keyboard's pick scrolls it into view, the pointer's does not
-  function movePick(list, i, scroll) { const old = $('.r.on', list); if (old) old.classList.remove('on'); const el = $(`[data-i="${i}"]`, list); if (el) { el.classList.add('on'); if (scroll) el.scrollIntoView({ block: 'nearest' }); } }
+  // the pick moves between two rows only; the keyboard's pick scrolls it into view, the pointer's does not. The field keeps
+  // the focus (a combobox): the pick is its aria-activedescendant, the row aria-selected
+  function movePick(list, i, scroll, field) { const old = $('.r.on', list); if (old) { old.classList.remove('on'); old.removeAttribute('aria-selected'); } const el = $(`[data-i="${i}"]`, list); if (el) { el.classList.add('on'); el.setAttribute('aria-selected', 'true'); if (scroll) el.scrollIntoView({ block: 'nearest' }); } pickOf(field, el); }
+  const pickOf = (field, el) => { if (el) field.setAttribute('aria-activedescendant', el.id); else field.removeAttribute('aria-activedescendant'); };
+  // a listbox holds options and groups only: a category's rows are a group named by its heading (no heading of the page)
+  const group = (id, head, rows) => `<div role="group" aria-labelledby="${id}"><h5 role="presentation" id="${id}">${head}</h5>${rows}</div>`;
   const day = iso => { const [y, m, d] = iso.split('-').map(Number); return dfmt(new Date(y, m - 1, d), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
 
   // ---- fetching: debounced, the stale request aborted, answers kept 30 s for back-typing ----
@@ -123,20 +127,20 @@
 
   // ---- the drop-down ----
   let items = [], sel = -1, last = null, data = null;
-  const setSel = (i, scroll = true) => { sel = i; movePick(box, i, scroll); };
+  const setSel = (i, scroll = true) => { sel = i; movePick(box, i, scroll, q); };
   calmScroll(box);
   function draw() {
     const v = q.value, d = data, ws = d ? wordsOf(v, d.scope) : [];
     items = []; let h = '', allSum = null;
-    const add = (it, inner, cls = '') => { items.push(it); return `<a class="r${cls}" href="${esc(it.href || '#')}" data-i="${items.length - 1}" role="option">${inner}</a>`; };
+    const add = (it, inner, cls = '') => { items.push(it); return `<a class="r${cls}" href="${esc(it.href || '#')}" data-i="${items.length - 1}" id="sres-o${items.length - 1}" role="option" tabindex="-1">${inner}</a>`; };
     if (d && v.trim()) {
       if (d.scope) { const c = CATS.find(c => c[0] === d.scope); h += `<div class="sscope">${ico('filter')}${esc(tr('js-search-only', { what: c[2] }))}</div>`; }
       if (d.jump) { const t = targetOf('jump', d.jump); h += add({ t, href: HREF(t) }, row('jump', d.jump, ws), ' jump'); }
       const tot = Object.fromEntries(CATS.map(([, k]) => [k, d.totals[k]])), n = alloc(tot);
       for (const [kind, k, label] of CATS) {
         if (!n[k]) continue;
-        h += `<h5>${esc(label)}<span>${n[k] < tot[k] ? esc(tr('js-search-of', { n: n[k], total: tot[k] })) : tot[k]}</span></h5>`;
-        d[k].slice(0, n[k]).forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + whySm(x), x.completed ? ' done' : ''); });
+        let rows = ''; d[k].slice(0, n[k]).forEach(x => { const t = targetOf(kind, x); rows += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + whySm(x), x.completed ? ' done' : ''); });
+        h += group('sres-g-' + k, `${esc(label)}<span>${n[k] < tot[k] ? esc(tr('js-search-of', { n: n[k], total: tot[k] })) : tot[k]}</span>`, rows);
       }
       const sum = CATS.reduce((a, [, k]) => a + tot[k], 0);
       if (!sum && !d.jump) h += `<div class="none">${esc(T.none)}</div>`;
@@ -144,12 +148,12 @@
     }
     const hs = histFor(v).slice(0, v.trim() ? 3 : 6);
     if (hs.length) {
-      h += `<h5>${esc(T.hist)}</h5>`;
-      hs.forEach(e => { h += add({ hist: e }, `<span class="ic">${ico('history')}</span><b>${hl(e.q, wordsOf(v))}</b><small>${e.target ? esc(e.target.label || '') : ''}</small><button type="button" class="hx" data-hdel="${e.id}" title="${esc(T.histRm)}" aria-label="${esc(T.histRm)}">${ico('x')}</button>`, ' hist'); });
+      let rows = ''; hs.forEach(e => { rows += add({ hist: e }, `<span class="ic">${ico('history')}</span><b>${hl(e.q, wordsOf(v))}</b><small>${e.target ? esc(e.target.label || '') : ''}</small><button type="button" class="hx" data-hdel="${e.id}" title="${esc(T.histRm)}" aria-label="${esc(T.histRm)}" tabindex="-1">${ico('x')}</button>`, ' hist'); });
+      h += group('sres-g-hist', esc(T.hist), rows);
     }
     // always there with a query, pinned to the foot: the dialog also says why each hit was found
     if (allSum !== null) h += add({ all: true }, `<span class="ic">${ico('list')}</span><b>${esc(T.all)} (${allSum})</b><small>Enter</small>`, ' more');
-    box.innerHTML = h; box.hidden = !h; sel = -1;
+    box.innerHTML = h; box.hidden = !h; sel = -1; pickOf(q, null); q.setAttribute('aria-expanded', String(!!h));
     drawGhost();
   }
   function drawGhost() { // the newest history entry the input is the start of
@@ -170,7 +174,7 @@
     if (it.hist) { if (it.hist.target) { record(it.hist.q, it.hist.target); close(); q.value = it.hist.q; open(it.hist.target); } else { q.value = it.hist.q; q.focus(); refresh(); } return; }
     record(from, it.t); close(); open(it.t);
   }
-  const close = () => { box.hidden = true; ghost.innerHTML = ''; };
+  const close = () => { box.hidden = true; ghost.innerHTML = ''; q.setAttribute('aria-expanded', 'false'); pickOf(q, null); };
   let t;
   q.addEventListener('input', () => { drawGhost(); clearTimeout(t); t = setTimeout(refresh, 180); });
   q.addEventListener('focus', () => { refresh(); });
@@ -196,25 +200,25 @@
   function openAll(v) {
     close();
     const w = document.createElement('div'); w.className = 'ask sdlg-wrap';
-    w.innerHTML = `<div class="ask-box sdlg" role="dialog" aria-modal="true" aria-label="${esc(T.dlg)}"><div class="sd-head"><div class="sfield"><input type="search" autocomplete="off" spellcheck="false" aria-label="${esc(T.dlg)}"></div><button class="btn icon-btn" type="button" data-x title="${esc(T.close)}" aria-label="${esc(T.close)}">${ico('x')}</button></div><div class="seg sd-tabs" role="group"></div><div class="sres sd-list" role="listbox" aria-label="${esc(T.dlg)}"></div><p class="sd-foot">${esc(T.keys)}</p></div>`;
+    w.innerHTML = `<div class="ask-box sdlg" role="dialog" aria-modal="true" aria-label="${esc(T.dlg)}"><div class="sd-head"><div class="sfield"><input type="search" role="combobox" aria-expanded="true" aria-controls="sd-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${esc(T.dlg)}"></div><button class="btn icon-btn" type="button" data-x title="${esc(T.close)}" aria-label="${esc(T.close)}">${ico('x')}</button></div><div class="seg sd-tabs" role="group"></div><div class="sres sd-list" id="sd-list" role="listbox" aria-label="${esc(T.dlg)}"></div><p class="sd-foot">${esc(T.keys)}</p></div>`;
     document.body.appendChild(w);
     const inp = $('input', w), tabs = $('.sd-tabs', w), list = $('.sd-list', w);
     let d = null, cat = 'all', its = [], s = -1, t2, c2 = null;
     inp.value = v;
-    const mark = (i, scroll = true) => { s = i; movePick(list, i, scroll); };
+    const mark = (i, scroll = true) => { s = i; movePick(list, i, scroll, inp); };
     calmScroll(list);
     function paint() {
       if (!d) return; const ws = wordsOf(inp.value, d.scope); its = []; let h = '';
-      const add = (it, inner, cls = '') => { its.push(it); return `<a class="r${cls}" href="${esc(it.href)}" data-i="${its.length - 1}" role="option">${inner}</a>`; };
+      const add = (it, inner, cls = '') => { its.push(it); return `<a class="r${cls}" href="${esc(it.href)}" data-i="${its.length - 1}" id="sd-o${its.length - 1}" role="option" tabindex="-1">${inner}</a>`; };
       const sum = CATS.reduce((a, [, k]) => a + d.totals[k], 0);
       tabs.innerHTML = `<button type="button" data-cat="all" aria-pressed="${cat === 'all'}">${esc(T.tabAll)} <span class="n">${sum}</span></button>` + CATS.map(([kind, k, label]) => `<button type="button" data-cat="${kind}" aria-pressed="${cat === kind}"${d.totals[k] ? '' : ' disabled'}>${esc(label)} <span class="n">${d.totals[k]}</span></button>`).join('');
       if (d.jump && cat === 'all') { const t = targetOf('jump', d.jump); h += add({ t, href: HREF(t) }, row('jump', d.jump, ws), ' jump'); }
       for (const [kind, k, label] of CATS) {
         if ((cat !== 'all' && cat !== kind) || !d[k].length) continue;
-        h += `<h5>${esc(label)}<span>${d[k].length < d.totals[k] ? esc(tr('js-search-of', { n: d[k].length, total: d.totals[k] })) : d.totals[k]}</span></h5>`;
-        d[k].forEach(x => { const t = targetOf(kind, x); h += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + why(x, ws), x.completed ? ' done' : ''); });
+        let rows = ''; d[k].forEach(x => { const t = targetOf(kind, x); rows += add({ t, href: HREF(t) }, row(kind, x, ws.concat(typos(x))) + why(x, ws), x.completed ? ' done' : ''); });
+        h += group('sd-g-' + k, `${esc(label)}<span>${d[k].length < d.totals[k] ? esc(tr('js-search-of', { n: d[k].length, total: d.totals[k] })) : d.totals[k]}</span>`, rows);
       }
-      list.innerHTML = h || `<div class="none">${esc(T.none)}</div>`; s = -1;
+      list.innerHTML = h || `<div class="none">${esc(T.none)}</div>`; s = -1; pickOf(inp, null);
     }
     async function load() {
       const v2 = inp.value.trim(); if (!v2) { d = { totals: { events: 0, contacts: 0, tasks: 0 }, events: [], contacts: [], tasks: [] }; paint(); return; }

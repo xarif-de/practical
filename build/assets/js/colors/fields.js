@@ -80,7 +80,7 @@
       if (k !== 'holiday') idx.sort((x, y) => order(x[0], y[0]));
       return idx.length ? `<div class="label">${esc(tr('js-color-g-' + k))}</div><div class="group">${idx.map(([s, i]) => row(s, i)).join('')}</div>` : ''; };
     list.innerHTML = BLOCKS.map(([view, kinds]) => { const inner = kinds.map(group).join('');
-        return inner && view ? `<div class="cfo-block"><h3>${esc(tr('js-cfo-block-' + view))}</h3><button type="button" class="cfo-opt" data-opt="${view}">✦ ${esc(tr('js-cfo-btn'))}</button></div>${inner}` : inner; }).join('')
+        return inner && view ? `<div class="cfo-block"><h2>${esc(tr('js-cfo-block-' + view))}</h2><button type="button" class="cfo-opt" data-opt="${view}">✦ ${esc(tr('js-cfo-btn'))}</button></div>${inner}` : inner; }).join('')
       + `<div class="label">${esc(tr('js-color-g-offer', { n: pal.length }))}</div><div class="group">${offers.map((p, i) => { const body = `<span class="swatch" style="background:${p.hex}"></span><span>${esc(p.text)}</span><span class="val"><code>${p.hex}</code>`;
         return p.src.some(x => x.editable) ? `<button type="button" class="cell link" data-o="${i}">${body}<span class="chev">›</span></span></button>` : `<div class="cell">${body}</span></div>`; }).join('')}</div>`;
     const v = $('#v-colors'); if (v) v.textContent = pal.length;

@@ -17,8 +17,8 @@
 .ed .cardform .lk-msg:empty { display: none; }
 .ed .cardform .lk-msg { font-size: 11.5px; color: var(--fg-3); }
 .ed .cardform .lk-msg.err { color: var(--c3-text); }
-.ed .cardform .lk-sec h4 { margin: 8px 0 2px 26px; font: 600 11px/1.4 var(--font-display); color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; display: flex; gap: 6px; align-items: center; }
-.ed .cardform .lk-sec h4 .ico { width: 13px; height: 13px; }
+.ed .cardform .lk-sec h3 { margin: 8px 0 2px 26px; font: 600 11px/1.4 var(--font-display); color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; display: flex; gap: 6px; align-items: center; }
+.ed .cardform .lk-sec h3 .ico { width: 13px; height: 13px; }
 .ed .cardform .lk-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; padding: 4px 0 4px 26px; }
 .ed .cardform .lk-row > .ico { grid-row: 1 / 3; width: 16px; height: 16px; color: var(--fg-2); }
 .ed .cardform .lk-row .lk-t { grid-column: 2; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -23,8 +23,8 @@
   <nav class="nav">{% for (href, icon, label) in nav %}
     <a href="{{ href }}"{% if ctx.is_active(href) %} aria-current="page"{% endif %} title="{{ label }}" aria-label="{{ label }}">{{ m::ico(icon) }}</a>{% endfor %}
   </nav>
-  <div class="usearch"><div class="sfield"><input id="q" type="search" placeholder="{{ ctx.t("search-placeholder") }}" autocomplete="off" spellcheck="false" aria-label="{{ ctx.t("search-placeholder") }}" aria-controls="sres" aria-autocomplete="list"><div class="ghost" id="q-ghost" aria-hidden="true"></div><div class="sres" id="sres" role="listbox" aria-label="{{ ctx.t("search-placeholder") }}" hidden></div></div>
-    <div class="filter shelp"><button class="icon-btn" type="button" aria-haspopup="true" title="{{ ctx.t("search-help") }}" aria-label="{{ ctx.t("search-help") }}">{{ m::ico("info") }}</button><div class="pop"><h4>{{ ctx.t("search-help") }}</h4><ul>
+  <div class="usearch"><div class="sfield"><input id="q" type="search" role="combobox" aria-expanded="false" placeholder="{{ ctx.t("search-placeholder") }}" autocomplete="off" spellcheck="false" aria-label="{{ ctx.t("search-placeholder") }}" aria-controls="sres" aria-autocomplete="list"><div class="ghost" id="q-ghost" aria-hidden="true"></div><div class="sres" id="sres" role="listbox" aria-label="{{ ctx.t("search-placeholder") }}" hidden></div></div>
+    <div class="filter shelp"><button class="icon-btn" type="button" aria-haspopup="true" title="{{ ctx.t("search-help") }}" aria-label="{{ ctx.t("search-help") }}">{{ m::ico("info") }}</button><div class="pop"><h2>{{ ctx.t("search-help") }}</h2><ul>
       <li>{{ ctx.t("search-help-words") }}</li>
       <li>{{ ctx.t("search-help-scope") }} <code>{{ ctx.t("search-scope-ev") }}:</code>, <code>{{ ctx.t("search-scope-ct") }}:</code> {{ ctx.t("search-or") }} <code>{{ ctx.t("search-scope-tk") }}:</code></li>
       <li>{{ ctx.t("search-help-date") }}</li>
@@ -38,7 +38,7 @@
   <div class="filter user">
     <button class="avatar" aria-haspopup="true" title="{{ ctx.user_id() }}">{{ ctx.initials() }}</button>
     <div class="pop">
-      <h4>{{ ctx.user_id() }}</h4>
+      <h2>{{ ctx.user_id() }}</h2>
       <a class="row-link" href="/settings#prefs">{{ ctx.t("nav-settings") }}</a>
       {# AGPL-3.0 §13: the source of this service, offered to everyone who uses it #}
       <a class="row-link" href="{{ ctx.source_url() }}" target="_blank" rel="noopener">{{ ctx.t("source-code") }}</a>

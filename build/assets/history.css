@@ -66,7 +66,7 @@ a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
 .hx-badge:empty { display: none; }
 .filter .pop.hx-fpop { width: 300px; max-height: 70vh; overflow: auto; }
 .hx-fg { padding: 4px 0 10px; }
-.hx-fg h4 { margin: 8px 0 4px; font-weight: 600; } /* inside .filter: its h4/label rules apply */
+.hx-fg h2 { margin: 8px 0 4px; font-weight: 600; } /* inside .filter: its h2/label rules apply */
 .hx-fg label { padding: 3px 4px; border-radius: 6px; cursor: pointer; }
 .hx-fg label:hover { background: var(--bg-2); }
 .hx-fg label small { font-variant-numeric: tabular-nums; }
@@ -122,7 +122,7 @@ a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
 /* ---- list with details and the day ruler ---- */
 .hxc { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr) 64px; height: calc(100dvh - 130px); border-top: 1px solid var(--line); }
 .hxc-l { border-right: 1px solid var(--line); overflow: auto; }
-.hxc-list h4 { margin: 0; padding: 10px 14px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-3); }
+.hxc-list h2 { margin: 0; padding: 10px 14px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-3); }
 .hxc-it { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 8px 14px; border-bottom: 1px solid var(--line); }
 .hxc-it:hover { background: var(--tile); }
 .hxc-it.sel { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent); }

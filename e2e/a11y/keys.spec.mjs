@@ -171,3 +171,77 @@ test('reduced motion: a page turn in the month view does not glide', async ({ pa
   await settle(page);
   expect(await page.evaluate(() => window.__flip)).toBe(false);
 });
+
+test('reduced motion: the recurrence strip snaps without a glide, its height and the colour fan do not animate', async ({ page }) => {
+  await page.goto('/calendar?view=day&date=2026-10-14');
+  await page.locator('article.lnk[data-key$="/standup@seed"] h3').first().click();
+  await page.locator('#ed-lock').click();
+  const sc = page.locator('#ed-rr .calscroll');
+  await sc.waitFor();
+  // the harness turns every transition off (lib/test.mjs FREEZE_CSS): the page's own rules are read without it
+  const dur = await page.evaluate(() => { document.getElementById('e2e-freeze')?.remove(); const fan = document.createElement('div'); fan.className = 'cpk-card'; document.body.append(fan); const d = [getComputedStyle(document.querySelector('#ed-rr .calscroll')).transitionDuration, getComputedStyle(fan).transitionDuration]; fan.remove(); return d; });
+  expect(dur).toEqual(['0s', '0s']);
+  // a wheel step under half a month: the strip settles back to its month (strip.js settle) — the 2nd scroll is the snap; a glide moves on after it
+  await sc.evaluate(el => { window.__glide = null; let n = 0;
+    el.addEventListener('scroll', () => { if (++n !== 2) return; const t = el.scrollTop; requestAnimationFrame(() => requestAnimationFrame(() => { window.__glide = el.scrollTop !== t; })); });
+    el.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true })); });
+  await expect.poll(() => page.evaluate(() => window.__glide)).toBe(false);
+});
+
+test('the date picker from the keyboard: the title opens it, arrows and PageDown move, Enter picks, Escape closes', async ({ page }) => {
+  await page.goto('/calendar?view=month&date=2026-10-14');
+  await tabTo(page, '#title');
+  await page.keyboard.press('Enter');
+  const pk = page.locator('#picker[role=dialog][aria-modal=true]');
+  await expect(pk).toBeVisible();
+  const day = () => page.evaluate(() => document.activeElement.dataset.date);
+  expect(await day()).toBe('2026-10-14');
+  await page.keyboard.press('ArrowRight');
+  expect(await day()).toBe('2026-10-15');
+  await page.keyboard.press('ArrowDown');
+  expect(await day()).toBe('2026-10-22');
+  await page.keyboard.press('PageDown'); // a month on: the grid turns with it
+  expect(await day()).toBe('2026-11-22');
+  await expect(page.locator('#pk-title')).toHaveText(/2026/);
+  for (let i = 0; i < 4; i++) { await page.keyboard.press('Tab'); expect(await inDialog(page, '#picker')).toBe(true); }
+  await page.keyboard.press('Escape');
+  await expect(pk).toBeHidden();
+  await expect.poll(() => active(page)).toBe('#title');
+  await page.keyboard.press('Enter');
+  await expect(pk).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#viewroot')).toHaveAttribute('data-date', /^2026-10/);
+  await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.get('date'))).toBe('2026-10-13');
+});
+
+test('search: the field is a combobox, the pick its active descendant, the rows grouped; Tab leaves the list out', async ({ page }) => {
+  await page.goto('/calendar?view=month&date=2026-10-14');
+  await settle(page);
+  const q = page.locator('#q');
+  await q.focus();
+  await page.keyboard.type('anna');
+  await page.locator('#sres .r').first().waitFor();
+  await expect(q).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowDown');
+  const on = page.locator('#sres .r.on');
+  await expect(on).toHaveAttribute('aria-selected', 'true');
+  await expect(q).toHaveAttribute('aria-activedescendant', await on.getAttribute('id'));
+  // a listbox owns options and groups only; each group is named by its category
+  expect(await page.evaluate(() => [...document.querySelectorAll('#sres > *')].filter(e => !['group', 'option', null].includes(e.getAttribute('role'))).length)).toBe(0);
+  expect(await page.locator('#sres [role=group]').evaluateAll(gs => gs.every(g => (document.getElementById(g.getAttribute('aria-labelledby')) || {}).textContent))).toBe(true);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => !!document.activeElement.closest('#sres'))).toBe(false);
+});
+
+test('contacts table: its editor dialog is a named modal dialog that keeps the focus', async ({ page }) => {
+  await page.goto('/contacts?view=table');
+  await page.locator('#contacts.view-table').waitFor();
+  await page.locator('#ct-fab').click();
+  const det = page.locator('#detail[role=dialog][aria-modal=true]');
+  await expect(det).toBeVisible();
+  await expect(det).toHaveAttribute('aria-label', /.+/);
+  for (let i = 0; i < 12; i++) { await page.keyboard.press('Tab'); expect(await inDialog(page, '#detail'), `Tab ${i + 1} left the dialog`).toBe(true); }
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#detail[role=dialog]')).toHaveCount(0);
+});

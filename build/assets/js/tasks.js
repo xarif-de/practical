@@ -314,7 +314,7 @@
       const t = list[k], o = k - deckI;
       const p = pctOf(t);
       h += `<div class="cd" data-key="${esc(key(t))}" style="transform:translateY(${-o * 14}px) scale(${1 - o * 0.05});opacity:${o === 0 ? 1 : 0.85 - o * 0.25};z-index:${10 - o}${o ? ';height:120px;overflow:hidden' : ''}">
-        <h3${isDone(t) ? ' class="off"' : ''}>${esc(t.summary)}</h3>${o ? '' :
+        <h2${isDone(t) ? ' class="off"' : ''}>${esc(t.summary)}</h2>${o ? '' :
         `${t.description ? `<p class="dsc">${esc(t.description)}</p>` : ''}<div class="fx">${chips(t)}<span class="tchip">${ic('calendar', 'xs')}${esc(t.cal_name)}</span></div>
          ${p > 0 && p < 100 ? `<div class="pb"><i style="width:${p}%"></i></div>` : ''}
          <div class="act"><button class="btn" data-tog="${esc(key(t))}">${isDone(t) ? '↺' : '✓'}</button><button class="btn icon-btn" data-open title="${esc(T.edit)}" aria-label="${esc(T.edit)}">${ic('pencil')}</button><button class="btn" data-next>→</button></div>`}</div>`;

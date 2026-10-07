@@ -35,7 +35,7 @@ form.inline { display: inline; }
 ul.plain { list-style: none; padding: 0; margin: 8px 0; } ul.plain li { padding: 4px 0; }
 .filter.user .pop { width: 220px; }
 .filter.user .avatar { border: 0; cursor: pointer; }
-.filter.user h4 { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.filter.user h2 { text-transform: none; letter-spacing: 0; font-size: 13px; }
 .filter .row-link { display: block; padding: 6px; border-radius: 8px; } .filter .row-link:hover { background: var(--tile); }
 .filter .src-note { margin: 2px 6px 6px; font-size: 11.5px; line-height: 1.4; } .filter .src-note a { color: inherit; text-decoration: underline; }
 .filter .row-form { padding: 6px; }

@@ -416,7 +416,7 @@
       // the wheel turns to a neighbour month: the pointer over the grid is the intent (also right after a turn, unmoved)
       practical.intent(m, () => [...fetches(shifted(1)), ...fetches(shifted(-1))], true); } }
     wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root));
-    const title = $('#title', root); if (title) title.onclick = openPicker;
+    const title = $('#title', root); if (title) { title.onclick = openPicker; practical.keyClick(title); title.setAttribute('aria-haspopup', 'dialog'); } // Enter/Space open the picker too
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });
@@ -424,24 +424,43 @@
 
   // ---- orbit picker ----
   const pk = $('#picker');
-  let pkYear = +pk.dataset.year, pkMonth = +pk.dataset.month, pkBase = +pk.dataset.year;
+  let pkYear = +pk.dataset.year, pkMonth = +pk.dataset.month, pkBase = +pk.dataset.year, pkFocus = null; // pkFocus: the day the keyboard is on (the grid's one Tab stop)
+  pk.setAttribute('role', 'dialog'); pk.setAttribute('aria-modal', 'true'); pk.setAttribute('aria-labelledby', 'pk-title');
   const yn = $$('.ynode', pk);
   function py() { yn.forEach((g, i) => { const y = pkBase + (8 - i); g.dataset.year = y; g.querySelector('text').textContent = y; g.classList.toggle('cur', y === pkYear); }); }
   function pm() { $$('.mnode', pk).forEach(g => g.classList.toggle('cur', +g.dataset.month === pkMonth)); $('#pk-title').textContent = MON[pkMonth - 1] + ' ' + pkYear; grid(); }
   function grid() {
     const g = $('#pk-grid'); let h = DOW.map(d => `<div class="dow">${d}</div>`).join('');
     const first = new Date(pkYear, pkMonth - 1, 1); const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
-    for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); if (i >= 35 && d.getMonth() !== pkMonth - 1) break; const s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; h += `<div class="day${d.getMonth() !== pkMonth - 1 ? ' other' : ''}${s === today ? ' today' : ''}" data-date="${s}"><span class="n">${d.getDate()}</span></div>`; }
+    const stop = pkFocus && pkFocus.slice(0, 7) === `${pkYear}-${pad(pkMonth)}` ? pkFocus : `${pkYear}-${pad(pkMonth)}-01`;
+    for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); if (i >= 35 && d.getMonth() !== pkMonth - 1) break; const s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; h += `<div class="day${d.getMonth() !== pkMonth - 1 ? ' other' : ''}${s === today ? ' today' : ''}" data-date="${s}" role="button" tabindex="${s === stop ? 0 : -1}" aria-label="${esc(dfmt(d, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}"><span class="n">${d.getDate()}</span></div>`; }
     g.innerHTML = h;
     $$('.day', g).forEach(d => d.onclick = () => { pk.hidden = true; go(state.view === 'week' || state.view === 'day' ? state.view : (['planner','weekends','vacation','countdown','numbers'].includes(state.view) ? state.view : 'month'), d.dataset.date); });
   }
   async function density() { try { const r = await practical.req(`/api/density?year=${pkYear}${state.cals ? '&cals=' + encodeURIComponent(state.cals) : ''}`); if (!r.ok) return; const d = r.data; const mx = Math.max(1, ...d); $$('.mnode', pk).forEach(g => { const m = +g.dataset.month; if (!g.classList.contains('cur')) g.querySelector('circle').setAttribute('r', 14 + 10 * d[m - 1] / mx); }); } catch (_) {} }
-  function openPicker() { const d = parse(state.date); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; py(); pm(); density(); pk.hidden = false; }
+  function openPicker() { const d = parse(state.date); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; pkFocus = state.date; py(); pm(); density(); pk.hidden = false; $('#pk-grid [tabindex="0"]').focus({ preventScroll: true }); }
+  const pkClose = () => { pk.hidden = true; const t = $('#title', root); if (t) t.focus({ preventScroll: true }); }; // the focus back on the title that opened it
+  /* the keyboard: ←/→ a day, ↑/↓ a week, PageUp/PageDown a month (with Shift a year), Enter/Space picks, Escape closes;
+     a day of another month turns the grid to it, as the orbit's month and year nodes do */
+  pk.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); pkClose(); return; }
+    const day = e.target.closest && e.target.closest('#pk-grid .day'); if (!day) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); day.click(); return; }
+    const d = parse(day.dataset.date), step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    if (step) d.setDate(d.getDate() + step);
+    else if (e.key === 'PageUp' || e.key === 'PageDown') { const n = (e.key === 'PageUp' ? -1 : 1) * (e.shiftKey ? 12 : 1), dd = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); d.setDate(Math.min(dd, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); }
+    else return;
+    e.preventDefault(); pkFocus = ymd(d);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    if (y !== pkYear || m !== pkMonth) { const yc = y !== pkYear; pkYear = y; pkMonth = m; if (Math.abs(pkYear - pkBase) > 8) pkBase = pkYear; py(); pm(); if (yc) density(); }
+    else $$('#pk-grid .day', pk).forEach(x => { x.tabIndex = x.dataset.date === pkFocus ? 0 : -1; });
+    $(`#pk-grid .day[data-date="${pkFocus}"]`, pk).focus();
+  });
   yn.forEach(g => g.onclick = () => { pkYear = +g.dataset.year; py(); pm(); density(); });
   $$('.mnode', pk).forEach(g => g.onclick = () => { pkMonth = +g.dataset.month; pm(); });
   $('.ybtn.prev', pk).onclick = () => { pkBase -= 7; py(); }; $('.ybtn.next', pk).onclick = () => { pkBase += 7; py(); };
   $('.ybtn.reset', pk).onclick = () => { const d = parse(today); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; py(); pm(); density(); };
-  $('#pk-close').onclick = () => pk.hidden = true; pk.addEventListener('click', e => { if (e.target === pk) pk.hidden = true; });
+  $('#pk-close').onclick = pkClose; pk.addEventListener('click', e => { if (e.target === pk) pkClose(); });
 
 
   wire();

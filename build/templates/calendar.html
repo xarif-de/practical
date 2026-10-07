@@ -4,7 +4,7 @@
 {% block title %}{{ title }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
 {{ m::cal_filter() }}
-<h4>{{ ctx.t("filter-holidays") }}</h4>
+<h2>{{ ctx.t("filter-holidays") }}</h2>
 <label><input type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}><span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>
 {% if has_school %}<label><input type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}><span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{% endif %}
 </div></div>

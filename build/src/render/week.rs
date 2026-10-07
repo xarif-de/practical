@@ -90,5 +90,5 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
         heat.push_str("</div>");
     }
     // the heat panel names its month: the title carries the week now, so nothing else would
-    format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h4>{} <span class=\"hm\">{} {hy}</span></h4><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("v-density"), l.mon(hm), tl_weeks(view_date, today))
+    format!("<div class=\"cal v-week on\" data-focus=\"{focus}\"><div class=\"heat\" data-month=\"{hy}-{hm:02}\"><h2>{} <span class=\"hm\">{} {hy}</span></h2><div class=\"grid\">{heat}</div></div><div class=\"stream\">{stream}</div>{}</div>", l.t("v-density"), l.mon(hm), tl_weeks(view_date, today))
 }

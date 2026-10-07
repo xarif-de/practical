@@ -206,10 +206,10 @@
     const groups = FACETS.map(([k, name]) => {
       const counts = facetCounts(k), vals = facetValues(k).sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || String(facetLabel(k, a)).localeCompare(facetLabel(k, b)));
       if (!vals.length) return '';
-      return `<div class="hx-fg"><h4>${esc(name)}</h4>${vals.map(v => `<label><input type="checkbox" data-f="${k}" value="${esc(v)}"${F[k].has(v) ? ' checked' : ''}>${k === 'colls' ? `<span class="hx-sw" style="--c:${esc(coll(v).color)}"></span>` : ''}<span>${esc(facetLabel(k, v))}</span><small>${counts.get(v) || 0}</small></label>`).join('')}</div>`;
+      return `<div class="hx-fg"><h2>${esc(name)}</h2>${vals.map(v => `<label><input type="checkbox" data-f="${k}" value="${esc(v)}"${F[k].has(v) ? ' checked' : ''}>${k === 'colls' ? `<span class="hx-sw" style="--c:${esc(coll(v).color)}"></span>` : ''}<span>${esc(facetLabel(k, v))}</span><small>${counts.get(v) || 0}</small></label>`).join('')}</div>`;
     }).join('');
-    const per = `<div class="hx-fg"><h4>${esc(S('f-period'))}</h4><select data-f="period" aria-label="${esc(S('f-period'))}">${PERIODS.map(p => `<option value="${p}"${F.period === p ? ' selected' : ''}>${esc(periodName(p))}</option>`).join('')}</select>${F.period === 'custom' ? `<div class="hx-range"><input type="date" data-f="from" value="${F.from}" min="${dayKey(oldest())}"><span>–</span><input type="date" data-f="to" value="${F.to}"></div>` : ''}</div>`;
-    const st = `<div class="hx-fg"><h4>${esc(S('f-status'))}</h4><div class="seg" role="group">${['all', 'active', 'undone'].map(v => `<button type="button" data-fs="${v}" aria-pressed="${F.status === v}">${esc(S('fs-' + v))}</button>`).join('')}</div>
+    const per = `<div class="hx-fg"><h2>${esc(S('f-period'))}</h2><select data-f="period" aria-label="${esc(S('f-period'))}">${PERIODS.map(p => `<option value="${p}"${F.period === p ? ' selected' : ''}>${esc(periodName(p))}</option>`).join('')}</select>${F.period === 'custom' ? `<div class="hx-range"><input type="date" data-f="from" value="${F.from}" min="${dayKey(oldest())}"><span>–</span><input type="date" data-f="to" value="${F.to}"></div>` : ''}</div>`;
+    const st = `<div class="hx-fg"><h2>${esc(S('f-status'))}</h2><div class="seg" role="group">${['all', 'active', 'undone'].map(v => `<button type="button" data-fs="${v}" aria-pressed="${F.status === v}">${esc(S('fs-' + v))}</button>`).join('')}</div>
       <label class="hx-tech"><input type="checkbox" data-f="tech"${F.tech ? ' checked' : ''}><span>${esc(S('show-tech'))}</span><small>${log.filter(c => c.tech).length}</small></label></div>`;
     return per + st + groups + `<div class="row"><a href="#" data-reset>${esc(S('reset'))}</a></div>`;
   };
@@ -503,7 +503,7 @@
       lst = list();
       if (!byId[sel]) sel = lst[0] && lst[0].id;
       let html = '', day = '';
-      for (const c of lst) { const d = dayKey(c.t); if (d !== day) { html += `<h4>${esc(dayLabel(c.t))}</h4>`; day = d; } html += li(c); }
+      for (const c of lst) { const d = dayKey(c.t); if (d !== day) { html += `<h2>${esc(dayLabel(c.t))}</h2>`; day = d; } html += li(c); }
       M('list').innerHTML = html || `<div class="hx-empty">${esc(S('none'))} <a href="#" data-reset>${esc(S('reset'))}</a></div>`;
       M('foot').textContent = tr('retention', { n: D.retention, date: fmtShort.format(oldest()) });
       M('detail').innerHTML = detail(null);

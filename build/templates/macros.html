@@ -9,7 +9,7 @@
 {%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}
 
 {#- the calendar filter popover of the calendar and tasks pages (contacts filters address books: data-ab) -#}
-{%- macro cal_filter() -%}<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}">{{ ico("filter") }}</button><div class="pop" id="calfilter"><h4>{{ ctx.t("filter-calendars") }}</h4>
+{%- macro cal_filter() -%}<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}">{{ ico("filter") }}</button><div class="pop" id="calfilter"><h2>{{ ctx.t("filter-calendars") }}</h2>
 {% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
 {{ filter_row() }}{%- endmacro -%}
 {%- macro filter_row() -%}<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a>{% if self.has_shared() %}<a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a>{% endif %}</div>{%- endmacro -%}
@@ -18,7 +18,7 @@
 {%- macro pop_btn(icon, label) -%}<button class="icon-btn" aria-haspopup="true" title="{{ label }}" aria-label="{{ label }}">{{ ico(icon) }}</button>{%- endmacro -%}
 
 {#- editor cards (contacts, events, tasks): the head with symbol, title and the edit-mode remove button -#}
-{%- macro card_h(icon, label) -%}<h3>{{ ico(icon) }}<span>{{ label }}</span><span class="grow"></span><button class="rm edits" type="button" data-card-rm title="{{ ctx.t("ct-remove-card") }}">×</button></h3>{%- endmacro -%}
+{%- macro card_h(icon, label) -%}<h2>{{ ico(icon) }}<span>{{ label }}</span><span class="grow"></span><button class="rm edits" type="button" data-card-rm title="{{ ctx.t("ct-remove-card") }}">×</button></h2>{%- endmacro -%}
 {%- macro rm_row() -%}<button class="rm" type="button" data-rm title="{{ ctx.t("ct-remove") }}">×</button>{%- endmacro -%}
 {%- macro act(kind, icon, title) -%}<button class="act" type="button" data-act="{{ kind }}" title="{{ title }}">{{ ico(icon) }}</button>{%- endmacro -%}
 {%- macro add_btn(list, label) -%}<button class="add edits" type="button" data-add="{{ list }}">{{ ico("plus") }} {{ label }}</button>{%- endmacro -%}
@@ -35,7 +35,7 @@
     the calendar's own rows to the form -#}
 {%- macro coll_page(kinds, kind, pre, c, export_label, accept) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
-  <h2>{{ c.displayname }}</h2>
+  <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
     {{ csrf() }}
     <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ c.displayname }}" required></span></label>

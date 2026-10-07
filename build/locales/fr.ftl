@@ -473,6 +473,7 @@ col-birthday = Anniversaire
 col-address = Adresse
 col-note = Note
 col-org = Entreprise
+col-open = Ouvrir
 ct-none = Aucun contact pour l'instant. Créez un carnet d'adresses ou importez un fichier .vcf dans les réglages.
 ct-new-row = Nouveau contact …
 ct-given = Prénom

@@ -13,7 +13,7 @@
 {{ m::csrf() }}
 <input type="hidden" name="holiday_color" value="{{ prefs.holiday_color.clone().unwrap_or_default() }}"><input type="hidden" name="school_color" value="{{ prefs.school_color.clone().unwrap_or_default() }}">
 <section class="page" id="home">
-  <h2>{{ ctx.t("nav-settings") }}</h2>
+  <h1>{{ ctx.t("nav-settings") }}</h1>
   <div class="group">
     <a class="cell link" href="#account"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ ctx.user_id() }}<span class="sub">{{ ctx.public_dav_url.trim_start_matches("https://").trim_start_matches("http://") }}</span></span><span class="val">{{ ctx.t("set-account-sub") }}<span class="chev">›</span></span></a>
   </div>
@@ -48,7 +48,7 @@
 
 <section class="page" id="vacation">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("set-vacation") }}</h2>
+  <h1>{{ ctx.t("set-vacation") }}</h1>
   <div class="group">
     <label class="cell noic"><span>{{ ctx.t("pref-vacation-days") }}</span><span class="val"><input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}" placeholder="–"></span></label>
     <div class="cell noic"><span>{{ ctx.t("vacation-rule") }}</span><span class="val"><input type="hidden" name="vacation_kind" value="{{ vacation_kind }}"><span class="seg" data-field="vacation_kind"><button type="button" data-v="category" aria-pressed="{{ vacation_kind == "category" }}">{{ m::ico("tag") }}<span>{{ ctx.t("vacation-kind-category") }}</span></button><button type="button" data-v="calendar" aria-pressed="{{ vacation_kind == "calendar" }}">{{ m::ico("calendar") }}<span>{{ ctx.t("vacation-kind-calendar") }}</span></button><button type="button" data-v="title" aria-pressed="{{ vacation_kind == "title" }}">{{ m::ico("regex") }}<span>{{ ctx.t("vacation-kind-title") }}</span></button></span></span></div>
@@ -65,7 +65,7 @@
 
 <section class="page" id="alarms">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("pref-sec-alarms") }}</h2>
+  <h1>{{ ctx.t("pref-sec-alarms") }}</h1>
   <div class="label">{{ ctx.t("pref-snaps") }}</div>
   <div class="group">
     <div class="snp" id="snaps" data-default-start="{{ alarm_snaps_default_start }}" data-default-end="{{ alarm_snaps_default_end }}"></div>
@@ -83,7 +83,7 @@
 
 <section class="page" id="search" data-t-empty="{{ ctx.t("set-search-empty") }}" data-t-rm="{{ ctx.t("set-search-rm") }}" data-t-uses="{{ ctx.t1("set-search-uses", "n", "{n}") }}" data-t-ask="{{ ctx.t("set-search-clear-ask") }}">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("set-search") }}</h2>
+  <h1>{{ ctx.t("set-search") }}</h1>
   <div class="label">{{ ctx.t("set-search-hist") }}</div>
   <div class="group">
     <label class="cell noic"><span>{{ ctx.t("set-search-keep") }}</span><span class="val"><select name="search_history_days" id="hist-days">{% for d in [0i64, 7, 30, 90, 365, -1] %}<option value="{{ d }}"{% if prefs.history_days() == *d %} selected{% endif %}>{% if *d == 0 %}{{ ctx.t("set-search-off") }}{% else if *d == -1 %}{{ ctx.t("set-search-forever") }}{% else if *d == 365 %}{{ ctx.t("set-search-year") }}{% else %}{{ ctx.tn("set-days", "n", **d) }}{% endif %}</option>{% endfor %}</select></span></label>
@@ -97,7 +97,7 @@
 {# every element with a colour, drawn by app.js from /api/colors; a row opens the colour picker #}
 <section class="page" id="colors">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("set-colors") }}</h2>
+  <h1>{{ ctx.t("set-colors") }}</h1>
   <div id="colors-list"><div class="group"><div class="cell noic"><span class="muted">…</span></div></div></div>
   <p class="foot">{{ ctx.t("set-colors-hint") }}</p>
 </section>
@@ -107,7 +107,7 @@
 {% for kind in ["public", "school"] %}
 <section class="page regions" id="regions-{{ kind }}" data-kind="{{ kind }}">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{% if *kind == "public" %}{{ ctx.t("set-regions-public") }}{% else %}{{ ctx.t("set-regions-school") }}{% endif %}</h2>
+  <h1>{% if *kind == "public" %}{{ ctx.t("set-regions-public") }}{% else %}{{ ctx.t("set-regions-school") }}{% endif %}</h1>
   <div class="group rlist"></div>
   <div class="group"><a class="cell btnrow" href="#pick-country-{{ kind }}">{{ m::ico("pin-plus") }}<span>{{ ctx.t("set-region-add") }}</span></a></div>
   <p class="foot">{% if *kind == "public" %}{{ ctx.t("set-regions-public-hint") }}{% else %}{{ ctx.t("set-regions-school-hint") }}{% endif %}</p>
@@ -116,7 +116,7 @@
 
 <section class="page" id="pick">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2 id="pick-title"></h2>
+  <h1 id="pick-title"></h1>
   <div class="group pick-q"><input type="search" id="pick-q" placeholder="{{ ctx.t("set-pick-search") }}" autocomplete="off" aria-label="{{ ctx.t("set-pick-search") }}"></div>
   <div class="group" id="pick-list" role="listbox" aria-labelledby="pick-title"></div>
   <script type="application/json" id="pick-data">{{ picker_json|safe }}</script>
@@ -124,7 +124,7 @@
 
 <section class="page" id="collections">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("tab-collections") }}</h2>
+  <h1>{{ ctx.t("tab-collections") }}</h1>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     {% for c in calendars %}
@@ -155,7 +155,7 @@
 
 <section class="page" id="new-calendar">
   {{ m::back("#collections", ctx.t("tab-collections")) }}
-  <h2>{{ ctx.t("set-new-calendar") }}</h2>
+  <h1>{{ ctx.t("set-new-calendar") }}</h1>
   <form method="post" action="/settings/calendars">
     {{ m::csrf() }}
     <div class="group">
@@ -173,7 +173,7 @@
 
 <section class="page" id="import-calendar">
   {{ m::back("#collections", ctx.t("tab-collections")) }}
-  <h2>{{ ctx.t("set-import-calendar") }}</h2>
+  <h1>{{ ctx.t("set-import-calendar") }}</h1>
   <form class="imp-form" data-kind="calendars" data-default-tz="{{ default_timezone }}" data-default-color="{{ palette[0] }}">
     <div class="group">
       <label class="cell btnrow imp-pick"><span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".ics,text/calendar" hidden class="imp-file"></label>
@@ -197,7 +197,7 @@
 
 <section class="page" id="new-addressbook">
   {{ m::back("#collections", ctx.t("tab-collections")) }}
-  <h2>{{ ctx.t("set-new-addressbook") }}</h2>
+  <h1>{{ ctx.t("set-new-addressbook") }}</h1>
   <form method="post" action="/settings/addressbooks">
     {{ m::csrf() }}
     <div class="group">
@@ -209,7 +209,7 @@
 
 <section class="page" id="import-addressbook">
   {{ m::back("#collections", ctx.t("tab-collections")) }}
-  <h2>{{ ctx.t("set-import-addressbook") }}</h2>
+  <h1>{{ ctx.t("set-import-addressbook") }}</h1>
   <form class="imp-form" data-kind="addressbooks" data-default-color="{{ palette[1] }}">
     <div class="group">
       <label class="cell btnrow imp-pick"><span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".vcf,text/vcard" hidden class="imp-file"></label>
@@ -226,7 +226,7 @@
 
 <section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.tp("cat-count") }}" data-t-count-task="{{ ctx.tp("cat-count-task") }}" data-t-none="{{ ctx.t("cat-none") }}">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("tab-categories") }}</h2>
+  <h1>{{ ctx.t("tab-categories") }}</h1>
   {# rules are kept apart per component: the same category name may mean different things on an event and on a task #}
   <div class="scope"><span class="seg" role="group" id="cat-scope"><button type="button" data-scope="event" aria-pressed="true">{{ ctx.t("cat-scope-events") }}</button><button type="button" data-scope="task" aria-pressed="false">{{ ctx.t("cat-scope-tasks") }}</button></span></div>
   <div class="group" id="cat-list"></div>
@@ -236,7 +236,7 @@
 
 <section class="page" id="groups">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("tab-groups") }}</h2>
+  <h1>{{ ctx.t("tab-groups") }}</h1>
   {% for g in groups %}
   <div class="label">{{ g.displayname }} · {{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</div>
   <div class="group">
@@ -267,7 +267,7 @@
 
 <section class="page" id="account">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("tab-account") }}</h2>
+  <h1>{{ ctx.t("tab-account") }}</h1>
   {% if let Some(t) = new_token %}
   <div class="flash ok token-reveal">
     <p>{{ ctx.t("token-new-hint") }}</p>
@@ -292,7 +292,7 @@
 
 <section class="page" id="trash">
   {{ m::back("#", ctx.t("nav-settings")) }}
-  <h2>{{ ctx.t("tab-trash") }}</h2>
+  <h1>{{ ctx.t("tab-trash") }}</h1>
   <div class="label">{{ ctx.t("tab-groups") }}</div>
   <div class="group">
     {% for g in trashed %}

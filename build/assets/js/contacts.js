@@ -130,7 +130,7 @@
     if (list) $$('.lpanel', panels).forEach(p => p.remove());
     for (const [g, rs] of order) {
       let sec = null;
-      if (list) { sec = document.createElement('section'); sec.className = 'lpanel'; sec.dataset.letter = g; sec.innerHTML = `<h3>${hesc(label(g))}</h3><ul class="list"></ul>`; }
+      if (list) { sec = document.createElement('section'); sec.className = 'lpanel'; sec.dataset.letter = g; sec.innerHTML = `<h2>${hesc(label(g))}</h2><ul class="list"></ul>`; }
       const ul = sec && sec.lastElementChild;
       rs.forEach(r => { r.g = g; if (ul && r.li) ul.appendChild(r.li); if (table && r.tr) { r.tr.dataset.letter = g; tbody.appendChild(r.tr); } });
       if (sec) panels.insertBefore(sec, ph);
@@ -319,8 +319,10 @@
     } catch (e) { cell.textContent = was; if (e && e.kind) practical.tell(e); else console.error(e); }
   });
   // table view: + opens the editor as a dialog over the table (the list view has it beside the list)
-  const dlgClose = () => { wrap.classList.remove('dlg', 'solo'); form.classList.remove('solo'); f.full_name.readOnly = false; det.classList.remove('on'); if (!wide()) det.hidden = true; };
-  $('#ct-fab').onclick = () => { show(null); wrap.classList.add('dlg'); f.full_name.focus(); };
+  // the dialog is a modal one for assistive technology too, named by the contact (shell/base.js keeps Tab inside an aria-modal box)
+  const dlgRole = on => { if (!on) { ['role', 'aria-modal', 'aria-label'].forEach(a => det.removeAttribute(a)); return; } det.setAttribute('role', 'dialog'); det.setAttribute('aria-modal', 'true'); det.setAttribute('aria-label', f.full_name.value || f.full_name.placeholder); };
+  const dlgClose = () => { wrap.classList.remove('dlg', 'solo'); dlgRole(false); form.classList.remove('solo'); f.full_name.readOnly = false; det.classList.remove('on'); if (!wide()) det.hidden = true; };
+  $('#ct-fab').onclick = () => { show(null); wrap.classList.add('dlg'); dlgRole(true); f.full_name.focus(); };
   /* a cell the table cannot edit (categories, address, note) opens just that card of the editor,
      already unlocked, as a dialog; saving writes the whole contact as the full editor does */
   async function openSolo(key, card) {
@@ -328,7 +330,7 @@
     const c = $(`.card[data-card="${card}"]`, form); if (!c) return;
     c.dataset.added = '1'; mode('edit');
     $$('.card', form).forEach(x => x.classList.toggle('solo-on', x === c)); c.hidden = false;
-    form.classList.add('solo'); wrap.classList.add('dlg', 'solo'); f.full_name.readOnly = true;
+    form.classList.add('solo'); wrap.classList.add('dlg', 'solo'); dlgRole(true); f.full_name.readOnly = true;
     // an empty list card (addresses …) starts with one empty row, as a new contact does with its phone
     const add = $('[data-add]', c); if (add && !$('.rows .row', c)) add.click();
     const first = $('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c); if (first) first.focus();

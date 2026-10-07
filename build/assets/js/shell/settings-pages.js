@@ -86,12 +86,12 @@
       let rows = [], search = null, kind = '', on = () => false, count = () => 0;
       const rm = route.match(/^region-(public|school)-([A-Z0-9-]+)$/), cm = route.match(/^country-(public|school)$/);
       if (route === 'tz') {
-        backTo('#', $('#home h2').textContent);
+        backTo('#', $('#home h1').textContent);
         title.textContent = tr('js-pick-tz'); const cur = hid('timezone').value; on = v => v === cur;
         rows = [{ v: '', name: tr('js-pick-default', { tz: prefsForm.dataset.defaultTz }) }];
         pickData.zones.forEach(([area, zs]) => { rows.push({ head: area }); zs.forEach(([id, name]) => rows.push({ v: id, name, sub: id })); });
       } else if (cm) {
-        kind = cm[1]; backTo('#regions-' + kind, $(`#regions-${kind} h2`).textContent);
+        kind = cm[1]; backTo('#regions-' + kind, $(`#regions-${kind} h1`).textContent);
         title.textContent = tr('js-pick-country');
         count = v => listOf(kind).filter(x => x.slice(0, 2) === v).length;
         rows = pickData.countries.filter(c => kind !== 'school' || c.school).map(c => ({ v: c.code, name: c.name, more: true }));
