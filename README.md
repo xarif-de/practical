@@ -66,7 +66,7 @@ crates' tag, for a deployment that runs RustiCal's own image.
 ## Release and deployment
 
 CI (`dagger-ci.yaml`: one `dagger call … ci`, base/dagger-modules docs/ci.md; `.forgejo/workflows/ci.yml` only
-triggers it) runs cargo-deny and builds + tests the image (`tests/tests.yaml`) on every push. `main` publishes build
+triggers it) runs cargo-deny and builds + tests the image on every push (the build step runs `cargo test`, then `tests/tests.yaml`; e2e stays a local gate). `main` publishes build
 versions with the `release` profile (`registry.gitlab.com/xarif/docker/practical:main`, `main-<sha8>`; skipped when the
 build inputs are unchanged) — never deployed. A `vX.Y.Z` tag publishes the release image (`dist` profile, `:vX.Y.Z`);
 Renovate pins it in kubernetes/rustical (PR, CI, auto-merge for minor/patch, up to 2 h after the publish), ArgoCD
@@ -80,7 +80,7 @@ mise run dev-db                         # COPY of the production DB → ~/.cache
 mise run dev                            # http://localhost:4001 as DEV_USER: watchexec rebuild + restart, assets from disk, the tab reloads and re-logs in
 mise run test                           # cargo test (e2e/cargo.sh: rust-toolchain.toml, per-checkout target dir)
 mise run deny                           # cargo-deny: advisories, bans, sources
-mise run pipeline                       # the CI pipeline locally (cargo-deny + image build + tests), never publishes
+mise run pipeline                       # the CI pipeline locally (cargo-deny + image build with cargo test + image tests), never publishes
 mise run image                          # the image, loaded into docker as xarif-practical
 mise run e2e-seed                       # synthetic fixture DB → e2e/.work/fixture.sqlite3 (docker: RustiCal CLI)
 mise run e2e                            # functional Playwright suite (E2E_WORKERS, default 4)

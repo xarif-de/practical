@@ -38,6 +38,8 @@ Where code lives: `docs/MAP.md`. Deploy/config/commands: `README.md`. These rule
   state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
 - a11y rule: a new axe finding fails (fix it, or add `<rule>⇥<key>⇥<reason>` to e2e/a11y-allow.txt); a line no state
   shows any more is STALE and fails — delete it: the list only shrinks. Icon-only controls need aria-label/title.
+- CI (dagger) runs cargo-deny, `cargo test` inside the image build step (build/Dockerfile: after the release build,
+  2 jobs, own cache mount, no `-D warnings`) and tests/tests.yaml. e2e, visual, a11y, bench: local gates only.
 - A fixed bug gets a test that fails on the old code. A new cache gets a test that writes and reads back.
 - An intended bench cost is named in the commit with its ratio from the bench table.
 
