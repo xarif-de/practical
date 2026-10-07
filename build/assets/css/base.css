@@ -9,7 +9,7 @@
   --ok: #30b46c; --warn: #ff9f0a; --err: #ff3b30; /* states, the same in both schemes (unlike --c2/--c4/--today) */
 }
 /* the dark scheme: data-scheme=dark on <html> (theme.js, layout.html) */
-html[data-scheme=dark] { --bg:#0f1115; --bg-2:#171a20; --bg-3:#21252d; --fg:#f2f2f4; --fg-2:#a4abb7; --fg-3:#6f7783; --line:#22262e; --tile:#171a20; --tile-other:#121418; --tile-weekend:#14171c;
+html[data-scheme=dark] { --bg:#0f1115; --bg-2:#171a20; --bg-3:#21252d; --fg:#f2f2f4; --fg-2:#a4abb7; --fg-3:#7d858f; --line:#22262e; --tile:#171a20; --tile-other:#121418; --tile-weekend:#14171c;
   --accent:#4f7cff; --accent-fg:#fff; --today:#ff453a; --shadow:none; --c1:#5b8cff; --c2:#34c48f; --c3:#ff6b6b; --c4:#ffb340; --c5:#bf7dff; --c6:#4cc2f0; }
 * { box-sizing: border-box; scrollbar-width: none; }
 html, body { margin: 0; height: 100%; }
