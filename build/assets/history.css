@@ -162,7 +162,7 @@ a.hx-go { color: var(--accent); font-weight: 600; text-decoration: none; }
 .hxc-hist li button:hover { background: var(--tile); } .hxc-hist li.cur button { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); font-weight: 600; }
 .hxc-hist small { color: var(--fg-3); } .hxc-hs { background: var(--bg-3); padding: 0 6px; border-radius: 6px; }
 .hxc-back { display: none; margin-bottom: 10px; }
-/* the day ruler (as in the round-17 time machine): one notch per day, longer with more changes */
+/* the day ruler: one notch per day, longer with more changes */
 .hxf-ruler { display: flex; flex-direction: column; padding: 14px 10px 24px 0; border-left: 1px solid var(--line); overflow: hidden; }
 .hxf-day { position: relative; flex: 1; min-height: 1px; }
 .hxf-day i { position: absolute; right: 0; top: 50%; width: 8px; height: 1px; background: var(--line); }

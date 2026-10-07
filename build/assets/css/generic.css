@@ -1,0 +1,52 @@
+/* css/generic.css — generic pieces (flash, toast, inline forms, tokens, login, danger zone, focus ring on tiles), calendar
+   colours from hex */
+.flash { margin: 8px 0; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 14px; }
+.flash.error { background: color-mix(in srgb, var(--err) 12%, transparent); } /* the login error: the error tint of .cardform .rm:hover and .act.map.hot */
+.toast { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); font-size: 14px; transition: opacity .3s; }
+.toast.error { background: var(--today); color: #fff; }
+.toast.gone { opacity: 0; pointer-events: none; }
+.toast.net { top: 8px; bottom: auto; padding: 8px 16px; font-size: 13px; } /* the offline notice (practical.online): at the top, so a toast below never covers it */
+.toast-x { border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; opacity: .7; }
+@media (min-width: 900px) { .toast { bottom: 24px; } }
+.muted { color: var(--fg-3); } .small { font-size: 13px; }
+.grow { flex: 1; }
+.btn.wide { width: 100%; padding: 10px; }
+.btn.danger, .link.danger { color: var(--today); }
+.btn.danger { border-color: color-mix(in srgb, var(--today) 40%, transparent); }
+button.link { background: none; border: 0; padding: 2px 6px; color: var(--accent); cursor: pointer; font-size: 13px; }
+form.inline { display: inline; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.inline-form input[type=text], .inline-form select, .login input { font: inherit; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; min-width: 200px; }
+/* the focus ring of every text field on a tile background (after their rules: it replaces the tile) */
+.usearch input:focus, .sdlg .sd-head input:focus, .ask-type input:focus, .ed input:focus, .ed select:focus, .ed textarea:focus, .inline-form input:focus, .login input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg); }
+.chip, .hx-chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--fg-2); background: var(--tile); } /* .hx-chip: the history filter chips (history.css: padding) */
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.danger-zone summary { list-style: none; display: inline-block; }
+.danger-zone summary::-webkit-details-marker { display: none; }
+.danger-zone[open] { flex-basis: 100%; }
+.token-reveal code { font-size: 14px; user-select: all; overflow-wrap: anywhere; }
+.login { max-width: 380px; margin: 10vh auto; background: var(--tile); border-radius: 16px; padding: 24px; display: grid; gap: 12px; }
+.login h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+.login .pwform { display: grid; gap: 8px; } .login label { display: grid; gap: 4px; font-size: 13px; color: var(--fg-2); }
+.placeholder { padding: 0 var(--pad) var(--pad); max-width: 720px; }
+ul.plain { list-style: none; padding: 0; margin: 8px 0; } ul.plain li { padding: 4px 0; }
+.filter.user .pop { width: 220px; }
+.filter.user .avatar { border: 0; cursor: pointer; }
+.filter.user h4 { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.filter .row-link { display: block; padding: 6px; border-radius: 8px; } .filter .row-link:hover { background: var(--tile); }
+.filter .src-note { margin: 2px 6px 6px; font-size: 11.5px; line-height: 1.4; } .filter .src-note a { color: inherit; text-decoration: underline; }
+.filter .row-form { padding: 6px; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ---- app: colours come from the calendar (hex), not from c1..c6 classes ---- */
+.ev { border-left-color: var(--c, var(--c1)); }
+html[data-scheme=dark] .ev.allday { background: color-mix(in srgb, var(--c, var(--c1)) 30%, transparent) !important; }
+.day .dots i, .sw, .agenda .sw { background: var(--c, var(--c1)); }
+.ev.spacer { visibility: hidden; }
+.ev { cursor: pointer; }
+.day.sel { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.v-month > .month > .day:not(.sel, .today):hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 28%, transparent); } /* a click picks the day (app.js `pick`); today keeps its own ring */
+.lnk { cursor: pointer; } .doc article.lnk:hover h3 { color: var(--accent); }
+.heat i, .lrow, .wdot, .mline { cursor: pointer; }
+.picker .centre .day { min-height: 0; aspect-ratio: 1; padding: 3px; font-size: 11px; cursor: pointer; display: grid; place-items: center; }
+.picker .centre .day.other { opacity: .4; }

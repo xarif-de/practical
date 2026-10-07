@@ -6,7 +6,7 @@
 (() => {
   const root = document.getElementById('hx');
   if (!root) return;
-  const { $, $$, escN: esc, csrf } = practical; // app.js runs first (both deferred, in document order)
+  const { $, $$, escN: esc } = practical; // app.js runs first (both deferred, in document order)
   const LOC = window.LOC;
   const fmtDay = new Intl.DateTimeFormat(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
   const fmtShort = new Intl.DateTimeFormat(LOC, { weekday: 'short', day: 'numeric', month: 'numeric' });
@@ -59,7 +59,7 @@
   const attrLabel = k => { for (const c of log) for (const it of c.items) for (const a of it.attrs) if (a[0] === k) return a[1]; return k; };
   const dayKey = practical.ymd;
   const now = () => new Date(D.now);
-  const fmtTime = new Intl.DateTimeFormat(LOC, { hour: '2-digit', minute: '2-digit' }), time = t => fmtTime.format(t); // one formatter, not one per row (perf3 #2: 57 ms self time per load)
+  const fmtTime = new Intl.DateTimeFormat(LOC, { hour: '2-digit', minute: '2-digit' }), time = t => fmtTime.format(t); // one formatter, not one per row (one per row cost 57 ms self time per load)
   const dayDiff = t => Math.round((new Date(dayKey(now())) - new Date(dayKey(t))) / 864e5);
   const dayLabel = t => { const d = dayDiff(t); return d === 0 ? S('today') : d === 1 ? S('yesterday') : fmtDay.format(t); };
   const when = t => { const d = dayDiff(t); return (d === 0 ? S('today') : d === 1 ? S('yesterday') : fmtShort.format(t)) + ' ' + time(t); };

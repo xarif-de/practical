@@ -1,0 +1,33 @@
+/* css/icon-buttons.css — icons and icon buttons */
+/* ---- icon buttons: the sprite assets/icons.svg, currentColor, text kept in title/aria-label ---- */
+.ico { width: 18px; height: 18px; display: block; flex: none; }
+.nav a { display: grid; place-items: center; padding: 6px 9px; }
+.tabbar .ico { width: 22px; height: 22px; }
+.icon-btn, .seg button { display: inline-grid; place-items: center; }
+/* the scheme button shows the setting in effect: system, light or dark */
+#scheme .ico { display: none; } html[data-pref-scheme=auto] #scheme .s-auto, html[data-pref-scheme=light] #scheme .s-light, html[data-pref-scheme=dark] #scheme .s-dark { display: block; }
+.seg button { min-height: 32px; min-width: 36px; box-sizing: border-box; } /* icon-only segments (contacts list/table, reminder settings) get the height of the text ones and of .icon-btn */
+.seg button .ico { width: 16px; height: 16px; }
+/* a symbol beside a label: buttons, links, menu rows and segments */
+.btn:not(.icon-btn):has(> .ico), button.link:has(> .ico), summary.link:has(> .ico), .seg button:has(> .ico + span), .more .pop a:has(> .ico), .filter .row a:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; }
+.btn:not(.icon-btn) > .ico, button.link > .ico, summary.link > .ico { width: 16px; height: 16px; }
+/* button rule: symbol + label = no frame, coloured text (blue, red for danger); symbol only = framed button */
+.btn:not(.icon-btn):has(> .ico) { background: none; border-color: transparent; box-shadow: none; color: var(--accent); padding-left: 4px; padding-right: 4px; }
+.btn.danger:not(.icon-btn):has(> .ico) { color: var(--today); }
+.btn:not(.icon-btn):has(> .ico):hover:not(:disabled) { background: color-mix(in srgb, currentColor 8%, transparent); }
+.ed .cardform .lk-join .btn:has(> .ico) { background: none; color: #fff; } /* on the blue join box */
+.btn.icon-btn > .n { position: absolute; top: -6px; right: -6px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--today); color: #fff; font: 600 10.5px/17px var(--font, inherit); text-align: center; } .btn.icon-btn:has(> .n) { position: relative; } /* a count on a symbol-only button (colour optimiser: changes) */
+.filter .row a > .ico { width: 14px; height: 14px; }
+.more .pop a > .ico { color: var(--fg-2); }
+.seg [data-more] { display: inline-flex; align-items: center; gap: 2px; } .seg [data-more] > .ico:last-child { width: 14px; height: 14px; color: var(--fg-2); }
+.set .cell.btnrow:has(> .ico) { grid-template-columns: 18px 1fr; column-gap: 10px; align-items: center; }
+.list .bday .ico, .list .abchip .ico, a.r small .ico { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+.cfo-man .ico { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 3px; } .cfo-manbar .ico { width: 14px; height: 14px; }
+.cd .ic .ico { width: 20px; height: 20px; }
+.rrbottom .pillbtn .ico { width: 14px; height: 14px; }
+.tkmain .sheet th .a .ico { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; } .tkmain .sheet th .a.asc { --sort-down: .3; } .tkmain .sheet th .a.desc { --sort-up: .3; } /* i-sort: the arrow of the other direction dims */
+.btn[aria-pressed=true], .ed header .tlt[aria-pressed=true], .ed .cardform .apre button[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
+.btn.icon-btn { padding: 6px 9px; }
+
+[hidden] { display: none !important; } /* the icon-button display rules must not resurrect hidden elements (the delete button in new-contact mode did) */

@@ -1,0 +1,150 @@
+/* css/tasks.css — the tasks page: six views over one list, the docked editor, the toolbar groups.
+   The atoms (.chip, .sw, .pb, .seg, .sel) are the app's; only the view shells live here. */
+/* .main is a grid: without min-width 0 a wide table stretches the whole page (toolbar included) past
+   the screen edge instead of scrolling inside its own box */
+.tkpage { min-width: 0; }
+.tkwrap { display: block; padding: 10px var(--pad) var(--pad); } /* 10px on top of the toolbar's own 10px: the views keep their distance from it */
+/* groups on a wide window: list | editor, half and half (≥1100px, set by app.js as `.dock`) */
+.tkwrap.dock { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+/* the task views bring their own chip: the app's `.chip` is the category tag and stacks its icon */
+.tchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--tile); border-radius: 999px;
+  padding: 2px 8px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap; line-height: 1.5; }
+.tchip .ico { width: 13px; height: 13px; color: var(--fg-3); flex: none; }
+.tchip.warn { color: var(--today); border-color: color-mix(in srgb, var(--today) 40%, var(--line)); }
+.tchip.warn .ico { color: var(--today); }
+.tchip.good { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.tchip.good .ico { color: var(--ok); }
+.tnum { font-variant-numeric: tabular-nums; }
+.tkwrap .mut { color: var(--fg-3); }
+.tkwrap .pb { height: 4px; border-radius: 2px; background: var(--bg-3); overflow: hidden; margin: 5px 0; }
+.tkwrap .pb i { display: block; height: 100%; background: var(--accent); }
+
+/* the tick circle */
+.tcb { width: 19px; height: 19px; border-radius: 50%; border: 1.7px solid var(--fg-3); background: transparent; cursor: pointer; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; color: transparent; }
+.tcb:hover { border-color: var(--accent); }
+.tcb[aria-checked="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.tcb.pp { border-style: dashed; border-color: var(--warn); color: var(--warn); }
+
+/* groups */
+.tkg { margin-bottom: 16px; }
+.tkgh { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg-2); padding: 6px 2px; }
+.tkgh.due { color: var(--today); }
+.tkgh .n { color: var(--fg-3); font-weight: 400; }
+.tkcard { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: var(--tile); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 11px; margin-bottom: 6px; cursor: pointer; }
+.tkcard:hover { border-color: var(--accent); }
+.tkcard.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tkcard.off .ti { text-decoration: line-through; color: var(--fg-3); }
+.tkcard .meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+
+/* table */
+/* table: the contacts sheet (.sheetwrap/.sheet) is the editor — every cell edits in place */
+.tkmain .sheet { min-width: 0; }
+/* the pin cell stays a table cell (as a flex box it would not stretch to the row's height) */
+.tkmain .sheet .pin { display: table-cell; min-width: 280px; }
+.tkmain .sheet .pinw { display: flex; align-items: center; gap: 10px; }
+.tkmain .sheet .pin [contenteditable] { flex: 1; min-width: 0; white-space: normal; }
+.tkmain .sheet tr.off .pin [contenteditable] { text-decoration: line-through; color: var(--fg-3); }
+.tkmain .sheet th[data-sk] { cursor: pointer; user-select: none; } .tkmain .sheet th[data-sk]:hover { color: var(--accent); }
+.tkmain .sheet th .a { color: var(--accent); font-size: 10px; }
+.tkmain .sheet td.tkc { text-align: center; }
+.tkmain .sheet td.ro { color: var(--fg-2); }
+.tkmain .sheet input, .tkmain .sheet select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 0; outline: none; }
+.tkmain .sheet input[type=number] { width: 4.5em; text-align: right; }
+.tkmain .sheet input:focus, .tkmain .sheet select:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.tkmain .sheet input.late { color: var(--today); }
+/* cells edited through the editor's card (categories, place, note, reminders, links): a click opens it */
+.sheet td.cardcell { cursor: pointer; }
+.sheet td.cardcell:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.sheet td.cardcell .ico { display: inline-block; vertical-align: -2px; color: var(--fg-3); }
+.tkmain .sheet td.desc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.tkmain .sheet td.saved { outline: 2px solid var(--c2); outline-offset: -2px; }
+.tkmain .sheet tr.sent td { border: 0; background: transparent; }
+.tkmain .sheet [contenteditable][data-f]:empty::after { content: "–"; color: var(--fg-3); }
+/* an empty date shows a dash, the input appears on hover and while it has the focus */
+.tkmain .sheet td:has(> input[data-empty]) { position: relative; }
+.tkmain .sheet td:has(> input[data-empty]:not(:focus))::before { content: "–"; color: var(--fg-3); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.tkmain .sheet td:has(> input[data-empty]):hover::before { content: none; }
+.tkmain .sheet input[data-empty]:not(:focus) { opacity: 0; } .tkmain .sheet td:hover > input[data-empty] { opacity: 1; }
+.tkmain .sheet ::-webkit-calendar-picker-indicator { opacity: 0; } .tkmain .sheet td:hover ::-webkit-calendar-picker-indicator, .tkmain .sheet input:focus::-webkit-calendar-picker-indicator { opacity: .6; }
+.tkmain .sheet select { appearance: none; cursor: pointer; } .tkmain .sheet td:hover select { text-decoration: underline dotted var(--fg-3); }
+
+/* board */
+.tkboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
+.tkcol { background: var(--tile); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-height: 160px; }
+.tkcol .chd { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--fg-2); margin-bottom: 9px; padding: 0 2px; }
+.tkcol .chd .n { margin-left: auto; color: var(--fg-3); font-weight: 400; }
+.tkkc { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 9px; padding: 9px 10px; margin-bottom: 7px; cursor: pointer; }
+.tkkc:hover { border-color: var(--accent); }
+.tkkc.sel { box-shadow: 0 0 0 1px var(--accent); }
+.tkkc .ti { font-size: 13.5px; }
+.tkkc .ft { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.tkcol.done .tkkc .ti { color: var(--fg-3); text-decoration: line-through; }
+
+/* timeline */
+.tktl { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--tile); padding: 34px 14px 10px; }
+.tktl .axis { position: relative; height: 22px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.tktl .axis span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--fg-3); top: 0; }
+.tktl .axis i { position: absolute; bottom: 0; width: 1px; height: 6px; background: var(--line); }
+.tktl .now { position: absolute; top: 28px; bottom: 6px; width: 2px; background: var(--today); z-index: 3; }
+.tktl .now b { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--today); background: var(--bg); padding: 0 4px; border-radius: 4px; }
+.tktl .lane { position: relative; height: 30px; border-bottom: 1px dotted var(--line); }
+.tktl .bar2 { position: absolute; top: 6px; height: 17px; border-radius: 9px; background: color-mix(in srgb, var(--c) 22%, var(--bg)); border: 1px solid var(--c);
+  display: flex; align-items: center; padding: 0 8px; font-size: 11.5px; white-space: nowrap; cursor: pointer; gap: 5px; overflow: hidden; }
+.tktl .bar2.dot { padding: 0; width: 17px; justify-content: center; }
+.tktl .bar2.off { opacity: .55; background: var(--bg-3); border-style: dashed; }
+.tktl .lbl { position: absolute; top: 8px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap; pointer-events: none; }
+.tknd { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tknd .chip { cursor: pointer; }
+
+/* deck */
+.tkdeck { position: relative; height: 420px; display: flex; align-items: flex-start; justify-content: center; outline: none; }
+.tkdeck .cd { position: absolute; top: 34px; width: min(460px, 92%); background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .14); transform-origin: top center; }
+.tkdeck .cd h3 { margin: 0 0 6px; font-size: 18px; }
+.tkdeck .cd h3.off { text-decoration: line-through; color: var(--fg-3); }
+.tkdeck .cd .dsc { color: var(--fg-2); font-size: 13px; margin: 0 0 14px; }
+.tkdeck .cd .fx { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tkdeck .cd .act { display: flex; gap: 8px; }
+.tkcnt, .tkkeys { text-align: center; font-size: 12px; color: var(--fg-3); margin-top: 6px; }
+
+/* history */
+.tkhm { display: flex; gap: 3px; overflow-x: auto; padding: 4px 0 6px; }
+.tkhm .wk { display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; }
+.tkhm .dy { width: 13px; height: 13px; border-radius: 3px; background: var(--bg-3); cursor: pointer; }
+.tkhm .dy[data-n="1"] { background: color-mix(in srgb, var(--ok) 32%, var(--bg-3)); }
+.tkhm .dy[data-n="2"] { background: color-mix(in srgb, var(--ok) 58%, var(--bg-3)); }
+.tkhm .dy[data-n="3"] { background: color-mix(in srgb, var(--ok) 82%, var(--bg-3)); }
+.tkhm .dy.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tkdl { border-left: 2px solid var(--line); padding-left: 12px; margin: 14px 0 0 4px; }
+.tkdl .dd { font-size: 12px; color: var(--fg-3); margin: 10px 0 4px; position: relative; }
+.tkdl .dd::before { content: ""; position: absolute; left: -17px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.tkdl .ri { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 13.5px; cursor: pointer; }
+.tkdl .ri:hover { color: var(--accent); }
+/* the picked task (app.js act): table as in contacts, bars/chips/entries with an accent ring */
+.contacts .sheet tr[data-key]:not(.on):hover td, .tkmain .sheet tr[data-key]:not(.sel):hover td { background: color-mix(in srgb, var(--accent) 5%, var(--bg)); } .contacts .sheet tr.on td, .tkmain .sheet tr.sel td { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); } .contacts .sheet tr.on td:first-child, .tkmain .sheet tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tktl .bar2.sel { box-shadow: 0 0 0 2px var(--accent); } .tknd .tchip.sel, .tkdl .ri.sel { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 6px; } .tkdl .ri.sel { color: var(--accent); }
+
+/* the docked editor: the same dialog, as the right-hand pane of the groups view (sticky, scrolls on its own like the contacts pane) */
+/* `inset` before `top`: the shorthand after it reset top to auto and the pane scrolled away with the list.
+   app.js sets --ed-off (margin-top) so the pane starts level with the first task, not its group heading */
+.ed.docked { position: sticky; inset: auto; top: calc(var(--toolbar-h) + 10px + var(--ed-off, 0px)); margin-top: var(--ed-off, 0px); /* sticks where it starts: it never moves */ z-index: 1; display: block; padding: 0; background: none; backdrop-filter: none; }
+.ed.docked .box { width: 100%; max-height: calc(100dvh - var(--sticky-top) - 36px - var(--ed-off, 0px)); box-shadow: none; border-radius: var(--radius); }
+/* a task has no day to lay out: no day line, no toggle for it, one column (`task-hide`, see editor.html) */
+.ed.taskmode .task-hide { display: none !important; }
+.ed.taskmode .cols3 { grid-template-columns: 1fr; }
+/* solo: one card of the editor, opened from a table cell (rusticalEd.open(key, …, only)). A card a
+   category rule changed is shown as well (.solo-on); title, other cards, add menu and delete stay out */
+.ed.solo .box { width: min(560px, 100%); }
+.ed.solo .cardform .cards { columns: 1; }
+.ed.solo .card:not(.solo-on), .ed.solo .addmenu, .ed.solo #ed-delete { display: none !important; }
+.ed.solo header .names input { pointer-events: none; border-bottom-color: transparent; }
+/* the lookback picker sits in the page toolbar, where `.sel` is not otherwise used */
+.toolbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; color: var(--fg-2); }
+.toolbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }
+.toolbar .sel .ico { color: var(--fg-3); }
+/* toolbar groups (lookback | sort | views): a hairline between them; sort field and its direction button sit close */
+.tbsep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; flex: none; }
+.tksort { display: inline-flex; align-items: center; gap: 4px; }
+.tksent { padding: 18px 4px 30px; color: var(--fg-3); font-size: 12.5px; text-align: center; }

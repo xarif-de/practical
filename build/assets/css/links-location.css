@@ -1,0 +1,104 @@
+/* css/links-location.css — editor cards: links and attachments, location, the map dialog */
+/* status / links cards, colour and coordinates */
+.ev.cancelled { text-decoration: line-through; opacity: .55; }
+.ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }
+.ed .cardform .field.geo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "v map" "l map"; } /* same column as the address row: the two map buttons line up */
+.ed .cardform .field.geo > .mapbtn { grid-area: map; }
+.ed .cardform .field.geo .inl { min-width: 0; } /* number inputs have a wide intrinsic width that would push the track past the card */
+.ed .cardform .field.geo .inl input[type=number] { flex: 1 1 0; width: 0; min-width: 0; }
+/* links & attachments: add box (paste, search, drop), rows in three groups (conference
+   with a join card, in this calendar, on the internet), an edit card for the selected row */
+.ed .cardform .lk-add { margin: 0 0 8px 26px; display: grid; gap: 6px; }
+.ed .cardform .lk-in { display: flex; gap: 6px; align-items: center; }
+.ed .cardform .lk-in input { flex: 1; min-width: 0; }
+.ed .cardform .lk-drop { border: 2px dashed var(--line); border-radius: 10px; background: var(--bg); padding: 8px; text-align: center; color: var(--fg-3); font-size: 11.5px; cursor: pointer; }
+.ed .cardform .lk-drop b { display: block; color: var(--fg-2); font-weight: 500; font-size: 12.5px; }
+.ed .cardform .lk-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.ed .cardform .lk-msg:empty { display: none; }
+.ed .cardform .lk-msg { font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .lk-msg.err { color: var(--c3); }
+.ed .cardform .lk-sec h4 { margin: 8px 0 2px 26px; font: 600 11px/1.4 var(--font-display); color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; display: flex; gap: 6px; align-items: center; }
+.ed .cardform .lk-sec h4 .ico { width: 13px; height: 13px; }
+.ed .cardform .lk-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: center; padding: 4px 0 4px 26px; }
+.ed .cardform .lk-row > .ico { grid-row: 1 / 3; width: 16px; height: 16px; color: var(--fg-2); }
+.ed .cardform .lk-row .lk-t { grid-column: 2; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed .cardform .lk-row .lk-s { grid-column: 2; font-size: 11.5px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed .cardform .lk-row .lk-acts { grid-column: 3; grid-row: 1 / 3; display: inline-flex; gap: 2px; background: var(--bg); border-radius: 999px; padding: 2px 3px; } /* not `.acts`: those are hidden in edit mode */
+.ed .cardform .lk-row .lk-acts:empty { display: none; }
+.ed .cardform .lk-row.sel .lk-t { color: var(--accent); }
+.ed .cardform .lk-row .act.on { color: var(--accent); }
+.ed .cardform .lk-join { margin-left: 26px; background: var(--accent); color: #fff; border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; }
+.ed .cardform .lk-join b { font-size: 14px; } .ed .cardform .lk-join small { opacity: .85; font-size: 11.5px; display: block; }
+.ed .cardform .lk-join .btn { background: #fff; color: var(--accent); border: 0; grid-row: 1 / 3; }
+.ed .cardform .lk-kv { margin: 6px 0 0 26px; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: 12.5px; }
+.ed .cardform .lk-kv span:nth-child(odd) { color: var(--fg-3); }
+.ed .cardform .lk-pill { all: unset; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; border: 1px dashed var(--line); border-radius: 999px; padding: 4px 9px; font-size: 12.5px; color: var(--fg-3); margin: 6px 0 0 26px; }
+.ed .cardform .lk-pill .ico { width: 13px; height: 13px; }
+.ed .cardform .lk-detail { margin: 8px 0 0 26px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: grid; gap: 4px; }
+.ed .cardform .lk-detail .lk-dh { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--fg-3); }
+.ed .cardform .lk-detail .lk-dh button { all: unset; cursor: pointer; color: var(--c3); }
+.ed .cardform .lk-detail .field { padding: 2px 0; }
+.ed .cardform .lk-detail .seg { justify-self: start; }
+.ed .cardform .lk-detail .seg button { padding: 4px 8px; font-size: 12px; min-width: 0; }
+.rrpop .lk-hit { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center; }
+.rrpop .lk-hit .ico { width: 14px; height: 14px; color: var(--fg-2); grid-row: 1 / 3; }
+.rrpop .lk-hit small { color: var(--fg-3); font-size: 11px; grid-column: 2; }
+.rrpop .lk-hit[aria-selected="true"] { background: var(--tile); } /* the event title's templates: the key-chosen one */
+.rrpop .lk-none { padding: 6px 10px; font-size: 12.5px; color: var(--fg-3); }
+/* location: suggestions after a typing pause (the ring counts it down), two map buttons, sync state, map dialog */
+.ed .cardform input:not([type=hidden]) { border-radius: 0; } /* the dialog's rounded inputs would bend the underline at its ends */
+.ed .cardform .field.loc { grid-template-columns: 1fr auto auto; grid-template-areas: "v map acts" "l map acts"; }
+.ed .cardform.mode-edit .field.loc { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "v map" "l map"; } /* no empty action column (its gap would shift the map button 8 px off the one below) */
+.ed .cardform .field.loc > .lbl { grid-area: l; } .ed .cardform .field.loc > .locwrap { grid-area: v; } .ed .cardform .field.loc > .mapbtn { grid-area: map; display: inline-flex; gap: 4px; } .ed .cardform .field.loc > .acts { grid-area: acts; }
+.ed .cardform .field .sync { font-style: normal; color: var(--err); margin-left: 6px; }
+.ed .cardform .field.stale input { color: var(--err); border-bottom-color: color-mix(in srgb, var(--err) 55%, transparent); background: color-mix(in srgb, var(--err) 6%, transparent); }
+.ed .cardform .field.stale .act.map, .ed .cardform .act.map.stale { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+.ed .cardform .locwrap { position: relative; min-width: 0; display: block; }
+.ed .cardform .locwrap .ctdown { position: absolute; right: 2px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%) rotate(-90deg); pointer-events: none; z-index: 1; }
+.ed .cardform .locwrap .ctdown circle { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 50.27; stroke-dashoffset: 0; }
+.ed .cardform .locwrap .ctdown.busy circle { stroke-dasharray: 12 38.27; stroke-dashoffset: 0 !important; animation: ringspin .8s linear infinite; }
+@keyframes ringspin { to { stroke-dashoffset: -50.27; } }
+.ed .cardform .locwrap input { padding-right: 24px; }
+.ed .cardform .sugg { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); padding: 4px; max-height: 240px; overflow: auto; }
+.ed .cardform .sugg button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13.5px; line-height: 1.3; }
+.ed .cardform .sugg button:hover, .ed .cardform .sugg button[aria-selected=true] { background: var(--tile); }
+.ed .cardform .sugg .none { padding: 6px 8px; font-size: 13px; color: var(--fg-3); }
+.ed .cardform .field.loc > .mapbtn, .ed .cardform .field.geo > .mapbtn { align-self: center; justify-self: end; }
+.geomap { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
+.geomap .gbox { width: min(760px, 100%); background: var(--bg); border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.35); display: grid; grid-template-rows: auto 1fr auto auto; max-height: calc(100dvh - 32px); }
+.geomap header, .geomap footer { display: flex; align-items: flex-end; gap: 12px; padding: 10px 14px; }
+.geomap header { align-items: center; border-bottom: 1px solid var(--line); } .geomap footer { border-top: 1px solid var(--line); }
+.geomap header h3 { margin: 0; font: 600 15px/1.3 var(--font-display); }
+.geomap header #gm-hint { flex: 1; text-align: right; }
+.geomap .gmap { position: relative; height: min(60vh, 460px); background: var(--tile); }
+.geomap .cross { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,.35); z-index: 500; pointer-events: none; }
+.geomap .cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--accent); }
+.geomap footer .col { display: grid; gap: 4px; min-width: 0; }
+.geomap footer .val { font-size: 12px; color: var(--fg-3); min-height: 15px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.geomap footer .val.unknown { color: var(--err); }
+.geomap .btn .ico { width: 15px; height: 15px; vertical-align: -3px; margin-right: 4px; }
+.geomap .btn.hot { background: var(--err); color: #fff; border-color: transparent; }
+.geomap .btn:disabled, .cfo-dlg .btn[disabled] { opacity: .45; cursor: default; }
+.geomap .confirm, .ed .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, var(--err) 10%, var(--bg)); font-size: 13.5px; }
+.geomap .confirm span, .ed .confirm span { flex: 1; }
+.ed .confirm { position: sticky; bottom: 58px; z-index: 2; border-top: 1px solid var(--line); }
+.leaflet-control-attribution { font-size: 10px; }
+/* location: one primary field, the other part derived and shown as a chip below; errors in red */
+.ed .cardform .field.loc.err input { color: var(--err); border-bottom-color: color-mix(in srgb, var(--err) 55%, transparent); }
+.ed .cardform .locsub { padding: 4px 0 2px 26px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ed .cardform .locsub:empty { display: none; }
+.ed .cardform .locsub .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--bg); max-width: 100%; }
+.ed .cardform .locsub .chip .ico { width: 12px; height: 12px; color: var(--fg-3); flex: none; }
+.ed .cardform .locsub .chip b { all: unset; cursor: pointer; color: var(--fg-3); padding-left: 2px; }
+.ed .cardform .locsub .chip b:hover { color: var(--err); }
+.ed .cardform .locsub .chip.ghost { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); border-radius: 999px; padding: 2px 8px; font-size: 12px; color: var(--accent); }
+.ed .cardform .locsub .chip.ghost .ico { color: var(--accent); }
+.ed .cardform .locsub .chip.err { color: var(--err); border-color: var(--err); }
+.ed .cardform .locsub .errtxt { font-size: 11.5px; color: var(--err); }
+.ed .cardform .act.map.hot { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+.geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
+/* view mode: the address in lines (split at commas), a line too long for the card shrinks its text */
+.ed .cardform .addr-lines { font-size: 15px; line-height: 1.35; padding: 2px 0; }
+.ed .cardform .addr-lines .ln { display: block; white-space: nowrap; overflow: hidden; }
+.ed .cardform .addr-lines .ln.wrap { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.geomap footer .col .val { max-width: 320px; }

@@ -1,0 +1,112 @@
+/* css/grid.css — month grid, timeline ruler, desktop frame, the table views' add button, contacts panels, multi-day bars,
+   event and tile typography */
+/* Calendar month grid */
+.cal { grid-template-columns: 1fr; padding: 0 var(--pad) var(--pad); gap: var(--gap); display: none; min-width: 0; }
+.month { display: grid; grid-template-rows: auto; grid-auto-rows: 1fr; border: 0; background: transparent; border-radius: 0; gap: 4px; overflow: visible; grid-template-columns: repeat(7, minmax(0, 1fr)); } /* minmax(0, …): a nowrap event title never widens the grid */
+.month .dow { padding: 6px 4px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; background: transparent; border: 0; color: var(--fg-3); font-weight: 600; }
+.day { display: flex; flex-direction: column; gap: 2px; overflow: visible; background: var(--tile); border: 0; border-radius: 10px; padding: 6px; min-height: 86px; position: relative; min-width: 0; }
+.day > * { flex: none; }
+.day:nth-child(7n+7) { border-right: 0; }
+.day .n { color: var(--fg-2); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 500; }
+.ev { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.more { font-size: 11px; color: var(--fg-3); padding-left: 5px; position: relative; display: inline-flex; }
+@media (max-width: 720px) {
+  .ev { display: none; }
+  .day .dots { display: flex; gap: 3px; justify-content: center; }
+  .day .dots i { width: 5px; height: 5px; border-radius: 50%; }
+  .agenda { display: block; }
+}
+@media (min-width: 721px) { .day .dots { display: none; } .agenda { display: none; } }
+.agenda { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+.agenda h2 { font-size: 13px; margin: 0 0 6px; color: var(--fg-2); }
+.agenda li { list-style: none; display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.agenda ul { margin: 0; padding: 0; }
+.agenda time { color: var(--fg-2); font-variant-numeric: tabular-nums; }
+
+/* Timeline ruler (Immich-like) */
+@media (min-width: 900px) {
+  .cal { grid-template-columns: 1fr 64px; }
+}
+
+/* Desktop frame */
+@media (min-width: 900px) {
+  .app { grid-template-rows: auto 1fr; grid-template-columns: 1fr; }
+  .nav { display: flex; }
+  .tabbar { display: none; }
+}
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.fab { position: fixed; right: 18px; bottom: 74px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-size: 28px; line-height: 52px; text-align: center; box-shadow: var(--shadow); border: 0; }
+@media (min-width: 900px) { .fab { display: none; } }
+/* table views (contacts, tasks): the round + is how a new entry is added, on every width, bottom left */
+.fab.fab-add { display: grid; place-items: center; padding: 0; line-height: 1; left: 18px; right: auto; z-index: 30; width: 44px; height: 44px; font-size: 0;
+  background: linear-gradient(var(--accent-fg), var(--accent-fg)) center / 16px 2px no-repeat, linear-gradient(var(--accent-fg), var(--accent-fg)) center / 2px 16px no-repeat, var(--accent); } /* z-index: above the sticky table cells, below the dialogs (45); the + is drawn, the glyph sat ~3px low in its line box */
+@media (min-width: 900px) { .fab.fab-add { bottom: 18px; } }
+.contacts:not(.view-table) #ct-fab { display: none; }
+/* the contacts table has no editor beside it: + opens the editor pane as a dialog over the table,
+   with the calendar dialog's backdrop */
+.contacts.dlg::before { content: ""; position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); }
+.view-table.contacts.dlg .detail { display: block !important; position: fixed; inset: 16px; margin: auto; z-index: 46; width: min(900px, calc(100% - 32px)); height: fit-content; max-height: calc(100dvh - 32px); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+.contacts.dlg #ct-cancel { display: inline-grid !important; }
+/* one card of the contact editor, opened from a table cell */
+.view-table.contacts.dlg.solo .detail { width: min(560px, calc(100% - 32px)); }
+#ctform.solo .cards { columns: 1; }
+#ctform.solo .card:not(.solo-on), #ctform.solo .addmenu, #ctform.solo #ct-delete, #ctform.solo #ct-vcf, #ctform.solo .names small { display: none !important; }
+#ctform.solo .names input { pointer-events: none; border-bottom-color: transparent; }
+.sheet td.ctnote { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Contacts */
+.contacts { gap: var(--gap); display: grid; padding: 0 var(--pad) var(--pad); grid-template-areas: "list"; grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.list li { display: grid; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.list li:first-child { border-top: 0; }
+.list .av { width: 36px; height: 36px; display: grid; place-items: center; font-weight: 600; font-size: 13px; color: #fff; background: var(--c5); border-radius: 10px; }
+.list .name { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.list .sub { color: var(--fg-2); font-size: 13px; display: flex; flex-wrap: wrap; gap: 0 4px; }
+.list .tag { font-size: 11px; color: var(--fg-2); background: var(--bg-2); border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; } .view-table .list { display: none; }
+.detail { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--pad); display: none; }
+@media (min-width: 1100px) { .contacts { align-items: start; } .contacts > .list { grid-area: list; } }
+.detail .field { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; align-items: center; }
+.detail .field span:first-child { color: var(--fg-3); }
+.detail input { font: inherit; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--fg); width: 100%; }
+.detail input:focus { outline: 0; border-bottom-color: var(--accent); }
+.detail .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+
+/* --- Multi-day events: one continuous bar across tiles. Geometry: tile padding 6px, gap 4px.
+   A segment owns its tile's content width plus the gap to its right (start/mid: -10px margin);
+   mid/end begin exactly at their tile's edge (-6px), so segments never overlap. At every tile
+   transition the mask dips symmetrically: 10px ramp → --dip across the gap → 10px ramp back. --- */
+.mflip { position: relative; overflow: hidden; min-width: 0; min-height: 0; } /* page turn (app.js `monthFlip`): a column of month grids glides past the window */
+.mflip .mcol { position: absolute; left: 0; top: 0; width: 100%; display: grid; pointer-events: none; }
+.ev.span { position: relative; border-radius: 0; max-width: none; --dip: rgba(0,0,0,.5); -webkit-mask-image: var(--edge); mask-image: var(--edge); } /* max-width: the .ev cap below would freeze the width and shift the fades off the edges */
+.ev.span.start { border-radius: 6px 0 0 6px; margin-right: -10px; padding-right: 10px; --edge: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), var(--dip) calc(100% - 4px), var(--dip) 100%); }
+.ev.span.mid   { margin-left: -6px; margin-right: -10px; padding-left: 6px; padding-right: 10px; color: transparent; --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 calc(100% - 14px), var(--dip) calc(100% - 4px), var(--dip) 100%); }
+.ev.span.end   { border-radius: 0 6px 6px 0; margin-left: -6px; padding-left: 6px; color: transparent; --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 100%); }
+/* row break: a start/mid segment in the last column continues in the next row → it ends at the
+   tile edge with the same dip as a tile transition (no rounded corner), and the first segment of
+   the next row repeats the title so the bar stays identifiable. nth-child counts the 7 .dow
+   header cells too, so 7n+7 = Sunday and 7n+1 = Monday. */
+.day:nth-child(7n+7) .ev.span.start, .day:nth-child(7n+7) .ev.span.mid { margin-right: -6px; padding-right: 6px; } /* runs to the tile edge, like the next row's first segment starts there */
+.day:nth-child(7n+7) .ev.span.start { --edge: linear-gradient(90deg, #000 0, #000 calc(100% - 10px), var(--dip) 100%); }
+.day:nth-child(7n+7) .ev.span.mid   { --edge: linear-gradient(90deg, var(--dip) 0, #000 10px, #000 calc(100% - 10px), var(--dip) 100%); }
+.day:nth-child(7n+1) .ev.span.mid, .day:nth-child(7n+1) .ev.span.end { color: var(--fg); padding-left: 12px; } /* 6px margin compensation + the normal 6px inset */
+@media (max-width: 720px) { .ev.span { display: none; } }
+
+/* Apple typography + Immich-like tiles; events as colour bar + text, all-day as tinted bar. */
+/* tiles */
+.day.other { background:var(--tile-other); color:var(--fg-3); }
+/* controls — Apple segmented */
+.seg button { border-radius:6px; padding:5px 10px; }
+.seg button[aria-pressed=true] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(0,0,0,.18); }
+html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
+.btn-primary { color: var(--accent-fg); border-color: transparent; background:var(--accent); }
+.agenda, .list, .detail { border-color:var(--line); background:var(--bg); }
+
+.ev { font-size: 12.5px; line-height: 1.35; background: transparent !important; color: var(--fg); border-left: 3px solid var(--c1); border-radius: 3px; padding: 1px 4px 1px 6px; font-weight: 400; }
+/* all-day events: full tinted bar (no left border), colour dot kept for the legend */
+.ev.allday { border-left: 0; padding-left: 6px; background: color-mix(in srgb, var(--c, var(--c1)) 20%, transparent) !important; }
+/* weekend tiles, minimally darker */
+.day:nth-child(7n+6), .day:nth-child(7n+7) { background: var(--tile-weekend); }
+.day.other:nth-child(7n+6), .day.other:nth-child(7n+7) { background: var(--tile-other); }
+.day.today { box-shadow: inset 0 0 0 1.5px var(--today); }
+.day.today .n { background: transparent; color: var(--today); font-weight: 700; }

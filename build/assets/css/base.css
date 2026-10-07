@@ -1,0 +1,19 @@
+/* css/base.css — style.css starts here (parts joined in src/bundle.rs order = cascade order): the light and the dark
+   scheme's custom properties, resets, buttons. Mobile-first, CSS grid, no framework. */
+:root {
+  --font: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; --font-display: var(--font);
+  --radius: 12px; --radius-s: 8px; --gap: 10px; --pad: 16px; --shadow: 0 1px 2px rgba(0,0,0,.05);
+  --bg: #fff; --bg-2: #f5f5f7; --bg-3: #e9e9ee; --fg: #1d1d1f; --fg-2: #6e6e73; --fg-3: #a1a1a6; --line: #e6e6ea; --tile: #f8f8fa; --tile-other: #fcfcfd; --tile-weekend: #f2f2f5;
+  --accent: #0a84ff; --accent-fg: #fff; --today: #ff3b30;
+  --c1: #0a84ff; --c2: #30b46c; --c3: #ff3b30; --c4: #ff9f0a; --c5: #af52de; --c6: #32ade6;
+  --ok: #30b46c; --warn: #ff9f0a; --err: #ff3b30; /* states, the same in both schemes (unlike --c2/--c4/--today) */
+}
+/* the dark scheme: data-scheme=dark on <html> (theme.js, layout.html) */
+html[data-scheme=dark] { --bg:#0f1115; --bg-2:#171a20; --bg-3:#21252d; --fg:#f2f2f4; --fg-2:#a4abb7; --fg-3:#6f7783; --line:#22262e; --tile:#171a20; --tile-other:#121418; --tile-weekend:#14171c;
+  --accent:#4f7cff; --accent-fg:#fff; --today:#ff453a; --shadow:none; --c1:#5b8cff; --c2:#34c48f; --c3:#ff6b6b; --c4:#ffb340; --c5:#bf7dff; --c6:#4cc2f0; }
+* { box-sizing: border-box; scrollbar-width: none; }
+html, body { margin: 0; height: 100%; }
+body { font: 15px/1.45 var(--font); color: var(--fg); background: var(--bg); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+button, .btn { font: inherit; color: var(--fg); border: 1px solid var(--line); padding: 6px 12px; cursor: pointer; border-radius: 8px; background: var(--bg-2); }
+.icon-btn { padding: 6px 8px; min-width: 34px; }

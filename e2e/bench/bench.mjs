@@ -348,11 +348,16 @@ async function clientPhase(sides, proc, M) {
 function staticSizes(bin, m) {
   m['size.binary'] = [[fs.statSync(bin).size]];
   let total = 0;
-  for (const f of fs.readdirSync(path.join(REPO, 'build', 'assets')).sort()) {
-    const n = fs.statSync(path.join(REPO, 'build', 'assets', f)).size;
-    total += n;
-    if (/^(app\.js|style\.css|history\.js|history\.css|icons\.svg)$/.test(f)) m[`size.src.${f}`] = [[n]];
+  const dir = path.join(REPO, 'build', 'assets'), src = {};
+  for (const f of fs.readdirSync(dir, { recursive: true }).sort()) {
+    const st = fs.statSync(path.join(dir, f));
+    if (!st.isFile()) continue;
+    total += st.size;
+    // app.js and style.css are joined from their parts in js/ and css/ (build/src/bundle.rs)
+    const name = { js: 'app.js', css: 'style.css' }[f.split(path.sep)[0]] || f;
+    if (/^(app\.js|style\.css|history\.js|history\.css|icons\.svg)$/.test(name)) src[name] = (src[name] || 0) + st.size;
   }
+  for (const [name, n] of Object.entries(src)) m[`size.src.${name}`] = [[n]];
   m['size.src.total'] = [[total]];
 }
 

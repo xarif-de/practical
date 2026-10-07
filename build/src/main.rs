@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 mod auth;
+mod bundle;
 mod clock;
 mod config;
 mod csrf;

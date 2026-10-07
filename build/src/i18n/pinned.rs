@@ -90,7 +90,8 @@ fn used_keys() -> BTreeMap<String, String> {
         }
     }
     for (path, text) in files("assets", "js") {
-        if path.ends_with("app.js") {
+        // app.js = the parts in assets/js/ (src/bundle.rs)
+        if path.contains("/assets/js/") {
             for call in ["tr('", "tr(\"", "tr(`"] {
                 for k in literals_after(&text, call) {
                     add(k, &path);

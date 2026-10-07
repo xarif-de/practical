@@ -1,3 +1,4 @@
+{#- The page frame of every page: <head> (assets, csrf, scheme), top bar, navigation, toast; blocks title/head/filter/content -#}
 {% import "macros.html" as m %}{% let nav = [("/calendar", "calendar", ctx.t("nav-calendar")), ("/contacts", "contacts", ctx.t("nav-contacts")), ("/tasks", "tasks", ctx.t("nav-tasks")), ("/history", "history", ctx.t("nav-history")), ("/settings", "settings", ctx.t("nav-settings"))] %}{# the five pages: top bar (symbols) and tab bar (symbol + label) #}<!doctype html>
 <html lang="{{ ctx.lang }}" data-pref-scheme="{{ ctx.scheme }}"{% if ctx.scheme != "auto" %} data-scheme="{{ ctx.scheme }}"{% endif %}>
 <head>
