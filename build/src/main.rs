@@ -90,7 +90,11 @@ async fn wait_for_rustical(url: &str) {
 async fn healthz(axum::extract::State(state): axum::extract::State<SharedState>) -> (axum::http::StatusCode, String) {
     match sqlx::query("SELECT 1").execute(&state.db).await {
         Ok(_) => (axum::http::StatusCode::OK, "ok".into()),
-        Err(e) => (axum::http::StatusCode::SERVICE_UNAVAILABLE, format!("db: {e}")),
+        // public (the kubelet's probe needs no login): the reason only in the log
+        Err(e) => {
+            warn!("healthz: {e}");
+            (axum::http::StatusCode::SERVICE_UNAVAILABLE, "db unavailable".into())
+        }
     }
 }
 
@@ -140,6 +144,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::MemoryStore) 
         .merge(routes::history::router())
         .merge(routes::settings::router())
         .merge(routes::api::router())
+        .route_layer(axum::middleware::from_fn(error::catch_panic))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), ctx::localize_errors))
         .route_layer(axum::middleware::from_fn(auth::require_user));
 
@@ -162,12 +167,21 @@ fn build_router_with(state: &SharedState, session_store: sessions::MemoryStore) 
         .layer(axum::middleware::map_response(move |mut r: axum::response::Response| {
             let csp = csp.clone();
             async move {
-                if r.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/html")) {
+                let ct = r.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+                let (html, json) = (ct.starts_with("text/html"), ct.starts_with("application/json"));
+                if html {
                     r.headers_mut().entry(header::CONTENT_SECURITY_POLICY).or_insert(csp);
+                }
+                // pages and JSON carry personal data: never kept by a shared cache, revalidated before a browser
+                // reuses them (`no-cache`, not `no-store`: the back/forward cache stays; assets set their own)
+                if html || json {
+                    r.headers_mut().entry(header::CACHE_CONTROL).or_insert(axum::http::HeaderValue::from_static("private, no-cache"));
                 }
                 r
             }
         }))
+        // the pages outside `protected` (login, OIDC, assets) and the middleware above: unlocalized
+        .layer(axum::middleware::from_fn(error::catch_panic))
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone()))
 }
@@ -189,6 +203,7 @@ async fn serve() -> Result<(), String> {
         return Err(format!("{} is not a migrated RustiCal database", config.db_path));
     }
     db::migrate(&db).await.map_err(|e| format!("migrations: {e}"))?;
+    db::check_schema(&db).await?;
 
     let (cal_tx, _cal_rx) = tokio::sync::mpsc::channel(64);
     let (ab_tx, _ab_rx) = tokio::sync::mpsc::channel(64);
@@ -213,6 +228,7 @@ async fn serve() -> Result<(), String> {
         history: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),
+        guards: Default::default(),
         db,
         config,
     });
@@ -225,12 +241,42 @@ async fn serve() -> Result<(), String> {
 
     let listener = tokio::net::TcpListener::bind(&state.config.bind).await.map_err(|e| format!("bind {}: {e}", state.config.bind))?;
     info!("practical {} serving on http://{} (public {})", env!("CARGO_PKG_VERSION"), state.config.bind, state.config.public_url);
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
-        .map_err(|e| e.to_string())
+    let stop = state.clone();
+    let server = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(async move {
+        stop_signal().await;
+        info!("stopping: no new connections, open requests finish (at most {} s)", SHUTDOWN_GRACE.as_secs());
+        stop.guards.shutdown.send_replace(true);
+    });
+    let stopping = state.guards.stopping();
+    let r = tokio::select! {
+        r = server => r.map_err(|e| e.to_string()),
+        () = async { stopping.await; tokio::time::sleep(SHUTDOWN_GRACE).await } => {
+            warn!("requests still open after {} s: stopping anyway", SHUTDOWN_GRACE.as_secs());
+            Ok(())
+        }
+    };
+    // the last WAL frames into the database file; every write was committed before (sessions too)
+    state.db.close().await;
+    info!("stopped");
+    r
+}
+
+/// Inside the pod's terminationGracePeriodSeconds (30, kubernetes/rustical), with room for the DB close.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(20);
+
+/// SIGTERM (Kubernetes stopping the pod; PID 1 in the image, where the kernel drops a signal without a
+/// handler, so the pod used to wait the full grace period for SIGKILL) or Ctrl-C.
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("SIGTERM handler");
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 #[tokio::main]

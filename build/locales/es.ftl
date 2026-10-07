@@ -123,6 +123,7 @@ flash-not-found = No encontrado.
 flash-exists = Eso ya existe.
 flash-bad-data = Los datos no son válidos: { $detail }
 flash-failed = No ha funcionado: los detalles están en el registro del servidor.
+flash-busy = El servidor está ocupado en este momento: vuelve a intentarlo enseguida.
 err-window-too-large = El periodo es demasiado largo.
 err-too-many-changes = Demasiados cambios a la vez.
 err-colour-target = Destino de color desconocido.

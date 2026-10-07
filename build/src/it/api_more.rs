@@ -180,6 +180,7 @@ async fn push_with_vapid() {
         history: Default::default(),
         vapid: Some(rustical_dav_push::VapidKeypair::from_pem(&pem).unwrap()),
         started_at: app.state.started_at,
+        guards: Default::default(),
     });
     let router = crate::build_router(&state).unwrap();
     app.user("alice", "Alice").await;

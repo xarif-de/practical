@@ -82,9 +82,29 @@ impl AppError {
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
             Self::Ical(e) => return Some(Msg { key: "flash-bad-data", args: vec![("detail", e.to_string())] }),
             Self::Unauthorized => return None,
+            _ if self.is_busy() => "flash-busy",
             Self::Store(_) | Self::Db(_) | Self::Session(_) | Self::Internal(_) => "flash-failed",
         };
         Some(Msg { key, args: vec![] })
+    }
+
+    /// The database was busy (another writer held the lock past sqlx's 5 s busy timeout, or the pool had no
+    /// free connection in time): worth a retry, answered 503 + Retry-After instead of a generic 500.
+    pub fn is_busy(&self) -> bool {
+        fn sqlx_busy(e: &sqlx::Error) -> bool {
+            match e {
+                // SQLITE_BUSY (5) / SQLITE_LOCKED (6) and their extended codes (low byte)
+                sqlx::Error::Database(d) => d.code().and_then(|c| c.parse::<i32>().ok()).is_some_and(|c| matches!(c & 0xff, 5 | 6)),
+                sqlx::Error::PoolTimedOut => true,
+                _ => false,
+            }
+        }
+        match self {
+            Self::Db(e) => sqlx_busy(e),
+            // RustiCal's store wraps its sqlx errors in anyhow (rustical_store_sqlite error.rs)
+            Self::Store(rustical_store::Error::Other(a)) => a.downcast_ref::<sqlx::Error>().is_some_and(sqlx_busy),
+            _ => false,
+        }
     }
 
     /// The message for a user in `lang` (`user_text`, else the error's own text).
@@ -101,6 +121,7 @@ impl IntoResponse for AppError {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::BadRequest(_) | Self::Ical(_) => StatusCode::BAD_REQUEST,
             Self::Conflict(_) | Self::Store(rustical_store::Error::AlreadyExists) => StatusCode::CONFLICT,
+            _ if self.is_busy() => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status.is_server_error() {
@@ -109,7 +130,16 @@ impl IntoResponse for AppError {
             tracing::debug!("{self}");
         }
         let text = self.user_text();
-        let mut r = (status, self.to_string()).into_response();
+        // a server error's own text (SQL, file paths, upstream URLs) stays in the log: every client — app
+        // tokens and anonymous ones too, which `ctx::localize_errors` leaves alone — reads the English message
+        let body = match (&text, status.is_server_error()) {
+            (Some(t), true) => t.to_string(),
+            _ => self.to_string(),
+        };
+        let mut r = (status, body).into_response();
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            r.headers_mut().insert(axum::http::header::RETRY_AFTER, axum::http::HeaderValue::from_static("2"));
+        }
         if let Some(t) = text {
             r.extensions_mut().insert(t);
         }
@@ -118,3 +148,19 @@ impl IntoResponse for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+/// Middleware: a panicking handler answers 500 with the generic message (`flash-failed`, localized like any
+/// error inside `ctx::localize_errors`) instead of dropping the connection — which a browser reports as
+/// "Failed to fetch" and Traefik as 502. The panic and the request line go to the log; the client reads
+/// nothing of them. Covers the handler and the middleware inside this layer, not a streaming body.
+pub async fn catch_panic(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    use futures_util::FutureExt;
+    let line = format!("{} {}", req.method(), req.uri().path());
+    match std::panic::AssertUnwindSafe(next.run(req)).catch_unwind().await {
+        Ok(r) => r,
+        Err(p) => {
+            let msg = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default();
+            AppError::Internal(format!("{line}: a handler panicked: {msg}")).into_response()
+        }
+    }
+}

@@ -233,3 +233,45 @@ pub async fn rustical_schema_present(db: &SqlitePool) -> Result<bool, sqlx::Erro
         .get("n");
     Ok(n == 4)
 }
+
+/// The `practical_*` schema as the code expects it: every table and column a replay of `MIGRATIONS` on an
+/// empty database creates, and no migration newer than this binary. A start against anything else is
+/// refused — on 2026-10-05 a hand-applied change (table prefix, a dropped column) left a schema the
+/// migrations did not describe, and that showed only as 500s at runtime while /healthz stayed green.
+pub async fn check_schema(db: &SqlitePool) -> Result<(), String> {
+    let newest = MIGRATIONS.last().map_or(0, |m| m.0);
+    let applied: Option<i64> = sqlx::query_scalar("SELECT max(version) FROM practical_migrations").fetch_one(db).await.map_err(|e| e.to_string())?;
+    if let Some(v) = applied.filter(|v| *v > newest) {
+        return Err(format!("the database has practical migration {v}, this binary knows up to {newest} (an older image on a newer database?) — refusing to start"));
+    }
+    let mut expected = <sqlx::SqliteConnection as sqlx::Connection>::connect("sqlite::memory:").await.map_err(|e| e.to_string())?;
+    for (_, sql) in MIGRATIONS {
+        sqlx::raw_sql(*sql).execute(&mut expected).await.map_err(|e| e.to_string())?;
+    }
+    let want = practical_columns(&mut expected).await.map_err(|e| e.to_string())?;
+    let mut live = db.acquire().await.map_err(|e| e.to_string())?;
+    let have = practical_columns(&mut *live).await.map_err(|e| e.to_string())?;
+    let mut diff = vec![];
+    for (col, def) in &want {
+        match have.get(col) {
+            None => diff.push(format!("missing {}.{}", col.0, col.1)),
+            Some(d) if d != def => diff.push(format!("{}.{} is {d}, expected {def}", col.0, col.1)),
+            Some(_) => {}
+        }
+    }
+    diff.extend(have.keys().filter(|c| !want.contains_key(*c)).map(|c| format!("unexpected {}.{}", c.0, c.1)));
+    if diff.is_empty() { Ok(()) } else { Err(format!("the practical_* schema differs from its migrations — refusing to start: {}", diff.join("; "))) }
+}
+
+/// (table, column) → "type notnull=… default=… pk=…" of every `practical_*` table but the migration log.
+async fn practical_columns(conn: &mut sqlx::SqliteConnection) -> Result<std::collections::BTreeMap<(String, String), String>, sqlx::Error> {
+    let tables: Vec<String> = sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'practical\\_%' ESCAPE '\\' AND name != 'practical_migrations'").fetch_all(&mut *conn).await?;
+    let mut out = std::collections::BTreeMap::new();
+    for t in tables {
+        for r in sqlx::query("SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info(?)").bind(&t).fetch_all(&mut *conn).await? {
+            let def = format!("{} notnull={} default={:?} pk={}", r.get::<String, _>("type"), r.get::<i64, _>("notnull"), r.get::<Option<String>, _>("dflt_value"), r.get::<i64, _>("pk"));
+            out.insert((t.clone(), r.get::<String, _>("name")), def);
+        }
+    }
+    Ok(out)
+}

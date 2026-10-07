@@ -42,7 +42,8 @@ async fn changes(State(state): State<SharedState>, user: Principal) -> Sse<impl 
             }
         }
     });
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    // ends when the server stops: an open stream would hold the graceful shutdown until SIGKILL
+    Sse::new(stream.take_until(state.guards.stopping())).keep_alive(KeepAlive::default())
 }
 
 /// Broadcast receiver as a stream. `unfold` keeps the pending `recv()` future between polls, so its
@@ -58,9 +59,11 @@ fn tokio_stream_wrapper(rx: tokio::sync::broadcast::Receiver<crate::state::Chang
     })
 }
 
+/// The handlers taking this have a principal; with a Basic header and no session user it came from a valid
+/// app token (`csrf::token_authenticated`).
 async fn check_csrf(session: &Session, headers: &HeaderMap) -> AppResult<()> {
     let has_basic = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("Basic "));
-    if has_basic {
+    if has_basic && session.get::<String>(crate::ctx::SESSION_USER).await?.is_none() {
         return Ok(());
     }
     csrf::check(session, &csrf::header_token(headers)).await

@@ -7,6 +7,7 @@ mod assets;
 mod auth;
 mod caches;
 mod history;
+mod http;
 mod pages;
 pub mod seed;
 mod sessions;

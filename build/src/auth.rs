@@ -149,7 +149,7 @@ pub async fn post_login(State(state): State<SharedState>, session: Session, Form
             Ok(Redirect::to(&target).into_response())
         }
         None => {
-            tracing::warn!("failed password login as {}", f.username);
+            tracing::warn!("failed password login as {:?}", f.username); // Debug: a typed CR/LF cannot forge log lines
             Ok(Redirect::to(&format!("/login?error=1&redirect_uri={}", urlenc(&target))).into_response())
         }
     }

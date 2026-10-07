@@ -150,6 +150,7 @@ impl TestApp {
             history: Default::default(),
             vapid: None,
             started_at: chrono::DateTime::from_timestamp(1_791_964_800, 0).unwrap(),
+            guards: Default::default(),
             db,
             config,
         });
@@ -368,6 +369,11 @@ impl Client {
         }
         let resp = self.router.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
         (resp.status(), resp.headers().clone())
+    }
+
+    /// The Cookie header this client sends.
+    pub fn cookie_header(&self) -> String {
+        self.cookies.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; ")
     }
 
     /// A cookie the page's script set (`document.cookie`).

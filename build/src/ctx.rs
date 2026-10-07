@@ -4,7 +4,6 @@ use crate::i18n::negotiate;
 use crate::state::SharedState;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::response::IntoResponse;
 use fluent_bundle::FluentValue;
 use rustical_store::auth::Principal;
 use serde::{Deserialize, Serialize};
@@ -197,7 +196,10 @@ pub async fn localize_errors(axum::extract::State(state): axum::extract::State<S
         None => None,
     };
     let lang = stored.unwrap_or_else(|| negotiate(accept.as_deref(), &state.config.default_lang));
-    (res.status(), text.render(&state.i18n, &lang)).into_response()
+    // the answer's other headers stay (Retry-After of a 503, Cache-Control)
+    let (mut parts, _) = res.into_parts();
+    parts.headers.remove(axum::http::header::CONTENT_LENGTH);
+    axum::response::Response::from_parts(parts, axum::body::Body::from(text.render(&state.i18n, &lang)))
 }
 
 pub async fn set_flash(session: &Session, kind: &str, text: String) {
