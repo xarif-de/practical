@@ -11,7 +11,7 @@ browser ─HTTP─► main.rs build_router: TraceLayer → catch_panic → CSP +
      (sessions::DbStore) → sessions::activity (expiry extension) → rustical AuthenticationLayer (principal from
      session or HTTP Basic app token) → csrf::origin_guard → router
        ├─ auth::router (/login, /login/oidc*, /logout), routes::dev (/dev/reload, dev only), / → /calendar
-       └─ protected: auth::require_user → ctx::localize_errors → error::catch_panic → routes::{calendar,contacts,tasks,history,settings,api}
+       └─ protected: auth::require_user → ctx::localize_errors → error::catch_panic → routes::{calendar,contacts,tasks,history,settings,editor,more,api}
 handler: extractors extract::{Path,Query,Json,Form} (validated; a rejection names the field) · csrf::{Token,TokenOrBasic} (after
   path, before body: bad token + bad body = 403) · routes::calendar::PageView(PageCtx, ViewCtx) → domain::* (no HTTP
   types) → RustiCal stores (rustical_store_sqlite: SqliteCalendarStore/AddressbookStore/PrincipalStore, AppState) +
@@ -142,7 +142,7 @@ No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
 |---|---|---|
 | views | render/, routes/calendar.rs, js/calendar.js | server-rendered; client swaps `?fragment=1`, refetches on SSE; `?week=<Monday>`/`?month=YYYY-MM` scroll; `date` shared by all views; tasks never show in the calendar (VEVENTs only); app frame = viewport, `.main` scrolls, toolbar sticky, scrollbars hidden |
 | view swipe | core.js `swipeViews` (+ `wheelAxis`/`wheelPages`), calendar/tasks/contacts/history.js | sideways wheel touch or touch swipe = click on the neighbouring view button (calendar: day…year only, no wrap); axis per touch (x iff > 2× vertical after 12 px); a horizontal scroller that can still move takes the whole touch; e2e functional/swipe.spec.mjs |
-| view slide | core.js `slide`, frame.css `pc-view` | every switch between a page's views (button, swipe, calendar back/forward among day…year) = same-document view transition of `.main` only (root not captured), transform-only 240 ms; none without the API or with reduced motion (all e2e suites); cost: e2e/perf/slide.spec.mjs |
+| view slide | core.js `slide`, frame.css `pc-view` | every switch between a page's views (button, swipe, calendar back/forward among day…year) = same-document view transition of `.main` only (root not captured; its toolbar with the view switch = `pc-bar`, shown at once), transform-only 240 ms; none without the API or with reduced motion (all e2e suites); cost: e2e/perf/slide.spec.mjs |
 | event editor | templates/editor.html, js/editor/*, domain/events/* | view mode behind a lock; cards only where data is; generated instances get the master's VALARMs (caldata builds none) |
 | status card | js/editor/status.js | TRANSP/CLASS defaults (OPAQUE/PUBLIC) shown as "default", unset stays unset; PRIORITY outside 1/5/9 keeps its number |
 | links/attachments | js/editor/links.js, events/props.rs | conference hosts → join card; RELATED-TO resolved to title+date; FMTTYPE/FILENAME/SIZE/FEATURE modelled, other params ride along |

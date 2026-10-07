@@ -96,10 +96,10 @@
   function markPicked() { $$('.stream .dayblock, .planner .c[data-date]', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date)); } // hoisted: wireItems calls it
   // the month grid and the year planner own the wheel: one touch of the trackpad (or one spin of a wheel) turns
   // exactly one page, however far it goes and however long its momentum runs (practical.wheelPages). The planner
-  // leaves the wheel to the page where that scrolls (a narrow window); a sideways touch belongs to the view switch below
+  // leaves the wheel to .main where that scrolls (a narrow or short window: its lower days); a sideways touch belongs to the view switch below
   const SLIDE = ['day', 'week', 'month', 'planner']; // the views of the switch, in its order: a change between them slides (load)
   const monthWheel = practical.wheelPages(shift);
-  const yearWheel = practical.wheelPages(shift, () => document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight);
+  const yearWheel = practical.wheelPages(shift, () => { const m = $('.main'); return m.scrollHeight > m.clientHeight + 1; }); // .main scrolls, never the document (frame.css)
   // a sideways swipe steps through day | week | month | year (practical.swipeViews), not into or out of the "more" views
   practical.swipeViews($('.main'), () => $$('.toolbar .seg > button[data-view]', root), bs => bs.findIndex(b => b.dataset.view === state.view));
   // page turn: the leaving grid, every month in between and the arriving grid form one column that

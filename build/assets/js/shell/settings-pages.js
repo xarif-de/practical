@@ -350,8 +350,7 @@
       $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = newName.value.trim(); if (n) openRule(n); });
       // a rule kept over a lost session (the editor's practical.keep → stash on this path): its editor loads at once and takes
       // the rule back itself (js/editor/wiring.js, unstash)
-      const kept = k => { try { const s = JSON.parse(sessionStorage['practical.stash.ed-' + k] || 'null'); return !!s && s.path === location.pathname; } catch (_) { return false; } };
-      const k0 = ['event', 'task'].find(kept);
+      const k0 = ['event', 'task'].find(k => practical.stashed('ed-' + k));
       if (k0) { scope = k0; segPress($(`#cat-scope button[data-scope="${k0}"]`)); if (location.hash !== '#categories') location.hash = '#categories'; editor(k0); }
       load();
     }

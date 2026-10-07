@@ -127,18 +127,18 @@
       };
     },
     /* a view switch slides: slide(dir, swap) runs swap() (the DOM change) inside a same-document view transition in
-       which `.main` (the page under the top bar: clipped there, toolbar included) leaves to one side and comes back
-       from the other — dir > 0: the view to the right in the switch (the old one goes left), < 0 mirrored, 0 none.
+       which `.main` (the page under the top bar, clipped there; its toolbar with the view switch is captured on its own
+       and shown at once, frame.css `pc-bar`) leaves to one side and comes back from the other — dir > 0: the view to the right in the switch (the old one goes left), < 0 mirrored, 0 none.
        Only transform on two snapshots, run by the compositor (frame.css `pc-view`); the root is not captured, so the
        rest of the page stays live and the attribute that turns the names on (html[data-slide]) is gone once it
        ends. Without the API or with prefers-reduced-motion, swap() runs at once. → updateCallbackDone (swap's
        errors reject it). A second switch during the slide skips the first to its end (the API's own rule). */
     slide: (dir, swap) => {
       const d = document.documentElement;
-      if (!dir || !document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { swap(); return Promise.resolve(); }
+      if (!dir || !document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { try { swap(); return Promise.resolve(); } catch (e) { return Promise.reject(e); } }
       d.dataset.slide = dir > 0 ? 'next' : 'prev';
       const t = slideT = document.startViewTransition(swap);
-      t.ready.catch(() => {}); t.finished.finally(() => { if (slideT === t) { slideT = null; delete d.dataset.slide; } });
+      t.ready.catch(() => {}); t.finished.finally(() => { if (slideT === t) { slideT = null; delete d.dataset.slide; } }).catch(() => {}); // a failed swap is told by updateCallbackDone
       return t.updateCallbackDone;
     },
     /* a sideways swipe switches the page's views: swipeViews(area, views, at, busy) — views() = the view switch's

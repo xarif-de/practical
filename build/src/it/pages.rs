@@ -294,4 +294,8 @@ async fn editor_fragment_per_kind_matches_its_page_behind_the_login() {
     c.post_form("/settings/tokens", &[("name", " ")]).await;
     c.get("/editor?kind=event").await.ok();
     c.get("/settings").await.ok().has("<div class=\"toast error\"");
+    // also past a rejected query (the query is read before the page context takes the flash)
+    c.post_form("/settings/tokens", &[("name", " ")]).await;
+    assert_eq!(c.get("/editor?kind=journal").await.status, StatusCode::BAD_REQUEST);
+    c.get("/settings").await.ok().has("<div class=\"toast error\"");
 }

@@ -67,7 +67,7 @@ struct EditorFragment {
     category_rules_json: String,
 }
 
-async fn fragment(State(state): State<SharedState>, user: Principal, session: Session, PageView(ctx, vc): PageView, Query(q): Query<EditorQuery>) -> AppResult<EditorFragment> {
+async fn fragment(State(state): State<SharedState>, user: Principal, session: Session, Query(q): Query<EditorQuery>, PageView(ctx, vc): PageView) -> AppResult<EditorFragment> {
     let kind = match q.kind {
         Kind::Event => "event",
         Kind::Task => "task",

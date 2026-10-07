@@ -64,7 +64,9 @@
     location.href = '/login?redirect_uri=' + encodeURIComponent(location.pathname + location.search + location.hash);
   };
   P.stash = (name, v) => { try { sessionStorage['practical.stash.' + name] = JSON.stringify({ path: location.pathname, t: Date.now(), v }); } catch (_) {} }; // too big for the storage: lost, as before
-  P.unstash = name => { const k = 'practical.stash.' + name; let s = null; try { s = JSON.parse(sessionStorage[k] || 'null'); delete sessionStorage[k]; } catch (_) {} return s && s.path === location.pathname && Date.now() - s.t < 864e5 ? s.v : null; };
+  const live = s => s && s.path === location.pathname && Date.now() - s.t < 864e5; // a stash is this page's and under a day old
+  P.stashed = name => { try { return !!live(JSON.parse(sessionStorage['practical.stash.' + name] || 'null')); } catch (_) { return false; } }; // unstash would give one back
+  P.unstash = name => { const k = 'practical.stash.' + name; let s = null; try { s = JSON.parse(sessionStorage[k] || 'null'); delete sessionStorage[k]; } catch (_) {} return live(s) ? s.v : null; };
 
   // leaving the page with unsaved work asks first (the browser's own question); practical.leaving: a navigation the app starts after a save
   const dirt = [];

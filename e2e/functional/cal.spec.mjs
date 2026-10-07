@@ -105,6 +105,20 @@ test('the year planner turns by the wheel, the extra views by prev/next; today i
   }
 });
 
+// a short window: the planner is taller than .main (the page's scroller), so the wheel scrolls to its lower days instead
+// of turning the year (calendar.js yearWheel's pass; the year turns by the title's picker there)
+test('year planner in a short window: the wheel scrolls it, the year stays', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 560 });
+  await open(page, cal('planner'));
+  expect(await page.evaluate(() => { const m = document.querySelector('.main'); return m.scrollHeight > m.clientHeight; })).toBe(true);
+  const bb = await page.locator('.planner').boundingBox();
+  await page.mouse.move(bb.x + bb.width / 2, bb.y + 60); // its top rows: the window ends above its middle
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => document.querySelector('.main').scrollTop)).toBeGreaterThan(0);
+  await expect(page.locator('#title')).toHaveText(/2026/);
+  expect(qp(page, 'date')).toBe(D);
+});
+
 test('picking a day: month cell, planner cell, ledger row, "+N more", today button', async ({ page }) => {
   await open(page, cal('month'));
   const day = page.locator('.v-month .day[data-date="2026-10-16"]');

@@ -231,14 +231,21 @@ test.describe('phone touch', () => {
   });
 });
 
+test('the browser\'s own back/forward swipe is off on every page (base.css): a sideways swipe never leaves the page', async ({ page }) => {
+  for (const u of [cal('month'), '/tasks', '/contacts', '/history', '/settings']) {
+    await page.goto(u);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorX), u).toBe('none');
+  }
+});
+
 // a view switch slides (core.js practical.slide, frame.css pc-view): the side follows the switch's order, for clicks and
 // swipes alike; nothing of it stays behind; with reduced motion (the suite's default) there is none
 test.describe('slide', () => {
   test.use({ reducedMotion: 'no-preference' });
   test.beforeEach(({ page }) => page.addInitScript(() => {
-    window.__slides = []; window.__anims = [];
+    window.__slides = []; window.__anims = []; window.__bars = [];
     const vt = Document.prototype.startViewTransition; // what runs once the transition is ready
-    if (vt) Document.prototype.startViewTransition = function (...a) { const t = vt.apply(this, a); t.ready.then(() => { window.__anims.push(document.getAnimations().filter(x => x.effect && x.effect.pseudoElement).map(x => `${x.animationName} ${x.effect.pseudoElement}`).sort().join(', ')); }, () => {}); return t; };
+    if (vt) Document.prototype.startViewTransition = function (...a) { const t = vt.apply(this, a); t.ready.then(() => { const bar = document.querySelector('.main .toolbar:has(.seg [aria-pressed])'); window.__bars.push(bar ? getComputedStyle(bar).viewTransitionName : 'no toolbar'); window.__anims.push(document.getAnimations().filter(x => x.effect && x.effect.pseudoElement).map(x => `${x.animationName} ${x.effect.pseudoElement}`).sort().join(', ')); }, () => {}); return t; };
     new MutationObserver(() => { const v = document.documentElement.dataset.slide; if (v) window.__slides.push(v); }).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-slide'] }); // the document: an init script runs before <html> exists
   }));
   const slides = page => page.evaluate(() => window.__slides);
@@ -266,6 +273,8 @@ test.describe('slide', () => {
     await expect(calView(page)).toHaveAttribute('data-view', 'month');
     await clean(page);
     expect(await slides(page)).toEqual(['prev', 'next', 'next', 'prev']);
+    // the toolbar with the view switch is its own capture (pc-bar): it does not slide (no animation names it, above)
+    expect(await page.evaluate(() => window.__bars)).toEqual(['pc-bar', 'pc-bar', 'pc-bar', 'pc-bar']);
   });
   test('tasks, contacts, history: the button and the swipe slide; the same view again does not', async ({ page }) => {
     await page.goto('/tasks?view=groups&back=all');
@@ -291,6 +300,8 @@ test.describe('slide', () => {
     await expect(page.locator('.hxc-list')).toBeVisible();
     await clean(page);
     expect(await slides(page)).toEqual(['next']);
+    expect(await page.evaluate(() => [...new Set(window.__bars)])).toEqual(['pc-bar']); // the view switch stays, on every page
+    expect(await page.evaluate(() => window.__anims.every(a => !a.includes('pc-bar')))).toBe(true);
   });
   test('reduced motion: no slide', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });

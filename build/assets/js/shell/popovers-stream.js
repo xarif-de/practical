@@ -1,6 +1,6 @@
 // js/shell/popovers-stream.js — part of the shell IIFE (src/bundle.rs; shares its scope): user menu, popovers kept on screen (practical.fitPop), "/" hotkey,
 // the live change stream (`rustical:change`)
-  // user menu: click toggles (hover works via CSS, touch needs the click)
+  // popovers: a click toggles (.click ones open only so; the others also on hover/focus, chrome.css)
   $$('.filter > button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.parentElement.classList.toggle('open'); }));
   document.addEventListener('click', e => { if (!e.target.closest('.filter')) $$('.filter.open').forEach(f => f.classList.remove('open')); });
   // Escape closes an open popover (a click-only one has no hover to leave) and gives the focus back to its button
