@@ -27,7 +27,7 @@ a11y('tasks: groups, table, board', async (page, check) => {
   }
 });
 
-a11y('settings: home, colours, collections, a calendar', async (page, check) => {
+a11y('settings: home, colours, collections, a calendar, groups and the typed question', async (page, check) => {
   await go(page, '/settings', '.set');
   await check('set-home');
   for (const [hash, name] of [['#colors', 'set-colors'], ['#collections', 'set-collections'], ['#cal-alice-5eed0000-0000-4000-8000-000000000001', 'set-cal']]) {
@@ -35,6 +35,10 @@ a11y('settings: home, colours, collections, a calendar', async (page, check) => 
     await page.locator(`section.page${hash}`).waitFor();
     await check(name);
   }
+  await page.goto('/settings#groups');
+  await page.locator('#groups details.danger-zone summary').first().click();
+  await page.locator('.ask .ask-type').waitFor();
+  await check('set-groups-ask'); // the settings page under it: the groups page
 });
 
 a11y('history: map and list, the login page', async (page, check) => {
