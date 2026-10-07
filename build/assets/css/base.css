@@ -9,17 +9,17 @@
   --ok: #22804d; --warn: #ff9f0a; --err: #de0c00; /* states; dark keeps the brighter --ok/--err */
   /* light twins that reach WCAG AA 4.5:1 (axe colour-contrast, 2026-10-07): a palette colour as text on the page and on
      its own 12-18 % tint (-text), under white initials (-ink, the avatar rule below), --accent as text on its own 14 %
-     tint (--accent-chip); dark sets each to the colour itself. --today-tint: the day ledger's today row keeps the tint of
+     tint (--accent-chip; #0067ce was 4.27:1 on a settings cell's tint, now ≥ 4.7), --fg-2 on an accent tint (--fg-2-tint: the rule chips, 4.17 → 5.2:1); dark sets each to the colour itself. --today-tint: the day ledger's today row keeps the tint of
      the old red (a tint of #de0c00 lowered --fg-2 there from 4.55 to 4.42:1). Opacities: a cancelled event's, the join
      box's subtitle (white on --accent); --fer-mix: the share of --fer in a school holiday's name (the rest --fg). */
-  --c2-text: #217a49; --c3-text: #de0c00; --c4-text: #915800; --accent-chip: #0067ce; --today-tint: #ff3b30;
+  --c2-text: #217a49; --c3-text: #de0c00; --c4-text: #915800; --accent-chip: #005fbf; --fg-2-tint: #5f5f64; --today-tint: #ff3b30;
   --c1-ink: #0074e8; --c2-ink: #248751; --c3-ink: #ed0d00; --c4-ink: #aa6700; --c5-ink: #aa47dc; --c6-ink: #157eaf;
   --cancelled-a: .61; --join-sub-a: 1; --fer-mix: 55%;
 }
 /* the dark scheme: data-scheme=dark on <html> (theme.js, layout.html) */
 html[data-scheme=dark] { --bg:#0f1115; --bg-2:#171a20; --bg-3:#21252d; --fg:#f2f2f4; --fg-2:#a4abb7; --fg-3:#7d858f; --line:#22262e; --tile:#171a20; --tile-other:#121418; --tile-weekend:#14171c;
   --accent:#4f7cff; --accent-fg:#fff; --today:#ff453a; --shadow:none; --c1:#5b8cff; --c2:#34c48f; --c3:#ff6b6b; --c4:#ffb340; --c5:#bf7dff; --c6:#4cc2f0;
-  --ok:#30b46c; --err:#ff3b30; --c2-text:var(--c2); --c3-text:var(--c3); --c4-text:var(--c4); --accent-chip:var(--accent); --today-tint:var(--today);
+  --ok:#30b46c; --err:#ff3b30; --c2-text:var(--c2); --c3-text:var(--c3); --c4-text:var(--c4); --accent-chip:var(--accent); --fg-2-tint:var(--fg-2); --today-tint:var(--today);
   --c1-ink:var(--c1); --c2-ink:var(--c2); --c3-ink:var(--c3); --c4-ink:var(--c4); --c5-ink:var(--c5); --c6-ink:var(--c6); --cancelled-a:.55; --join-sub-a:.85; --fer-mix:70%; }
 /* avatars (white initials): their inline style and the .pav/.list .av defaults read var(--cN); here --cN is the -ink twin */
 .av, .pav { --c1: var(--c1-ink); --c2: var(--c2-ink); --c3: var(--c3-ink); --c4: var(--c4-ink); --c5: var(--c5-ink); --c6: var(--c6-ink); }

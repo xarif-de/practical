@@ -80,7 +80,7 @@
 .rrpop .ct-hit small { color: var(--fg-3); margin-left: 8px; font-size: 11px; }
 .rrpop .ct-hit.new { color: var(--accent); }
 .rrpop .ct-hit { max-width: min(480px, calc(100vw - 32px)); overflow: hidden; text-overflow: ellipsis; } /* a very long name (3,000 characters) widened the page to 21,711 px: the chaos monkey */
-.rbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--fg-2); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 999px; padding: 1px 7px 1px 4px; white-space: nowrap; vertical-align: middle; } /* template and lock chips look alike */
+.rbadge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--fg-2-tint); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 999px; padding: 1px 7px 1px 4px; white-space: nowrap; vertical-align: middle; } /* template and lock chips look alike */
 .rbadge .ico { width: 11px; height: 11px; }
 .rbadge.off { color: var(--fg-3); background: var(--tile); }
 .rb { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .rb .rb-x { font-size: 10.5px; color: var(--fg-3); } /* chip + plain text after it ("angepasst", "gilt für neue Termine", "(geändert)") */
@@ -92,7 +92,7 @@
 .ed .cardform.rulemode.mode-edit #ed-sub { display: block !important; } /* rule mode: the rule name lives in the subtitle, the title field holds the title template */
 .ed .cardform #edh:read-only { opacity: .5; } /* title locked by a rule */
 .ed .cardform .rf-row { display: contents; } .ed .cardform .rf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 17px; } /* the label sits on the chip line; wrapped qualifier text goes below on its own */ .ed .cardform .rf-row .rb { min-width: 0; justify-content: flex-start; }
-button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } button.rbadge:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-2); }
+button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } button.rbadge:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-2-tint); }
 .ed .cardform .lk-row.locked { opacity: .55; }
 .ed .cardform .stile.locked { cursor: default; opacity: .55; }
 .ed .cardform .stile.locked:hover { border-color: transparent; }

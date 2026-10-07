@@ -285,8 +285,8 @@ test('rule mode from an event: stacks over it and returns to it, on the calendar
     await page.locator('#ed-close').click(); // the event's unsaved title: discarded
     await page.locator('#ed-discard').click();
     await expect(page.locator('#ed')).toBeHidden();
-    // the tasks page: the same detour (board: the editor as a dialog; the docked groups pane falls back to the new-task
-    // form when any dialog closes, tasks.js rusticalHost.closed)
+    // the tasks page: the same detour, the editor as a dialog (board) and docked beside the list (groups: closing the
+    // rule must not reach tasks.js rusticalHost.closed, which turns the pane to the new-task form)
     await page.goto('/tasks?view=board');
     await page.locator('#tkmain .tkkc').filter({ hasText: 'Keller aufräumen' }).click(); // Haushalt
     await expect(page.locator('#edh')).toHaveValue('Keller aufräumen');
@@ -297,6 +297,16 @@ test('rule mode from an event: stacks over it and returns to it, on the calendar
     await page.keyboard.press('Escape');
     await expect(page.locator('#ed')).not.toHaveClass(/rulemode/);
     await expect(page.locator('#edh')).toHaveValue('Keller aufräumen');
+    await page.goto('/tasks?view=groups');
+    await page.locator('#tkmain .tkcard').filter({ hasText: 'Keller aufräumen' }).click();
+    await expect(page.locator('#edh')).toHaveValue('Keller aufräumen');
+    await page.locator('#ed-lock').click();
+    await page.locator('#ed-ct-rows [data-ct-rule="Haushalt"]').click();
+    await page.locator('#ed.rulemode:not([hidden])').waitFor();
+    await page.locator('#ed-close').click();
+    await expect(page.locator('#ed')).not.toHaveClass(/rulemode/);
+    await expect(page.locator('#edh')).toHaveValue('Keller aufräumen'); // the task, not the new-task form
+    await expect(page.locator('#edform')).not.toHaveClass(/\bnew\b/);
   } finally { await api(page, 'DELETE', `/api/events/${key}`).catch(() => {}); }
   expect(errors).toEqual([]);
 });
