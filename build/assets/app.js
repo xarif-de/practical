@@ -13,7 +13,8 @@
   window.plural = (s, n) => { if (typeof s === 'string' && s.startsWith('{"')) try { s = JSON.parse(s); } catch (_) { return s; } return s && typeof s === 'object' ? s[PR.select(n)] ?? s.other : s; };
   window.tr = (k, v) => { let s = S[k] ?? k; if (s && typeof s === 'object') s = plural(s, +(v || {})[s.$]); if (v) for (const [n, x] of Object.entries(v)) s = s.split('%' + n).join(x); return s; };
   window.trs = (prefix, names) => Object.fromEntries(names.map(n => [n, tr(prefix + n)]));
-  const f = o => new Intl.DateTimeFormat(LOC, o);
+  // one formatter per option set: building one per call cost 65 ms for 1,700 history times, reusing it 1.1 ms (perf3 #2, node)
+  const fmts = new Map(), f = o => { const k = JSON.stringify(o); let x = fmts.get(k); if (!x) fmts.set(k, x = new Intl.DateTimeFormat(LOC, o)); return x; };
   window.dfmt = (d, o) => f(o).format(d);
   const days = style => Array.from({ length: 7 }, (_, i) => f({ weekday: style }).format(new Date(2024, 0, 1 + i)).replace(/\.$/, '')); // 2024-01-01 was a Monday
   window.MONTHS = Array.from({ length: 12 }, (_, i) => f({ month: 'long' }).format(new Date(2024, i, 1)));
@@ -34,13 +35,13 @@
     // the icon sprite (<meta name=icons>, a cached file): every <use href> is `${practical.sprite}#i-…`
     sprite: SPRITE,
     ico: (n, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="${SPRITE}#i-${n}"/></svg>`,
-    // a JSON request with the CSRF header
     /* the calendar filter kept in this browser (localStorage.calHidden) is a ?cals= list of the shown calendars,
        which only the calendar and the tasks page can compute (each lists its own calendars): each records its
        list for the hidden set it was computed from (localStorage.calCals), and a plain click on a bare link to
        that page carries it, so the server renders the filtered page at once instead of the page fetching it again */
     keepCals: (page, cals) => { let m = {}; try { m = JSON.parse(localStorage.calCals || '{}'); } catch (_) {} m[page] = [localStorage.calHidden || '[]', cals]; localStorage.calCals = JSON.stringify(m); },
-    send: (url, method, body) => fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.practical.csrf() }, body: JSON.stringify(body) }),
+    // a JSON write: practical.req's answer (below), never a thrown error
+    send: (url, method, body) => window.practical.req(url, { method, json: body }),
     // a suggestion list (body-level .rrpop) under `anchor`, kept inside the dialog box; `r` = the anchor's rect
     placeUnder: (pop, anchor, r = anchor.getBoundingClientRect()) => { const box = anchor.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
       pop.style.left = `${Math.max(8, Math.min(r.left, maxRight - pop.offsetWidth)) + scrollX}px`; pop.style.top = `${r.bottom + scrollY + 4}px`; },
@@ -104,6 +105,124 @@
   };
 })();
 
+/* requests and writes: every request a user waits for goes through practical.req, every write of an editor or a
+   form through practical.writer. A failure is told (toast, the editor's error line, the offline notice), never
+   thrown, and never drawn as a page inside the page (audit3-robustness R5, R6, R10, R13). */
+(function () {
+  const P = window.practical, nap = ms => new Promise(r => setTimeout(r, ms));
+  const KIND = s => s === 401 ? 'auth' : s === 403 ? 'forbidden' : s === 404 ? 'notfound' : s === 409 ? 'conflict' : s === 429 || s === 503 ? 'busy' : s >= 500 ? 'server' : 'invalid';
+  const OWN = new Set(['forbidden', 'notfound', 'conflict', 'invalid']); // kinds whose server text (localized for a signed-in user: ctx::localize_errors) says more than the app's
+  /* practical.req(url, o) → { ok: true, status, data } | { ok: false, kind, status, msg, body }; never throws.
+     o: method, json (sent as JSON) or body, headers, as ('json' | 'text'; default: by the answer's Content-Type), signal,
+     keepalive, wait (ms after which the page shows its progress line: navigations).
+     kind: 'offline' (no answer) · 'auth' (401, or sent on to /login: the session ended — the page leaves for the
+     login, authLost below) · 'forbidden' 403 · 'notfound' 404 · 'conflict' 409 · 'invalid' any other 4xx ·
+     'busy' 429/503 (asked again twice first, after Retry-After or 0.5 / 1.5 s) · 'server' 5xx or an unreadable
+     answer · 'aborted' (o.signal). msg: the server's own text where it has one (text/plain, ≤ 300 characters) for
+     the kinds in OWN, else the app's message for the kind; body: the answer's text (a 409 of /history carries JSON). */
+  P.req = async (url, o = {}) => {
+    const method = (o.method || 'GET').toUpperCase(), headers = { ...o.headers }; let body = o.body;
+    if (o.json !== undefined) { body = JSON.stringify(o.json); headers['Content-Type'] = 'application/json'; }
+    if (method !== 'GET') headers['X-CSRF-Token'] = P.csrf();
+    const fail = (kind, status, text = '', own = '') => ({ ok: false, kind, status, body: text, msg: (OWN.has(kind) && own) || tr('js-req-' + kind) });
+    const done = o.wait != null ? P.progress(o.wait) : null;
+    try {
+      for (let i = 0; ; i++) {
+        let r;
+        try { r = await fetch(url, { method, headers, body, signal: o.signal, keepalive: o.keepalive }); }
+        catch (e) { if (e && e.name === 'AbortError') return { ok: false, kind: 'aborted', status: 0, msg: '', body: '' }; P.online(false); return fail('offline', 0); }
+        P.online(true);
+        if (r.status === 401 || (r.redirected && new URL(r.url).pathname === '/login')) { P.authLost(); return fail('auth', 401); }
+        const kind = r.ok ? '' : KIND(r.status), type = r.headers.get('Content-Type') || '';
+        if (kind === 'busy' && i < 2) { const ra = +r.headers.get('Retry-After'); await nap(ra > 0 ? Math.min(ra, 5) * 1000 : 500 * 3 ** i); continue; }
+        if (r.ok) { try { return { ok: true, status: r.status, data: (o.as ? o.as === 'json' : type.includes('json')) ? await r.json() : await r.text() }; } catch (_) { return fail('server', r.status); } } // a cut or foreign body
+        let text = ''; try { text = await r.text(); } catch (_) {}
+        return fail(kind, r.status, text, type.startsWith('text/plain') && text.length <= 300 ? text.trim() : '');
+      }
+    } finally { if (done) done(); }
+  };
+  // a failed answer as a toast ('auth': the page is leaving; 'aborted': the caller's own doing); returns the answer
+  P.tell = r => { if (r && !r.ok && r.kind !== 'auth' && r.kind !== 'aborted') toast(r.msg, true); return r; };
+
+  // the progress line (the top bar's bottom edge in the accent colour) for a navigation slower than `ms` (perf3 #10)
+  let busyN = 0;
+  P.progress = ms => { let on = false, off = false; const t = setTimeout(() => { on = true; if (!busyN++) document.documentElement.setAttribute('data-busy', ''); }, ms);
+    return () => { if (off) return; off = true; clearTimeout(t); if (on && !--busyN) document.documentElement.removeAttribute('data-busy'); }; }; // stop(): once, however often called
+
+  // the offline notice: shown while the browser says it is offline or a request got no answer, gone with the next answer
+  let netEl = null;
+  P.online = on => {
+    if (on === !netEl) return;
+    if (on) { netEl.remove(); netEl = null; return; }
+    netEl = document.createElement('div'); netEl.className = 'toast error net'; netEl.setAttribute('role', 'status'); netEl.textContent = tr('js-req-offline-bar');
+    document.body.appendChild(netEl);
+  };
+  addEventListener('offline', () => P.online(false)); addEventListener('online', () => P.online(true));
+
+  /* the session ended (every server restart ends all sessions, R6): what an editor holds unsaved is kept
+     (practical.keep → practical.stash, sessionStorage), then the page goes to the login, which brings the user back to
+     this address; the editor takes its work back from there (practical.unstash) */
+  const keepers = []; let gone = false;
+  P.keep = fn => keepers.push(fn);
+  P.authLost = () => {
+    if (gone) return; gone = true; P.leaving = true;
+    for (const fn of keepers) try { fn(); } catch (_) {}
+    location.href = '/login?redirect_uri=' + encodeURIComponent(location.pathname + location.search + location.hash);
+  };
+  P.stash = (name, v) => { try { sessionStorage['practical.stash.' + name] = JSON.stringify({ path: location.pathname, t: Date.now(), v }); } catch (_) {} }; // too big for the storage: lost, as before
+  P.unstash = name => { const k = 'practical.stash.' + name; let s = null; try { s = JSON.parse(sessionStorage[k] || 'null'); delete sessionStorage[k]; } catch (_) {} return s && s.path === location.pathname && Date.now() - s.t < 864e5 ? s.v : null; };
+
+  // leaving the page with unsaved work asks first (the browser's own question); practical.leaving: a navigation the app starts after a save
+  const dirt = [];
+  P.guard = fn => dirt.push(fn);
+  addEventListener('beforeunload', e => { if (!P.leaving && dirt.some(fn => fn())) { e.preventDefault(); e.returnValue = ''; } });
+
+  /* the write cycle of an editor or a form: w = practical.writer(box, { buttons, error, conflict, idle }).
+     w.run(fn) — fn() → a req() answer — runs one write at a time: called again while one is pending (a double click,
+     Enter and a click) it returns the pending one; run(fn, true) instead runs fn once more after it (an autosave: the
+     newest state wins). Meanwhile box[data-state=saving][aria-busy=true] and buttons() are disabled; afterwards idle()
+     (else each button gets its own state back). A failed answer: 'auth' → nothing (the page leaves for the login);
+     'conflict' with conflict = { overwrite, reload } → the question "keep mine / load theirs" (Escape: back to the
+     editing, the message stays); else its message into `error` (an element) or a toast. Slower than 300 ms: the
+     progress line too. box[data-state]: saving | conflict | error, none once done — the editor's own states (closed,
+     view, edit, dirty) live in its classes. */
+  P.writer = (box, o = {}) => {
+    let pending = null, queued = null;
+    const set = s => { if (s) box.dataset.state = s; else delete box.dataset.state; if (s === 'saving') box.setAttribute('aria-busy', 'true'); else box.removeAttribute('aria-busy'); };
+    const w = {
+      get busy() { return !!pending; },
+      run(fn, again) {
+        if (pending) { if (!again) return pending; queued = fn; return pending.then(() => { const q = queued; queued = null; return q ? w.run(q) : null; }); }
+        const btns = (o.buttons ? o.buttons() : []).filter(Boolean), was = btns.map(b => b.disabled);
+        if (o.error) o.error.textContent = '';
+        set('saving'); btns.forEach(b => { b.disabled = true; }); let stop = P.progress(300);
+        return (pending = (async () => {
+          let r, tell = true;
+          try {
+            r = await fn();
+            while (r && !r.ok && r.kind === 'conflict' && o.conflict) {
+              set('conflict'); stop(); // the question waits for the user, not for the server
+              const a = await askYesNo(tr('js-req-conflict-ask'), tr('js-req-mine'), tr('js-req-theirs'), true);
+              if (a === null) break;
+              set('saving'); stop = P.progress(300);
+              if (!a) { await o.conflict.reload(); tell = false; break; }
+              r = await o.conflict.overwrite();
+            }
+          } catch (e) { console.error(e); r = { ok: false, kind: 'server', status: 0, msg: tr('js-req-server'), body: '' }; }
+          pending = null; stop();
+          if (o.idle) o.idle(); else btns.forEach((b, i) => { b.disabled = was[i]; });
+          if (r && !r.ok && tell && r.kind !== 'auth' && r.kind !== 'aborted') { set('error'); if (o.error) o.error.textContent = r.msg; else toast(r.msg, true); } else set('');
+          return r;
+        })());
+      },
+    };
+    return w;
+  };
+
+  // to the clipboard; a refused write (no focus, no permission, no clipboard) is told instead of failing unseen
+  P.copy = text => Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => true, () => { toast(tr('js-req-copy'), true); return false; });
+})();
+
 (function () {
   const { $, $$, csrf, ico } = practical;
 
@@ -131,8 +250,9 @@
 
   /* segmented switch (`.seg`): exactly one button pressed. Every page switches through this one
      function — the look keys on aria-pressed="true", so a bare attribute ("") shows nothing */
-  /* a minimal yes/no question over the page (the editor dialog's backdrop). Resolves true for "yes";
-     Escape, "no" and a click on the backdrop resolve false. "Yes" has the focus, so Enter confirms.
+  /* a minimal yes/no question over the page (the editor dialog's backdrop). Resolves true for "yes", false for
+     "no"; Escape and a click on the backdrop resolve null (also a "no"; the conflict question tells it apart:
+     back to the editing). "Yes" has the focus, so Enter confirms.
      `modal`: the backdrop does not answer — a question whose "no" still changes something (a stray click
      must not decide it); Escape stays the explicit "no". */
   window.askYesNo = (text, yes, no, modal) => new Promise(done => {
@@ -143,9 +263,9 @@
     for (const [a, t] of [['0', no], ['1', yes]]) { const b = d.querySelector(`[data-a="${a}"]`); b.title = t; b.setAttribute('aria-label', t); }
     const prev = document.activeElement;
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
-    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); } };
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(null); } };
     addEventListener('keydown', key, true);
-    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d && !modal) end(false); });
+    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d && !modal) end(null); });
     document.body.appendChild(d);
     d.querySelector('[data-a="1"]').focus();
   });
@@ -156,7 +276,7 @@
 
   // the bottom toast (layout.html renders the server's one the same way): a success fades, an error stays until closed
   window.toast = (text, err) => {
-    $$('.toast').forEach(t => t.remove());
+    $$('.toast:not(.net)').forEach(t => t.remove()); // the offline notice stays (practical.online)
     const t = document.createElement('div'); t.className = 'toast' + (err ? ' error' : ''); t.setAttribute('role', err ? 'alert' : 'status');
     t.innerHTML = '<span></span><button type="button" class="toast-x" aria-label="×">×</button>'; t.firstChild.textContent = text;
     const bye = () => { t.classList.add('gone'); setTimeout(() => t.remove(), 400); };
@@ -180,8 +300,7 @@
     const seg = $('.seg[data-field=scheme]');
     if (seg) { segPress($(`button[data-v="${v}"]`, seg)); seg.closest('.val').querySelector('input[name=scheme]').value = v; }
     if (!document.body.dataset.user) return; // the login page: for this visit only
-    const r = await practical.send('/settings/scheme', 'POST', { scheme: v }).catch(() => null);
-    if (!r || !r.ok) toast(tr('js-set-err'), true);
+    practical.tell(await practical.send('/settings/scheme', 'POST', { scheme: v }));
   });
 
   // confirmations on destructive forms
@@ -220,32 +339,32 @@
       const e2 = practical.escQ;
       const when = t => { const d = new Date(String(t).replace(' ', 'T') + 'Z'); return isNaN(d) ? '' : dfmt(d, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }; // stored in UTC
       const drawHist = async () => {
-        let H = []; try { H = await (await fetch('/api/search/history')).json(); } catch (_) {}
+        const r = await practical.req('/api/search/history'), H = r.ok ? r.data : [];
         $('#hist-n', hp).textContent = H.length ? `(${H.length})` : ''; clr.disabled = !H.length;
         list.innerHTML = H.length ? H.map(e => `<div class="cell noic" data-id="${e.id}"><span>${e2(e.q)}<span class="sub">${e2([when(e.used_at), e.uses > 1 ? D.tUses.replace('{n}', e.uses) : '', e.target && e.target.label ? '→ ' + e.target.label : ''].filter(Boolean).join(' · '))}</span></span><span class="val"><button type="button" class="btn icon-btn" data-hrm title="${e2(D.tRm)}" aria-label="${e2(D.tRm)}">${ico('x')}</button></span></div>`).join('')
           : `<div class="cell noic"><span class="muted">${e2(D.tEmpty)}</span></div>`;
       };
-      list.addEventListener('click', async e => { const b = e.target.closest('[data-hrm]'); if (!b) return; await fetch('/api/search/history/' + b.closest('[data-id]').dataset.id, { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); drawHist(); });
-      clr.addEventListener('click', async () => { if (!await ask(D.tAsk)) return; await fetch('/api/search/history', { method: 'DELETE', headers: { 'X-CSRF-Token': csrfTok } }); drawHist(); });
+      list.addEventListener('click', async e => { const b = e.target.closest('[data-hrm]'); if (!b) return; practical.tell(await practical.req('/api/search/history/' + b.closest('[data-id]').dataset.id, { method: 'DELETE' })); drawHist(); });
+      clr.addEventListener('click', async () => { if (!await ask(D.tAsk)) return; practical.tell(await practical.req('/api/search/history', { method: 'DELETE' })); drawHist(); });
       const onShow = () => { if (location.hash === '#search') drawHist(); };
       addEventListener('hashchange', onShow); onShow();
       // the home row names the choice; a shorter one drops old entries (the list shows the result after the save)
       $('#hist-days', hp).addEventListener('change', e => { $('#v-search').textContent = e.target.selectedOptions[0].textContent; setTimeout(drawHist, 600); });
     }
-    // autosave: a changed field of a [data-autosave] form posts the whole form; the server answers JSON
-    const save = async form => {
-      const r = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(form)) });
-      const d = r.ok ? await r.json().catch(() => ({ ok: false, msg: String(r.status) })) : { ok: false, msg: String(r.status) };
-      if (!d.ok) { toast(d.msg || String(r.status), true); return false; }
-      return d.msg || settings.dataset.tSaved;
-    };
+    // autosave: a changed field of a [data-autosave] form posts the whole form; the server answers JSON. One post at a
+    // time per form, the newest state last (two at once could each carry one change only: the later answer would win)
+    const save = (form, w) => w.run(async () => {
+      const r = await practical.req(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(form)) });
+      return !r.ok || (r.data && r.data.ok) ? r : { ok: false, kind: 'invalid', msg: (r.data && r.data.msg) || tr('js-req-server') };
+    }, true).then(r => r && r.ok && (r.data.msg || settings.dataset.tSaved));
     $$('form[data-autosave]', settings).forEach(form => {
+      const w = practical.writer(form);
       form.addEventListener('submit', e => e.preventDefault()); // Enter in a field saves through change, never navigates
       form.addEventListener('change', async e => {
         if (!e.target.name || e.target.type === 'file' || !form.reportValidity()) return;
-        const msg = await save(form); if (!msg) return;
+        const msg = await save(form, w); if (!msg) return;
         if (e.target.name === 'scheme') applyScheme(e.target.value);
-        if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; location.reload(); } else toast(msg);
+        if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; practical.leaving = true; location.reload(); } else toast(msg);
       });
     });
     // region lists (#regions-public, #regions-school): a hidden field each, a comma list of region codes in the
@@ -256,7 +375,7 @@
     const hid = n => $(`input[type=hidden][name="${n}"]`, prefsForm);
     const names = pickData.names || {}; // code → [name, path above it]
     let subs = null, subsFor = '';
-    const loadSubs = async c => { if (subsFor !== c) { const r = await fetch('/api/holidays/subdivisions?country=' + encodeURIComponent(c)); subs = r.ok ? await r.json() : []; subsFor = c; } return subs; };
+    const loadSubs = async c => { if (subsFor !== c) { const r = practical.tell(await practical.req('/api/holidays/subdivisions?country=' + encodeURIComponent(c))); if (!r.ok) return []; subs = r.data; subsFor = c; } return subs; };
     const esc2 = practical.esc;
     const commit = (name, value) => { const i = hid(name); i.value = value; i.dispatchEvent(new Event('change', { bubbles: true })); };
     const pathOf = (list, r) => { const out = []; let x = r; while (x && out.length < 5) { out.unshift(x.name); x = list.find(y => y.code === x.parent); } return out; };
@@ -445,7 +564,7 @@
     // and an invalid pattern blocks the autosave through the field's validity.
     const vacKind = hid('vacation_kind');
     // the vacation rule and the categories page both start with the event categories: one request for both
-    let catsFirst = vacKind && $('#vac-re') && $('#categories') ? fetch('/api/categories?scope=event').then(r => r.ok ? r.json() : []) : null;
+    let catsFirst = vacKind && $('#vac-re') && $('#categories') ? practical.req('/api/categories?scope=event').then(r => r.ok ? r.data : []) : null;
     if (vacKind && $('#vac-re')) {
       const catSel = $('#vac-cat'), calSel = $('#vac-cal'), re = $('#vac-re'), tools = $('#vac-tools'), test = $('#vac-test');
       let titles = null, cats = null, shown = 'match';
@@ -515,7 +634,7 @@
       const ruleUrl = n => (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories');
       const load = async () => {
         const first = scope === 'event' && catsFirst; catsFirst = null;
-        let d; if (first) d = await first; else { const r = await fetch('/api/categories?scope=' + scope); d = r.ok ? await r.json() : []; }
+        let d; if (first) d = await first; else { const r = practical.tell(await practical.req('/api/categories?scope=' + scope)); d = r.ok ? r.data : []; }
         if (scope === 'event') $('#cat-total').textContent = d.length;
         list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h(plural(scope === 'task' ? t.tCountTask : t.tCount, c.count).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
       };
@@ -543,6 +662,9 @@
   practical.fitPop = fitPop; // history.js draws its filter popover after this runs
   const fitPops = () => $$('.filter > .pop, .more > .pop').forEach(fitPop);
   fitPops(); addEventListener('resize', fitPops);
+  // a suggestion list (body-level .rrpop, practical.placeUnder) stays inside a window that got narrower (the chaos
+  // monkey: placed at 1280 px, then 390 px wide → the page 940 px wide)
+  addEventListener('resize', () => $$('body > .rrpop').forEach(p => { const r = p.getBoundingClientRect(); if (r.right > innerWidth - 8) p.style.left = Math.max(8, innerWidth - 8 - r.width) + scrollX + 'px'; }));
   $$('.filter, .more').forEach(f => ['pointerenter', 'focusin', 'click'].forEach(t => f.addEventListener(t, () => { const p = f.querySelector(':scope > .pop'); if (p) fitPop(p); })));
 
   document.addEventListener('click', e => {
@@ -560,18 +682,21 @@
   // live updates: server-sent changes → custom event for the views. A hidden tab keeps its stream for
   // HIDE_GRACE, then closes it (no keep-alive every 15 s, no redraws nobody sees); a change that arrives
   // while hidden waits. Back in view the stream reopens and, if anything may have been missed, the views get
-  // ONE `rustical:change` ({ resync: true }). After an error the retry waits 5–10 s, doubling up to 5–10 min.
+  // ONE `rustical:change` ({ resync: true }). After an error the retry waits 5–10 s, doubling up to 5–10 min; the
+  // browser coming back online retries at once; a stream that opens again after an error resyncs too, since the changes
+  // broadcast meanwhile never arrive (perf3 #1: a write during a 6.7 s gap stayed invisible).
   if (document.body.dataset.user && 'EventSource' in window) {
     const HIDE_GRACE = 15000, RETRY = 5000, RETRY_MAX = 300000;
-    let es = null, fails = 0, retryT = 0, graceT = 0, away = false, missed = false;
+    let es = null, fails = 0, retryT = 0, graceT = 0, away = false, missed = false, broke = false;
     const fire = detail => document.dispatchEvent(new CustomEvent('rustical:change', { detail }));
     const connect = () => {
       retryT = 0; es = new EventSource('/api/changes');
-      es.onopen = () => { fails = 0; practical.stream(true); };
+      es.onopen = () => { fails = 0; practical.stream(true); if (broke) { broke = false; if (document.hidden) missed = true; else fire({ resync: true }); } };
       es.addEventListener('change', ev => { let d; try { d = JSON.parse(ev.data); } catch (_) { return; } if (document.hidden) missed = true; else fire(d); });
-      es.onerror = () => { practical.stream(false); es.close(); es = null; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
+      es.onerror = () => { practical.stream(false); es.close(); es = null; broke = true; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
     };
-    const sleep = () => { away = true; missed = true; clearTimeout(retryT); retryT = 0; practical.stream(false); if (es) { es.close(); es = null; } };
+    addEventListener('online', () => { if (es || away) return; clearTimeout(retryT); fails = 0; connect(); });
+    const sleep = () => { away = true; missed = true; broke = false; /* the return resyncs once, through `missed` */ clearTimeout(retryT); retryT = 0; practical.stream(false); if (es) { es.close(); es = null; } };
     document.addEventListener('visibilitychange', () => {
       clearTimeout(graceT); graceT = 0;
       if (document.hidden) { graceT = setTimeout(sleep, HIDE_GRACE); return; }
@@ -832,14 +957,15 @@
   const page = $('#colors'), list = page && $('#colors-list', page);
   if (!page) return;
   const putRule = async (scope, name, color) => {
-    const q = '?scope=' + scope, rules = await (await fetch('/api/category-rules' + q)).json(), rule = rules[name];
-    if (!rule || !rule.when || !rule.when.color) return { ok: false, status: 404 };
+    const q = '?scope=' + scope, got = await practical.req('/api/category-rules' + q); if (!got.ok) return got;
+    const rule = got.data[name];
+    if (!rule || !rule.when || !rule.when.color) return { ok: false, kind: 'notfound', status: 404, msg: tr('js-req-notfound') };
     rule.when.color.value = color;
     return practical.send('/api/category-rules/' + encodeURIComponent(name) + q, 'PUT', rule);
   };
   // a category's new colour: existing events/tasks with the category that still carry the old one may follow
   const recolor = async (scope, name, from, to) => {
-    const post = apply => practical.send('/api/colors/category', 'POST', { scope, name, from, to, apply }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const post = apply => practical.send('/api/colors/category', 'POST', { scope, name, from, to, apply }).then(r => r.ok ? r.data : null);
     const c = await post(false); if (!c || !c.count) return;
     close(); // the question needs the page, not the popover over it
     if (!await askYesNo(tr('js-color-recolor-' + scope, { n: c.count, cat: name }), tr('js-color-recolor-yes'), tr('js-color-recolor-no'), true)) return;
@@ -895,8 +1021,8 @@
   const setOne = async (kind, key, v) => {
     const vr = VAR[kind];
     if (vr) { const f = field(vr[0]); f.value = v; themeVar(vr[1], v); f.dispatchEvent(new Event('change', { bubbles: true })); return true; }
-    const r = await (kind.startsWith('category') ? putRule(kind === 'category' ? 'event' : 'task', key, v) : put(kind, key, v)).catch(() => null);
-    if (!r || !r.ok) { toast(tr('js-set-err') + (r ? ' ' + r.status : ''), true); return false; }
+    const r = practical.tell(await (kind.startsWith('category') ? putRule(kind === 'category' ? 'event' : 'task', key, v) : put(kind, key, v)));
+    if (!r.ok) return false;
     if (kind === 'calendar' || kind === 'addressbook') syncPage(kind, key, v);
     return true;
   };
@@ -1185,8 +1311,8 @@
     const applyAll = async () => {
       const list = P.changes.map(c => ({ kind: c.item.kind, key: c.item.kind.startsWith('category') ? c.item.name : c.item.key, color: c.to }));
       applyBtn.disabled = true;
-      const r = await practical.send('/api/colors/batch', 'POST', { changes: list }).then(x => x.ok ? x.json() : null).catch(() => null);
-      if (!r) { applyBtn.disabled = false; toast(tr('js-set-err'), true); return; }
+      const x = practical.tell(await practical.send('/api/colors/batch', 'POST', { changes: list })), r = x.ok ? x.data : null;
+      if (!r) { applyBtn.disabled = false; return; }
       // holiday colours live in the prefs form too (autosave would write the old value back); calendars elsewhere on the page
       for (const c of list) { const vr = VAR[c.kind]; if (vr) { const f = field(vr[0]); if (f) f.value = c.color; themeVar(vr[1], c.color); } else if (c.kind === 'calendar') syncPage('calendar', c.key, c.color); }
       toast(tr('js-color-changed', { n: r.count }) + (r.failed ? ' ' + tr('js-cfo-failed', { n: r.failed }) : ''), !!r.failed);
@@ -1304,22 +1430,24 @@
   // holidays: a setting of the user (not of this browser), saved at once, then the view redraws
   $$('input[data-hol]', filterBox || document.createElement('div')).forEach(i => i.addEventListener('change', async () => {
     const body = {}; $$('input[data-hol]', filterBox).forEach(x => { body[x.dataset.hol] = x.checked; }); // no school switch → the setting stays
-    await practical.send('/settings/holiday-display', 'POST', body);
+    practical.tell(await practical.send('/settings/holiday-display', 'POST', body));
     dropCarried(); load(false);
   }));
 
   // ---- navigation / fragment loading ----
   function url(fragment, s = state) { const u = new URL('/calendar', location.origin); u.searchParams.set('view', s.view); u.searchParams.set('date', s.date); if (s.view === 'month' && s.month && s.month !== s.date.slice(0, 7)) u.searchParams.set('month', s.month); if (s.view === 'week' && s.week && s.week !== localIso(weekStart(parse(s.date)))) u.searchParams.set('week', s.week); if (s.cals) u.searchParams.set('cals', s.cals); if (fragment) u.searchParams.set('fragment', '1'); return u; }
-  async function load(push = true) {
+  async function load(push = true, prev = null) { // prev: the state before a page turn / view switch, back in place when its fetch fails
     const u = url(true);
     loading = u;
     // a month-to-month change glides (wheel, rail, orbit picker, today alike); the months in between are fetched alongside the target
     const turnOf = from => root.dataset.view === 'month' && state.view === 'month' && from.slice(0, 7) !== shown().slice(0, 7) ? (shown() > from ? 1 : -1) : 0;
     const from0 = root.dataset.date, between0 = turnOf(from0) ? monthsBetween(from0, shown()) : [];
     const midsP = between0.length && between0.length <= FLIP_FETCH && !reducedMotion() ? fetchMonths(between0) : Promise.resolve(null);
+    const done = practical.progress(300); // also while a prefetch of it is still on its way
     try {
       let html = await practical.prefetched(u);
-      if (html === null) { const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (loading !== u) return; if (!r.ok) throw new Error(r.status); html = await r.text(); }
+      // a failed fetch is told and leaves the view as it is; a session that ended goes to the login (practical.req), never into the view
+      if (html === null) { const r = await practical.req(u, { headers: { Accept: 'text/html' }, as: 'text' }); if (loading !== u) return; if (!r.ok) { if (prev) state = prev; practical.tell(r); return; } html = r.data; }
       if (loading !== u) return;
       if (!push && onScreen && onScreen.href === u.href && onScreen.html === html) return;
       const mids = await midsP; tlScroll = $('.tl', root) ? $('.tl', root).scrollTop : null;
@@ -1332,7 +1460,7 @@
       if (push) history.pushState(state, '', url(false).pathname + url(false).search);
       onScreen = { href: u.href, html };
       wire(); if (turn) monthFlip(oldMonth, turn, between, from === from0 ? mids : null);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); } finally { done(); }
   }
   addEventListener('popstate', e => { if (e.state) { state = e.state; load(false); } });
   // the state shift() / go() lead to, without going there (also what a prefetch asks for)
@@ -1345,8 +1473,8 @@
     s.date = ymd(d); return s;
   }
   function gone(view, date) { const s = { ...state }; if (date || (view && view !== s.view)) s.month = s.week = null; if (view) s.view = view; if (date) s.date = date; return s; } // a picked day or another view shows the picked day's month again
-  function shift(dir) { state = shifted(dir); load(); }
-  function go(view, date) { state = gone(view, date); load(); }
+  function shift(dir) { const prev = state; state = shifted(dir); load(true, prev); }
+  function go(view, date) { const prev = state; state = gone(view, date); load(true, prev); }
   // the fragments a navigation to `s` fetches: the target and the months a page turn glides past (load())
   function fetches(s) {
     const out = [url(true, s)].filter(u => !onScreen || u.href !== onScreen.href), from = root.dataset.date, to = shown(s); // not the view on screen
@@ -1567,8 +1695,8 @@
       busy = true;
       try {
         const u = new URL('/api/weeks', location.origin); u.searchParams.set('start', from); u.searchParams.set('count', WK_CHUNK); if (state.cals) u.searchParams.set('cals', state.cals);
-        const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (!r.ok) return;
-        const tmp = document.createElement('div'); tmp.innerHTML = await r.text();
+        const r = await practical.req(u, { headers: { Accept: 'text/html' }, as: 'text' }); if (!r.ok) return; // offline: the notice says so; the next scroll asks again
+        const tmp = document.createElement('div'); tmp.innerHTML = r.data;
         const fresh = [...tmp.children].filter(w => !$(`.week[data-week="${w.dataset.week}"]`, stream));
         if (!fresh.length) return;
         // put a block that stays back where it was: measuring the displacement afterwards also absorbs
@@ -1625,8 +1753,8 @@
       busy = true;
       try {
         const u = new URL('/api/days', location.origin); u.searchParams.set('start', localIso(d0)); u.searchParams.set('count', LED_CHUNK); if (state.cals) u.searchParams.set('cals', state.cals);
-        const r = await fetch(u, { headers: { Accept: 'text/html' } }); if (!r.ok) return;
-        const tmp = document.createElement('div'); tmp.innerHTML = await r.text();
+        const r = await practical.req(u, { headers: { Accept: 'text/html' }, as: 'text' }); if (!r.ok) return;
+        const tmp = document.createElement('div'); tmp.innerHTML = r.data;
         const fresh = [...tmp.children].filter(x => !$(`.lrow[data-date="${x.dataset.date}"]`, led));
         if (!fresh.length) return;
         const top = led.getBoundingClientRect().top, anchor = rows().find(x => x.getBoundingClientRect().bottom > top) || rs[0], y0 = anchor.getBoundingClientRect().top; // a visible row is never the one that gets trimmed
@@ -1657,7 +1785,7 @@
     $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
     // the day document's details sit inside the clickable entry, so each of them stops the click
     $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
-      navigator.clipboard.writeText(b.dataset.copytext).then(() => { b.classList.add('ok'); b.title = T.copied; setTimeout(() => b.classList.remove('ok'), 1200); }); });
+      practical.copy(b.dataset.copytext).then(ok => { if (!ok) return; b.classList.add('ok'); b.title = T.copied; setTimeout(() => b.classList.remove('ok'), 1200); }); });
     $$('.doc [data-map]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); const q = encodeURIComponent(b.dataset.q);
       window.open(b.dataset.map === 'osm' ? 'https://www.openstreetmap.org/search?query=' + q : 'https://www.google.com/maps/search/?api=1&query=' + q, '_blank', 'noopener'); });
     $$('.doc a.lk', scope).forEach(a => a.onclick = e => e.stopPropagation());
@@ -1692,7 +1820,7 @@
     g.innerHTML = h;
     $$('.day', g).forEach(d => d.onclick = () => { pk.hidden = true; go(state.view === 'week' || state.view === 'day' ? state.view : (['planner','weekends','vacation','countdown','numbers'].includes(state.view) ? state.view : 'month'), d.dataset.date); });
   }
-  async function density() { try { const r = await fetch(`/api/density?year=${pkYear}${state.cals ? '&cals=' + encodeURIComponent(state.cals) : ''}`); const d = await r.json(); const mx = Math.max(1, ...d); $$('.mnode', pk).forEach(g => { const m = +g.dataset.month; if (!g.classList.contains('cur')) g.querySelector('circle').setAttribute('r', 14 + 10 * d[m - 1] / mx); }); } catch (_) {} }
+  async function density() { try { const r = await practical.req(`/api/density?year=${pkYear}${state.cals ? '&cals=' + encodeURIComponent(state.cals) : ''}`); if (!r.ok) return; const d = r.data; const mx = Math.max(1, ...d); $$('.mnode', pk).forEach(g => { const m = +g.dataset.month; if (!g.classList.contains('cur')) g.querySelector('circle').setAttribute('r', 14 + 10 * d[m - 1] / mx); }); } catch (_) {} }
   function openPicker() { const d = parse(state.date); pkYear = d.getFullYear(); pkMonth = d.getMonth() + 1; pkBase = pkYear; py(); pm(); density(); pk.hidden = false; }
   yn.forEach(g => g.onclick = () => { pkYear = +g.dataset.year; py(); pm(); density(); });
   $$('.mnode', pk).forEach(g => g.onclick = () => { pkMonth = +g.dataset.month; pm(); });
@@ -1741,6 +1869,10 @@
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
   const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;
   let current = null, openDate = null, baseline = '';
+  // the user worked in the dialog since it was filled: the leave-page guard and the work kept over a new login ask for it
+  // (a rule editor opened by a link can differ from its baseline untouched; nothing to lose there)
+  let touched = false;
+  ['pointerdown', 'keydown', 'input', 'change', 'drop'].forEach(t => form.addEventListener(t, e => { if (e.isTrusted) touched = true; }, true));
   function setAllDay(on) { if (!f.all_day) return; f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
   $x('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); paintColor(); }
@@ -1749,8 +1881,14 @@
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };
-  function requestClose() { if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
-  $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = close;
+  // while a write is pending the dialog stays (its answer closes it, or shows why not): ×, Escape and "discard" wait
+  function requestClose() { if (W.busy) return; if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
+  /* writes (save, delete, a rule's save and delete): one at a time, Save shows the progress, a 409 asks whether the
+     own version overwrites the other one (the server's ETag of now) or the other one is loaded (practical.writer) */
+  const W = practical.writer(form, { buttons: () => [$('#ed-save'), $('#ed-delete'), $('#ed-reset')], error: $('#ed-error'), idle: () => updateButtons(),
+    conflict: { overwrite: async () => { const r = await practical.req(API + '/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(); },
+      reload: () => openEditor(f.key.value, openDate) } });
+  $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = () => { if (!W.busy) close(); };
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
   const fmtD = s => dfmt(parse(s.slice(0, 10)), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);
@@ -1896,8 +2034,10 @@
   const eventBody = () => { const [principal, cal_id] = f.calendar.value.split('/'); const allDay = f.all_day.checked; const start = allDay ? f.date.value + 'T00:00:00' : f.date.value + 'T' + (f.from.value || '09:00') + ':00'; const endDate = f.end_date.value || f.date.value; const end = allDay ? nextDay(endDate) + 'T00:00:00' : endDate + 'T' + (f.to.value || f.from.value || '10:00') + ':00';
     return { principal, cal_id, summary: f.summary.value, location: f.location.value, description: f.description.value, start, end, all_day: allDay, rrule: rrBuild(), exdates: rrDates('exdates'), rdates: rrDates('rdates'), alarms: alarmsOf(), organizer: PEOPLE.organizer, attendees: PEOPLE.attendees, categories: chips(), status: f.status.value, transp: f.transp.value, class: f.class.value, priority: f.priority.value === '' ? null : +f.priority.value, color: colorOf(), geo: geoOf(), ...linksOf(), timezone: root.dataset.tz, etag: f.etag.value }; };
   const sig = () => serialize() + (ruleMode ? '|' + JSON.stringify(ruleOf()) : '');
+  // the dialog's content as a detail `fill` takes back: the rule editor's way back, and the work kept over a new login
+  const snapDetail = () => ({ ...(TASK ? taskBody() : { ...eventBody(), rrule_until: RR.end.kind === 'until' ? RR.end.until : null, has_overrides: !!(current && current.has_overrides), related: LK.related }), object_id: f.key.value.split('/')[2] || '', uid: (current || {}).uid || '' });
   function openRuleEditor(name, stack) {
-    if (stack && !ruleMode) ruleReturn = { detail: { ...eventBody(), object_id: f.key.value.split('/')[2] || '', uid: (current || {}).uid || '', rrule_until: RR.end.kind === 'until' ? RR.end.until : null, has_overrides: !!(current && current.has_overrides), related: LK.related }, baseline, isNew: form.classList.contains('new'), summaryPh: f.summary.placeholder, date: openDate };
+    if (stack && !ruleMode) ruleReturn = { detail: snapDetail(), baseline, isNew: form.classList.contains('new'), summaryPh: f.summary.placeholder, date: openDate };
     const r = RULES[name] || {}, today = state.date || new Date().toISOString().slice(0, 10), cal = ((f.calendar.options[0] || {}).value || '/').split('/');
     const st = k => ((r[FLD[k][0]] || {})[k]) || null, where = r.where || { mode: 'off' }, repeat = r.repeat || { mode: 'off' }, ralarms = (r.alarm || {}).alarms || [], rlinks = (r.links || {}).links || [];
     const calv = st('calendar') && [...f.calendar.options].some(o => o.value === st('calendar').value) ? st('calendar').value.split('/') : cal;
@@ -1926,11 +2066,11 @@
   // leaving rule mode: back to the event it was opened from (rules re-applied by `fill`), or to the page it
   // was called from (`?back=`), or simply closed
   function ruleLeave() { if (!ruleMode) return false; ruleMode = null; RM = {}; form.classList.remove('rulemode'); ed.classList.remove('rulemode'); f.summary.readOnly = false; f.summary.disabled = false; f.summary.required = true; $$('.rfoot', form).forEach(el => { el.innerHTML = ''; });
-    if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
-    if (ruleBack) { const to = ruleBack; ruleBack = null; location.href = to; return true; }
+    if (ruleReturn) { const r = ruleReturn; ruleReturn = null; fill(r.detail, r.date); touched = true; if (r.isNew) { form.classList.add('new'); f.key.value = ''; f.etag.value = ''; f.summary.placeholder = r.summaryPh; const b = $('#ed-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); rulesApply('open'); baseline = r.baseline; updateButtons(); ed.hidden = false; return true; }
+    if (ruleBack) { const to = ruleBack; ruleBack = null; practical.leaving = true; location.href = to; return true; }
     return false; }
-  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await practical.send('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, 'PUT', rule); if (!r.ok) { $('#ed-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; } RULES[name] = await r.json(); ctInvalidate(); if (!ruleLeave()) close(); }
-  async function ruleDelete() { const name = ruleMode; const r = await fetch('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } else $('#ed-error').textContent = T.err + ' ' + r.status; }
+  async function ruleSave() { const rule = ruleOf(), name = ruleMode; const r = await practical.send('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, 'PUT', rule); if (!r.ok) return r; RULES[name] = r.data; ctInvalidate(); if (!ruleLeave()) close(); return r; }
+  async function ruleDelete() { const name = ruleMode; const r = await practical.req('/api/category-rules/' + encodeURIComponent(name) + '?scope=' + ED_SCOPE, { method: 'DELETE' }); if (r.ok) { delete RULES[name]; ctInvalidate(); if (!ruleLeave()) close(); } return r; }
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
@@ -1952,7 +2092,7 @@
   const presetSig = a => a.at ? null : JSON.stringify([!!a.related_end, a.minutes, a.action, a.repeat, a.duration_minutes, a.proximity || '', a.attach || '', [...(a.attendees || [])].sort()]);
   const fromPreset = p => newAlarm({ action: p.action, minutes: p.minutes, related_end: !!p.related_end, repeat: p.repeat || 0, duration_minutes: p.duration_minutes || 0, attendees: [...(p.attendees || [])], attach: p.attach || '', proximity: p.proximity || '' });
   const matchesPreset = a => !a.at && PRESETS.some(p => presetSig(p) === presetSig(a));
-  async function savePresets() { try { const r = await practical.send('/api/alarm-presets', 'PUT', PRESETS); if (!r.ok) throw new Error(r.status); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; } }
+  async function savePresets() { const r = await practical.send('/api/alarm-presets', 'PUT', PRESETS); if (!r.ok && r.kind !== 'auth') $('#ed-error').textContent = r.msg; }
   const amount = m => { m = Math.abs(m); if (m && m % 10080 === 0) return plural(AT.tWeeks, m / 10080).replace('{n}', m / 10080); if (m && m % 1440 === 0) return plural(D.tDays, m / 1440).replace('{n}', m / 1440); if (m && m % 60 === 0) return D.tHours.replace('{n}', m / 60); return D.tMin.replace('{n}', m); };
   const whenText = a => { if (a.at) return fmtDT(a.at); if (a.minutes === 0) return a.related_end ? AT.tAtEndTxt : AT.tAtStart; return amount(a.minutes) + ' ' + (a.minutes > 0 ? (a.related_end ? D.tBeforeEnd : D.tBefore) : (a.related_end ? AT.tAfterEnd : AT.tAfter)); };
   const proxText = a => a.proximity ? AT.tProxVals.split('|')[AL_PROX.indexOf(a.proximity)] || a.proximity : '';
@@ -2187,7 +2327,7 @@
     if (chip) { const i = +chip.dataset.i; const open = chip.getAttribute('aria-expanded') === 'true'; if (open) { $x('#ed-people-detail').innerHTML = ''; chip.setAttribute('aria-expanded', 'false'); } else peopleDetail(i); return; }
     if (!act) return; const p = peAll()[+$('.pchip[aria-expanded=true]', PC).dataset.i];
     if (act.dataset.pact === 'mail') location.href = 'mailto:' + p.email;
-    else if (act.dataset.pact === 'copy') navigator.clipboard.writeText(p.email).then(() => { act.title = D.tCopied; act.style.color = 'var(--accent)'; setTimeout(() => act.style.color = '', 800); });
+    else if (act.dataset.pact === 'copy') practical.copy(p.email).then(ok => { if (!ok) return; act.title = D.tCopied; act.style.color = 'var(--accent)'; setTimeout(() => act.style.color = '', 800); });
     else if (p.contacts.length === 1) location.href = '/contacts#' + p.contacts[0].key;
     else rrPop(act, [], null, key => { location.href = '/contacts#' + key; }, `<div class="q">${esc(PT.tPick)}</div>` + p.contacts.map(c => `<button type="button" class="pk" data-v="${esc(c.key)}"><span class="pav" style="background:var(--c${c.color_index})">${esc(c.initials)}</span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></button>`).join('')); });
   // links: URL / attachment / conference; an embedded (binary) attachment is shown read-only and never re-sent
@@ -2244,7 +2384,7 @@
   const lkAddFiles = files => { let total = LK.links.filter(l => l.embedded && l.data).reduce((a, l) => a + (l.size || 0), 0); const errs = []; [...files].forEach(file => { if (file.size > 2 * 1024 * 1024 || total + file.size > 6 * 1024 * 1024) { errs.push(LKT.tToobig.replace('{name}', file.name)); return; } total += file.size; const rd = new FileReader(); rd.onload = () => { LK.links.push({ kind: 'attach', uri: '', label: '', embedded: true, filename: file.name, fmt: file.type || 'application/octet-stream', size: file.size, features: [], extra: [], keep: false, data: String(rd.result).replace(/^data:[^,]*,/, '') }); lkSync(); }; rd.readAsDataURL(file); }); lkMsg.className = 'lk-msg' + (errs.length ? ' err' : ''); lkMsg.textContent = errs.join(' · '); };
   const lkClosePop = () => { if (lkPop) { lkPop.remove(); lkPop = null; } };
   let lkSearchT = 0;
-  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await fetch('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = await r.json(); const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="${practical.sprite}#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; document.body.appendChild(lkPop); placeUnder(lkPop, e.target); lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
+  $('#ed-lk-search').addEventListener('input', e => { clearTimeout(lkSearchT); const q = e.target.value.trim(); if (q.length < 2) { lkClosePop(); return; } lkSearchT = setTimeout(async () => { const r = await practical.req('/api/search?q=' + encodeURIComponent(q)); if (!r.ok) return; const d = r.data; const seen = new Set([current && current.uid, ...LK.related.map(x => x.uid)]); const hits = [...d.events.map(x => ({ kind: 'event', key: x.key, uid: x.uid, summary: x.summary, date: x.date, done: false })), ...d.tasks.map(x => ({ kind: 'task', key: x.key, uid: x.uid, summary: x.summary, date: x.due, done: x.completed }))].filter(h => h.uid && !seen.has(h.uid) && seen.add(h.uid)).slice(0, 8); lkClosePop(); lkPop = document.createElement('div'); lkPop.className = 'rrpop'; lkPop.innerHTML = hits.length ? hits.map((h, i) => `<button type="button" class="lk-hit" data-h="${i}"><svg class="ico"><use href="${practical.sprite}#${h.kind === 'task' ? 'i-tasks' : 'i-calendar'}"/></svg><span>${esc(h.summary)}</span><small>${esc([h.kind === 'task' ? LKT.tTask : LKT.tEvent, h.date ? fmtD(h.date) : ''].filter(Boolean).join(' · '))}</small></button>`).join('') : `<div class="lk-none">${esc(LKT.tNothing)}</div>`; document.body.appendChild(lkPop); placeUnder(lkPop, e.target); lkPop.addEventListener('click', ev => { const b = ev.target.closest('.lk-hit'); if (!b) return; const h = hits[+b.dataset.h]; LK.related.push({ uid: h.uid, reltype: '', extra: [], target: h }); e.target.value = ''; lkClosePop(); lkSync(); }); }, 250); });
   $('#ed-lk-search').addEventListener('blur', () => setTimeout(lkClosePop, 150));
   $('#ed-lk-addbtn').onclick = () => { lkAddUri($('#ed-lk-url').value); $('#ed-lk-url').value = ''; };
   $('#ed-lk-url').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#ed-lk-addbtn').click(); } });
@@ -2260,7 +2400,7 @@
   lkDetail.addEventListener('click', e => { const k = e.target.closest('[data-lk-kind]'); if (k && lkSel != null) { LK.links[lkSel].kind = k.dataset.lkKind; if (k.dataset.lkKind === 'conference' && !(LK.links[lkSel].features || []).length) LK.links[lkSel].features = ['AUDIO', 'VIDEO']; lkSync(); } });
   LKC.addEventListener('click', e => { const b = e.target.closest('[data-lact]'); if (!b) return; const a = b.dataset.lact, i = +b.dataset.i;
     if (a === 'open') { if (lkSafe(LK.links[i].uri)) window.open(LK.links[i].uri, '_blank', 'noopener'); }
-    else if (a === 'copy') navigator.clipboard.writeText(LK.links[i].uri).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); });
+    else if (a === 'copy') practical.copy(LK.links[i].uri).then(ok => { if (!ok) return; b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); });
     else if (a === 'download') window.open(`/api/events/${f.key.value}/attach/${LK.links[i].bin_index}`, '_blank', 'noopener');
     else if (a === 'edit') { lkSel = lkSel === i ? null : i; lkRender(); }
     else if (a === 'rm') { LK.links.splice(i, 1); lkSel = null; lkSync(); }
@@ -2545,7 +2685,7 @@
     if (pc && !pc.dataset.added) pc.hidden = !(f.status.value && f.status.value !== 'NEEDS-ACTION') && !(+f.percent.value > 0) && !f.completed_date.value; /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); soloCards(); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
-  function updateButtons() { const changed = sig() !== baseline; $('#ed-save').disabled = !changed; $('#ed-reset').disabled = !changed && form.classList.contains('new'); $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  function updateButtons() { const changed = sig() !== baseline, busy = W.busy; $('#ed-save').disabled = !changed || busy; $('#ed-reset').disabled = (!changed && form.classList.contains('new')) || busy; $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new') || busy; }
   function taskLine() {
     const [start] = getStamp('start'), [due] = getStamp('due');
     const box = $('#ed-whenline');
@@ -2597,7 +2737,7 @@
   }
   // `asNew`: `d` is a template (`tplUse`) — its attributes fill a new event
   function fill(d, date, asNew) {
-    const old = d && !asNew; current = old ? d : null; openDate = date; form.reset(); $('#ed-error').textContent = '';
+    const old = d && !asNew; current = old ? d : null; openDate = date; touched = false; form.reset(); $('#ed-error').textContent = '';
     $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); catsInit([]); $$('.rows .row', form).forEach(x => x.remove());
     f.key.value = old ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = old ? d.etag : '';
     form.classList.toggle('new', !old); f.summary.placeholder = old ? D.tTitle : D.tNewtitle;
@@ -2632,7 +2772,7 @@
   async function openEditor(key, date, quiet, only) {
     soloEnd();
     if (key) {
-      try { const r = await fetch(API + '/' + key); if (!r.ok) throw new Error(r.status); fill(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); return; }
+      const r = await practical.req(API + '/' + key); if (!r.ok) { practical.tell(r); return; } fill(r.data);
     } else fill(null, date);
     if (key && only) soloStart(only);
     ed.hidden = false; if (!key && !quiet) f.summary.focus(); dayline();
@@ -2657,7 +2797,7 @@
   }
   f.summary.addEventListener('input', () => {
     const q = f.summary.value.trim(); tplClose(); if (!tplOn() || q.length < 2) return;
-    const n = tplReq; tplTimer = setTimeout(async () => { let hits = []; try { const r = await fetch('/api/events/suggest?q=' + encodeURIComponent(q)); if (r.ok) hits = await r.json(); } catch (_) {} if (n === tplReq && tplOn() && document.activeElement === f.summary) tplShow(hits); }, 200);
+    const n = tplReq; tplTimer = setTimeout(async () => { const r = await practical.req('/api/events/suggest?q=' + encodeURIComponent(q)), hits = r.ok ? r.data : []; if (n === tplReq && tplOn() && document.activeElement === f.summary) tplShow(hits); }, 200);
   });
   f.summary.addEventListener('keydown', e => {
     if (!tplPop) return;
@@ -2669,14 +2809,14 @@
   const b64Of = async url => { const r = await fetch(url); if (!r.ok) throw new Error(r.status); const b = await r.blob(); return new Promise((ok, no) => { const rd = new FileReader(); rd.onload = () => ok(String(rd.result).replace(/^data:[^,]*,/, '')); rd.onerror = no; rd.readAsDataURL(b); }); };
   async function tplUse(h) {
     tplClose();
-    let d; try { const r = await fetch(API + '/' + h.key); if (!r.ok) throw new Error(r.status); d = await r.json(); } catch (e) { $('#ed-error').textContent = T.err + ': ' + e.message; return; }
+    const got = await practical.req(API + '/' + h.key); if (!got.ok) { if (got.kind !== 'auth') $('#ed-error').textContent = got.msg; return; } const d = got.data;
     const day = f.date.value || state.date, delta = Math.round((parse(day) - parse(d.start.slice(0, 10))) / 864e5), move = s => s && addDays(s.slice(0, 10), delta) + s.slice(10);
     const links = await Promise.all(d.links.map(async l => { if (!l.embedded) return l; try { return { ...l, data: await b64Of(`${API}/${h.key}/attach/${l.bin_index}`), bin_index: null, keep: false }; } catch (_) { return null; } }));
     const b0 = baseline, cal = f.calendar.value;
     fill({ ...d, start: move(d.start), end: move(d.end), rrule: d.rrule ? d.rrule.split(';').filter(p => !/^UNTIL=/i.test(p)).join(';') : null, rrule_until: null, exdates: [], rdates: [],
       attendees: d.attendees.map(p => ({ ...p, status: p.status ? 'NEEDS-ACTION' : '' })), alarms: d.alarms.map(a => ({ ...a, idx: null, at: move(a.at), acknowledged: null })), links: links.filter(Boolean) }, day, true);
     if (!f.calendar.value) { f.calendar.value = cal; syncDot(); } // the old calendar is gone: the one chosen stays
-    baseline = b0; updateButtons(); f.summary.focus(); dayline();
+    baseline = b0; touched = true; updateButtons(); f.summary.focus(); dayline();
   }
   /* solo: the dialog shows one card, already in edit mode, and saves the whole entry as usual. A
      category rule can fill other cards (location, reminders …): every card whose content changed
@@ -2711,7 +2851,7 @@
     if (b.hasAttribute('data-card-rm')) { if (!await ask(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') stRender(); if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode) { SCALARS.filter(k => FLD[k][0] === c.dataset.card).forEach(k => { RM[k] = 'off'; }); rulesApply('change'); } /* a removed rule card is off */ delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
-    if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else navigator.clipboard.writeText(v).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
+    if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else practical.copy(v).then(ok => { if (!ok) return; b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
@@ -2721,26 +2861,35 @@
     let h = ''; for (let i = 0; i < 7; i++) h += `<span class="h" style="top:${(i * 14.3).toFixed(1)}%">${7 + i * 2}:00</span>`;
     try {
       const nd = parse(day); nd.setDate(nd.getDate() + 1); const end = `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}`;
-      const r = await fetch(`/api/events?start=${day}&end=${end}`); const evs = await r.json();
+      const r = await practical.req(`/api/events?start=${day}&end=${end}`); const evs = r.ok ? r.data : [];
       for (const ev of evs) { if (ev.all_day || ev.start.slice(0, 10) !== day) continue; const s = ev.start.slice(11, 16).split(':'), e2 = ev.end.slice(11, 16).split(':'); const top = ((+s[0] + s[1] / 60) - 7) / 14 * 100, hh = Math.max(3, ((+e2[0] + e2[1] / 60) - (+s[0] + s[1] / 60)) / 14 * 100); const me = f.key.value === `${ev.principal}/${ev.cal_id}/${ev.object_id}`; h += `<div class="blk${me ? ' me' : ''}" style="top:${top.toFixed(1)}%;height:${hh.toFixed(1)}%;--c:${esc(ev.color)}">${esc(ev.summary)}</div>`; }
     } catch (_) {}
     box.innerHTML = h;
   }
-  form.addEventListener('submit', async e => {
+  // the save request of the dialog as it is now (also the conflict's "overwrite", with the ETag it fetched)
+  async function put() {
+    const body = TASK ? taskBody() : eventBody(), key = f.key.value;
+    const r = await practical.req(key ? API + '/' + key : API, { method: key ? 'PUT' : 'POST', json: body });
+    if (!r.ok) return r;
+    const res = r.data || {}, saved = key || (res.id && body.principal && body.cal_id ? `${body.principal}/${body.cal_id}/${res.id}` : null);
+    ntInvalidate(); ctInvalidate(); close(); load(false, saved);
+    return r;
+  }
+  // Enter in a field and a click on Save (or two clicks) are one save: W.run hands the second the first one's answer
+  form.addEventListener('submit', e => {
     e.preventDefault();
     flush();
-    if (ruleMode) { await ruleSave(); return; }
-    const body = TASK ? taskBody() : eventBody();
-    const key = f.key.value;
-    try {
-      const r = await fetch(key ? API + '/' + key : API, { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) });
-      if (!r.ok) { $('#ed-error').textContent = (r.status === 409 ? T.conflict : T.err + ' ' + r.status) + ': ' + (await r.text()).slice(0, 200); return; }
-      const res = await r.json().catch(() => ({}));
-      const saved = key || (res.id && body.principal && body.cal_id ? `${body.principal}/${body.cal_id}/${res.id}` : null);
-      ntInvalidate(); ctInvalidate(); close(); load(false, saved);
-    } catch (e2) { $('#ed-error').textContent = T.err + ': ' + e2.message; }
+    W.run(ruleMode ? ruleSave : put);
   });
-  $('#ed-delete').onclick = async () => { if (ruleMode) { if (await ask(T.delRule)) await ruleDelete(); return; } if (!await ask(TASK ? T.delTask : T.del)) return; const r = await fetch(API + '/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { close(); load(false); } else $('#ed-error').textContent = T.err + ' ' + r.status; };
+  $('#ed-delete').onclick = async () => { if (W.busy) return; if (ruleMode) { if (await ask(T.delRule)) W.run(ruleDelete); return; } if (!await ask(TASK ? T.delTask : T.del)) return;
+    W.run(async () => { const r = await practical.req(API + '/' + f.key.value, { method: 'DELETE' }); if (r.ok) { close(); load(false); } return r; }); };
+  // a session that ended while the dialog held unsaved work (practical.authLost): after the login the page comes back here, and so does the work
+  practical.keep(() => { if (!ed.hidden && !ruleMode && touched && dirty()) practical.stash('ed-' + ED_SCOPE, { date: openDate, isNew: form.classList.contains('new'), d: snapDetail() }); });
+  practical.guard(() => !ed.hidden && touched && dirty());
+  setTimeout(() => { // after the page's own start (the tasks page fills its docked new-task form first)
+    const k = practical.unstash('ed-' + ED_SCOPE); if (!k) return;
+    soloEnd(); fill(k.d, k.date, k.isNew); mode('edit'); baseline = ''; touched = true; updateButtons(); ed.hidden = false; dayline(); toast(tr('js-req-restored'));
+  });
 
   window.rusticalEd = { open: openEditor };
   { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { const b = sp.get('back'); ruleBack = b && /^\/(?![/\\])/.test(b) ? b : null; openRuleEditor(rp); } } // ?back=: a path of this site only, the link may come from anywhere
@@ -2810,20 +2959,20 @@
   async function fetchQ(v, all, signal) {
     const k = (all ? '1' : '0') + v, c = cache.get(k);
     if (c && Date.now() - c.t < 30000) return c.d;
-    const r = await fetch('/api/search?q=' + encodeURIComponent(v) + (all ? '&all=1' : ''), { signal });
-    const d = await r.json(); cache.set(k, { t: Date.now(), d }); if (cache.size > 40) cache.delete(cache.keys().next().value);
+    const r = await practical.req('/api/search?q=' + encodeURIComponent(v) + (all ? '&all=1' : ''), { signal }); if (!r.ok) throw r; // the callers keep what is shown
+    const d = r.data; cache.set(k, { t: Date.now(), d }); if (cache.size > 40) cache.delete(cache.keys().next().value);
     return d;
   }
 
   // ---- history (domain::search_history): loaded once, then kept here ----
   let H = null;
-  const loadH = async () => { if (H) return H; try { H = await (await fetch('/api/search/history')).json(); } catch (_) { H = []; } return H; };
+  const loadH = async () => { if (H) return H; const r = await practical.req('/api/search/history'); H = r.ok ? r.data : []; return H; };
   function record(v, target) {
     v = v.trim(); if (fold(v).length < 2) return;
     fetch('/api/search/history', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ q: v, target: target || null }) })
       .then(r => r.json()).then(on => { if (!on || !H) return; const n = fold(v), old = H.find(e => fold(e.q) === n); H = H.filter(e => e !== old); H.unshift({ id: old ? old.id : 0, q: v, target: target || (old && old.target) || null, uses: (old ? old.uses : 0) + 1 }); if (!old) H = null; }).catch(() => {});
   }
-  async function forget(id) { await fetch('/api/search/history/' + id, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (H) H = H.filter(e => e.id !== id); }
+  async function forget(id) { if (!practical.tell(await practical.req('/api/search/history/' + id, { method: 'DELETE' })).ok) return; if (H) H = H.filter(e => e.id !== id); }
   const histFor = v => { const n = fold(v.trim()); return (H || []).filter(e => { const f = fold(e.q); return !n || (f !== n && (f.startsWith(n) || f.includes(n))); }); };
 
   // ---- one hit → markup + what a pick does ----
@@ -3001,11 +3150,11 @@
   if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table') && location.hash.length <= 1) $('[data-ctview=table]').click(); // a link to one contact (#key) opens the list
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
-  $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); practical.send('/settings/columns', 'POST', on); }));
+  $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); practical.send('/settings/columns', 'POST', on).then(practical.tell); }));
   applyCols();
   // list view: the same picker toggles the lines of every entry
   function applyListFields() { const on = $$('#colpop input[data-lf]').filter(i => i.checked).map(i => i.dataset.lf); $$('.panels [data-lf]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.lf))); return on; }
-  $$('#colpop input[data-lf]').forEach(i => i.addEventListener('change', () => { const on = applyListFields(); practical.send('/settings/list-fields', 'POST', on); }));
+  $$('#colpop input[data-lf]').forEach(i => i.addEventListener('change', () => { const on = applyListFields(); practical.send('/settings/list-fields', 'POST', on).then(practical.tell); }));
   applyListFields(); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (wrap.classList.contains('view-table') ? 'table' : 'list'));
   // filter by addressbook / category
   const fb = $('#abfilter');
@@ -3107,7 +3256,12 @@
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
   const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].filter(e => !e.closest('template')).map(e => e.value).join('|') + '|' + chips().join(',') + '|' + $$('.pref[aria-pressed=true]', form).length;
-  function updateButtons() { const changed = serialize() !== baseline; $('#ct-save').disabled = !changed; $('#ct-reset').disabled = !changed && form.classList.contains('new'); $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new'); }
+  function updateButtons() { const changed = serialize() !== baseline, busy = W.busy; $('#ct-save').disabled = !changed || busy; $('#ct-reset').disabled = (!changed && form.classList.contains('new')) || busy; $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new') || busy; }
+  const W = practical.writer(form, { buttons: () => [$('#ct-save'), $('#ct-delete'), $('#ct-reset')], error: $('#ct-error'), idle: () => updateButtons(),
+    conflict: { overwrite: async () => { const r = await practical.req('/api/contacts/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(); }, reload: () => open(f.key.value) } });
+  const dirty = () => !det.hidden && form.classList.contains('mode-edit') && serialize() !== baseline;
+  practical.guard(dirty);
+  practical.keep(() => { if (dirty()) practical.stash('ct', { isNew: form.classList.contains('new'), d: { ...collect(), object_id: f.key.value.split('/')[2] || '', uid: current ? current.uid : '', etag: f.etag.value } }); });
   const initials = n => n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   function show(c) {
     current = c; form.reset(); form.classList.remove('solo'); wrap.classList.remove('solo'); f.full_name.readOnly = false; $('#ct-error').textContent = '';
@@ -3130,7 +3284,7 @@
     activeKey = c ? KEY(c) : null; markRow(activeKey);
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
-  async function open(key) { try { const r = await fetch('/api/contacts/' + key); if (!r.ok) throw new Error(r.status); show(await r.json()); } catch (e) { alert(T.err + ': ' + e.message); } }
+  async function open(key) { const r = practical.tell(await practical.req('/api/contacts/' + key)); if (r.ok) show(r.data); return r.ok; }
   $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
   // editing: dirty tracking, display name follows given + family, dates re-evaluate
@@ -3162,9 +3316,9 @@
       case 'open': open_(/^https?:/.test(val) ? val : 'https://' + val); break;
       case 'osm': open_('https://www.openstreetmap.org/search?query=' + encodeURIComponent(adrText())); break;
       case 'gmaps': open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(adrText())); break;
-      case 'copy': navigator.clipboard.writeText(row.classList.contains('adr') ? adrText() : val).then(() => { b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); break;
+      case 'copy': practical.copy(row.classList.contains('adr') ? adrText() : val).then(ok => { if (!ok) return; b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); break;
       case 'im': { const svc = $('select.typ', row).value; const u = { Signal: 'https://signal.me/#p/' + digits, WhatsApp: 'https://wa.me/' + digits.replace(/^\+/, ''), Telegram: 'https://t.me/' + val.replace(/^@/, ''), Matrix: 'https://matrix.to/#/' + val, XMPP: 'xmpp:' + val, Threema: 'https://threema.id/' + val }[svc]; if (u) open_(u); break; }
-      case 'goto': { const li = $$('.list li[data-key]').find(l => (l.dataset.name || '').toLowerCase() === val.toLowerCase()); if (li) { open(li.dataset.key); const sc = $('.main'); sc.scrollTop += li.getBoundingClientRect().top - sc.getBoundingClientRect().top - 120; } else alert(D.tMissing); break; }
+      case 'goto': { const li = $$('.list li[data-key]').find(l => (l.dataset.name || '').toLowerCase() === val.toLowerCase()); if (li) { open(li.dataset.key); const sc = $('.main'); sc.scrollTop += li.getBoundingClientRect().top - sc.getBoundingClientRect().top - 120; } else toast(D.tMissing, true); break; }
     }
   }
   $('#ct-lock').onclick = () => mode('edit');
@@ -3181,7 +3335,10 @@
   // the table picks a contact with a click on its row; the list opens it (above)
   $$('.sheet tr[data-key]', wrap).forEach(tr => tr.addEventListener('click', () => { activeKey = tr.dataset.key; markRow(activeKey); }));
   window.rusticalContacts = { reveal };
-  if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1))); else if (wide()) show(null);
+  // the work an ended session left unsaved (practical.keep above) comes back before anything else is opened
+  const kept = practical.unstash('ct');
+  if (kept) { show(kept.d); if (kept.isNew) { f.key.value = f.etag.value = ''; form.classList.add('new'); const b = $('#ct-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); baseline = ''; updateButtons(); toast(tr('js-req-restored')); }
+  else if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1))); else if (wide()) show(null);
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
     const g = k => f[k].value.trim();
@@ -3191,13 +3348,15 @@
       dates: rows('dates').map(r => ({ label: $('.lbl', r).value.trim(), date: getDate($('.pdate', r)) })).filter(d => d.date),
       birthday: getDate($('[data-date=birthday]', form)), anniversary: getDate($('[data-date=anniversary]', form)), categories: chips() };
   }
-  form.addEventListener('submit', async e => {
-    e.preventDefault(); const key = f.key.value; const body = collect();
-    const r = await fetch(key ? '/api/contacts/' + key : '/api/contacts', { method: key ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(key ? { ...body, etag: f.etag.value } : body) });
-    if (!r.ok) { $('#ct-error').textContent = T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 200); return; }
-    const { id } = await r.json(); location.hash = `${body.principal}/${body.ab_id}/${id}`; location.reload();
-  });
-  $('#ct-delete').onclick = async () => { if (!await ask(T.del)) return; const r = await fetch('/api/contacts/' + f.key.value, { method: 'DELETE', headers: { 'X-CSRF-Token': csrf } }); if (r.ok) { location.hash = ''; location.reload(); } };
+  // writes: one at a time, a 409 asks keep mine / load theirs, as in the event editor (practical.writer)
+  async function put() {
+    const key = f.key.value, body = collect();
+    const r = await practical.req(key ? '/api/contacts/' + key : '/api/contacts', { method: key ? 'PUT' : 'POST', json: key ? { ...body, etag: f.etag.value } : body });
+    if (r.ok) { baseline = serialize(); location.hash = `${body.principal}/${body.ab_id}/${r.data.id}`; practical.leaving = true; location.reload(); }
+    return r;
+  }
+  form.addEventListener('submit', e => { e.preventDefault(); W.run(put); });
+  $('#ct-delete').onclick = async () => { if (W.busy || !await ask(T.del)) return; W.run(async () => { const r = await practical.req('/api/contacts/' + f.key.value, { method: 'DELETE' }); if (r.ok) { location.hash = ''; practical.leaving = true; location.reload(); } return r; }); };
   // table inline edit: fetch → patch one field → PUT
   $$('.sheet td[contenteditable][data-f], .sheet .pin [contenteditable][data-f]').forEach(cell => {
     let before = '';
@@ -3207,8 +3366,8 @@
       const v = cell.textContent.trim(); if (v === before.trim()) return;
       const tr = cell.closest('tr'); const key = tr.dataset.key;
       try {
-        const c = await (await fetch('/api/contacts/' + key)).json();
-        const body = { ...c }; // the contact JSON is a superset of the input: nothing gets dropped
+        const got = await practical.req('/api/contacts/' + key); if (!got.ok) throw got;
+        const c = got.data, body = { ...c }; // the contact JSON is a superset of the input: nothing gets dropped
         switch (cell.dataset.f) {
           case 'full_name': { body.full_name = v; const parts = v.split(/\s+/); body.given = parts.slice(0, -1).join(' '); body.family = parts.slice(-1)[0] || ''; break; }
           case 'phone': body.phones = v ? [{ kind: (c.phones[0] || {}).kind || 'cell', value: v }, ...c.phones.slice(1)] : c.phones.slice(1); break;
@@ -3217,9 +3376,9 @@
           case 'org': body.org = v; break;
         }
         const r = await practical.send('/api/contacts/' + key, 'PUT', body);
-        if (!r.ok) throw new Error(r.status);
+        if (!r.ok) throw r;
         cell.style.outline = '2px solid var(--c2)'; setTimeout(() => cell.style.outline = '', 800);
-      } catch (e) { cell.textContent = before; alert(T.err + ': ' + e.message); }
+      } catch (e) { cell.textContent = before; if (e && e.kind) practical.tell(e); else console.error(e); }
     });
   });
   // table view: + opens the editor as a dialog over the table (the list view has it beside the list)
@@ -3296,9 +3455,10 @@
   const esc = practical.escN;
   const ic = (n, cl) => practical.ico(n, cl || 's');
   const L = LOC;
-  const de = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-  const deS = d => d ? d.toLocaleDateString(L, { day: '2-digit', month: '2-digit' }) : '';
-  const deT = d => d ? d.toLocaleString(L, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  // dfmt: cached formatters, the same text as toLocale*String(L, o) (o names its fields, so no defaults are added)
+  const de = d => d ? dfmt(d, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const deS = d => d ? dfmt(d, { day: '2-digit', month: '2-digit' }) : '';
+  const deT = d => d ? dfmt(d, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
   const key = t => `${t.principal}/${t.cal_id}/${t.object_id}`;
 
   const isDone = t => t.status === 'COMPLETED' || (!t.status && !!t.completed_at);
@@ -3454,8 +3614,8 @@
   }
   // after a save the server's answer wins: it keeps status, progress and completion consistent
   async function refresh(k) {
-    const d = await (await fetch('/api/tasks/' + k)).json(), t = find(k);
-    if (!t) return;
+    const r = await practical.req('/api/tasks/' + k), d = r.data, t = find(k);
+    if (!r.ok || !t) return;
     ['summary', 'description', 'location', 'start', 'start_all_day', 'due', 'due_all_day', 'status', 'percent', 'completed_at', 'class', 'categories'].forEach(f => { t[f] = d[f]; });
     t.priority = d.priority || 0; if (!t.status) t.status = d.completed_at ? 'COMPLETED' : 'NEEDS-ACTION'; // the list rows' rule (tasks.rs shown_status); the editor's answer keeps a missing STATUS missing
     t.alarms = (d.alarms || []).length; t.links = (d.links || []).length;
@@ -3465,7 +3625,8 @@
   async function saveCell(el) {
     const k = el.closest('tr').dataset.key, f = el.dataset.f;
     const v = el.isContentEditable ? el.textContent.trim() : el.value;
-    const d = await (await fetch('/api/tasks/' + k)).json();
+    const got = practical.tell(await practical.req('/api/tasks/' + k)); if (!got.ok) { refresh(k); return; }
+    const d = got.data;
     switch (f) {
       case 'summary': if (!v) { refresh(k); return; } d.summary = v; break;
       case 'start': case 'due': d[f] = v || null; d[f + '_all_day'] = el.type === 'date'; break;
@@ -3496,7 +3657,7 @@
   });
   $$('#tk-colpop input[data-col]').forEach(i => i.addEventListener('change', () => {
     render();
-    practical.send('/settings/task-columns', 'POST', shownCols());
+    practical.send('/settings/task-columns', 'POST', shownCols()).then(practical.tell);
   }));
 
   // ---- C: board ----
@@ -3525,7 +3686,7 @@
     for (let m = -1; m <= 2; m++) {
       const d = new Date(TODAY.getFullYear(), TODAY.getMonth() + m, 1), n = day(d);
       if (n < LO || n > HI) continue;
-      ax += `<span style="left:${x(n)}%">${d.toLocaleDateString(L, { month: 'short', year: '2-digit' })}</span><i style="left:${x(n)}%"></i>`;
+      ax += `<span style="left:${x(n)}%">${dfmt(d, { month: 'short', year: '2-digit' })}</span><i style="left:${x(n)}%"></i>`;
     }
     let h = `<div class="tktl"><div class="axis">${ax}</div><div class="now" style="left:${x(0)}%"><b>${T.today}</b></div>`;
     sortList(TASKS.filter(t => t.due || t.completed_at), sort, desc).forEach(t => {
@@ -3666,11 +3827,7 @@
   });
 
   // ---- writing ----
-  async function put(k, body) {
-    const r = await practical.send('/api/tasks/' + k, 'PUT', body);
-    if (!r.ok) { alert(T.err + ' ' + r.status); return false; }
-    return true;
-  }
+  async function put(k, body) { return practical.tell(await practical.send('/api/tasks/' + k, 'PUT', body)).ok; }
   // one click or key press is easily an accident: finishing a task asks first (reopening does not)
   async function toggle(k) {
     const t = TASKS.find(x => key(x) === k); if (!t) return;
@@ -3679,7 +3836,8 @@
   }
   async function setStatus(k, st) {
     const t = TASKS.find(x => key(x) === k); if (!t || t.status === st) return;
-    const d = await (await fetch('/api/tasks/' + k)).json();
+    const got = practical.tell(await practical.req('/api/tasks/' + k)); if (!got.ok) return;
+    const d = got.data;
     d.status = st;
     if (st !== 'COMPLETED') { d.completed_at = null; if (d.percent === 100) d.percent = 0; } else d.percent = 100;
     if (await put(k, d)) reload();
@@ -3694,11 +3852,10 @@
   async function reload(hash = '') {
     const u = url(), n = ++reloads;
     let doc = null, data = null;
-    try {
-      const r = await fetch(u, { headers: { Accept: 'text/html' } });
-      if (r.ok && new URL(r.url).pathname === '/tasks') { doc = new DOMParser().parseFromString(await r.text(), 'text/html'); data = JSON.parse(doc.getElementById('tasks-data').textContent); }
-    } catch (_) { doc = null; }
+    const r = await practical.req(u, { headers: { Accept: 'text/html' }, as: 'text', wait: 300 });
     if (n !== reloads) return;
+    if (!r.ok) { practical.tell(r); return; } // the page stays as it is; a session that ended goes to the login (practical.req)
+    try { doc = new DOMParser().parseFromString(r.data, 'text/html'); data = JSON.parse(doc.getElementById('tasks-data').textContent); } catch (_) { doc = null; }
     if (!doc || !data || fixedOf(doc) !== FIXED) { location.href = u + hash; return; }
     $('#tasks-data').textContent = doc.getElementById('tasks-data').textContent;
     $('#task-count').textContent = doc.getElementById('task-count').textContent;
@@ -3825,12 +3982,12 @@
   const { esc } = practical, csrf = practical.csrf();
   const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
   // import: read the chosen file, POST its bytes (no multipart)
-  settings.querySelectorAll('input[type=file][data-import]').forEach(inp => inp.addEventListener('change', async () => {
+  settings.querySelectorAll('input[type=file][data-import]').forEach(inp => { const w = practical.writer(inp.closest('form') || inp); inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;
-    const r = await fetch(inp.dataset.import, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-CSRF-Token': csrf }, body: await file.arrayBuffer() });
-    if (r.ok) { const d = await r.json(); sessionStorage.toast = T.done(d.imported); location.reload(); } else toast(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300), true);
+    const body = await file.arrayBuffer();
+    await w.run(async () => { const r = await practical.req(inp.dataset.import, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body }); if (r.ok) { sessionStorage.toast = T.done(r.data.imported); practical.leaving = true; location.reload(); } return r; });
     inp.value = '';
-  }));
+  }); });
   // import into a NEW calendar or address book (.imp-form, data-kind = the route's collection kind): the page
   // reads the file first — for a calendar its calendar-level X-WR-* lines (the ones RustiCal's own IMPORT
   // reads, plus Apple's colour) prefill the form and the types it holds are switched on and locked; a .vcf
@@ -3880,14 +4037,17 @@
       info.textContent = [tr('js-imp-file', { file: f.name }), ...found.map(k => count(k, d.n[k]))].join(' · ') + (taken.length ? ' · ' + tr('js-imp-taken', { what: taken.join(', ') }) : '');
       fields.hidden = false; el.name.focus(); el.name.select();
     });
-    form.addEventListener('submit', async e => {
+    const w = practical.writer(form, { buttons: () => [go] });
+    form.addEventListener('submit', e => {
       e.preventDefault(); if (!buf || !form.reportValidity()) return;
-      go.disabled = true; go.textContent = tr('js-imp-busy');
+      go.textContent = tr('js-imp-busy');
       const p = new URLSearchParams({ owner: el.owner.value, name: el.name.value.trim(), color: el.color.value, description: el.description.value.trim() });
       if (kind === 'calendars') { p.set('timezone', el.timezone.value.trim()); p.set('components', [...form.querySelectorAll('input[name=comp]')].filter(c => c.checked).map(c => c.value).join(',')); }
-      const r = await fetch(`/settings/import/${kind}?${p}`, { method: 'POST', headers: { 'Content-Type': kind === 'calendars' ? 'text/calendar' : 'text/vcard', 'X-CSRF-Token': csrf }, body: buf });
-      if (r.ok) { const d = await r.json(); sessionStorage.toast = tr('js-imp-done', { title: el.name.value.trim(), count: d.imported }); location.hash = `#${kind === 'calendars' ? 'cal' : 'ab'}-${d.owner}-${d.id}`; location.reload(); return; }
-      toast(T.err + ' ' + r.status + ': ' + (await r.text()).slice(0, 300), true); go.disabled = false; go.textContent = goText;
+      w.run(async () => {
+        const r = await practical.req(`/settings/import/${kind}?${p}`, { method: 'POST', headers: { 'Content-Type': kind === 'calendars' ? 'text/calendar' : 'text/vcard' }, body: buf });
+        if (r.ok) { const d = r.data; sessionStorage.toast = tr('js-imp-done', { title: el.name.value.trim(), count: d.imported }); location.hash = `#${kind === 'calendars' ? 'cal' : 'ab'}-${d.owner}-${d.id}`; practical.leaving = true; location.reload(); return r; }
+        go.textContent = goText; return r;
+      });
     });
   });
   // push
@@ -3914,7 +4074,7 @@
   };
   dis.onclick = async () => {
     const reg = await navigator.serviceWorker.getRegistration('/'); const sub = reg && await reg.pushManager.getSubscription();
-    if (sub) { await practical.send('/api/push/subscriptions', 'DELETE', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+    if (sub) { practical.tell(await practical.send('/api/push/subscriptions', 'DELETE', { endpoint: sub.endpoint })); await sub.unsubscribe(); }
     refresh();
   };
   refresh();

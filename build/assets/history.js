@@ -58,7 +58,7 @@
   const attrLabel = k => { for (const c of log) for (const it of c.items) for (const a of it.attrs) if (a[0] === k) return a[1]; return k; };
   const dayKey = practical.ymd;
   const now = () => new Date(D.now);
-  const time = t => t.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' });
+  const fmtTime = new Intl.DateTimeFormat(LOC, { hour: '2-digit', minute: '2-digit' }), time = t => fmtTime.format(t); // one formatter, not one per row (perf3 #2: 57 ms self time per load)
   const dayDiff = t => Math.round((new Date(dayKey(now())) - new Date(dayKey(t))) / 864e5);
   const dayLabel = t => { const d = dayDiff(t); return d === 0 ? S('today') : d === 1 ? S('yesterday') : fmtDay.format(t); };
   const when = t => { const d = dayDiff(t); return (d === 0 ? S('today') : d === 1 ? S('yesterday') : fmtShort.format(t)) + ' ' + time(t); };
@@ -122,14 +122,17 @@
     ? tr('w-later', { title: w.title, n: w.ids.length, refs: w.ids.map(i => '#' + i).join(', ') })
     : tr('w-conflict', { label: w.label, by: w.by ? ` (#${w.by})` : '', cur: w.cur || S('empty'), old: w.old || S('empty') });
   const planText = p => [...p.warns.map(warnText), ...p.skips.map(s => tr('w-skip', { title: s.title, why: whyText(s.why, s.by) }))];
+  // a 409 carries the undo's plan (JSON); any other failure its message (practical.req); a session that ended: nothing (the page leaves)
   async function post(id, confirm) {
-    const r = await practical.send(`/api/history/${id}/undo`, 'POST', { confirm }).catch(() => null);
-    if (!r) return { err: S('err') };
-    if (r.status === 409) return { plan: await r.json() };
-    if (!r.ok) return { err: (await r.text()) || S('err') };
-    return { id: (await r.json()).id };
+    const r = await practical.send(`/api/history/${id}/undo`, 'POST', { confirm });
+    if (r.ok) return { id: r.data.id };
+    if (r.kind === 'conflict') try { return { plan: JSON.parse(r.body) }; } catch (_) {}
+    return { err: r.kind === 'auth' ? null : r.msg, gone: r.kind === 'auth' };
   }
-  async function undo(id, confirmed = false) {
+  // one undo at a time: a second click while one runs (its question included) is the same undo
+  let undoing = null;
+  const undo = (id, confirmed) => undoing || (undoing = undo1(id, confirmed).finally(() => { undoing = null; }));
+  async function undo1(id, confirmed = false) {
     let res = await post(id, confirmed);
     if (res.plan) {
       if (!res.plan.ok) { toast(whyText(res.plan.why, (res.plan.skips[0] || {}).by, byId[id]), true); return; }
@@ -137,6 +140,7 @@
       if (!await askYesNo(tr('ask', { ref: '#' + id }) + '\n\n• ' + lines.join('\n• '), S('undo'), S('cancel'), true)) return;
       res = await post(id, true);
     }
+    if (res.gone) return;
     if (res.err || res.plan) { toast(res.err || S('err'), true); return; }
     await reload();
     toast(tr('done', { ref: '#' + id, id: '#' + res.id }));
@@ -145,9 +149,9 @@
   // false: the document came back unchanged (the live echo of an undo made here) — nothing to redraw
   let lastDoc = '';
   async function reload() {
-    const r = await fetch('/api/history', { headers: { Accept: 'application/json' } }).catch(() => null);
-    if (!r || !r.ok) return true;
-    const t = await r.text(); if (t === lastDoc) return false;
+    const r = practical.tell(await practical.req('/api/history', { headers: { Accept: 'application/json' }, as: 'text' }));
+    if (!r.ok) return false; // the page stays as it is, the failure is told
+    const t = r.data; if (t === lastDoc) return false;
     lastDoc = t; load(JSON.parse(t)); return true;
   }
   async function planOf(id) {
