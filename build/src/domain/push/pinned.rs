@@ -32,7 +32,7 @@ async fn setup() -> TestApp {
     app.put_ics("group.fam", &fam, "g1", &vevent("g1", "Familie-Termin", &format!("{b}4T180000\nDTEND;TZID=Europe/Berlin:20261014T190000\n{}", alarm(":-PT20M")))).await;
     app.put_ics("group.fam", &fam, "g2", &vevent("g2", "Spät", &format!("{b}5T004500\nDTEND;TZID=Europe/Berlin:20261015T010000\n{}", alarm(":-PT15M")))).await;
     for (id, p) in [("sa", "alice"), ("sb", "bob")] {
-        sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES (?, ?, ?, 'k', 'a')").bind(id).bind(p).bind(format!("http://127.0.0.1:9/{id}")).execute(&app.state.db).await.unwrap();
+        sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES (?, ?, ?, ?, ?)").bind(id).bind(p).bind(format!("https://fcm.googleapis.com/fcm/send/{id}")).bind(super::guard::P256DH).bind(super::guard::AUTH).execute(&app.state.db).await.unwrap();
     }
     app
 }
@@ -134,7 +134,7 @@ async fn no_subscribers_no_work() {
     assert_eq!(plan.builds, 1);
     // a new subscription is a write: the next round looks again
     app.user("alice", "Alice").await;
-    sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('s', 'alice', 'http://127.0.0.1:9/s', 'k', 'a')").execute(&app.state.db).await.unwrap();
+    sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('s', 'alice', 'https://fcm.googleapis.com/fcm/send/s', ?, ?)").bind(super::guard::P256DH).bind(super::guard::AUTH).execute(&app.state.db).await.unwrap();
     tick(&app.state, &mut plan, watch.stamp().await, now + Duration::minutes(120)).await.unwrap();
     assert_eq!((plan.builds, plan.users.len()), (2, 1));
 }
@@ -146,7 +146,7 @@ async fn a_sent_reminder_is_not_sent_again() {
     app.user("alice", "Alice").await;
     let cal = app.calendar("alice", "Plan", "#3478f6", &["VEVENT"]).await;
     app.put_ics("alice", &cal, "e", &ics(&format!("BEGIN:VEVENT\nUID:e\nDTSTAMP:20260901T000000Z\nSUMMARY:x\nDTSTART:20261014T100000Z\nDTEND:20261014T110000Z\n{}\nEND:VEVENT", alarm(":-PT10M")))).await;
-    sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('s', 'alice', 'http://127.0.0.1:9/s', 'k', 'a')").execute(&app.state.db).await.unwrap();
+    sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('s', 'alice', 'https://fcm.googleapis.com/fcm/send/s', ?, ?)").bind(super::guard::P256DH).bind(super::guard::AUTH).execute(&app.state.db).await.unwrap();
     let mut watch = crate::db::Watch::new(app.state.db.clone());
     let t = |s: &str| chrono::DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc);
     let mut plan = Plan::default();
