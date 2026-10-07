@@ -16,10 +16,16 @@
 #    target dir via OUT_DIR misses, and so do the dependents). Cold build of a new checkout with a warm cache
 #    (2026-10-06): cargo test 79 → 69 s, e2e server 129 → 95 s; the same dir again ~50 % less; filling the cache
 #    costs ~10 % more than no sccache. SCCACHE_CLIENT_SIDE=1 was slower (98 s vs 69 s).
+#  - warnings are errors (RUSTFLAGS -D warnings, appended to yours): every gate step (cargo test, the e2e/bench server
+#    build) fails on a new warning. Here and not `#![deny(warnings)]`/[lints] in the crate: a toolchain bump that
+#    brings a new lint must not fail the image build in CI (Dockerfile, plain cargo) or `mise run dev`. Dependencies
+#    are unaffected (cargo passes them --cap-lints allow), but the flag is part of every crate's fingerprint: a
+#    target dir built without it is rebuilt once.
 set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO/build"
 export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings"
 T="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(pwd -P | shasum | cut -c1-12)}"
 unset CARGO_TARGET_DIR
 if [ "${E2E_SCCACHE:-1}" != 0 ] && [ -z "${RUSTC_WRAPPER:-}" ] && command -v sccache >/dev/null 2>&1; then
