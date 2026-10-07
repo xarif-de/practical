@@ -420,6 +420,10 @@
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });
+  /* an entry's data for the editor, on the intent to open it: started before the click, the answer is processed before the
+     click instead of after the next frame (Chromium defers network tasks after an input until a frame is drawn: a ~9 vs
+     ~23 ms bimodal editor open, 2026-10-07 trace, gone with --disable-features=DeferRendererTasksAfterInput) */
+  practical.intentIn(root, '[data-key]', el => ['/api/events/' + el.dataset.key], 'application/json');
   $('#fab').onclick = () => edOpen(null, state.date);
 
   // ---- orbit picker ----

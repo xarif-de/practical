@@ -36,7 +36,9 @@
   async function openEditor(key, date, quiet, only) {
     soloEnd();
     if (key) {
-      const r = await practical.req(API + '/' + key); if (!r.ok) { practical.tell(r); return; } fill(r.data);
+      const pre = await practical.prefetched(API + '/' + key); let d = null; try { d = pre && JSON.parse(pre); } catch (_) {} // the calendar's intent (calendar.js)
+      if (!d) { const r = await practical.req(API + '/' + key); if (!r.ok) { practical.tell(r); return; } d = r.data; }
+      fill(d);
     } else fill(null, date);
     if (key && only) soloStart(only);
     const was = ed.hidden; if (was) opener = document.activeElement; ed.hidden = false;

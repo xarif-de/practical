@@ -115,3 +115,28 @@ test('a prefetch leaves a pending flash to the page that shows it; Save-Data pre
   await page.waitForTimeout(500);
   expect(seen).toEqual([]);
 });
+
+test('hovering an entry prefetches what its editor shows; the click opens it from that answer; a change drops it', async ({ page }) => {
+  await open(page, '/calendar?view=month&date=2026-10-14');
+  const chip = page.locator('.v-month .day[data-date="2026-10-14"] .ev[data-key]').first();
+  const key = await chip.getAttribute('data-key'), url = '/api/events/' + key;
+  const seen = [];
+  page.on('request', r => { if (new URL(r.url()).pathname === url) seen.push(r.headers().purpose === 'prefetch'); });
+  const pre = page.waitForResponse(r => new URL(r.url()).pathname === url && r.request().headers().purpose === 'prefetch');
+  await chip.hover();
+  expect((await pre).status()).toBe(200);
+  const ev = await page.evaluate(u => practical.req(u).then(r => r.data), url); // the reference (not a prefetch)
+  const n = seen.length;
+  await chip.click();
+  await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue(ev.summary);
+  expect(seen.slice(n)).toEqual([]); // served from the prefetch
+  await page.locator('#ed-close').click();
+  await expect(page.locator('#ed')).toBeHidden();
+  // an own write after a prefetch: the editor shows the written state
+  const pre2 = page.waitForResponse(r => new URL(r.url()).pathname === url && r.request().headers().purpose === 'prefetch');
+  await chip.hover({ position: { x: 2, y: 2 } });
+  await pre2;
+  expect(await page.evaluate(([u, e]) => practical.send(u, 'PUT', { ...e, summary: 'F6 Umbenannt' }).then(r => r.ok), [url, ev])).toBe(true);
+  await page.locator(`.v-month .ev[data-key="${key}"]`, { hasText: 'F6 Umbenannt' }).first().click();
+  await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue('F6 Umbenannt');
+});

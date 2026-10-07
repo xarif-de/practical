@@ -45,7 +45,8 @@
     ctRows.innerHTML = CATS.map((c, i) => `<div class="ct-row" data-i="${i}" draggable="true"><span class="ct-grip edits" title="${esc(CTT.tUp)} / ${esc(CTT.tDown)}">⋮⋮</span><span class="ct-head"><span class="chip">${esc(c)}</span><button class="add edits ct-rule" type="button" data-ct-rule="${esc(c)}"><svg class="ico"><use href="${practical.sprite}#i-settings"/></svg> ${esc(CTT.tRule)}</button></span><button class="ct-x edits" type="button" data-ct-rm="${i}">×</button><span class="ct-fx">${ctFx(c, over)}</span></div>`).join('');
     ctCloudRender();
   }
-  const ctIndex = () => CT_IDX ? Promise.resolve(CT_IDX) : fetch('/api/categories?scope=' + ED_SCOPE).then(r => r.ok ? r.json() : []).then(d => (CT_IDX = d)).catch(() => []);
+  // one fetch however often the index is asked for meanwhile (a fill renders the categories 3 times); a failed one is asked again next time
+  const ctIndex = () => { if (CT_IDX) return CT_IDX; const p = CT_IDX = fetch('/api/categories?scope=' + ED_SCOPE).then(r => r.ok ? r.json() : Promise.reject(r)).catch(() => { if (CT_IDX === p) CT_IDX = null; return []; }); return p; };
   const ctInvalidate = () => { CT_IDX = null; };
   async function ctCloudRender() { const idx = await ctIndex(); ctCloud.innerHTML = idx.filter(c => !CATS.includes(c.name)).slice(0, 24).map(c => `<button class="ct-tag" type="button" data-ct-add="${esc(c.name)}">${esc(c.name)}${c.count ? ` <small>${c.count}</small>` : ''}${c.rule ? ` <svg class="ico" style="width:10px;height:10px"><use href="${practical.sprite}#i-tag"/></svg>` : ''}</button>`).join(''); }
   function catsInit(list) { CATS = (list || []).map(c => String(c).trim()).filter(Boolean); ctRender(); }

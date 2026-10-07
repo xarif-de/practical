@@ -16,11 +16,11 @@
   document.addEventListener('rustical:change', drop);
   const on = () => live && !(navigator.connection && navigator.connection.saveData);
   P.stream = open => { live = open; if (!open) drop(); };
-  P.prefetch = url => {
+  P.prefetch = (url, accept = 'text/html') => {
     const k = String(url), e = m.get(k);
     if (!on() || (e && Date.now() - e.t < TTL)) return;
     if (m.size >= MAX) m.delete(m.keys().next().value);
-    m.set(k, { t: Date.now(), g: gen, p: f0(k, { headers: { Accept: 'text/html', Purpose: 'prefetch' } }).then(r => r.status === 200 ? r.text() : null).catch(() => null) });
+    m.set(k, { t: Date.now(), g: gen, p: f0(k, { headers: { Accept: accept, Purpose: 'prefetch' } }).then(r => r.status === 200 ? r.text() : null).catch(() => null) });
   };
   P.prefetched = async url => {
     const k = String(url), e = m.get(k); if (!e) return null;
@@ -36,5 +36,14 @@
     el.addEventListener('pointerenter', rest);
     el.addEventListener('pointerleave', () => { clearTimeout(t); t = 0; });
     el.addEventListener('pointerdown', now); el.addEventListener('focus', now); el.addEventListener('touchstart', now, { passive: true });
+  };
+  // the same for every `sel` inside `box`, delegated (a view holds hundreds of entries); `urls(el)`, fetched as `accept`
+  P.intentIn = (box, sel, urls, accept) => {
+    let t = 0, cur = null; const of = e => (e.target.closest && e.target.closest(sel)) || null;
+    const now = el => { clearTimeout(t); t = 0; if (el.isConnected) urls(el).forEach(u => P.prefetch(u, accept)); };
+    box.addEventListener('pointerover', e => { const el = of(e); if (el === cur) return; clearTimeout(t); t = 0; cur = el; if (el) t = setTimeout(() => now(el), HOVER_MS); });
+    box.addEventListener('pointerleave', () => { clearTimeout(t); t = 0; cur = null; });
+    box.addEventListener('pointerdown', e => { const el = of(e); if (el) now(el); });
+    box.addEventListener('focusin', e => { const el = of(e); if (el && el.matches(':focus-visible')) now(el); }); // the keyboard's focus, not the one an editor gives back on closing
   };
 })();
