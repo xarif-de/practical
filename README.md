@@ -413,8 +413,9 @@ mise run e2e                            # functional suite (e2e/functional), spe
 mise run e2e-baseline -- <dir>          # visual suite → <dir> (default ~/.cache/practical-e2e/<sha>)
 mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>/compare-report; exit 1 on any difference
 mise run chaos                          # seeded UI monkey + network chaos (e2e/chaos, one worker, ~60 s)
+mise run a11y                           # axe-core over fixed states + keyboard flows (e2e/a11y, ~30 s)
 mise run gate-quick                     # cargo test → server build → functional suite
-mise run gate -- <ref-dir>              # gate-quick → chaos → visual baseline → compare against <ref-dir>
+mise run gate -- <ref-dir>              # gate-quick → chaos → a11y → visual baseline → compare against <ref-dir>
 mise run bench                          # performance bench of this checkout → ~/.cache/practical-e2e/bench-<sha>
 mise run bench-compare -- <bench-dir>   # A/B against a former bench dir, interleaved; exit 1 on a regression
 ```
@@ -456,6 +457,17 @@ mise run bench-compare -- <bench-dir>   # A/B against a former bench dir, interl
   on one DB. `compare.mjs` takes byte-identical files as equal and diffs the rest on 4 threads.
 - Pixel baselines depend on the host's fonts and Chromium build (`@playwright/test` pinned in
   `e2e/package-lock.json`): compare baselines from the same machine.
+
+### Accessibility
+
+`e2e/a11y/` (`mise run a11y`, part of the full gate): axe-core (`axe-core` pinned in `e2e/package.json`; WCAG 2.2
+A/AA + best practices, `e2e/lib/axe.mjs`) over 25 fixed states (calendar views, editor and its questions, search,
+contacts, tasks, settings, history, login) in desktop light + dark and phone light, plus keyboard-only flows
+(desktop light): every Tab stop shows its focus, the editor and the questions keep the focus inside and give it
+back, entries open with Enter, 200 % zoom, reduced motion. A finding fails unless `e2e/a11y-allow.txt` accepts it
+(rule + key: the colour pair for contrast, else the target without positions and values); `a11y-check.mjs` fails
+on a line no state shows any more — the list only shrinks. `E2E_AXE=1` with the visual suite writes every state's
+findings next to its PNG (`<state>.axe.json`): an audit of all of them.
 
 ### Performance bench
 
