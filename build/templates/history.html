@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block title %}{{ ctx.t("nav-history") }} · {{ ctx.t("app-name") }}{% endblock %}
-{% block head %}<link rel="stylesheet" href="/assets/history.css?v={{ ctx.asset_v }}"><script src="/assets/history.js?v={{ ctx.asset_v }}" defer></script>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ ctx.asset("history.css") }}"><script src="{{ ctx.asset("history.js") }}" defer></script>{% endblock %}
 {% block content %}
 {# drawn by history.js from #history-data: the line map (default) or the list with details #}
 <div class="hxpage" id="hx"></div>

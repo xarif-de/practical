@@ -2341,8 +2341,8 @@
   // ---- map dialog: the crosshair is the position; with the address part in use the address must be
   // determined for a moved map before "apply" — apply writes both parts at once ----
   const gm = $('#geomap'); let map = null, gmSeq = 0, gmMoved = false, gmAddrKnown = false, gmAddrErr = false, gmAddr = '', gmMoving = false;
-  const assetV = (($('script[src*="app.js"]') || {}).src || '').split('?')[1] || '';
-  const loadLeaflet = () => new Promise((res, rej) => { if (window.L) return res(); const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assets/leaflet.css?' + assetV; document.head.appendChild(css); const js = document.createElement('script'); js.src = '/assets/leaflet.js?' + assetV; js.onload = res; js.onerror = () => rej(new Error('leaflet')); document.head.appendChild(js); });
+  const [leafletJs, leafletCss] = ((gm && gm.dataset.leaflet) || '').split(' '); // each file's own versioned URL (editor.html)
+  const loadLeaflet = () => new Promise((res, rej) => { if (window.L) return res(); const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = leafletCss; document.head.appendChild(css); const js = document.createElement('script'); js.src = leafletJs; js.onload = res; js.onerror = () => rej(new Error('leaflet')); document.head.appendChild(js); });
   const centre = () => { const c = map.getCenter(); return [+c.lat.toFixed(6), +c.lng.toFixed(6)]; };
   const coordsChanged = () => { const c = centre(), g = geoOf(); return !g || Math.abs(g[0] - c[0]) > 5e-6 || Math.abs(g[1] - c[1]) > 5e-6; };
   // one main button: "determine address" (red) while the address for the crosshair is unknown, else

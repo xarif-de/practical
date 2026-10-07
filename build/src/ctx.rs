@@ -32,7 +32,6 @@ pub struct PageCtx {
     pub i18n: Arc<crate::i18n::I18n>,
     pub public_dav_url: String,
     pub push_enabled: bool,
-    pub asset_v: &'static str,
     /// Development mode (assets from disk + `/dev/reload`); adds `data-dev` to <body>.
     pub dev: bool,
     /// The request asked for JSON (a form saved by fetch): answer instead of redirecting with a flash.
@@ -74,6 +73,11 @@ impl PageCtx {
     /// without a file reads English, as `I18n::t` does).
     pub fn i18n_src(&self) -> &'static str {
         crate::routes::assets::url(&format!("i18n-{}.js", self.lang)).or_else(|| crate::routes::assets::url("i18n-en.js")).expect("i18n-en.js")
+    }
+    /// `/assets/<name>?v=<its own version>` for the <link>/<script> tags: a change of one file leaves the
+    /// other files' URLs (and the browser's immutable copies of them) as they are.
+    pub fn asset(&self, name: &str) -> &'static str {
+        crate::routes::assets::url(name).expect("an asset")
     }
     /// The icon sprite (`<use href="{icons}#i-…">`, macros.html `ico`).
     pub fn icons(&self) -> &'static str {
@@ -170,7 +174,6 @@ impl FromRequestParts<SharedState> for PageCtx {
             i18n: state.i18n.clone(),
             public_dav_url: state.config.public_dav_url.clone(),
             push_enabled: state.vapid.is_some(),
-            asset_v: crate::routes::assets::asset_version(),
             dev: state.config.dev_assets_dir.is_some(),
             wants_json,
             scheme,

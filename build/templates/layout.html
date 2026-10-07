@@ -7,10 +7,10 @@
 <meta name="color-scheme" content="light dark">
 <title>{% block title %}{{ ctx.t("app-name") }}{% endblock %}</title>
 <link rel="icon" href="/assets/icon.svg">
-<link rel="stylesheet" href="/assets/style.css?v={{ ctx.asset_v }}">
+<link rel="stylesheet" href="{{ ctx.asset("style.css") }}">
 <script src="{{ ctx.i18n_src() }}" defer></script>{# app.js' strings (window.I18N), one cached file per language; runs before app.js (both deferred, document order) #}
-<script src="/assets/app.js?v={{ ctx.asset_v }}" defer blocking="render"></script>{# render-blocking: the first paint already shows what app.js draws (task views, sort boxes …), no empty page in between; defer still runs it after parsing #}
-<script src="/assets/theme.js?v={{ ctx.asset_v }}"></script>{# parser-blocking on purpose: "auto" sets data-scheme before the first paint (no light flash; was an inline script, which the CSP forbids) #}
+<script src="{{ ctx.asset("app.js") }}" defer blocking="render"></script>{# render-blocking: the first paint already shows what app.js draws (task views, sort boxes …), no empty page in between; defer still runs it after parsing #}
+<script src="{{ ctx.asset("theme.js") }}"></script>{# parser-blocking on purpose: "auto" sets data-scheme before the first paint (no light flash; was an inline script, which the CSP forbids) #}
 <meta name="icons" content="{{ ctx.icons() }}">{# the icon sprite: <use href="…#i-x"> (macros.html ico); app.js reads its URL here #}
 {% block head %}{% endblock %}
 </head>
