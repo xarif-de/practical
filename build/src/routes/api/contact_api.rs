@@ -43,7 +43,7 @@ pub(super) async fn update_contact(State(state): State<SharedState>, user: Princ
         let uid = contacts::parse_vcf(&old)?.get_uid().unwrap_or(&id).to_string();
         let new_id = contacts::create_contact_as(&state, &user, u.input, Some(&uid)).await?;
         g.object(Store::Ab, &tp, &ta, &new_id);
-        contacts::delete_contact(&state, &user, &p, &a, &id).await?;
+        crate::domain::collections::delete_object(&state, &user, Store::Ab, &p, &a, &id).await?;
         g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
@@ -53,9 +53,5 @@ pub(super) async fn update_contact(State(state): State<SharedState>, user: Princ
 }
 
 pub(super) async fn delete_contact(State(state): State<SharedState>, user: Principal, Path((p, a, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
-    let mut g = history::begin(&state, Actor::ui(&user)).await;
-    g.object(Store::Ab, &p, &a, &id);
-    contacts::delete_contact(&state, &user, &p, &a, &id).await?;
-    g.commit().await;
-    Ok(Json(Created { id }))
+    delete_object(&state, &user, Store::Ab, &p, &a, id).await
 }

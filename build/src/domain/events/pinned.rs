@@ -184,7 +184,7 @@ fn build_vevent_lines() {
 fn assembled_object_shape() {
     let tz = berlin();
     let input: EventInput = serde_json::from_value(serde_json::json!({ "principal": "p", "cal_id": "c", "summary": "x".repeat(100), "start": "2026-10-14T09:00:00", "end": "2026-10-14T10:00:00" })).unwrap();
-    let ics = assemble(ical::vtimezone(tz.name()), vec![build_vevent("u", 0, &input, tz, None).unwrap()], &["BEGIN:VEVENT\r\nRECURRENCE-ID:20261021T070000Z\r\nEND:VEVENT\r\n".to_string()]);
+    let ics = ical::assemble(ical::vtimezone(tz.name()), "VEVENT", build_vevent("u", 0, &input, tz, None).unwrap(), &["BEGIN:VEVENT\r\nRECURRENCE-ID:20261021T070000Z\r\nEND:VEVENT\r\n".to_string()]);
     assert!(ics.starts_with("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\n"), "{ics}");
     assert!(ics.ends_with("END:VEVENT\r\nBEGIN:VEVENT\r\nRECURRENCE-ID:20261021T070000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"), "{ics}");
     assert!(ics.lines().all(|l| l.len() <= 76), "folded at 75 octets");

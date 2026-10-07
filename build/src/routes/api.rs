@@ -83,6 +83,15 @@ fn precondition(body: Option<&str>, headers: &HeaderMap) -> AppResult<String> {
         .ok_or_else(|| AppError::Rejected(axum::http::StatusCode::PRECONDITION_REQUIRED, crate::error::Msg { key: "err-etag-required", args: vec![] }))
 }
 
+/// DELETE of one event, task or contact: one change in the history.
+async fn delete_object(state: &SharedState, user: &Principal, store: Store, p: &str, c: &str, id: String) -> AppResult<Json<Created>> {
+    let mut g = history::begin(state, Actor::ui(user)).await;
+    g.object(store, p, c, &id);
+    crate::domain::collections::delete_object(state, user, store, p, c, &id).await?;
+    g.commit().await;
+    Ok(Json(Created { id }))
+}
+
 #[derive(serde::Serialize)]
 pub struct Created {
     pub id: String,

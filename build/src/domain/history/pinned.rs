@@ -15,7 +15,7 @@ async fn moves_contacts_tech_and_retention() {
     // a DAV MOVE: delete here, create there with the same UID, read in one poll → one move
     app.put_ics("alice", &a, "m", &vevent("m", "Umzug", "DTSTART:20261001T100000Z")).await;
     poll(&app.state).await;
-    crate::domain::events::delete_event(&app.state, &alice, "alice", &a, "m").await.unwrap();
+    crate::domain::collections::delete_object(&app.state, &alice, Store::Cal, "alice", &a, "m").await.unwrap();
     app.put_ics("alice", &b, "m", &vevent("m", "Umzug", "DTSTART:20261001T100000Z")).await;
     poll(&app.state).await;
     // a dismissed reminder only: technical

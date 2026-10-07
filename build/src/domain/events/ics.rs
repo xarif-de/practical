@@ -221,28 +221,6 @@ pub(super) fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chr
     Ok(l)
 }
 
-pub(super) fn assemble(vtimezone: Option<String>, vevents: Vec<Vec<String>>, extra_blocks: &[String]) -> String {
-    let mut out = String::new();
-    out.push_str("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\n");
-    if let Some(v) = vtimezone {
-        out.push_str(v.trim_end());
-        out.push_str("\r\n");
-    }
-    for ev in vevents {
-        out.push_str("BEGIN:VEVENT\r\n");
-        for line in ev {
-            out.push_str(&ical::fold(&line));
-            out.push_str("\r\n");
-        }
-        out.push_str("END:VEVENT\r\n");
-    }
-    for b in extra_blocks {
-        out.push_str(b.trim_end());
-        out.push_str("\r\n");
-    }
-    out.push_str("END:VCALENDAR\r\n");
-    out
-}
 
 /// Unfolded content lines, each in its canonical case: property names — and the component name of a
 /// BEGIN/END line — are case-insensitive (RFC 5545 §2, RFC 6350 §3.3) and come out upper-case, so every

@@ -213,26 +213,6 @@ pub(super) fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz
     Ok(l)
 }
 
-pub(super) fn assemble(vtimezone: Option<String>, lines: Vec<String>, extra_blocks: &[String]) -> String {
-    let mut out = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\n");
-    if let Some(v) = vtimezone {
-        out.push_str(v.trim_end());
-        out.push_str("\r\n");
-    }
-    out.push_str("BEGIN:VTODO\r\n");
-    for line in lines {
-        out.push_str(&ical::fold(&line));
-        out.push_str("\r\n");
-    }
-    out.push_str("END:VTODO\r\n");
-    for b in extra_blocks {
-        out.push_str(b.trim_end());
-        out.push_str("\r\n");
-    }
-    out.push_str("END:VCALENDAR\r\n");
-    out
-}
-
 /// The line references a time zone (a TZID parameter, its name in any case): the object needs that VTIMEZONE.
 fn has_tzid(l: &str) -> bool {
     ical::split_line(l).1.iter().any(|(k, _)| k == "TZID")
@@ -244,7 +224,7 @@ pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, t
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
     let vtz = lines.iter().any(|l| has_tzid(l)).then(|| ical::vtimezone(tz.name())).flatten();
-    let obj = CalendarObject::import(&assemble(vtz, lines, &[]), None)?;
+    let obj = CalendarObject::import(&ical::assemble(vtz, "VTODO", lines, &[]), None)?;
     state.calendars.put_object(&i.principal, &i.cal_id, &uid, obj, false).await?;
     Ok(uid)
 }
@@ -276,7 +256,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
         let blocks = events::vtimezone_blocks(&stored);
         if blocks.is_empty() { ical::vtimezone(tz.name()) } else { Some(blocks.join("\r\n")) }
     };
-    let obj = CalendarObject::import(&assemble(vtz, lines, &extra), None)?;
+    let obj = CalendarObject::import(&ical::assemble(vtz, "VTODO", lines, &extra), None)?;
     state.calendars.put_object(&i.principal, &i.cal_id, object_id, obj, true).await?;
     Ok(())
 }
@@ -308,10 +288,4 @@ pub async fn set_completed(state: &AppState, user: &Principal, principal: &str, 
         related: d.related,
     };
     update_task(state, user, object_id, i, Some(&etag), tz).await
-}
-
-pub async fn delete_task(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str) -> AppResult<()> {
-    collections::ensure_owner(user, principal)?;
-    state.calendars.delete_object(principal, cal_id, object_id, true).await?;
-    Ok(())
 }

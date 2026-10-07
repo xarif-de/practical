@@ -55,9 +55,5 @@ pub(super) async fn update_task(State(state): State<SharedState>, user: Principa
 }
 
 pub(super) async fn delete_task(State(state): State<SharedState>, user: Principal, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
-    let mut g = history::begin(&state, Actor::ui(&user)).await;
-    g.object(Store::Cal, &p, &c, &id);
-    tasks::delete_task(&state, &user, &p, &c, &id).await?;
-    g.commit().await;
-    Ok(Json(Created { id }))
+    delete_object(&state, &user, Store::Cal, &p, &c, id).await
 }

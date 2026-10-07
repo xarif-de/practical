@@ -192,9 +192,3 @@ pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str,
     state.addressbooks.put_object(&i.principal, &i.ab_id, object_id, obj, true).await?;
     Ok(())
 }
-
-pub async fn delete_contact(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<()> {
-    collections::ensure_owner(user, principal)?;
-    AddressbookWriteStore::delete_object(&*state.addressbooks, principal, ab_id, object_id, true).await?;
-    Ok(())
-}

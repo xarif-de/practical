@@ -72,6 +72,28 @@ pub fn list<C: Component>(c: &C, name: &str) -> Vec<String> {
     c.get_named_properties(name).flat_map(|p| split_list(&p.value)).collect()
 }
 
+/// The VCALENDAR text PractiCal stores: its VTIMEZONE (if any), the master `component` (VEVENT | VTODO) of
+/// `lines` (folded here), then the stored objects' other blocks verbatim (overrides, foreign components).
+pub fn assemble(vtimezone: Option<String>, component: &str, lines: Vec<String>, extra_blocks: &[String]) -> String {
+    let mut out = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\n");
+    if let Some(v) = vtimezone {
+        out.push_str(v.trim_end());
+        out.push_str("\r\n");
+    }
+    out.push_str(&format!("BEGIN:{component}\r\n"));
+    for line in lines {
+        out.push_str(&fold(&line));
+        out.push_str("\r\n");
+    }
+    out.push_str(&format!("END:{component}\r\n"));
+    for b in extra_blocks {
+        out.push_str(b.trim_end());
+        out.push_str("\r\n");
+    }
+    out.push_str("END:VCALENDAR\r\n");
+    out
+}
+
 /// Fold a content line at 75 octets (RFC 5545 §3.1). Every line PractiCal writes (events, tasks, vCards, history
 /// restores) passes here, so this is also where control characters end: a content line cannot carry any but
 /// HTAB (RFC 5545 §3.1 VALUE-CHAR, RFC 6350 §3.3), and a CR/LF that came in through a parameter or URI field

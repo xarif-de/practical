@@ -98,7 +98,7 @@ fn build_and_reparse_event() {
         timezone: None,
     };
     let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
-    let ics = assemble(ical::vtimezone("Europe/Berlin"), vec![lines], &[]);
+    let ics = ical::assemble(ical::vtimezone("Europe/Berlin"), "VEVENT", lines, &[]);
     let obj = CalendarObject::import(&ics, None).unwrap();
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { panic!() };
     assert!(main.has_rruleset());
@@ -249,7 +249,7 @@ fn unchanged_save_keeps_every_property() {
     assert_eq!(input.attendees[0].extra, vec![("RSVP".to_string(), "TRUE".to_string())]);
     assert_eq!(input.organizer.as_ref().map(|o| o.name.as_str()), Some("Thomas Steinbach"));
     let lines = build_vevent("demo-event-full@xarif.de", 4, &input, tz, Some(&raw)).unwrap();
-    let out = assemble(ical::vtimezone("Europe/Berlin"), vec![lines], &overrides);
+    let out = ical::assemble(ical::vtimezone("Europe/Berlin"), "VEVENT", lines, &overrides);
     let (before, after) = (histogram(ics), histogram(&out));
     let lost: Vec<String> = before.iter().filter(|(k, v)| after.get(*k).copied().unwrap_or(0) < **v).map(|(k, v)| format!("{k} {v}->{}", after.get(k).copied().unwrap_or(0))).collect();
     assert!(lost.is_empty(), "lost on save: {lost:?}");

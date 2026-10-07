@@ -114,7 +114,7 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
         let uid = old.get_uid().to_string();
         let new_id = events::create_event_as(&state, &user, target, vc.tz, Some(&uid)).await?;
         g.object(Store::Cal, &tp, &tc, &new_id);
-        events::delete_event(&state, &user, &p, &c, &id).await?;
+        crate::domain::collections::delete_object(&state, &user, Store::Cal, &p, &c, &id).await?;
         g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
@@ -124,11 +124,7 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
 }
 
 pub(super) async fn delete_event(State(state): State<SharedState>, user: Principal, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
-    let mut g = history::begin(&state, Actor::ui(&user)).await;
-    g.object(Store::Cal, &p, &c, &id);
-    events::delete_event(&state, &user, &p, &c, &id).await?;
-    g.commit().await;
-    Ok(Json(Created { id }))
+    delete_object(&state, &user, Store::Cal, &p, &c, id).await
 }
 
 /// The user's reminder presets (event editor); `null` = not customised yet, the editor shows its defaults.

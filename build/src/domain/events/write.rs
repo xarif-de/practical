@@ -64,7 +64,7 @@ pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInp
     };
     let uid = keep.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let lines = build_vevent(&uid, 0, &input, tz, None)?;
-    let ics = assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, vec![lines], &[]);
+    let ics = ical::assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, "VEVENT", lines, &[]);
     let obj = CalendarObject::import(&ics, None)?;
     let object_id = uid.clone();
     // overwrite only replaces a trashed copy of a kept UID (a move there and back)
@@ -92,14 +92,8 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     let sequence: i64 = main.get_property("SEQUENCE").and_then(|p| p.value.parse().ok()).unwrap_or(0) + 1;
     let (raw, extra) = split_ics(&existing.get_ics());
     let lines = build_vevent(&uid, sequence, &input, tz, Some(&raw))?;
-    let ics = assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, vec![lines], &extra);
+    let ics = ical::assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, "VEVENT", lines, &extra);
     let obj = CalendarObject::import(&ics, None)?;
     state.calendars.put_object(&input.principal, &input.cal_id, object_id, obj, true).await?;
-    Ok(())
-}
-
-pub async fn delete_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str) -> AppResult<()> {
-    collections::ensure_owner(user, principal)?;
-    state.calendars.delete_object(principal, cal_id, object_id, true).await?;
     Ok(())
 }
