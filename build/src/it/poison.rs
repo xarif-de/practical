@@ -253,11 +253,12 @@ async fn hostile_inputs_are_answered() {
     if r.as_ref().map_or(true, |r| r.status != StatusCode::OK) {
         wrong.push(format!("POST contact birthday --1ä1 → {}", r.map_or("panic".into(), |r| r.status.as_u16().to_string())));
     }
+    // years outside 1–9999 are refused by the input gate (extract.rs) before any date arithmetic
     for (path, want) in [
-        ("/api/density?year=262143", StatusCode::OK),
-        ("/api/density?year=-300000", StatusCode::OK),
-        ("/api/events?start=%2B262142-12-01&end=%2B262142-12-31", StatusCode::OK),
-        ("/api/events?start=-262143-01-01&end=-262143-01-31", StatusCode::OK),
+        ("/api/density?year=262143", StatusCode::BAD_REQUEST),
+        ("/api/density?year=-300000", StatusCode::BAD_REQUEST),
+        ("/api/events?start=%2B262142-12-01&end=%2B262142-12-31", StatusCode::BAD_REQUEST),
+        ("/api/events?start=-262143-01-01&end=-262143-01-31", StatusCode::BAD_REQUEST),
         ("/api/days?start=%2B262142-12-31&count=120", StatusCode::BAD_REQUEST),
         ("/api/weeks?start=%2B262142-12-20&count=16", StatusCode::BAD_REQUEST),
         ("/calendar?view=month&date=%2B262142-12-31", StatusCode::BAD_REQUEST),
@@ -270,13 +271,19 @@ async fn hostile_inputs_are_answered() {
             wrong.push(format!("GET {path} → {st}"));
         }
     }
-    // an unbounded query costs the same as a bounded one
+    // an unbounded query is answered (searched or refused by the input gate as 400), never a 5xx or a panic
     for q in ["a".repeat(20_000), "é".repeat(500), ".*(+[\\".into()] {
         let u = format!("/api/search?q={}", url::form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>());
-        c.get_json(&u).await.ok();
+        let st = probe(&mut c, &u, true).await;
+        if st != "200" && st != "400" {
+            wrong.push(format!("GET /api/search?q=<{} chars> → {st}", q.chars().count()));
+        }
     }
     let u = format!("/api/events/suggest?q={}", url::form_urlencoded::byte_serialize("ä".repeat(5000).as_bytes()).collect::<String>());
-    c.get_json(&u).await.ok();
+    let st = probe(&mut c, &u, true).await;
+    if st != "200" && st != "400" {
+        wrong.push(format!("GET /api/events/suggest?q=<5000 chars> → {st}"));
+    }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
