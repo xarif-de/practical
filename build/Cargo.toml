@@ -89,7 +89,7 @@ mimalloc = { version = "0.1", default-features = false }
 
 # Tests only (testkit.rs, it/http.rs: `ServiceExt::oneshot` drives the router without a socket); in axum's graph.
 [dev-dependencies]
-tower = "0.5"
+tower = "=0.5.3"
 
 # Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
 [build-dependencies]
