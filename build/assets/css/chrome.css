@@ -48,12 +48,14 @@
 .sdlg .sd-foot { margin: 0; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-3); }
 .filter { position: relative; }
 .filter .pop { display: block; position: absolute; right: 0; top: 38px; width: 260px; padding: 8px 10px; z-index: 30; }
-/* hover popovers (.filter: topbar filter, user menu, contacts field picker; .more: calendar views) share one
-   behaviour: shown on hover, focus or the click toggle (.open, app.js), and they stay for half a second after
-   the pointer leaves so it can travel from the button into the dialog. visibility instead of display so the
-   delay can be a transition. */
+/* popovers (.filter, .more): shown by the click toggle (.open, app.js); the hover ones (.filter without .click:
+   tasks column picker, add-card menus, search help; .more: calendar views) also on hover or focus, and they stay
+   for half a second after the pointer leaves so it can travel from the button into the dialog. .click ones (topbar
+   filters, user menu, contacts field picker, history filter) open and close by click only, at once. visibility
+   instead of display so the delay can be a transition. */
 .filter .pop, .more .pop { visibility: hidden; opacity: 0; transition: opacity .15s .5s, visibility 0s .65s; }
-.filter:hover .pop, .filter:focus-within .pop, .filter.open .pop, .more:hover .pop, .more:focus-within .pop, .more.open .pop { visibility: visible; opacity: 1; transition: opacity .12s 0s, visibility 0s 0s; }
+.filter.click .pop { transition: opacity .12s, visibility 0s .12s; }
+.filter:not(.click):hover .pop, .filter:not(.click):focus-within .pop, .filter.open .pop, .more:hover .pop, .more:focus-within .pop, .more.open .pop { visibility: visible; opacity: 1; transition: opacity .12s 0s, visibility 0s 0s; }
 .filter h2 { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
 .filter label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 14px; }
 .filter label:hover { background: var(--tile); } .filter label small { margin-left: auto; color: var(--fg-3); }

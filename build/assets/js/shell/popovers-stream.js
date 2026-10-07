@@ -3,6 +3,8 @@
   // user menu: click toggles (hover works via CSS, touch needs the click)
   $$('.filter > button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.parentElement.classList.toggle('open'); }));
   document.addEventListener('click', e => { if (!e.target.closest('.filter')) $$('.filter.open').forEach(f => f.classList.remove('open')); });
+  // Escape closes an open popover (a click-only one has no hover to leave) and gives the focus back to its button
+  document.addEventListener('keydown', e => { const f = e.key === 'Escape' && $('.filter.open'); if (!f) return; f.classList.remove('open'); const b = f.querySelector(':scope > button'); if (b) b.focus(); });
   // keep every hover/click popover inside the screen. Its CSS anchor (right: 0, or -60px on a phone) is
   // right for some toolbar positions only: the contacts column picker sits at the left of a wrapped
   // toolbar row at 390px (ran 148px off the left edge) and at the right at 600px. Measured while hidden

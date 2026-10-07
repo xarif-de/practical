@@ -35,11 +35,10 @@
   {% endif %}
   <button class="icon-btn" id="scheme" title="{{ ctx.t("pref-scheme") }}: {% if ctx.scheme == "light" %}{{ ctx.t("scheme-light") }}{% else if ctx.scheme == "dark" %}{{ ctx.t("scheme-dark") }}{% else %}{{ ctx.t("scheme-auto") }}{% endif %}" aria-label="{{ ctx.t("scheme-toggle") }}" data-t-auto="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-auto") }}" data-t-light="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-light") }}" data-t-dark="{{ ctx.t("pref-scheme") }}: {{ ctx.t("scheme-dark") }}">{{ m::ico_c("scheme-auto", "s-auto") }}{{ m::ico_c("sun", "s-light") }}{{ m::ico_c("moon", "s-dark") }}</button>
   {% if ctx.user.is_some() %}
-  <div class="filter user">
+  <div class="filter click user">
     <button class="avatar" aria-haspopup="true" title="{{ ctx.user_id() }}">{{ ctx.initials() }}</button>
     <div class="pop">
       <h2>{{ ctx.user_id() }}</h2>
-      <a class="row-link" href="/settings#prefs">{{ ctx.t("nav-settings") }}</a>
       {# AGPL-3.0 §13: the source of this service, offered to everyone who uses it #}
       <a class="row-link" href="{{ ctx.source_url() }}" target="_blank" rel="noopener">{{ ctx.t("source-code") }}</a>
       <p class="muted small src-note">PractiCal {{ ctx.version() }} · <a href="{{ ctx.rustical_source_url() }}" target="_blank" rel="noopener">RustiCal {{ ctx.rustical_version() }}</a> · AGPL-3.0</p>

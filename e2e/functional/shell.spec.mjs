@@ -29,20 +29,17 @@ test('scheme button steps auto → light → dark → auto and the choice is sav
   await expect(page.locator('html')).toHaveAttribute('data-scheme', 'light'); // the project emulates a light system
 });
 
-test('avatar menu: user, versions, settings link', async ({ page }) => {
+test('avatar menu: user, versions, no settings link (the nav has it)', async ({ page }) => {
   await page.goto('/tasks');
   await page.locator('.filter.user > .avatar').click();
   const pop = page.locator('.filter.user .pop');
   await expect(pop).toBeVisible();
   await expect(pop.locator('h2')).toHaveText('alice');
   await expect(pop.locator('.src-note')).toContainText(/PractiCal \d+\.\d+\.\d+ · RustiCal \d+\.\d+\.\d+/);
-  await pop.locator('a[href="/settings#prefs"]').click();
-  await expect(page).toHaveURL(/\/settings#prefs$/);
-  await expect(page.locator('#home.page.on')).toBeVisible();
+  await expect(pop.locator('a[href^="/settings"]')).toHaveCount(0);
   // a click elsewhere closes the menu
-  await page.locator('.filter.user > .avatar').click();
   await expect(page.locator('.filter.user.open')).toHaveCount(1);
-  await page.locator('#home h1').click();
+  await page.locator('#tkmain').click({ position: { x: 5, y: 5 } });
   await expect(page.locator('.filter.user.open')).toHaveCount(0);
 });
 

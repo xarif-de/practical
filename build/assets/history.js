@@ -221,7 +221,7 @@
   root.innerHTML = `<div class="toolbar"><h1>${esc(S('title'))}</h1><span class="muted small" data-r="count"></span><span class="grow"></span>
     <span class="seg" role="group" data-r="zoom" aria-label="${esc(S('zoom'))}">${[90, 30, 7].map(z => `<button type="button" data-zoom="${z}">${esc(tr('days', { n: z }))}</button>`).join('')}</span>
     <label class="hx-q">${ico('i-filter')}<input type="search" data-f="q" placeholder="${esc(S('q'))}" autocomplete="off" aria-label="${esc(S('q'))}"></label>
-    <div class="filter hx-filter"><button class="icon-btn" type="button" aria-haspopup="true" title="${esc(S('filter'))}" aria-label="${esc(S('filter'))}">${ico('i-filter')}<span class="hx-badge" data-r="badge"></span></button><div class="pop hx-fpop" data-r="panel"></div></div>
+    <div class="filter click hx-filter"><button class="icon-btn" type="button" aria-haspopup="true" title="${esc(S('filter'))}" aria-label="${esc(S('filter'))}">${ico('i-filter')}<span class="hx-badge" data-r="badge"></span></button><div class="pop hx-fpop" data-r="panel"></div></div>
     <span class="seg" role="group" aria-label="${esc(S('view'))}">
       <button type="button" data-view="map" title="${esc(S('v-map'))}" aria-label="${esc(S('v-map'))}">${ico('i-gantt')}</button>
       <button type="button" data-view="list" title="${esc(S('v-list'))}" aria-label="${esc(S('v-list'))}">${ico('i-list')}</button>

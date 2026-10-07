@@ -9,7 +9,7 @@
 {%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}
 
 {#- the calendar filter popover of the calendar and tasks pages (contacts filters address books: data-ab) -#}
-{%- macro cal_filter() -%}<div class="filter"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}">{{ ico("filter") }}</button><div class="pop" id="calfilter"><h2>{{ ctx.t("filter-calendars") }}</h2>
+{%- macro cal_filter() -%}<div class="filter click"><button class="icon-btn" aria-haspopup="true" title="{{ ctx.t("filter") }}" aria-label="{{ ctx.t("filter") }}">{{ ico("filter") }}</button><div class="pop" id="calfilter"><h2>{{ ctx.t("filter-calendars") }}</h2>
 {% for c in calendars %}<label><input type="checkbox" checked data-cal="{{ c.principal }}/{{ c.id }}"><span class="sw" style="--c:{{ c.color }}"></span>{{ c.displayname }}{% if c.is_group %} <small>{{ c.owner_label }}</small>{% endif %}</label>{% endfor %}
 {{ filter_row() }}{%- endmacro -%}
 {%- macro filter_row() -%}<div class="row"><a href="#" data-filter="all">{{ ctx.t("filter-all") }}</a><a href="#" data-filter="none">{{ ctx.t("filter-none") }}</a>{% if self.has_shared() %}<a href="#" data-filter="mine">{{ ctx.t("filter-mine") }}</a>{% endif %}</div>{%- endmacro -%}

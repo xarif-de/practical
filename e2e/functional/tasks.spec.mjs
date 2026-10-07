@@ -386,7 +386,8 @@ test('calendar filter hides a calendar\'s tasks (shared with the calendar page)'
   await expect(mine).toHaveCount(0);
   await expect(work).toBeVisible();
   expect(JSON.parse(await page.evaluate(() => localStorage.calHidden))).toEqual([`alice/${CAL}`]);
-  await page.click('.topbar .filter:has(#calfilter) > button');
+  // the popover opens by click only and stays open until a click outside: open it again only if that closed it
+  if (!await page.locator('.topbar .filter:has(#calfilter)').evaluate(f => f.classList.contains('open'))) await page.click('.topbar .filter:has(#calfilter) > button');
   await page.click('#calfilter [data-filter=all]');
   await expect(mine).toBeVisible();
 });
