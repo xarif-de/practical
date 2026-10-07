@@ -33,7 +33,9 @@ headers = "0.4"
 http = "1.4"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
 tower = "0.5"
-tower-http = { version = "0.7", features = ["trace", "compression-gzip"] }
+# compression-br: pages, fragments and JSON as brotli (quality 5, main.rs `build_router_with`) — the same `brotli`
+# crate build.rs uses for the assets; gzip stays for clients without br.
+tower-http = { version = "0.7", features = ["trace", "compression-gzip", "compression-br"] }
 tower-sessions = "0.15"
 askama = { version = "0.16", features = ["serde_json"] }
 askama_web = { version = "0.16", features = ["axum-0.8"] }
@@ -78,6 +80,10 @@ flate2 = "1.1"
 # Dockerfile's MIMALLOC_PURGE_DELAY=0 + MIMALLOC_ARENA_EAGER_COMMIT=0 — mimalloc's defaults held 66-103 MB.
 # Adds libmimalloc-sys (C, built with cc — already a build dependency of the bundled SQLite).
 mimalloc = { version = "0.1", default-features = false }
+
+# Tests only: it/validators.rs decodes the brotli answers (the same crate tower-http's compression-br links).
+[dev-dependencies]
+brotli = "9"
 
 # Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
 [build-dependencies]

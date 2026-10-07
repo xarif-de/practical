@@ -185,7 +185,10 @@ async fn precompressed_by_accept_encoding() {
 async fn pages_are_still_compressed_per_response() {
     let app = TestApp::new().await;
     let mut a = app.anonymous();
+    // brotli when the client takes it (every browser over HTTPS), gzip for the others
     let page = a.send(Method::GET, "/login", &[("accept-encoding", "gzip, br")], Body::empty()).await;
+    assert_eq!(page.header("content-encoding").as_deref(), Some("br"));
+    let page = a.send(Method::GET, "/login", &[("accept-encoding", "gzip")], Body::empty()).await;
     assert_eq!(page.header("content-encoding").as_deref(), Some("gzip"));
     assert_eq!(&page.bytes[..2], &[0x1f, 0x8b]);
 }
