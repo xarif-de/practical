@@ -206,3 +206,52 @@ async fn instances_follow_writes_renames_recolours_and_zones() {
     app.state.calendars.delete_object("alice", &b, "i3", true).await.unwrap();
     assert_eq!(read(berlin).await, ["Ohne Farbe 05 08:00 Büro #ff9f0a false", "Kalenderfarbe 06 09:00 Büro #ff9f0a false"]);
 }
+
+/// The five year views from `routes::more::YearCache`: each answer equals the uncached one (cache emptied)
+/// after a DAV write, an override with its own title, an own colour, a rename + recolour (no synctoken move),
+/// a zone change and a deletion; a second request is served from the cache.
+#[tokio::test]
+async fn year_views_follow_writes_renames_recolours_and_zones() {
+    let (app, a, b) = app().await;
+    let user = app.principal("alice").await;
+    app.put_ics("alice", &a, "y1", &vevent("y1", "Serie", "DTSTART;TZID=Europe/Berlin:20260105T090000\nDTEND;TZID=Europe/Berlin:20260105T100000\nRRULE:FREQ=WEEKLY;COUNT=60\nCOLOR:tomato")).await;
+    app.put_ics("alice", &b, "y2", &vevent("y2", "Urlaub Meer", "DTSTART;VALUE=DATE:20260803\nDTEND;VALUE=DATE:20260815\nCATEGORIES:Urlaub")).await;
+    app.put_ics("alice", &b, "y3", &vevent("y3", "Spät", "DTSTART:20261231T233000Z\nDTEND:20261231T234500Z")).await;
+    let mut c = app.login("alice").await;
+    let views = ["planner", "weekends", "vacation", "countdown", "numbers"];
+    async fn both(app: &TestApp, c: &mut crate::testkit::Client, views: &[&str]) -> Vec<String> {
+        let mut out = vec![];
+        for v in views {
+            let cached = c.get(&format!("/calendar?view={v}&date=2026-10-14&fragment=1")).await;
+            cached.ok();
+            app.state.caches.years.clear();
+            let fresh = c.get(&format!("/calendar?view={v}&date=2026-10-14&fragment=1")).await;
+            assert_eq!(cached.body, fresh.body, "{v}: cached = uncached");
+            out.push(fresh.body.clone());
+        }
+        out
+    }
+    let first = both(&app, &mut c, &views).await;
+    assert!(first[0].contains("title=\"Serie\"") && first[2].contains("Urlaub Meer") && first[4].contains("--c:tomato"), "{}", first[4]);
+    assert_eq!(app.state.caches.years.len(), 2, "one entry per calendar");
+    let n0 = first.clone();
+    assert_eq!(both(&app, &mut c, &views).await, n0, "served again from the cache");
+    // an override of one occurrence with its own title, in the same object
+    let series = "BEGIN:VEVENT\nUID:y1\nDTSTAMP:20260901T000000Z\nSUMMARY:Serie\nDTSTART;TZID=Europe/Berlin:20260105T090000\nDTEND;TZID=Europe/Berlin:20260105T100000\nRRULE:FREQ=WEEKLY;COUNT=60\nCOLOR:tomato\nEND:VEVENT";
+    let over = "BEGIN:VEVENT\nUID:y1\nDTSTAMP:20260901T000000Z\nRECURRENCE-ID;TZID=Europe/Berlin:20261012T090000\nSUMMARY:Ausnahme\nDTSTART;TZID=Europe/Berlin:20261012T090000\nDTEND;TZID=Europe/Berlin:20261012T100000\nEND:VEVENT";
+    app.put_ics("alice", &a, "y1", &crate::testkit::ics(&format!("{series}\n{over}"))).await;
+    let after = both(&app, &mut c, &views).await;
+    assert!(after[0].contains("title=\"Ausnahme\"") && after[0].contains("title=\"Serie\""), "{}", after[0]);
+    // rename and recolour move no synctoken
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &b, "Freizeit", "#123456", "").await.unwrap();
+    let renamed = both(&app, &mut c, &views).await;
+    assert!(renamed[4].contains("Freizeit") && renamed[4].contains("--c:#123456"), "{}", renamed[4]);
+    // another zone: 23:30 UTC on 31 December is 1 January 2027 in Berlin, still 2026 in New York
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York")]).await.ok();
+    let ny = both(&app, &mut c, &views).await;
+    assert_ne!(ny[4], renamed[4]);
+    // a deletion
+    app.state.calendars.delete_object("alice", &b, "y2", true).await.unwrap();
+    let gone = both(&app, &mut c, &views).await;
+    assert!(!gone[2].contains("Urlaub Meer"));
+}
