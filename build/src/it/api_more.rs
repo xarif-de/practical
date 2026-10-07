@@ -191,12 +191,35 @@ async fn push_with_vapid() {
     assert_eq!(key["key"].as_str().unwrap(), kp.public().encode_b64().0);
     let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "http://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" } })).await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Der Endpunkt muss https sein."));
-    let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" }, "user_agent": "Test" })).await;
+    // audit3-security #2/#3: the server POSTs to the endpoint — only a browser push service, with keys
+    // the encryption can use (the endpoint cut mid-character used to panic every reminder round)
+    let (p256dh, auth) = (crate::domain::push::guard::P256DH, crate::domain::push::guard::AUTH);
+    for e in ["https://push.example.org/x", "https://127.0.0.1:4000/", "https://127.0.0.1:4598/xxxxxxxxxxxxxxxxä", "https://plan.xarif.de/api/events", "https://fcm.googleapis.com.evil.example/x"] {
+        let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": e, "keys": { "p256dh": p256dh, "auth": auth } })).await;
+        assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Das ist keine Push-Adresse eines Browsers."), "{e}");
+    }
+    let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://fcm.googleapis.com/fcm/send/x", "keys": { "p256dh": "a", "auth": "b" } })).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Die Schlüssel der Push-Anmeldung sind ungültig."));
+    assert_eq!(c.get_json("/api/push/subscriptions").await.json(), json!([]));
+    let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://fcm.googleapis.com/fcm/send/x", "keys": { "p256dh": p256dh, "auth": auth }, "user_agent": "Test" })).await;
     assert_eq!(r.ok().json()["id"].as_str().unwrap().len(), 36);
     let list = c.get_json("/api/push/subscriptions").await.json();
-    assert_eq!((list[0]["endpoint"].as_str(), list[0]["user_agent"].as_str()), (Some("https://push.example.org/x"), Some("Test")));
-    c.send(Method::DELETE, "/api/push/subscriptions", &[("content-type", "application/json"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", &c.csrf.clone())], axum::body::Body::from(r#"{"endpoint":"https://push.example.org/x"}"#)).await.ok();
+    assert_eq!((list[0]["endpoint"].as_str(), list[0]["user_agent"].as_str()), (Some("https://fcm.googleapis.com/fcm/send/x"), Some("Test")));
+    c.send(Method::DELETE, "/api/push/subscriptions", &[("content-type", "application/json"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", &c.csrf.clone())], axum::body::Body::from(r#"{"endpoint":"https://fcm.googleapis.com/fcm/send/x"}"#)).await.ok();
     assert_eq!(c.get_json("/api/push/subscriptions").await.json(), json!([]));
+    // a bounded list per user: the eleventh device drops the oldest; a renewed one keeps its place
+    for i in 0..11 {
+        let e = format!("https://updates.push.services.mozilla.com/wpush/v2/{i}");
+        c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": e, "keys": { "p256dh": p256dh, "auth": auth }, "user_agent": "u".repeat(400) })).await.ok();
+        if i == 10 {
+            c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "https://updates.push.services.mozilla.com/wpush/v2/1", "keys": { "p256dh": p256dh, "auth": auth } })).await.ok();
+        }
+    }
+    let list = c.get_json("/api/push/subscriptions").await.json();
+    let ends: Vec<&str> = list.as_array().unwrap().iter().map(|s| s["endpoint"].as_str().unwrap().rsplit('/').next().unwrap()).collect();
+    assert_eq!((ends.len(), ends.contains(&"0"), ends.contains(&"1")), (10, false, true), "{ends:?}");
+    let two = list.as_array().unwrap().iter().find(|s| s["endpoint"].as_str().unwrap().ends_with("/2")).unwrap();
+    assert_eq!(two["user_agent"].as_str().unwrap().len(), 300);
     // the page offers push now
     c.get("/settings").await.ok();
 }

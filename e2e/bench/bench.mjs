@@ -300,8 +300,9 @@ async function countPhase(sides, proc, M) {
  *  is the ratio of the totals (the reminder loop ticks once a minute, in one window only). */
 async function idlePhase(sides, proc, M) {
   const pem = execFileSync(sides.at(-1).bin, ['gen-vapid']).toString().match(/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/)[0];
-  // one push subscriber (unreachable endpoint): the reminder loop does its per-minute work as in production
-  const prepare = db => execFileSync('sqlite3', [db, "INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('bench1', 'alice', 'http://127.0.0.1:9/push', 'BJhYN3NTQ_qM0wOydjYNoaoJOsyz9jjkpTx', 'x')"]);
+  // one push subscriber the reminder loop accepts (allowlisted host, valid keys; since w3/push a malformed one is
+  // skipped and would leave the loop idle) whose name does not resolve: it does its per-minute work as in production
+  const prepare = db => execFileSync('sqlite3', [db, "INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('bench1', 'alice', 'https://bench.invalid.push.apple.com/push', 'BLMbF9ffKBiWQLCKvTHb6LO8Nb6dcUh6TItC455vu2kElga6PQvUmaFyCdykxY2nOSSL3yKgfbmFLRTUaGv4yV8', 'xS03Fi5ErfTNH_l9WHE9Ig')"]);
   await startSides(sides, proc, { env: { PRACTICAL__VAPID_PRIVATE_KEY_PEM: pem }, prepare, tag: 'idle' });
   const streams = [];
   try {

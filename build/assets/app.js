@@ -187,6 +187,14 @@
   // confirmations on destructive forms
   $$('[data-confirm]').forEach(b => b.addEventListener('click', async e => { if (b.dataset.asked) { delete b.dataset.asked; return; } e.preventDefault(); if (await ask(b.dataset.confirm)) { b.dataset.asked = '1'; b.click(); } })); // the repeated click submits with this button
 
+  // logout ends this browser's push subscription too: a shared device must not keep showing the user's reminders (at most 1.5 s)
+  $$('form[action="/logout"]').forEach(f => f.addEventListener('submit', e => {
+    if (f.dataset.done || !('serviceWorker' in navigator)) return;
+    e.preventDefault(); f.dataset.done = '1';
+    const off = navigator.serviceWorker.getRegistration('/').then(reg => reg && reg.pushManager.getSubscription()).then(sub => sub && Promise.all([practical.send('/api/push/subscriptions', 'DELETE', { endpoint: sub.endpoint }), sub.unsubscribe()]));
+    Promise.race([off, new Promise(r => setTimeout(r, 1500))]).catch(() => {}).finally(() => f.submit());
+  }));
+
   // copy-to-clipboard
   $$('[data-copy]').forEach(b => b.addEventListener('click', async () => {
     const el = $(b.dataset.copy); if (!el) return;

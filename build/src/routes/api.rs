@@ -600,9 +600,8 @@ async fn push_subscribe(State(state): State<SharedState>, user: Principal, sessi
     if state.vapid.is_none() {
         return Err(AppError::bad("err-push-disabled"));
     }
-    if !b.endpoint.starts_with("https://") {
-        return Err(AppError::bad("err-push-https"));
-    }
+    // the server POSTs to the endpoint: only a browser push service's (domain::push, audit3-security #2/#3)
+    crate::domain::push::check_subscription(&b.endpoint, &b.keys.p256dh, &b.keys.auth).map_err(AppError::bad)?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth, user_agent) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET principal=excluded.principal, p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent")
         .bind(&id)
@@ -610,9 +609,19 @@ async fn push_subscribe(State(state): State<SharedState>, user: Principal, sessi
         .bind(&b.endpoint)
         .bind(&b.keys.p256dh)
         .bind(&b.keys.auth)
-        .bind(b.user_agent.or_else(|| headers.get(axum::http::header::USER_AGENT).and_then(|v| v.to_str().ok()).map(str::to_string)))
+        .bind(b.user_agent.or_else(|| headers.get(axum::http::header::USER_AGENT).and_then(|v| v.to_str().ok()).map(str::to_string)).map(|u| u.chars().take(300).collect::<String>()))
         .execute(&state.db)
         .await?;
+    // a bounded list per user: past the cap the oldest device goes (more than a few are dead browsers)
+    sqlx::query("DELETE FROM practical_push_subscriptions WHERE principal = ? AND endpoint <> ? AND id NOT IN (SELECT id FROM practical_push_subscriptions WHERE principal = ? ORDER BY endpoint = ? DESC, created_at DESC, rowid DESC LIMIT ?)")
+        .bind(&user.id)
+        .bind(&b.endpoint)
+        .bind(&user.id)
+        .bind(&b.endpoint)
+        .bind(crate::domain::push::MAX_SUBSCRIPTIONS)
+        .execute(&state.db)
+        .await?;
+    crate::domain::push::remember_in_session(&session, &b.endpoint).await;
     Ok(Json(Created { id }))
 }
 
