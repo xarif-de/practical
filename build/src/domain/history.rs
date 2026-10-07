@@ -23,6 +23,19 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 #[derive(Default)]
 pub struct Hist {
     lock: tokio::sync::Mutex<()>,
+    /// moves after every committed write of the history tables (ingest, undo, purge): the history
+    /// document's cache key (routes/history.rs). Read before the tables, moved after the commit, so a
+    /// document read before a write is never stored under the generation after it.
+    generation: std::sync::atomic::AtomicU64,
+}
+
+impl Hist {
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn moved(&self) {
+        self.generation.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
 }
 
 /// Who a change is attributed to. `src`: ui | import | undo (DAV changes are found, never begun).
@@ -292,6 +305,7 @@ async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<ObjKey>, &Hash
         id = Some(n);
     }
     tx.commit().await?;
+    state.history.moved();
     Ok(id)
 }
 
@@ -397,6 +411,9 @@ pub async fn purge(state: &AppState) -> AppResult<u64> {
         .await?;
     }
     tx.commit().await?;
+    if n > 0 {
+        state.history.moved();
+    }
     Ok(n)
 }
 

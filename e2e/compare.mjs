@@ -37,9 +37,11 @@ const gunzip = f => zlib.gunzipSync(fs.readFileSync(f)).toString('utf8');
  *  (`<svg class="sprite">` → assets/icons.svg, `href="#i-x"` → `href="/assets/icons.svg?v=…#i-x"` + <meta
  *  name=icons>), app.js' strings (`<script id="i18n">` → /assets/i18n-<lang>.js) and the colour-scheme script
  *  (inline → /assets/theme.js). Both forms normalise to one, so a baseline from before compares with one
- *  from after; their contents are pinned by cargo tests (it/assets.rs) and the functional suite. */
+ *  from after; their contents are pinned by cargo tests (it/assets.rs) and the functional suite. The map
+ *  dialog names Leaflet's two files by their own versioned URLs (`data-leaflet`, 2026-10, package transport). */
 function normDom(html) {
   return html
+    .replace(/ data-leaflet="\/assets\/leaflet\.js\?v=<v> \/assets\/leaflet\.css\?v=<v>"/g, '')
     .replace(/href="\/assets\/icons\.svg\?v=<v>#/g, 'href="#')
     .replace(/^<meta name="icons" content="\/assets\/icons\.svg\?v=<v>">\n/m, '')
     .replace(/^<script src="\/assets\/i18n-[a-z]+\.js\?v=<v>" defer="">\n<\/script>\n/m, '')

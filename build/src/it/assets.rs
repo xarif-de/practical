@@ -78,7 +78,20 @@ async fn asset_version_is_stable_and_used_in_pages() {
     assert_eq!(v, crate::routes::assets::asset_version());
     let app = TestApp::new().await;
     let page = app.anonymous().get("/login").await;
-    page.ok().has(&format!("/assets/style.css?v={v}")).has(&format!("/assets/app.js?v={v}")).has(&format!("/assets/theme.js?v={v}"));
+    // each file by its own version: a change of app.js must not make the browser fetch style.css again
+    let own = |n: &str| crate::routes::assets::url(n).unwrap();
+    page.ok().has(&format!("<link rel=\"stylesheet\" href=\"{}\">", own("style.css"))).has(&format!("<script src=\"{}\" defer", own("app.js"))).has(&format!("<script src=\"{}\"></script>", own("theme.js")));
+    assert!(!page.body.contains(&format!("?v={v}")), "no file by the version of all files");
+    assert_ne!(own("style.css").split("?v=").nth(1), own("app.js").split("?v=").nth(1));
+    let s = super::seed::seed().await;
+    let mut c = s.app.login("alice").await;
+    c.get("/history").await.ok().has(&format!("<link rel=\"stylesheet\" href=\"{}\"><script src=\"{}\" defer></script>", own("history.css"), own("history.js")));
+    // the map dialog (editor.html) loads Leaflet by its files' own URLs (app.js reads data-leaflet)
+    c.get("/calendar").await.ok().has(&format!(" data-leaflet=\"{} {}\"", own("leaflet.js"), own("leaflet.css")));
+    for n in ["style.css", "app.js", "theme.js", "history.css", "history.js", "leaflet.js", "leaflet.css"] {
+        let r = c.send(Method::GET, own(n), &[("accept-encoding", "br")], Body::empty()).await;
+        assert_eq!((r.status, r.header("cache-control").as_deref()), (StatusCode::OK, Some("public, max-age=31536000, immutable")), "{n}");
+    }
     // the sprite and the strings by their own version (the language: German, the default)
     let (icons, i18n) = (crate::routes::assets::icons(), crate::routes::assets::url("i18n-de.js").unwrap());
     assert!(icons.starts_with("/assets/icons.svg?v=") && icons.len() == "/assets/icons.svg?v=".len() + 8, "{icons}");
@@ -185,7 +198,10 @@ async fn precompressed_by_accept_encoding() {
 async fn pages_are_still_compressed_per_response() {
     let app = TestApp::new().await;
     let mut a = app.anonymous();
+    // brotli when the client takes it (every browser over HTTPS), gzip for the others
     let page = a.send(Method::GET, "/login", &[("accept-encoding", "gzip, br")], Body::empty()).await;
+    assert_eq!(page.header("content-encoding").as_deref(), Some("br"));
+    let page = a.send(Method::GET, "/login", &[("accept-encoding", "gzip")], Body::empty()).await;
     assert_eq!(page.header("content-encoding").as_deref(), Some("gzip"));
     assert_eq!(&page.bytes[..2], &[0x1f, 0x8b]);
 }

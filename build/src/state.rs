@@ -54,6 +54,10 @@ pub struct Caches {
     pub contacts: crate::domain::contacts::ContactCache,
     pub mentions: crate::routes::api::MentionCache,
     pub holidays: crate::domain::holidays::MemCache,
+    /// a year of instances per calendar for the five year views (`routes::more::YearCache`)
+    pub years: crate::routes::more::YearCache,
+    /// the history document's changes and elements per user (`routes::history::HistoryCache`)
+    pub history: crate::routes::history::HistoryCache,
 }
 
 /// Process-wide state of the HTTP layer; every part starts empty.

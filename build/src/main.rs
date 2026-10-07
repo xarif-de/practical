@@ -9,6 +9,7 @@ mod ctx;
 mod db;
 mod domain;
 mod error;
+mod etag;
 mod extract;
 mod i18n;
 mod render;
@@ -163,6 +164,9 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .layer(AuthenticationLayer::new(state.principals.clone()))
         .layer(axum::middleware::from_fn_with_state(activity, sessions::activity))
         .layer(session_layer)
+        // inside the compression: the tag is taken of the identity body (and br made of it), the 304 has none
+        .layer(axum::middleware::from_fn(etag::revalidate))
+        // gzip for what etag::revalidate did not already encode as brotli (a client without br, other types)
         .layer(CompressionLayer::new())
         // Merged AFTER the layers above, so none of them runs for these two: static files and the
         // kubelet probe read no session, look up no principal (a DB query per request with a session

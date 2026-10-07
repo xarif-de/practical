@@ -207,3 +207,196 @@ async fn instances_follow_writes_renames_recolours_and_zones() {
     app.state.calendars.delete_object("alice", &b, "i3", true).await.unwrap();
     assert_eq!(read(berlin).await, ["Ohne Farbe 05 08:00 Büro #ff9f0a false", "Kalenderfarbe 06 09:00 Büro #ff9f0a false"]);
 }
+
+/// The five year views from `routes::more::YearCache`: each answer equals the uncached one (cache emptied)
+/// after a DAV write, an override with its own title, an own colour, a rename + recolour (no synctoken move),
+/// a zone change and a deletion; a second request is served from the cache.
+#[tokio::test]
+async fn year_views_follow_writes_renames_recolours_and_zones() {
+    let (app, a, b) = app().await;
+    let user = app.principal("alice").await;
+    app.put_ics("alice", &a, "y1", &vevent("y1", "Serie", "DTSTART;TZID=Europe/Berlin:20260105T090000\nDTEND;TZID=Europe/Berlin:20260105T100000\nRRULE:FREQ=WEEKLY;COUNT=60\nCOLOR:tomato")).await;
+    app.put_ics("alice", &b, "y2", &vevent("y2", "Urlaub Meer", "DTSTART;VALUE=DATE:20260803\nDTEND;VALUE=DATE:20260815\nCATEGORIES:Urlaub")).await;
+    app.put_ics("alice", &b, "y3", &vevent("y3", "Spät", "DTSTART:20261231T233000Z\nDTEND:20261231T234500Z")).await;
+    let mut c = app.login("alice").await;
+    let views = ["planner", "weekends", "vacation", "countdown", "numbers"];
+    async fn both(app: &TestApp, c: &mut crate::testkit::Client, views: &[&str]) -> Vec<String> {
+        let mut out = vec![];
+        for v in views {
+            let cached = c.get(&format!("/calendar?view={v}&date=2026-10-14&fragment=1")).await;
+            cached.ok();
+            app.state.caches.years.clear();
+            let fresh = c.get(&format!("/calendar?view={v}&date=2026-10-14&fragment=1")).await;
+            assert_eq!(cached.body, fresh.body, "{v}: cached = uncached");
+            out.push(fresh.body.clone());
+        }
+        out
+    }
+    let first = both(&app, &mut c, &views).await;
+    assert!(first[0].contains("title=\"Serie\"") && first[2].contains("Urlaub Meer") && first[4].contains("--c:tomato"), "{}", first[4]);
+    assert_eq!(app.state.caches.years.len(), 2, "one entry per calendar");
+    let n0 = first.clone();
+    assert_eq!(both(&app, &mut c, &views).await, n0, "served again from the cache");
+    // an override of one occurrence with its own title, in the same object
+    let series = "BEGIN:VEVENT\nUID:y1\nDTSTAMP:20260901T000000Z\nSUMMARY:Serie\nDTSTART;TZID=Europe/Berlin:20260105T090000\nDTEND;TZID=Europe/Berlin:20260105T100000\nRRULE:FREQ=WEEKLY;COUNT=60\nCOLOR:tomato\nEND:VEVENT";
+    let over = "BEGIN:VEVENT\nUID:y1\nDTSTAMP:20260901T000000Z\nRECURRENCE-ID;TZID=Europe/Berlin:20261012T090000\nSUMMARY:Ausnahme\nDTSTART;TZID=Europe/Berlin:20261012T090000\nDTEND;TZID=Europe/Berlin:20261012T100000\nEND:VEVENT";
+    app.put_ics("alice", &a, "y1", &crate::testkit::ics(&format!("{series}\n{over}"))).await;
+    let after = both(&app, &mut c, &views).await;
+    assert!(after[0].contains("title=\"Ausnahme\"") && after[0].contains("title=\"Serie\""), "{}", after[0]);
+    // rename and recolour move no synctoken
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &b, "Freizeit", "#123456", "").await.unwrap();
+    let renamed = both(&app, &mut c, &views).await;
+    assert!(renamed[4].contains("Freizeit") && renamed[4].contains("--c:#123456"), "{}", renamed[4]);
+    // another zone: 23:30 UTC on 31 December is 1 January 2027 in Berlin, still 2026 in New York
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York")]).await.ok();
+    let ny = both(&app, &mut c, &views).await;
+    assert_ne!(ny[4], renamed[4]);
+    // a deletion
+    app.state.calendars.delete_object("alice", &b, "y2", true).await.unwrap();
+    let gone = both(&app, &mut c, &views).await;
+    assert!(!gone[2].contains("Urlaub Meer"));
+}
+
+/// The history document's cached part (`routes::history::HistoryCache`): after every kind of change that
+/// shows in it — a UI write, a DAV write before and after the poll finds it, an undo, a collection rename,
+/// a principal's new name, a group membership, a purge, a zone or language switch — the answer equals the
+/// uncached one; an unchanged second request is served from the cache.
+#[tokio::test]
+async fn history_document_follows_every_change() {
+    let s = crate::it::seed::seed().await;
+    let app = &s.app;
+    let mut c = app.login("alice").await;
+    crate::domain::history::poll(&app.state).await;
+    async fn check(app: &TestApp, c: &mut crate::testkit::Client, what: &str) -> serde_json::Value {
+        let strip = |mut v: serde_json::Value| {
+            v.as_object_mut().unwrap().remove("now");
+            v
+        };
+        let cached = strip(c.get_json("/api/history").await.ok().json());
+        app.state.caches.history.clear();
+        let fresh = strip(c.get_json("/api/history").await.ok().json());
+        assert_eq!(cached, fresh, "{what}: cached = uncached");
+        // the page carries the same document
+        let page = c.get("/history").await;
+        assert_eq!(strip(page.island("history-data")), fresh, "{what}: page");
+        fresh
+    }
+    let input = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Yoga", "start": "2026-10-23T18:00:00", "end": "2026-10-23T19:00:00" });
+    let id = c.json(Method::POST, "/api/events", input.clone()).await.ok().json()["id"].as_str().unwrap().to_string();
+    let h = check(app, &mut c, "UI write").await;
+    assert_eq!(app.state.caches.history.len(), 1);
+    let before = app.state.history.generation();
+    assert_eq!(check(app, &mut c, "nothing changed").await, h);
+    assert_eq!(app.state.history.generation(), before, "reading moves nothing");
+    // defaults are left out (history.js puts them back)
+    let ch = &h["changes"][0];
+    for k in ["dev", "prodid", "label", "reverts", "undoneBy", "inactiveBy", "tech"] {
+        assert!(ch.get(k).is_none(), "{k}: {ch}");
+    }
+    assert_eq!(ch["undo"], json!({ "ok": true }));
+    assert_eq!(ch["who"], "alice");
+    // a DAV write: seen at once in the objects (synctoken), then as a change after the poll
+    let path = format!("/api/events/alice/{}/{id}", s.privat);
+    let mut upd = input.clone();
+    upd["summary"] = json!("Yoga im Park");
+    upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
+    c.json(Method::PUT, &path, upd).await.ok();
+    app.put_ics("alice", &s.privat, "dav1", &vevent("dav1", "Vom Telefon", "DTSTART;TZID=Europe/Berlin:20261024T090000\nDTEND;TZID=Europe/Berlin:20261024T100000")).await;
+    check(app, &mut c, "DAV write before the poll").await;
+    crate::domain::history::poll(&app.state).await;
+    let h = check(app, &mut c, "DAV write after the poll").await;
+    let dav = h["changes"].as_array().unwrap().last().unwrap();
+    assert_eq!((dav["src"].as_str(), dav["who"].is_null(), dav["prodid"].as_str()), (Some("dav"), true, Some("-//test//test//EN")));
+    // an undo: the undone change names its undo, the plan of the others changes
+    let upd_id = h["changes"][1]["id"].as_i64().unwrap();
+    let u = c.json(Method::POST, &format!("/api/history/{upd_id}/undo"), json!({ "confirm": true })).await.ok().json()["id"].as_i64().unwrap();
+    let h = check(app, &mut c, "undo").await;
+    assert_eq!(h["changes"][1]["undoneBy"], u);
+    // a rename moves no synctoken; a principal's new name; a new group member sees the group's changes
+    let user = app.principal("alice").await;
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &s.privat, "Freizeit", "#123456", "").await.unwrap();
+    assert_eq!(check(app, &mut c, "rename").await["colls"][format!("alice/{}", s.privat)]["name"], "Freizeit");
+    sqlx::query("UPDATE principals SET displayname = 'Alice Neu' WHERE id = 'alice'").execute(&app.state.db).await.unwrap();
+    assert_eq!(check(app, &mut c, "principal name").await["people"]["alice"]["name"], "Alice Neu");
+    let mut carol = app.login("carol").await;
+    assert_eq!(check(app, &mut carol, "carol").await["changes"], json!([]));
+    app.put_ics("group.familie", &s.familie, "fam1", &vevent("fam1", "Grillen", "DTSTART;VALUE=DATE:20261025\nDTEND;VALUE=DATE:20261026")).await;
+    crate::domain::history::poll(&app.state).await;
+    check(app, &mut carol, "carol, group change").await;
+    rustical_store::auth::AuthenticationProvider::add_membership(&*app.state.principals, "carol", "group.familie").await.unwrap();
+    let mut carol = app.login("carol").await;
+    assert!(check(app, &mut carol, "carol joined").await["changes"].as_array().unwrap().iter().any(|x| x["items"][0]["title"] == "Grillen"));
+    // zone and language
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York"), ("lang", "en")]).await.ok();
+    let ny = check(app, &mut c, "zone + language").await;
+    assert_ne!(ny["changes"][0]["at"], h["changes"][0]["at"]);
+    // a purge
+    sqlx::query("UPDATE practical_history_changes SET at = '2000-01-01 00:00:00' WHERE id = ?").bind(h["changes"][0]["id"].as_i64()).execute(&app.state.db).await.unwrap();
+    // (that SQL write bypasses the history module: the entry made now is stale until the purge moves the generation)
+    c.get_json("/api/history").await.ok();
+    let first = h["changes"][0]["id"].clone();
+    assert!(crate::domain::history::purge(&app.state).await.unwrap() > 0);
+    assert!(!check(app, &mut c, "purge").await["changes"].as_array().unwrap().iter().any(|x| x["id"] == first));
+}
+
+/// The search corpus is brought up to date per object (`search::index`): after a UI write, a DAV write, a
+/// series override, a deletion, a RELATED-TO target's new title, a calendar rename, a contact change and a
+/// zone change, every query answers exactly as a corpus built from scratch; objects nobody touched keep
+/// their document.
+#[tokio::test]
+async fn search_corpus_follows_writes_per_object() {
+    let s = crate::it::seed::seed().await;
+    let app = &s.app;
+    let mut c = app.login("alice").await;
+    let queries = ["standup", "review", "zahn", "anna", "steuer", "garten", "ostsee", "lauf", "familie", "14.10.", "ev: arbeit", "tk: keller", "partner"];
+    async fn both(app: &TestApp, c: &mut crate::testkit::Client, qs: &[&str], what: &str) {
+        for q in qs {
+            let path = format!("/api/search?q={}&limit=200", url::form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>());
+            let kept = c.get_json(&path).await.ok().json();
+            app.state.search_index.clear();
+            let fresh = c.get_json(&path).await.ok().json();
+            assert_eq!(kept, fresh, "{what}: {q}");
+        }
+    }
+    both(app, &mut c, &queries, "start").await;
+    let ptrs = app.state.search_index.doc_ptrs("alice");
+    assert!(ptrs.len() > 5, "{ptrs:?}");
+    // a UI write: one new object, every other document kept
+    let input = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Lauftreff im Garten", "start": "2026-10-23T18:00:00", "end": "2026-10-23T19:00:00" });
+    let id = c.json(Method::POST, "/api/events", input.clone()).await.ok().json()["id"].as_str().unwrap().to_string();
+    c.get_json("/api/search?q=lauf").await.ok();
+    let now = app.state.search_index.doc_ptrs("alice");
+    assert_eq!(now.len(), ptrs.len() + 1);
+    // (one with RELATED-TO gets its titles filled in anew on every rebuild: "review" names the standup)
+    assert!(ptrs.iter().filter(|(k, _)| !k.ends_with("/review")).all(|(k, p)| now.get(k) == Some(p)), "untouched objects keep their documents");
+    assert_ne!(ptrs.iter().find(|(k, _)| k.ends_with("/review")).map(|x| x.1), None);
+    both(app, &mut c, &queries, "UI write").await;
+    // a DAV write with RELATED-TO the new event, then the event's title changes: the relation follows
+    app.put_ics("alice", &s.arbeit, "partner", &vevent("partner", "Partnertermin", &format!("DTSTART;TZID=Europe/Berlin:20261026T090000\nDTEND;TZID=Europe/Berlin:20261026T100000\nRELATED-TO:{id}"))).await;
+    both(app, &mut c, &queries, "DAV write").await;
+    let mut upd = input.clone();
+    upd["summary"] = json!("Lauftreff an der Elbe");
+    upd["etag"] = c.get_json(&format!("/api/events/alice/{}/{id}", s.privat)).await.json()["etag"].clone();
+    c.json(Method::PUT, &format!("/api/events/alice/{}/{id}", s.privat), upd).await.ok();
+    c.get_json("/api/search?q=partner").await.ok();
+    both(app, &mut c, &["partner", "elbe", "lauf", "garten"], "related title").await;
+    let r = c.get_json("/api/search?q=partner%20elbe").await.json();
+    assert_eq!(r["events"][0]["summary"], "Partnertermin", "{r}");
+    // an override of one standup occurrence; a deletion
+    let series = "BEGIN:VEVENT\nUID:standup\nDTSTAMP:20260901T000000Z\nSUMMARY:Standup\nDTSTART;TZID=Europe/Berlin:20260902T090000\nDTEND;TZID=Europe/Berlin:20260902T091500\nRRULE:FREQ=WEEKLY;BYDAY=WE\nEND:VEVENT";
+    let over = "BEGIN:VEVENT\nUID:standup\nDTSTAMP:20260901T000000Z\nRECURRENCE-ID;TZID=Europe/Berlin:20261021T090000\nSUMMARY:Standup im Garten\nDTSTART;TZID=Europe/Berlin:20261021T100000\nDTEND;TZID=Europe/Berlin:20261021T101500\nEND:VEVENT";
+    app.put_ics("alice", &s.arbeit, "standup", &crate::testkit::ics(&format!("{series}\n{over}"))).await;
+    both(app, &mut c, &queries, "override").await;
+    app.state.calendars.delete_object("alice", &s.privat, "zahnarzt", true).await.unwrap();
+    both(app, &mut c, &queries, "deletion").await;
+    // a rename moves no synctoken; a contact; another zone
+    let user = app.principal("alice").await;
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &s.arbeit, "Büro", "#123456", "").await.unwrap();
+    both(app, &mut c, &["ev: büro", "review", "standup"], "rename").await;
+    assert_eq!(c.get_json("/api/search?q=review").await.json()["events"][0]["cal_name"], "Büro");
+    app.put_vcf("alice", &s.freunde, "anna", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:anna\r\nFN:Anna Gärtner\r\nN:Gärtner;Anna;;;\r\nEND:VCARD\r\n").await;
+    both(app, &mut c, &["anna", "gärtner", "schmidt"], "contact").await;
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York")]).await.ok();
+    both(app, &mut c, &queries, "zone").await;
+    assert_eq!(app.state.search_index.users(), 1);
+}

@@ -250,7 +250,7 @@ fn sort_instances(v: &mut [Instance]) {
 /// Instances one `expand` call keeps at most: caldata stops a series at 2 048 occurrences per window
 /// (event/mod.rs:210), so only many such series together reach it — then the rest of the calendar is
 /// left out of that window (logged) rather than the process running out of memory (192 MiB in prod).
-const EXPAND_MAX: usize = 50_000;
+pub(crate) const EXPAND_MAX: usize = 50_000;
 
 /// A master whose properties beyond what the expansion needs (`LIGHT_KEEP`) exceed this many bytes is
 /// expanded from a light copy (`light_master`): caldata clones every property of the master into every
@@ -396,6 +396,26 @@ fn expand_object(obj: &CalendarObject, cal: &CalInfo, id: &str, tz: chrono_tz::T
     }
 }
 
+/// One object's instances touching [start, end), read as `expand` reads them (window clamped, a panic of the
+/// object caught, at most `EXPAND_MAX`): the search corpus re-reads single objects (`search::cal_part_update`).
+pub(crate) fn object_instances(obj: &CalendarObject, cal: &CalInfo, id: &str, start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz) -> Vec<Instance> {
+    let Some((start, end)) = clamp_window(start, end) else { return vec![] };
+    let ws = ical::to_utc(start.and_time(chrono::NaiveTime::MIN), tz) - Duration::days(1);
+    let we = ical::to_utc(end.and_time(chrono::NaiveTime::MIN), tz) + Duration::days(1);
+    let (win_start, win_end) = (start.and_time(chrono::NaiveTime::MIN), end.and_time(chrono::NaiveTime::MIN));
+    let mut out = vec![];
+    let key = format!("{}/{}/{id}", cal.principal, cal.id);
+    if per_object(&key, || expand_object(obj, cal, id, tz, (ws, we), (win_start, win_end), LIGHT_MIN_BYTES, &mut out)).is_none() {
+        out.clear();
+    }
+    out
+}
+
+/// `search_extra` of one object, a panic caught as `expand` catches it (none: the default).
+pub(crate) fn object_extra(obj: &CalendarObject, cal: &CalInfo, id: &str) -> SearchExtra {
+    per_object(&format!("{}/{}/{id}", cal.principal, cal.id), || search_extra(obj)).unwrap_or_default()
+}
+
 type WinKey = (String, String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
 
 /// Expanded instances per (calendar, synctoken, zone, window): the calendar views, the endless lists
@@ -492,7 +512,7 @@ pub struct SearchExtra {
     pub related: Vec<String>,
 }
 
-fn search_extra(obj: &CalendarObject) -> SearchExtra {
+pub(crate) fn search_extra(obj: &CalendarObject) -> SearchExtra {
     let (raw, _) = split_ics(&obj.get_ics());
     let p = &raw.props;
     let get = |n: &str| p.iter().find(|l| prop_name(l) == n).map(|l| ical::split_line(l).2.trim().to_ascii_uppercase()).unwrap_or_default();

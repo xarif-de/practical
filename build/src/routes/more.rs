@@ -12,7 +12,7 @@ use crate::error::AppResult;
 use crate::render::{self, L, e};
 use crate::routes::calendar::ViewCtx;
 use crate::state::SharedState;
-use chrono::{Datelike, Duration, NaiveDate, Weekday};
+use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Weekday};
 use rustical_store::auth::Principal;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
@@ -34,9 +34,159 @@ pub struct YearData {
     pub school_regions: String,
 }
 
+/// One calendar's instances of one year as the five views read them (summary, categories, the event's own
+/// colour, start/end, all-day; the calendar's name and colour are taken at use, they change without the
+/// synctoken). Strings are kept once per object, not per instance.
+pub struct YearPart {
+    objs: Vec<YearObj>,
+    items: Vec<(NaiveDateTime, NaiveDateTime, bool, u32)>,
+}
+
+struct YearObj {
+    object_id: String,
+    /// shared with the instances made of it (`events::Text`)
+    summary: events::Text,
+    color: String,
+    categories: Vec<String>,
+}
+
+type YearKey = (String, String, i64, chrono_tz::Tz, i32);
+
+/// The year views' expansions per (calendar, synctoken, zone, year): a year is outside `InstanceCache`'s
+/// windows, so every planner/weekends/vacation/countdown/numbers request and every live-change refetch read
+/// and parsed the whole year again (~94 % of a planner request's samples on the bench DB, audit3-perf3 #7).
+/// RustiCal moves the synctoken on every object write, so a write is never answered from before it.
+/// Least recently used entries go first above `YEAR_CACHE_BYTES` (estimated heap).
+#[derive(Default)]
+pub struct YearCache(std::sync::Mutex<(HashMap<YearKey, (std::sync::Arc<YearPart>, usize, u64)>, usize, u64)>);
+
+const YEAR_CACHE_BYTES: usize = 6 << 20;
+
+impl YearPart {
+    fn of(instances: &[Instance]) -> YearPart {
+        let mut ids: HashMap<&str, u32> = HashMap::new();
+        let mut objs = vec![];
+        let mut items = Vec::with_capacity(instances.len());
+        for i in instances {
+            let o = *ids.entry(i.object_id.as_str()).or_insert_with(|| {
+                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone() });
+                objs.len() as u32 - 1
+            });
+            // an override (RECURRENCE-ID) may carry another title or colour than its series
+            let o = if objs[o as usize].summary == i.summary && objs[o as usize].color == i.color && objs[o as usize].categories == i.categories {
+                o
+            } else {
+                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone() });
+                objs.len() as u32 - 1
+            };
+            items.push((i.start, i.end, i.all_day, o));
+        }
+        objs.shrink_to_fit();
+        YearPart { objs, items }
+    }
+    /// heap estimate as `events::est_bytes` counts it (16-byte classes + 16 of overhead per allocation)
+    fn bytes(&self) -> usize {
+        let a = |n: usize| if n == 0 { 0 } else { n.div_ceil(16) * 16 + 16 };
+        self.items.len() * std::mem::size_of::<(NaiveDateTime, NaiveDateTime, bool, u32)>()
+            + self.objs.iter().map(|o| std::mem::size_of::<YearObj>() + a(o.object_id.len()) + a(o.summary.len()) + a(o.color.len()) + a(o.categories.len() * 24) + o.categories.iter().map(|c| a(c.len())).sum::<usize>()).sum::<usize>()
+            + 64
+    }
+}
+
+impl YearCache {
+    fn get(&self, k: &YearKey) -> Option<std::sync::Arc<YearPart>> {
+        let mut g = self.0.lock().unwrap();
+        g.2 += 1;
+        let t = g.2;
+        g.0.get_mut(k).map(|e| {
+            e.2 = t;
+            e.0.clone()
+        })
+    }
+    fn put(&self, k: YearKey, v: std::sync::Arc<YearPart>) {
+        let size = v.bytes();
+        if size > YEAR_CACHE_BYTES / 2 {
+            return;
+        }
+        let mut g = self.0.lock().unwrap();
+        let g = &mut *g;
+        // a request that read the calendar before a write must not push out the newer token's entries
+        if g.0.keys().any(|o| o.0 == k.0 && o.1 == k.1 && o.2 > k.2) {
+            return;
+        }
+        let stale: Vec<YearKey> = g.0.keys().filter(|o| o.0 == k.0 && o.1 == k.1 && o.2 < k.2).cloned().collect();
+        for o in stale {
+            g.1 -= g.0.remove(&o).unwrap().1;
+        }
+        while g.1 + size > YEAR_CACHE_BYTES {
+            let Some(old) = g.0.iter().min_by_key(|(_, e)| e.2).map(|(o, _)| o.clone()) else { break };
+            g.1 -= g.0.remove(&old).unwrap().1;
+        }
+        g.2 += 1;
+        if let Some(prev) = g.0.insert(k, (v, size, g.2)) {
+            g.1 -= prev.1;
+        }
+        g.1 += size;
+    }
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.0.lock().unwrap().0.len()
+    }
+    #[cfg(test)]
+    pub fn clear(&self) {
+        *self.0.lock().unwrap() = Default::default();
+    }
+}
+
+/// The year's instances of `cals`, sorted as `events::instances` sorts them. Only what `YearPart` keeps is
+/// filled in (location, description, uid and alarms stay empty): the five views read nothing else.
+async fn year_instances(state: &SharedState, cals: &[CalInfo], (start, end): (NaiveDate, NaiveDate), year: i32, tz: chrono_tz::Tz) -> AppResult<Vec<Instance>> {
+    let mut out = vec![];
+    let empty = events::Text::from("");
+    for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
+        let key: YearKey = (cal.principal.clone(), cal.id.clone(), cal.synctoken, tz, year);
+        let part = match state.caches.years.get(&key) {
+            Some(p) => p,
+            None => {
+                // without the calendar's colour: an instance without its own keeps "" and gets the colour at use
+                let bare = CalInfo { displayname: String::new(), color: String::new(), is_group: false, ..cal.clone() };
+                let p = std::sync::Arc::new(YearPart::of(&events::instances(state, std::slice::from_ref(&bare), start, end, tz).await?));
+                state.caches.years.put(key, p.clone());
+                p
+            }
+        };
+        out.extend(part.items.iter().map(|&(start, end, all_day, o)| {
+            let o = &part.objs[o as usize];
+            Instance {
+                principal: cal.principal.clone(),
+                cal_id: cal.id.clone(),
+                cal_name: cal.displayname.clone(),
+                color: if o.color.is_empty() { cal.color.clone() } else { o.color.clone() },
+                object_id: o.object_id.clone(),
+                uid: String::new(),
+                summary: o.summary.clone(),
+                location: empty.clone(),
+                description: empty.clone(),
+                start,
+                end,
+                all_day,
+                recurring: false,
+                categories: o.categories.clone(),
+                alarm_minutes: None,
+                alarms: vec![],
+                is_group: cal.is_group,
+                cancelled: false,
+            }
+        }));
+    }
+    // the order `events::instances` gives (each part is sorted, the merge is stable)
+    out.sort_by(|a, b| a.start.cmp(&b.start).then(b.all_day.cmp(&a.all_day)).then(a.summary.cmp(&b.summary)));
+    Ok(out)
+}
+
 pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, year: i32, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<YearData> {
     let (Some(start), Some(end)) = (NaiveDate::from_ymd_opt(year, 1, 1).filter(|d| crate::domain::ical::year_ok(*d)), NaiveDate::from_ymd_opt(year + 1, 1, 1)) else { return Err(crate::error::AppError::bad("err-date-range")) };
-    let instances = events::instances(state, cals, start, end, vc.tz).await?;
+    let instances = year_instances(state, cals, (start, end), year, vc.tz).await?;
     let p = &vc.prefs;
     let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
     let public = if p.holidays_enabled { holidays::for_regions(state, "public", &public_regions, year, &ctx.lang).await? } else { vec![] };

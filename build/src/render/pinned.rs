@@ -80,6 +80,11 @@ fn week_view_and_blocks_golden() {
     assert_snapshot("render/week_blocks_de.html", &lines_of_html(&one));
     assert!(one.starts_with("<div class=\"week now\" data-week=\"2026-10-12\"><h2 class=\"wk\">KW 42 <span>12.10. – 18.10.</span> <b class=\"fname\">Herbstferien</b></h2>"), "{one}");
     assert_eq!(week_blocks(date("2026-10-15"), 3, date("2026-10-14"), &v, &l, &hol).matches("<div class=\"week").count(), 3);
+    // an entry names its start date only on a later day of the event; on its start day app.js reads the day block's
+    let w = week_blocks(date("2026-10-19"), 1, date("2026-10-14"), &v, &l, &hol);
+    assert!(w.contains("<section class=\"dayblock\" data-date=\"2026-10-20\"><div class=\"dl\"><b>20</b><span>Di</span></div><ul><li><time>ganztags</time><span class=\"ev allday\" style=\"--c:#0a84ff\" data-key=\"alice/a/messe\">Messe</span>"), "{w}");
+    assert_eq!(w.matches("data-key=\"alice/a/messe\" data-date=\"2026-10-20\"").count(), 2, "21 and 22 October");
+    assert!(w.contains("data-key=\"alice/a/s1\">Eins</span>"), "{w}");
 }
 
 #[test]
