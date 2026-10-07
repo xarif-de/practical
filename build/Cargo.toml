@@ -37,7 +37,7 @@ tower-http = { version = "0.7", features = ["trace", "compression-gzip"] }
 tower-sessions = "0.15"
 askama = { version = "0.16", features = ["serde_json"] }
 askama_web = { version = "0.16", features = ["axum-0.8"] }
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 sqlx = { version = "0.9", default-features = false, features = ["sqlite", "runtime-tokio", "chrono", "json"] }
 sqlx-sqlite = { version = "0.9", features = ["bundled"] }

@@ -161,7 +161,7 @@ pub fn date_parts(q: &str) -> Option<(Option<i32>, Option<u32>, Option<u32>)> {
 pub fn parse_date_query(q: &str, today: NaiveDate) -> Option<JumpTo> {
     let (year, month, day) = date_parts(q)?;
     let (y, m, d) = (year.unwrap_or(today.year()), month.unwrap_or(if day.is_some() { today.month() } else { 1 }), day.unwrap_or(1));
-    let date = NaiveDate::from_ymd_opt(y, m, d)?;
+    let date = NaiveDate::from_ymd_opt(y, m, d).filter(|d| crate::domain::ical::year_ok(*d))?;
     let view = if day.is_some() { "day" } else if month.is_some() { "month" } else { "planner" };
     let label = match (day, month, year) {
         (Some(_), _, _) => date.format("%d.%m.%Y").to_string(),
@@ -273,6 +273,9 @@ impl DateField {
     /// vCard dates: `1987-11-17`, `19871117`, `--11-17`, `--1117` (a time part is ignored)
     fn vcard(code: &'static str, v: &str, weight: f32) -> Option<Self> {
         let v = v.trim().split('T').next()?.replace('-', "");
+        if !v.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
         let (y, md): (Option<i32>, &str) = match v.len() {
             4 => (None, &v),
             8 => (Some(v[..4].parse().ok()?), &v[4..]),
@@ -630,10 +633,18 @@ struct Query {
     tier: u8,
 }
 
+/// A query's length bound (characters, then words): every hit test runs per query word over the whole corpus,
+/// so an unbounded `q` (20 000 characters in one GET) cost CPU in proportion. Nobody types more.
+const QUERY_MAX_CHARS: usize = 200;
+const QUERY_MAX_WORDS: usize = 12;
+
 impl Query {
     fn new(raw: &str) -> Self {
-        let phrase = fold(raw.trim());
-        let words = words(&phrase);
+        let raw = raw.trim();
+        let raw = raw.char_indices().nth(QUERY_MAX_CHARS).map_or(raw, |(at, _)| &raw[..at]);
+        let phrase = fold(raw);
+        let mut words = words(&phrase);
+        words.truncate(QUERY_MAX_WORDS);
         let chars = words.iter().map(|w| w.chars().collect()).collect();
         Query { phrase, words, chars, tier: 1 }
     }
@@ -767,7 +778,7 @@ async fn index(state: &AppState, user: &Principal, today: NaiveDate, tz: chrono_
     let (inst, mut extras): (Vec<Instance>, _) = events::instances_with_extras(state, &cals, from, to, tz).await?;
     let tasks = tasks::tasks_for(state, &cals, tz).await?;
     // RELATED-TO names the other side by UID: its title is what can be searched
-    let mut titles: HashMap<String, String> = inst.iter().map(|i| (i.uid.clone(), i.summary.clone())).collect();
+    let mut titles: HashMap<String, String> = inst.iter().map(|i| (i.uid.clone(), i.summary.to_string())).collect();
     titles.extend(tasks.iter().map(|t| (t.uid.clone(), t.summary.clone())));
     let related = |uids: &[String]| uids.iter().filter_map(|u| titles.get(u).cloned()).collect::<Vec<_>>().join(" · ");
 
@@ -801,7 +812,7 @@ async fn index(state: &AppState, user: &Principal, today: NaiveDate, tz: chrono_
                     Field::new("geo", &geo_text(x.geo), 0.25),
                     Field::collection(&i.cal_name).shown(),
                 ];
-                evs.push(EvDoc { key: k.clone(), uid: i.uid.clone(), summary: i.summary.clone(), color: i.color.clone(), cal_name: i.cal_name.clone(), cancelled: i.cancelled, occ: vec![], doc: Doc { fields, ..Default::default() } });
+                evs.push(EvDoc { key: k.clone(), uid: i.uid.clone(), summary: i.summary.to_string(), color: i.color.clone(), cal_name: i.cal_name.clone(), cancelled: i.cancelled, occ: vec![], doc: Doc { fields, ..Default::default() } });
                 by_key.insert(k, evs.len() - 1);
                 evs.len() - 1
             }
@@ -1057,7 +1068,7 @@ async fn past_events(state: &AppState, user: &Principal, today: NaiveDate, tz: c
         let k = i.key();
         let at = *by_key.entry(k.clone()).or_insert_with(|| {
             let doc = Doc { fields: vec![Field::new("title", &i.summary, 1.0)], ..Default::default() };
-            evs.push(EvDoc { key: k, uid: i.uid.clone(), summary: i.summary.clone(), color: i.color.clone(), cal_name: i.cal_name.clone(), cancelled: i.cancelled, occ: vec![], doc });
+            evs.push(EvDoc { key: k, uid: i.uid.clone(), summary: i.summary.to_string(), color: i.color.clone(), cal_name: i.cal_name.clone(), cancelled: i.cancelled, occ: vec![], doc });
             evs.len() - 1
         });
         evs[at].occ.push((i.start, i.time_label())); // `instances` is sorted by start

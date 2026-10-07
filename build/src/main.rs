@@ -36,8 +36,13 @@ use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::{info, warn};
 
 // see Cargo.toml (measurement) and the Dockerfile (MIMALLOC_* options that keep RSS at musl level)
+#[cfg(not(test))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+// tests: the same allocator, counting each thread's bytes (`testkit::peak_of`)
+#[cfg(test)]
+#[global_allocator]
+static GLOBAL: testkit::Counting = testkit::Counting;
 
 pub const RUSTICAL_TAG: &str = env!("RUSTICAL_TAG");
 

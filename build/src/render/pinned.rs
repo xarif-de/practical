@@ -193,7 +193,8 @@ fn small_helpers() {
     assert_eq!((en.long_date(d), en.dm(d), en.date(d), en.mon3(3)), ("Thursday, March 5".to_string(), "3/5".to_string(), "2026-03-05".to_string(), "Mar".to_string()));
     // by_day: every touched day, an end at midnight is exclusive
     let v = vec![instance("a", "x", "X", "2026-10-09T22:00", "2026-10-11T00:00"), instance("a", "y", "Y", "2026-10-09T10:00", "2026-10-09T10:00")];
-    let idx = by_day(&v);
+    let idx = by_day(&v, date("2026-01-01"), date("2027-01-01"));
+    assert!(by_day(&v, date("2026-10-10"), date("2026-10-11")).keys().eq([&date("2026-10-10")]), "only the window's days");
     let mut days: Vec<NaiveDate> = idx.keys().copied().collect();
     days.sort();
     assert_eq!(days, [date("2026-10-09"), date("2026-10-10")]);

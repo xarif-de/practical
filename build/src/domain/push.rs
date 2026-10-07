@@ -108,7 +108,7 @@ async fn build(state: &AppState, now: chrono::DateTime<Utc>, out: &mut Vec<Plann
                     cal_id: i.cal_id.clone(),
                     object_id: i.object_id.clone(),
                     trigger: start_utc - Duration::minutes(m),
-                    title: i.summary.clone(),
+                    title: i.summary.to_string(),
                     body: format!("{when} · {}", i.cal_name),
                     url: format!("/calendar?view=day&date={}", i.start_date()),
                     tag: i.key(),

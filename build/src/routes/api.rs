@@ -276,7 +276,7 @@ async fn mention_events(state: &SharedState, user: &Principal, cals: &[crate::do
         return Ok(v.clone());
     }
     let mut seen = std::collections::HashSet::new();
-    let events: Vec<MentionEvent> = events::instances(state, cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.clone(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
+    let events: Vec<MentionEvent> = events::instances(state, cals, vc.today - chrono::Duration::days(90), vc.today + chrono::Duration::days(365), vc.tz).await?.into_iter().filter(|i| seen.insert(i.uid.clone())).take(500).map(|i| MentionEvent { summary: i.summary.to_string(), key: i.key(), uid: i.uid.clone(), date: Some(i.start.date()) }).collect();
     // collected in place from the instances' buffer (std's in-place iteration): without the shrink the
     // cache would keep the whole 15-month expansion's allocation (measured +9.5 MiB live heap)
     let mut events = events;
@@ -308,7 +308,8 @@ async fn event_attachment(State(state): State<SharedState>, user: Principal, Pat
     let (raw, _) = events::split_ics(&obj.get_ics());
     let (fmt, name, bytes) = events::embedded_attachment(&raw.props, n).ok_or(AppError::NotFound)?;
     let safe: String = name.chars().filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ')).collect();
-    Ok(([(axum::http::header::CONTENT_TYPE, fmt), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", if safe.trim().is_empty() { format!("anhang-{}", n + 1) } else { safe })), (axum::http::header::CACHE_CONTROL, "private, max-age=0".into())], bytes).into_response())
+    // nosniff + a sandboxing CSP: the bytes are any client's; they are never a script or a page of this origin
+    Ok(([(axum::http::header::CONTENT_TYPE, fmt), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", if safe.trim().is_empty() { format!("anhang-{}", n + 1) } else { safe })), (axum::http::header::CACHE_CONTROL, "private, max-age=0".into()), (axum::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()), (axum::http::header::CONTENT_SECURITY_POLICY, "sandbox; default-src 'none'".into())], bytes).into_response())
 }
 
 #[derive(Deserialize)]

@@ -53,7 +53,7 @@ async fn instances_through_zones_series_and_overrides() {
         "Serie verschoben 2026-10-27T15:00→2026-10-27T16:00 series -55",
         "Serie 2026-11-03T09:00→2026-11-03T10:00 series -55",
     ]);
-    let d = all.iter().find(|i| i.summary == "Mit Dauer").unwrap();
+    let d = all.iter().find(|i| &*i.summary == "Mit Dauer").unwrap();
     assert_eq!((d.color.as_str(), d.cancelled, d.categories.clone()), ("tomato", true, vec!["A".to_string(), "B".into(), "C".into()]));
     assert_eq!(all[0].alarm_minutes, Some(-55), "RELATED=END 5 minutes before a 60-minute event");
     // in another zone the same objects move
