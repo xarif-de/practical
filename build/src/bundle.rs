@@ -21,7 +21,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("js/core.js"),
         File("js/prefetch.js"),
         File("js/req.js"),
-        File("js/shell.js"),
+        Wrap(IIFE, &[File("js/shell/base.js"), File("js/shell/settings-pages.js"), File("js/shell/popovers-stream.js")], END),
         Wrap(IIFE, &[File("js/colors/picker.js"), File("js/colors/fields.js"), File("js/colors/optimise.js")], END),
         File("js/calendar.js"),
         Wrap(IIFE, &[
