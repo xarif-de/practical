@@ -88,6 +88,14 @@ run = "e2e/baseline.sh"
 description = "Diff two baselines (pixels, DOM, computed style): mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
 run = "node e2e/compare.mjs"
 
+[tasks.bench]
+description = "Performance bench of this checkout on the synthetic big DB (e2e/bench): server latency/RSS/idle CPU, wire bytes, UI interaction times, sizes → mise run bench -- [--out dir], default ~/.cache/practical-e2e/bench-<sha>"
+run = "node e2e/bench/bench.mjs"
+
+[tasks.bench-compare]
+description = "A/B bench against a former `mise run bench` dir, interleaved on this machine: mise run bench-compare -- <ref-dir> [--out dir]; exit 1 on a regression beyond the thresholds"
+run = "node e2e/bench/bench.mjs --ref"
+
 [tasks.gate-quick]
 description = "Gate of a change without the visual part: cargo test → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
 run = "e2e/gate.sh quick"
