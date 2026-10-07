@@ -1,0 +1,11 @@
+# Kept out of default rg/fd searches (both read .ignore; git, cargo, Docker and dagger do not).
+# Generated, vendored or golden data: a match prints whole lines (regions.json is one 553 KB line).
+# Search them on purpose with `rg -u` / `fd -u`.
+/build/src/data/regions.json
+/build/Cargo.lock
+/build/assets/leaflet.js
+/build/assets/leaflet.css
+/build/assets/icons.svg
+/build/tests/fixtures/
+/build/tests/snapshots/
+/e2e/package-lock.json
