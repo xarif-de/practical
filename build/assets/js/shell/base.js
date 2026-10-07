@@ -95,8 +95,15 @@
   // confirmations on destructive forms
   $$('[data-confirm]').forEach(b => b.addEventListener('click', async e => { if (b.dataset.asked) { delete b.dataset.asked; return; } e.preventDefault(); if (await ask(b.dataset.confirm)) { b.dataset.asked = '1'; b.click(); } })); // the repeated click submits with this button
 
+  /* a logout ends the session of every tab of this browser: the others hear it at once (practical.authLost: their unsaved
+     work kept, to the login) instead of at their next request — the live stream stays open over it. Told as this page goes,
+     i.e. once the server answered the logout: a tab that went to the login before would still find the session. */
+  const tabs = document.body.dataset.user && 'BroadcastChannel' in window ? new BroadcastChannel('practical.session') : null;
+  let loggingOut = false;
+  if (tabs) { tabs.onmessage = e => { if (e.data === 'logout') practical.authLost(); }; addEventListener('pagehide', () => { if (loggingOut) tabs.postMessage('logout'); }); addEventListener('pageshow', e => { if (e.persisted) loggingOut = false; }); }
   // logout ends this browser's push subscription too: a shared device must not keep showing the user's reminders (at most 1.5 s)
   $$('form[action="/logout"]').forEach(f => f.addEventListener('submit', e => {
+    loggingOut = true;
     if (f.dataset.done || !('serviceWorker' in navigator)) return;
     e.preventDefault(); f.dataset.done = '1';
     const off = navigator.serviceWorker.getRegistration('/').then(reg => reg && reg.pushManager.getSubscription()).then(sub => sub && Promise.all([practical.send('/api/push/subscriptions', 'DELETE', { endpoint: sub.endpoint }), sub.unsubscribe()]));
