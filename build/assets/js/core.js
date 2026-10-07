@@ -70,5 +70,28 @@
       for (const x of hits.sort((x, y) => x.a - y.a)) { h += e(t.slice(i, x.a)) + x.html; i = x.b; }
       return (h + e(t.slice(i))).replace(/^- (.*)$/gm, '• $1');
     },
+    /* the touches in a wheel stream: wheelTouch() → (t, delta) → true where a new touch starts. A page never learns when
+       fingers touch a trackpad, and macOS scrolls on after they lift (momentum: a steady frame cadence, deltas that only
+       shrink), so a touch is read from the stream: a rest (> 150 ms), a reversal, or a coasting stream that breaks — a
+       gap no coasting stream has (≥ 24 ms) with a delta far off the coasting speed (a touch stops the momentum: 30–57 ms
+       of silence, then a slow finger), or any such gap once the tail has faded below 0.1 px/ms (what is left of it can
+       turn no page). Speeds are taken over pairs of events in the input's own time, so a coalesced event keeps its speed
+       and a finger's uneven samples are never "coasting". Tuned on a MacBook Pro trackpad, 120 Hz, Edge 154 (2026-10-07):
+       30 swipes normal/fast/strong/gentle → 30 touches (the former speed-jump rule: 62), then 57 free swipes the user
+       judged one page each; each part but the reversal guard errs on the replay when left out
+       (e2e/functional/wheel-touch.json). Shared (not inside the calendar) so e2e/functional can test it directly. */
+    wheelTouch: () => {
+      let last = -1e9, dir = 0, h = []; // [gap ms, |delta|] of this touch's last 5 events
+      const g = i => Math.max(1, h[i - 1][0] + h[i][0]), v = i => (h[i - 1][1] + h[i][1]) / g(i); // ms and px/ms of the event pair ending at i
+      return (t, delta) => {
+        const gap = t - last, a = Math.abs(delta), s = Math.sign(delta); last = t;
+        let fresh = gap > 150 || (s && dir && s !== dir);
+        if (!fresh && gap >= 24 && h.length === 5 && [2, 3, 4].every(i => v(i) <= v(i - 1) * 1.6 + 1.5 / g(i))) { // coasting: pair speeds that never grow
+          const sp = (h[2][1] + h[3][1] + h[4][1]) / Math.max(1, h[2][0] + h[3][0] + h[4][0]), want = sp * gap; fresh = sp < 0.1 || a < want / 2 || a > 2 * want + 2; }
+        if (fresh) { dir = s; h = []; } else if (!dir) dir = s;
+        h.push([gap, a]); if (h.length > 5) h.shift();
+        return fresh;
+      };
+    },
   };
 })();

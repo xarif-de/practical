@@ -2,7 +2,6 @@
   // ---- the strip: NWEEKS rows of ROWH px, starting a year before the event on a Monday; the separators are the
   // only variable spacing (a GAP margin above / below at most three rows), so every row position is arithmetic ----
   const ROWH = 32, GAP = 16, NWEEKS = 130;
-  const GESTURE_PAUSE = 40; // ms without wheel input that end a gesture — the next one may reach the next month
   const SETTLE_MS = 120;    // ms after the last input before the strip glides to the nearest month
   const WHEEL_DRAG = 0.8;   // share of the wheel distance the strip follows
   const rrW0 = () => { const d = rrStart(); d.setDate(d.getDate() - rrWd(d) - 364); return d; };
@@ -57,13 +56,14 @@
       if (!animate || Math.abs(scroller.scrollTop - top) <= GAP) scroller.scrollTop = top; else glide.to(top); }; // a gap-sized rest is set at once: a glide would fight an ongoing gesture
     const nearestMonth = () => { const st = scroller.scrollTop; let best = rrFocus, dist = Math.abs(snapTop(rrFocus) - st); for (const mi of [rrFocus - 1, rrFocus + 1]) if (inRange(mi) && Math.abs(snapTop(mi) - st) < dist) { best = mi; dist = Math.abs(snapTop(mi) - st); } return best; }; // past half the way the neighbour wins
     const settle = () => focusMonth(nearestMonth(), true, null);
-    // the strip owns the wheel: one gesture reaches at most the neighbouring month and snaps in on arrival
-    let lastWheel = 0, gestureFrom = null, gestureDir = 0, settleT = 0;
-    scroller.addEventListener('wheel', e => { e.preventDefault(); glide.stop(); const now = e.timeStamp; // the input's own time: a busy main thread must not split a gesture
-      if (now - lastWheel > GESTURE_PAUSE || gestureFrom == null) { gestureFrom = rrFocus; gestureDir = 0; } lastWheel = now;
+    // the strip owns the wheel: one touch (practical.wheelTouch, momentum included) reaches at most the neighbouring
+    // month and snaps in on arrival; the next touch may reach the next month
+    let lastWheel = 0, gestureFrom = null, gestureDir = 0, settleT = 0; const touch = practical.wheelTouch();
+    scroller.addEventListener('wheel', e => { e.preventDefault(); glide.stop(); const now = e.timeStamp, px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroller.clientHeight : 1); // the input's own time: a busy main thread must not split a touch
+      if (touch(now, px) || gestureFrom == null) { gestureFrom = rrFocus; gestureDir = 0; } lastWheel = now;
       const dir = Math.sign(e.deltaY); if (dir && dir !== gestureDir) { gestureDir = dir; setSeps(rrFocus, rrFocus + dir); }
       const lo = snapTop(inRange(gestureFrom - 1) ? gestureFrom - 1 : gestureFrom), hi = snapTop(inRange(gestureFrom + 1) ? gestureFrom + 1 : gestureFrom);
-      const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroller.clientHeight : 1) * WHEEL_DRAG;
+      const delta = px * WHEEL_DRAG;
       const target = Math.min(hi, Math.max(lo, scroller.scrollTop + delta)); scroller.scrollTop = target;
       clearTimeout(settleT); if ((target === hi && dir > 0) || (target === lo && dir < 0)) settle(); else settleT = setTimeout(settle, SETTLE_MS); }, { passive: false });
     scroller.addEventListener('pointerdown', glide.stop); scroller.addEventListener('touchstart', glide.stop, { passive: true });

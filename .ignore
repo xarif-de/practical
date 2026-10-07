@@ -9,3 +9,4 @@
 /build/tests/fixtures/
 /build/tests/snapshots/
 /e2e/package-lock.json
+/e2e/functional/wheel-touch.json

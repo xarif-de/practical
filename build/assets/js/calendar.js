@@ -91,23 +91,14 @@
     else { state.date = date; markPicked(); }
     history.replaceState(state, '', url(false).pathname + url(false).search); }
   function markPicked() { $$('.stream .dayblock, .planner .c[data-date]', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date)); } // hoisted: wireItems calls it
-  // the month grid owns the wheel: one gesture turns exactly one page, however far it goes. A new
-  // gesture is told by speed, not by a pause: a trackpad's momentum tail only ever slows down, while
-  // a fresh swipe arrives faster than the tail it interrupts — the speed must have fallen below half
-  // the gesture's peak and then jump above twice the recent mean (a finger still accelerating after
-  // the page turned is neither). Time gaps proved unusable: the lift-off before the tail and Chrome
-  // coalescing events while the page swaps both open gaps that look like rests (two pages per swipe),
-  // and the rest between two swipes can be shorter than either (no page at all). Speed is taken over
-  // the event's own time, so a coalesced event (one big delta over a long gap) keeps its true speed.
-  // State lives outside the fragment so the events that arrive after the swap still count as the
-  // same gesture.
-  const MONTH_FLIP = 60, MONTH_REST = 150, MONTH_JUMP = 2, MONTH_MINV = 0.25; // px that turn the page; ms of rest that end a gesture for sure; speed ratio and floor (px/ms) of a fresh swipe
-  let mwLast = 0, mwAcc = 0, mwDone = false, mwVs = [], mwPeak = 0;
+  // the month grid owns the wheel: one touch of the trackpad (or one spin of a wheel) turns exactly one page,
+  // however far it goes and however long its momentum runs; the next touch turns the next (practical.wheelTouch).
+  // State lives outside the fragment so the events that arrive after the swap still count as the same touch.
+  const MONTH_FLIP = 60; // px that turn the page
+  const mwTouch = practical.wheelTouch(); let mwAcc = 0, mwDone = false;
   function monthWheel(e) {
-    e.preventDefault(); const now = e.timeStamp, dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
-    const gap = now - mwLast, v = Math.abs(dy) / Math.max(1, gap), ref = mwVs.reduce((a, b) => a + b, 0) / (mwVs.length || 1);
-    const fresh = gap > MONTH_REST || (mwDone && v >= MONTH_MINV && ref < mwPeak / 2 && v > MONTH_JUMP * ref);
-    if (fresh) { mwAcc = 0; mwDone = false; mwVs = []; mwPeak = 0; } mwLast = now; mwVs = mwVs.concat(v).slice(-3); mwPeak = Math.max(mwPeak, v);
+    e.preventDefault(); const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
+    if (mwTouch(e.timeStamp, dy)) { mwAcc = 0; mwDone = false; }
     if (mwDone) return;
     mwAcc += dy;
     if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; shift(mwAcc > 0 ? 1 : -1); }

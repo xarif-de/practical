@@ -2,6 +2,7 @@
 // wheel, endless week stream and day ledger), keyboard, filter + holiday switches, opening events
 // from every view, the FAB / add buttons, and live updates from another user (SSE).
 import { test, expect, settle, api } from '../lib/test.mjs';
+import fs from 'node:fs';
 import { BASE } from '../lib/env.mjs';
 
 const D = '2026-10-14';
@@ -198,10 +199,21 @@ test('month wheel turns exactly one month per gesture', async ({ page }) => {
   await expect(page.locator('#title')).toHaveText(/November 2026/);
   expect(qp(page, 'month')).toBe('2026-11');
   expect(qp(page, 'date')).toBe(D); // the picked day stays
-  // a second gesture after a rest (> MONTH_REST = 150 ms between events) turns back
+  // a second gesture after a rest (> 150 ms between events, practical.wheelTouch) turns back
   await page.waitForTimeout(400);
   await page.mouse.wheel(0, -120);
   await expect(page.locator('#title')).toHaveText(/Oktober 2026/);
+});
+
+// a real trackpad's stream, momentum included (wheel-touch.json): exactly one page per swipe — the rule the month
+// grid turns its pages by (calendar.js monthWheel: a touch resets, 60 px turn once)
+test('recorded trackpad swipes turn one month each', async ({ page }) => {
+  await open(page, cal('month'));
+  const rec = JSON.parse(fs.readFileSync(new URL('./wheel-touch.json', import.meta.url), 'utf8'));
+  const got = await page.evaluate(parts => parts.map(p => { const touch = practical.wheelTouch(); let acc = 0, done = false, out = '';
+    for (const [t, dy] of p.ev) { if (touch(t, dy)) { acc = 0; done = false; } if (done) continue; acc += dy; if (Math.abs(acc) >= 60) { done = true; out += acc > 0 ? '+' : '-'; } }
+    return out; }), rec.parts);
+  expect(got).toEqual(rec.parts.map(p => p.turns));
 });
 
 test('rail click jumps to a month', async ({ page }) => {
