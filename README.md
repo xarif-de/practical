@@ -414,6 +414,8 @@ mise run e2e-baseline -- <dir>          # visual suite → <dir> (default ~/.cac
 mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff, report in <dirB>/compare-report; exit 1 on any difference
 mise run gate-quick                     # cargo test → server build → functional suite
 mise run gate -- <ref-dir>              # gate-quick → visual baseline → compare against <ref-dir>
+mise run bench                          # performance bench of this checkout → ~/.cache/practical-e2e/bench-<sha>
+mise run bench-compare -- <bench-dir>   # A/B against a former bench dir, interleaved; exit 1 on a regression
 ```
 
 - **Fixture** (`e2e/seed/`, synthetic data only): users alice/bob/carol (password `devpass`, carol
@@ -454,6 +456,46 @@ mise run gate -- <ref-dir>              # gate-quick → visual baseline → com
 - Pixel baselines depend on the host's fonts and Chromium build (`@playwright/test` pinned in
   `e2e/package-lock.json`): compare baselines from the same machine.
 
+### Performance bench
+
+`e2e/bench/` tells whether a change made PractiCal slower or bigger than expected: a small set of key metrics
+of this checkout's server build (`E2E_PROFILE`, default `e2e`: relative numbers only) on a large synthetic DB.
+
+- **DB** (`gen-db.py`): the e2e fixture + for alice 3,500 events (60 series), 150 tasks, 300 contacts (import)
+  and ~450 history changes (JSON API), generated through PractiCal's own endpoints, cached as
+  `~/.cache/practical-e2e/bench-db-<sha of generator + fixture>.sqlite3` (12 MiB, ~3 s; delete it after a change
+  of the history/collection format). The imports' own history entries are purged (4,000 items made /history alone
+  hold ~350 MB RSS). Servers: production mode (embedded assets, password login, real clock, retention 100 years:
+  nothing purges as dates pass), egress blocked, each phase on fresh copies.
+- **Metrics** (`table.txt`, `result.json` with every sample): `srv.lat.<ep>` p50/p90, `srv.cpu.<ep>` (CPU ms per
+  request), `srv.inst.<ep>` (retired instructions per request) for 11 endpoints (month/week/day/year views, next-
+  month fragment, tasks, contacts, history, settings, search, mentions); `srv.first.*` (month page, search after an
+  edit); `srv.sql.<ep>` (statements per request, from sqlx' log in a separate start); `srv.rss.start`,
+  `srv.rss.burst`/`srv.peak.burst` (RSS / peak footprint after the latency loop + every endpoint 3× concurrently);
+  `idle.cpu`/`idle.inst`/`idle.wakeups` (60 s, one SSE client, VAPID + one push subscriber); `wire.*` (bytes as
+  served to Chromium's Accept-Encoding: pages gzip, assets br); `dom.*` (nodes per page); `ui.<action>` input →
+  result laid out (open editor, save event, month → week, next month by wheel, toggle task, one search keystroke;
+  `.cpu4` with CDP CPU throttling ×4, `.busy` main-thread task time, `.reqs` requests); `size.binary`,
+  `size.src.*` (build/assets as written). 5 server rounds (fresh processes), 5 UI samples per side.
+- **Verdict** (`bench-compare`): both binaries run in the same session, ref and candidate alternating per round,
+  request and UI sample; a metric regresses when the median of the per-round cand/ref ratios exceeds `1 + rel`
+  AND the median difference exceeds `abs` (`RULES` in bench.mjs). Power modes change the clock speed between runs
+  and within one: no stored number of another run is ever the criterion (a bench dir supplies the reference
+  binary; its numbers are information), instructions/statements/bytes/nodes do not depend on the clock, the idle
+  phase runs both servers at once. The power state (`pmset`: source, Low/High Power mode, thermal limits) is
+  recorded before and after every phase; Low Power Mode warns; a change during the run marks the result
+  unreliable and `bench-compare` exits 4 (no verdict).
+- **Calibration** (befd301 vs itself, 3 runs, M4 Pro on battery in Low Power Mode — the only power state
+  available; 0 alarms): largest |ratio − 1| per class — latency p50 4.2 % (others ≤ 2.7 %), p90 10 %, CPU/request
+  3.9 %, instructions/request 2.6 % (others ≤ 1 %), first hit 1.5 %, RSS start 0.3 %, RSS burst 6.4 %, peak 4.0 %,
+  idle CPU 4.9 %, wakeups 2.4 %, UI ≤ 8.3 % (editor-open 30 % of 8.7 ms, below its +10 ms), UI ×4 ≤ 6.5 %; counts and
+  bytes 0 (pages ±1 B: the CSRF token). Nearest to an alarm: RSS burst (0.64 of its threshold), all else ≤ 0.4.
+  Injected regressions, each caught: 20 ms sleep in the tasks handler → `srv.lat.tasks.p50` ×11.9; app.js + 5 KB
+  → `wire.asset.app.js` ×1.054, `size.src.app.js` ×1.013; 30 MB kept per burst → `srv.rss.burst` ×1.12,
+  `srv.peak.burst` ×1.14 (threshold ×1.10: the thinnest margin); 50 ms busy loop on click → 12 `ui.*` metrics.
+- **Runtime**: `bench` ~2 min, `bench-compare` ~2.5 min + the build. Ports `E2E_PORT` … `+2`. Env:
+  `BENCH_ROUNDS`, `BENCH_UI_SAMPLES`, `BENCH_IDLE_S`, `BENCH_PHASES` (server,count,idle,client), `BENCH_SKIP_BUILD=1`.
+
 ### How to gate a change
 
 1. Reference first: a baseline of the change's base commit (same fixture, same machine), e.g. in a
@@ -470,6 +512,11 @@ mise run gate -- <ref-dir>              # gate-quick → visual baseline → com
 4. Parallel checkouts: own `E2E_PORT` each (a functional run takes `E2E_PORT` … `E2E_PORT + 7` with
    4 workers), never two heavy suites at once on a shared host.
 5. Release candidates and profile changes: `E2E_PROFILE=release mise run gate -- <ref-dir>`.
+6. Changes that can cost time, memory or bytes (Rust, queries, templates, assets, dependencies, profiles): the
+   bench is part of the full gate. Reference: `mise run bench` in a worktree of the base commit (or an existing
+   `~/.cache/practical-e2e/bench-<base-sha>`), then `mise run bench-compare -- ~/.cache/practical-e2e/bench-<base-sha>`
+   → exit 0. An alarm names the metric; an intended cost (a new feature) is stated in the commit with the
+   ratio. Exit 4 (power state changed) is no verdict: rerun.
 
 ## Repository layout
 
