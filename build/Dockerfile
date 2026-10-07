@@ -31,7 +31,8 @@ COPY templates ./templates
 # `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): same step, AFTER the release build, own
 # target/ (dev profile, own cache id). Not a stage: dagger v0.21.10 evaluates stages one after another anyway. Not
 # beside the build: the two compiles' memory would add up, and in the 8 GiB CI dind an OOM wipes the whole engine
-# cache. CARGO_BUILD_JOBS=4 bounds the cold test compile. Measured 2026-10-07, local engine (12 CPUs), a one-line
+# cache. CARGO_BUILD_JOBS=2 bounds the cold test compile (at 4 its own memory reached the release build's peak: no margin;
+# 2 only slows a cold run). Measured at 4 jobs 2026-10-07, local engine (12 CPUs), a one-line
 # change: step 172 s (release 146 + tests 26) vs 150-157 s without, cgroup peak 2.14 GB with and without; both
 # targets cold: release 336 s + tests 133 s, peak 3.59 GB in the release build, 5.03 GB in the tests incl. >= 1.46 GB
 # page cache the build left (tests' own anon <= 3.57 GB). No `-D warnings` (e2e/cargo.sh adds it locally): a
@@ -48,7 +49,7 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     find . -path ./target -prune -o -type f -exec touch {} + \
  && cargo build --profile "$CARGO_PROFILE" --locked \
  && cp "target/$CARGO_PROFILE/practical" /practical \
- && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=4 cargo test --locked --target-dir /test-target
+ && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 cargo test --locked --target-dir /test-target
 
 # renovate: datasource=docker packageName=alpine
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
