@@ -10,7 +10,7 @@ use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::Router;
-use axum::extract::State;
+use axum::extract::{FromRequestParts, State};
 use crate::extract::Query;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
@@ -102,6 +102,20 @@ pub async fn view_ctx(state: &SharedState, user: &Principal, lang: &str) -> AppR
     Ok(ViewCtx { tz, today, l: L::new(lang, state.i18n.clone()), prefs: p })
 }
 
+/// Extractor: the page context and the user's view context in its language — `PageView(ctx, vc)`.
+pub struct PageView(pub PageCtx, pub ViewCtx);
+
+impl FromRequestParts<SharedState> for PageView {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut axum::http::request::Parts, state: &SharedState) -> Result<Self, Response> {
+        let user = Principal::from_request_parts(parts, state).await.map_err(IntoResponse::into_response)?;
+        let Ok(ctx) = PageCtx::from_request_parts(parts, state).await;
+        let vc = view_ctx(state, &user, &ctx.lang).await.map_err(IntoResponse::into_response)?;
+        Ok(PageView(ctx, vc))
+    }
+}
+
 pub fn parse_cals(cals: Option<&str>) -> Option<HashSet<String>> {
     cals.filter(|c| !c.is_empty()).map(|c| c.split(',').map(str::to_string).collect())
 }
@@ -183,8 +197,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
     })
 }
 
-async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<CalQuery>) -> AppResult<Response> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Query(q): Query<CalQuery>) -> AppResult<Response> {
     let view = q.view.clone().unwrap_or_else(|| "month".into());
     let date = q.date.unwrap_or(vc.today);
     let all_cals = events::visible_calendars(&state, &user, None).await?;
@@ -241,8 +254,7 @@ pub struct WindowQuery {
     pub cals: Option<String>,
 }
 
-pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<WindowQuery>) -> AppResult<axum::Json<Vec<Instance>>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub async fn api_events(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Query(q): Query<WindowQuery>) -> AppResult<axum::Json<Vec<Instance>>> {
     if (q.end - q.start).num_days() > 400 || q.end < q.start {
         return Err(crate::error::AppError::bad("err-window-too-large"));
     }
@@ -263,8 +275,7 @@ pub struct DaysQuery {
     pub cals: Option<String>,
 }
 
-pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<DaysQuery>) -> AppResult<Response> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub async fn api_days(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Query(q): Query<DaysQuery>) -> AppResult<Response> {
     let count = q.count.unwrap_or(30).clamp(1, 120);
     if !crate::domain::ical::year_ok(q.start) {
         return Err(crate::error::AppError::bad("err-date-range"));
@@ -287,8 +298,7 @@ pub struct WeeksQuery {
     pub cals: Option<String>,
 }
 
-pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<WeeksQuery>) -> AppResult<Response> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub async fn api_weeks(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Query(q): Query<WeeksQuery>) -> AppResult<Response> {
     let count = q.count.unwrap_or(8).clamp(1, 16);
     if !crate::domain::ical::year_ok(q.start) {
         return Err(crate::error::AppError::bad("err-date-range"));
@@ -309,8 +319,7 @@ pub struct DensityQuery {
     pub cals: Option<String>,
 }
 
-pub async fn api_density(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<DensityQuery>) -> AppResult<axum::Json<[usize; 12]>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub async fn api_density(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Query(q): Query<DensityQuery>) -> AppResult<axum::Json<[usize; 12]>> {
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     Ok(axum::Json(events::month_density(&state, &cals, q.year, vc.tz).await?))
 }

@@ -2,9 +2,7 @@
 
 use super::*;
 
-pub(super) async fn create_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Json(input): Json<TaskInput>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn create_task(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, _: csrf::TokenOrBasic, Json(input): Json<TaskInput>) -> AppResult<Json<Created>> {
     let (p, c) = (input.principal.clone(), input.cal_id.clone());
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     let id = tasks::create_task(&state, &user, input, vc.tz).await?;
@@ -13,8 +11,7 @@ pub(super) async fn create_task(State(state): State<SharedState>, user: Principa
     Ok(Json(Created { id }))
 }
 
-pub(super) async fn get_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<TaskDetail>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn get_task(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<TaskDetail>> {
     let mut d = tasks::get_task(&state, &user, &p, &c, &id, vc.tz).await?;
     events::resolve_related(&state, &user, &mut d.related, vc.tz).await?;
     Ok(Json(d))
@@ -31,9 +28,7 @@ pub(super) struct TaskUpdate {
     pub(super) etag: Option<String>,
 }
 
-pub(super) async fn update_task(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<TaskUpdate>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn update_task(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic, Json(u): Json<TaskUpdate>) -> AppResult<Json<Created>> {
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     match u.completed {
@@ -59,8 +54,7 @@ pub(super) async fn update_task(State(state): State<SharedState>, user: Principa
     Ok(Json(Created { id }))
 }
 
-pub(super) async fn delete_task(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn delete_task(State(state): State<SharedState>, user: Principal, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     tasks::delete_task(&state, &user, &p, &c, &id).await?;

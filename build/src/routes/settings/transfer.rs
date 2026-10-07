@@ -27,8 +27,7 @@ pub(super) struct Imported {
 }
 
 /// Raw .ics body (app.js reads the chosen file and POSTs it — no multipart dependency).
-pub(super) async fn import_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn import_calendar(State(state): State<SharedState>, user: Principal, Path((owner, id)): Path<(String, String)>, _: csrf::Token, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     let mut g = history::begin(&state, Actor::import(&user, "")).await;
     g.coll(Store::Cal, &owner, &id);
     let imported = crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await?;
@@ -61,8 +60,7 @@ pub(super) struct ImportedNew {
 
 /// A new calendar from an .ics file: the metadata in the query (the page prefills it from the file's
 /// X-WR-* lines), the raw file as the body.
-pub(super) async fn import_new_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Query(q): crate::extract::Query<NewImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn import_new_calendar(State(state): State<SharedState>, user: Principal, crate::extract::Query(q): crate::extract::Query<NewImportQ>, _: csrf::Token, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
     let comps: Vec<String> = q.components.split(',').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect();
     let owner = q.owner.clone();
     let n = NewCalendar {
@@ -91,8 +89,7 @@ pub(super) struct NewAbImportQ {
 }
 
 /// A new address book from a .vcf file: the metadata in the query, the raw file as the body.
-pub(super) async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Query(q): crate::extract::Query<NewAbImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, crate::extract::Query(q): crate::extract::Query<NewAbImportQ>, _: csrf::Token, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
     let mut g = history::begin(&state, Actor::import(&user, q.name.trim())).await;
     let (id, imported) = crate::domain::transfer::import_new_addressbook(&state, &user, &q.owner, &q.name, q.color.trim(), &q.description, &body).await?;
     g.coll(Store::Ab, &q.owner, &id);
@@ -100,8 +97,7 @@ pub(super) async fn import_new_addressbook(State(state): State<SharedState>, use
     Ok(axum::Json(ImportedNew { id, owner: q.owner, imported }))
 }
 
-pub(super) async fn import_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, Path((owner, id)): Path<(String, String)>, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn import_addressbook(State(state): State<SharedState>, user: Principal, Path((owner, id)): Path<(String, String)>, _: csrf::Token, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     let mut g = history::begin(&state, Actor::import(&user, "")).await;
     g.coll(Store::Ab, &owner, &id);
     let imported = crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await?;

@@ -12,8 +12,7 @@ pub(super) async fn contact_vcf(State(state): State<SharedState>, user: Principa
     Ok(([(axum::http::header::CONTENT_TYPE, "text/vcard; charset=utf-8".to_string()), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{id}.vcf\""))], vcf).into_response())
 }
 
-pub(super) async fn create_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn create_contact(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {
     let (p, a) = (input.principal.clone(), input.ab_id.clone());
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     let id = contacts::create_contact(&state, &user, input).await?;
@@ -30,8 +29,7 @@ pub(super) struct ContactUpdate {
     pub(super) etag: Option<String>,
 }
 
-pub(super) async fn update_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>, Json(u): Json<ContactUpdate>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn update_contact(State(state): State<SharedState>, user: Principal, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic, Json(u): Json<ContactUpdate>) -> AppResult<Json<Created>> {
     let etag = precondition(u.etag.as_deref(), &headers)?;
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Ab, &p, &a, &id);
@@ -54,8 +52,7 @@ pub(super) async fn update_contact(State(state): State<SharedState>, user: Princ
     Ok(Json(Created { id }))
 }
 
-pub(super) async fn delete_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn delete_contact(State(state): State<SharedState>, user: Principal, Path((p, a, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Ab, &p, &a, &id);
     contacts::delete_contact(&state, &user, &p, &a, &id).await?;

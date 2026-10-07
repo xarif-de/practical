@@ -20,8 +20,7 @@ pub(super) fn scope_of(q: &ScopeQ) -> &str {
 }
 
 /// Every category of the visible calendars with its count, plus rule-only categories (count 0).
-pub(super) async fn categories(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<ScopeQ>) -> AppResult<Json<Vec<CategoryInfo>>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn categories(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Query(q): Query<ScopeQ>) -> AppResult<Json<Vec<CategoryInfo>>> {
     let rules = crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?;
     let mut out: Vec<CategoryInfo> = events::category_counts(&state, &user, scope_of(&q), vc.tz).await?.into_iter().map(|(name, count)| CategoryInfo { rule: rules.contains_key(&name), name, count }).collect();
     for name in rules.keys() {
@@ -65,9 +64,8 @@ pub(super) struct Count {
 
 /// A category's colour changed from `from` to `to`: how many events/tasks with that category still carry
 /// `from`, and with `apply` give them `to`.
-pub(super) async fn color_category(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(c): Json<CategoryRecolor>) -> AppResult<Json<Count>> {
+pub(super) async fn color_category(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(c): Json<CategoryRecolor>) -> AppResult<Json<Count>> {
     use crate::domain::colors;
-    check_csrf(&session, &headers).await?;
     let scope = if c.scope == "task" { "task" } else { "event" };
     let keys = colors::category_objects(&state, &user, scope, &c.name, &c.from).await?;
     if c.apply {
@@ -96,8 +94,7 @@ pub(super) struct BatchDone {
 }
 
 /// The colour optimiser's result in one go: every change it lists; a failing one is counted, not fatal.
-pub(super) async fn colors_batch(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<ColorBatch>) -> AppResult<Json<BatchDone>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn colors_batch(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(b): Json<ColorBatch>) -> AppResult<Json<BatchDone>> {
     if b.changes.len() > 5000 {
         return Err(AppError::bad("err-too-many-changes"));
     }
@@ -119,9 +116,8 @@ pub(super) async fn colors_batch(State(state): State<SharedState>, user: Princip
 
 /// One element's colour: calendar and addressbook `{principal}/{id}`, event and task
 /// `{principal}/{calendar}/{object}` ("" = the calendar's again).
-pub(super) async fn color_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((kind, key)): Path<(String, String)>, Json(c): Json<ColorSet>) -> AppResult<axum::http::StatusCode> {
+pub(super) async fn color_put(State(state): State<SharedState>, user: Principal, Path((kind, key)): Path<(String, String)>, _: csrf::TokenOrBasic, Json(c): Json<ColorSet>) -> AppResult<axum::http::StatusCode> {
     use crate::domain::colors;
-    check_csrf(&session, &headers).await?;
     let parts: Vec<&str> = key.split('/').collect();
     let color = c.color.trim().to_lowercase();
     match (kind.as_str(), parts.as_slice()) {
@@ -142,14 +138,12 @@ pub(super) async fn category_rules_get(State(state): State<SharedState>, user: P
     Ok(Json(crate::domain::catrules::all(&state.db, &user.id, scope_of(&q)).await?))
 }
 
-pub(super) async fn category_rule_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Query(q): Query<ScopeQ>, Json(rule): Json<crate::domain::catrules::Rule>) -> AppResult<Json<crate::domain::catrules::Rule>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn category_rule_put(State(state): State<SharedState>, user: Principal, Path(name): Path<String>, Query(q): Query<ScopeQ>, _: csrf::TokenOrBasic, Json(rule): Json<crate::domain::catrules::Rule>) -> AppResult<Json<crate::domain::catrules::Rule>> {
     crate::domain::catrules::put(&state.db, &user.id, scope_of(&q), &name, &rule).await?;
     Ok(Json(rule))
 }
 
-pub(super) async fn category_rule_delete(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path(name): Path<String>, Query(q): Query<ScopeQ>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn category_rule_delete(State(state): State<SharedState>, user: Principal, Path(name): Path<String>, Query(q): Query<ScopeQ>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
     crate::domain::catrules::delete(&state.db, &user.id, scope_of(&q), &name).await?;
     Ok(Json(Created { id: name }))
 }

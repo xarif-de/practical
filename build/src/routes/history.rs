@@ -8,20 +8,19 @@ use crate::domain::collections;
 use crate::domain::history::{self, Plan};
 use crate::domain::history_text::{self as ht, Show};
 use crate::error::{AppError, AppResult};
-use crate::routes::calendar::view_ctx;
+use crate::routes::calendar::{view_ctx, PageView};
 use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::State;
 use crate::extract::{Json, Path};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use rustical_store::auth::{AuthenticationProvider, Principal};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap};
-use tower_sessions::Session;
 
 /// The order attributes are listed in, as the editors show them; the rest follow by name.
 const ORDER: &[&str] = &[
@@ -269,8 +268,7 @@ async fn coll_names(state: &SharedState, user: &Principal) -> AppResult<HashMap<
     Ok(m)
 }
 
-async fn api_plan(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Path(id): Path<i64>) -> AppResult<Json<Value>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+async fn api_plan(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Path(id): Path<i64>) -> AppResult<Json<Value>> {
     let all = history::visible(&state, &user).await?;
     let c = all.iter().find(|x| x.id == id).ok_or(AppError::NotFound)?;
     let p = history::plan(&state, &user, c, &all, &mut history::PlanMemo::default()).await?;
@@ -286,9 +284,7 @@ struct UndoBody {
 
 /// Undo: `{id}` of the new change, or 409 with the plan when it warns and was not confirmed
 /// (or cannot be done at all: then `ok` is false).
-async fn api_undo(State(state): State<SharedState>, user: Principal, ctx: PageCtx, session: Session, headers: HeaderMap, Path(id): Path<i64>, Json(b): Json<UndoBody>) -> AppResult<Response> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+async fn api_undo(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Path(id): Path<i64>, _: csrf::Token, Json(b): Json<UndoBody>) -> AppResult<Response> {
     match history::undo(&state, &user, id, b.confirm).await? {
         Ok(n) => Ok(Json(json!({ "id": n })).into_response()),
         Err(p) => Ok((StatusCode::CONFLICT, Json(plan_json(&state, &ctx.lang, vc.tz, &coll_names(&state, &user).await?, &p))).into_response()),

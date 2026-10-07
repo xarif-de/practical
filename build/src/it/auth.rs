@@ -187,6 +187,24 @@ async fn origin_guard_matrix() {
     assert_ne!(r.status, StatusCode::FORBIDDEN);
 }
 
+/// The CSRF extractors (`csrf::Token`, `csrf::TokenOrBasic`) run after the path and query and before the body:
+/// a bad token is refused before the body is read, a bad path still answers 400.
+#[tokio::test]
+async fn the_csrf_token_is_checked_after_the_path_and_before_the_body() {
+    async fn status(c: &mut crate::testkit::Client, token: &str, method: Method, path: &str, body: &'static str) -> StatusCode {
+        c.send(method, path, &[("content-type", "application/json"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", token)], Body::from(body)).await.status
+    }
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let good = c.csrf.clone();
+    for (method, path) in [(Method::PUT, "/api/alarm-presets"), (Method::POST, "/settings/task-columns")] {
+        assert_eq!(status(&mut c, "wrong", method.clone(), path, "{not json").await, StatusCode::FORBIDDEN, "{path}: bad token and bad body");
+        assert_eq!(status(&mut c, &good, method, path, "{not json").await, StatusCode::BAD_REQUEST, "{path}: bad body");
+    }
+    let path = format!("/api/events/alice/{}/o", "x".repeat(1025));
+    assert_eq!(status(&mut c, "wrong", Method::DELETE, &path, "").await, StatusCode::BAD_REQUEST, "bad path and bad token");
+}
+
 #[tokio::test]
 async fn session_csrf_token_is_required_for_session_writes() {
     let s = seed().await;

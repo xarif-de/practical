@@ -24,8 +24,7 @@ pub(super) struct SubscribeBody {
     user_agent: Option<String>,
 }
 
-pub(super) async fn push_subscribe(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<SubscribeBody>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn push_subscribe(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, _: csrf::TokenOrBasic, Json(b): Json<SubscribeBody>) -> AppResult<Json<Created>> {
     if state.vapid.is_none() {
         return Err(AppError::bad("err-push-disabled"));
     }
@@ -59,8 +58,7 @@ pub(super) struct UnsubscribeBody {
     endpoint: String,
 }
 
-pub(super) async fn push_unsubscribe(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(b): Json<UnsubscribeBody>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn push_unsubscribe(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(b): Json<UnsubscribeBody>) -> AppResult<Json<Created>> {
     sqlx::query("DELETE FROM practical_push_subscriptions WHERE principal = ? AND endpoint = ?").bind(&user.id).bind(&b.endpoint).execute(&state.db).await?;
     Ok(Json(Created { id: String::new() }))
 }

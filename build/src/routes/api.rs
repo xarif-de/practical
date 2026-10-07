@@ -12,7 +12,7 @@ use crate::domain::prefs;
 use crate::domain::search;
 use crate::domain::tasks::{self, TaskDetail, TaskInput};
 use crate::error::{AppError, AppResult};
-use crate::routes::calendar::view_ctx;
+use crate::routes::calendar::PageView;
 use crate::state::SharedState;
 use axum::Router;
 use axum::extract::State;
@@ -72,16 +72,6 @@ fn tokio_stream_wrapper(rx: tokio::sync::broadcast::Receiver<crate::state::Chang
             Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
         }
     })
-}
-
-/// The handlers taking this have a principal; with a Basic header and no session user it came from a valid
-/// app token (`csrf::token_authenticated`).
-async fn check_csrf(session: &Session, headers: &HeaderMap) -> AppResult<()> {
-    let has_basic = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("Basic "));
-    if has_basic && session.get::<String>(crate::ctx::SESSION_USER).await?.is_none() {
-        return Ok(());
-    }
-    csrf::check(session, &csrf::header_token(headers)).await
 }
 
 /// The version a write is based on: the body's `etag` (app.js sends the one it read), else `If-Match`.

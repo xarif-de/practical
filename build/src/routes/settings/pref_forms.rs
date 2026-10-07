@@ -100,8 +100,7 @@ pub(super) struct HolidayDisplay {
 }
 
 /// Show public holidays / school holidays in the calendar (its filter popover, app.js).
-pub(super) async fn holiday_display_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(d): crate::extract::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn holiday_display_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(d): crate::extract::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     if let Some(v) = d.public {
@@ -120,8 +119,7 @@ pub(super) struct SchemeChoice {
 }
 
 /// The colour scheme from the button in the bar (app.js): auto | light | dark.
-pub(super) async fn scheme_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(d): crate::extract::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn scheme_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(d): crate::extract::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.scheme = Some(d.scheme).filter(|s| s == "light" || s == "dark");
@@ -130,8 +128,7 @@ pub(super) async fn scheme_save(State(state): State<SharedState>, user: Principa
 }
 
 /// Contact table column choice (JSON array from app.js), stored per user.
-pub(super) async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn columns_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::contacts::ALL_COLUMNS.contains(&c.as_str())).collect();
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
@@ -141,8 +138,7 @@ pub(super) async fn columns_save(State(state): State<SharedState>, user: Princip
 }
 
 /// Task table column choice (JSON array from app.js), stored per user.
-pub(super) async fn task_columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn task_columns_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::tasks::ALL_COLUMNS.contains(&c.as_str())).collect();
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
@@ -152,8 +148,7 @@ pub(super) async fn task_columns_save(State(state): State<SharedState>, user: Pr
 }
 
 /// Contact list-view field choice (JSON array from app.js), stored per user.
-pub(super) async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(fields): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
-    csrf::check(&session, &csrf::header_token(&headers)).await?;
+pub(super) async fn list_fields_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(fields): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     let fields: Vec<String> = fields.into_iter().filter(|c| crate::routes::contacts::ALL_LIST_FIELDS.contains(&c.as_str())).collect();
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;

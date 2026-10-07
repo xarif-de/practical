@@ -2,9 +2,7 @@
 
 use super::*;
 
-pub async fn create_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Json(input): Json<EventInput>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub async fn create_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, _: csrf::TokenOrBasic, Json(input): Json<EventInput>) -> AppResult<Json<Created>> {
     let (p, c) = (input.principal.clone(), input.cal_id.clone());
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     let id = events::create_event(&state, &user, input, vc.tz).await?;
@@ -13,8 +11,7 @@ pub async fn create_event(State(state): State<SharedState>, user: Principal, ctx
     Ok(Json(Created { id }))
 }
 
-pub(super) async fn get_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn get_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
     let mut d = events::get_event(&state, &user, &p, &c, &id, vc.tz).await?;
     events::resolve_related(&state, &user, &mut d.related, vc.tz).await?;
     if d.organizer.is_some() || !d.attendees.is_empty() {
@@ -70,8 +67,7 @@ async fn mention_events(state: &SharedState, user: &Principal, cals: &[crate::do
 /// Index for the note editor's suggestions and detection: contacts, categories with counts,
 /// events (90 days back, a year ahead, one per UID, at most 500) and open tasks. Loaded on the
 /// first keystroke in a note and cached in the page.
-pub(super) async fn mentions(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, Query(q): Query<ScopeQ>) -> AppResult<Json<Mentions>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+pub(super) async fn mentions(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Query(q): Query<ScopeQ>) -> AppResult<Json<Mentions>> {
     let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;
     let contacts = contacts::contacts_for(&state, &abs).await?.into_iter().map(|c| MentionContact { name: c.full_name.clone(), email: c.primary_email(), key: format!("{}/{}/{}", c.principal, c.ab_id, c.object_id) }).filter(|c| !c.name.trim().is_empty()).collect();
     let categories = events::category_counts(&state, &user, scope_of(&q), vc.tz).await?.into_iter().map(|(name, count)| MentionCategory { name, count }).collect();
@@ -101,10 +97,8 @@ pub(super) struct EventUpdate {
     pub(super) etag: Option<String>,
 }
 
-pub(super) async fn update_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<EventUpdate>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn update_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic, Json(u): Json<EventUpdate>) -> AppResult<Json<Created>> {
     let etag = precondition(u.etag.as_deref(), &headers)?;
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     if u.input.principal != p || u.input.cal_id != c {
@@ -129,8 +123,7 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
     Ok(Json(Created { id }))
 }
 
-pub(super) async fn delete_event(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<Created>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn delete_event(State(state): State<SharedState>, user: Principal, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     events::delete_event(&state, &user, &p, &c, &id).await?;
@@ -145,8 +138,7 @@ pub(super) async fn alarm_presets_get(State(state): State<SharedState>, user: Pr
 }
 
 /// Replaces the user's reminder presets (the star in a reminder's settings toggles one).
-pub(super) async fn alarm_presets_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(list): Json<Vec<events::AlarmPreset>>) -> AppResult<Json<Vec<events::AlarmPreset>>> {
-    check_csrf(&session, &headers).await?;
+pub(super) async fn alarm_presets_put(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(list): Json<Vec<events::AlarmPreset>>) -> AppResult<Json<Vec<events::AlarmPreset>>> {
     events::validate_presets(&list)?;
     let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
