@@ -12,17 +12,11 @@ WORKDIR /src
 # release (every build) or dist (release tags: dagger-ci.yaml release-build-args);
 # see the two profiles in Cargo.toml
 ARG CARGO_PROFILE=release
-# Cached build (base/dagger-modules docs/rust-functions.md): cargo's registry and
-# this repo's target/ live in BuildKit cache mounts that persist in the dagger
-# engine, so cargo's fingerprints skip every crate whose inputs did not change.
-# Replaces a dummy-main.rs dependency layer, which rebuilt ALL dependencies on
-# every Cargo.lock change, i.e. on every Renovate bump. Measured on arm64 (8
-# CPUs, `release` profile, 2026-10-02): cold 290 s, a CSS change 115 s (only
-# this crate). The binary is copied out in the same RUN: a cache mount is not part of
-# the layer. The `touch` forces this crate to rebuild every time: cargo judges
-# path crates by mtime alone, and a tree with OLDER mtimes than the cache (a
-# copied tree, rsync -a) is otherwise served the previous binary — reproduced
-# on ai/panelist 2026-10-01. Dependencies live in the registry and stay cached.
+# Cached build (base/dagger-modules docs/rust-functions.md): registry + target/ in BuildKit cache mounts, so only
+# changed crates rebuild (a dummy-main.rs layer rebuilt every dependency on each Cargo.lock bump); arm64 8 CPUs,
+# release, 2026-10-02: cold 290 s, a CSS change 115 s. The binary is copied out in the same RUN (a cache mount is no
+# layer). `touch`: cargo judges path crates by mtime, and a tree older than the cache got the previous binary
+# (ai/panelist 2026-10-01).
 COPY Cargo.toml Cargo.lock build.rs askama.toml ./
 COPY src ./src
 COPY assets ./assets
@@ -39,10 +33,8 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # Not `scratch` like rustical's image: the shared dagger test harness runs every
 # step through `sh -c`, and a shell also makes `kubectl exec` diagnostics possible.
-# HTTPS trust (OIDC token exchange, OpenHolidays API, Web Push): the base image's
-# ca-certificates-bundle (/etc/ssl/certs/ca-certificates.crt) is all rustls-native-certs reads.
-# `apk add ca-certificates` (dropped 2026-10-06) only added 242 per-certificate files to
-# /etc/ssl/certs and a 0.25 MB layer; process start CPU and RSS measured the same without it.
+# HTTPS trust (OIDC, holidays, Web Push): the base image's ca-certificates-bundle is all rustls-native-certs reads;
+# `apk add ca-certificates` (dropped 2026-10-06) added 242 files + 0.25 MB, start CPU and RSS the same without it.
 LABEL org.opencontainers.image.source="https://git.xarif.de/docker/practical"
 LABEL org.opencontainers.image.description="RustiCal (unmodified, /usr/local/bin/rustical) plus its web UI PractiCal: groups, collections, app tokens, calendar, contacts, tasks and change history on RustiCal's own SQLite store"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
