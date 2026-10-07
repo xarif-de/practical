@@ -96,6 +96,15 @@ run = "node e2e/bench/bench.mjs"
 description = "A/B bench against a former `mise run bench` dir, interleaved on this machine: mise run bench-compare -- <ref-dir> [--out dir]; exit 1 on a regression beyond the thresholds"
 run = "node e2e/bench/bench.mjs --ref"
 
+[tasks.chaos]
+description = "Chaos Tier 1 alone: the seeded UI monkey with network chaos (e2e/chaos, one worker, ~60 s; CHAOS_SEEDS=1,2,3 CHAOS_STEPS=6); part of `gate`"
+run = '''
+cd e2e
+[ -d node_modules ] || npm ci --no-fund --no-audit
+npx playwright install chromium >/dev/null
+E2E_SUITE=chaos exec npx playwright test
+'''
+
 [tasks.gate-quick]
 description = "Gate of a change without the visual part: cargo test → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
 run = "e2e/gate.sh quick"

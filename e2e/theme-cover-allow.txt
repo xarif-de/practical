@@ -134,3 +134,4 @@ button.rbadge:hover	hover: no state hovers it
 .hxc-tab td.hxc-vx	no dark state reaches it
 .hxc-tab td.hxc-vg	no dark state reaches it
 .hxc-hist li button:hover	hover: no state hovers it
+html[data-busy] .topbar	transient: a navigation or write slower than 300 ms (practical.progress); no state is captured mid-request
