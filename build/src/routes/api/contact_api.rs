@@ -14,11 +14,7 @@ pub(super) async fn contact_vcf(State(state): State<SharedState>, user: Principa
 
 pub(super) async fn create_contact(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {
     let (p, a) = (input.principal.clone(), input.ab_id.clone());
-    let mut g = history::begin(&state, Actor::ui(&user)).await;
-    let id = contacts::create_contact(&state, &user, input).await?;
-    g.object(Store::Ab, &p, &a, &id);
-    g.commit().await;
-    Ok(Json(Created { id }))
+    create_object(&state, &user, Store::Ab, &p, &a, contacts::create_contact(&state, &user, input)).await
 }
 
 #[derive(Deserialize)]

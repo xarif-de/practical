@@ -83,6 +83,16 @@ fn precondition(body: Option<&str>, headers: &HeaderMap) -> AppResult<String> {
         .ok_or_else(|| AppError::Rejected(axum::http::StatusCode::PRECONDITION_REQUIRED, crate::error::Msg { key: "err-etag-required", args: vec![] }))
 }
 
+/// POST of one event, task or contact: one change in the history. The history guard is taken before
+/// `create` runs (a future does nothing before it is awaited), so the write is attributed to the user.
+async fn create_object(state: &SharedState, user: &Principal, store: Store, p: &str, c: &str, create: impl Future<Output = AppResult<String>>) -> AppResult<Json<Created>> {
+    let mut g = history::begin(state, Actor::ui(user)).await;
+    let id = create.await?;
+    g.object(store, p, c, &id);
+    g.commit().await;
+    Ok(Json(Created { id }))
+}
+
 /// DELETE of one event, task or contact: one change in the history.
 async fn delete_object(state: &SharedState, user: &Principal, store: Store, p: &str, c: &str, id: String) -> AppResult<Json<Created>> {
     let mut g = history::begin(state, Actor::ui(user)).await;

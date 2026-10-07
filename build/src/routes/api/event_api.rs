@@ -4,11 +4,7 @@ use super::*;
 
 pub async fn create_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, _: csrf::TokenOrBasic, Json(input): Json<EventInput>) -> AppResult<Json<Created>> {
     let (p, c) = (input.principal.clone(), input.cal_id.clone());
-    let mut g = history::begin(&state, Actor::ui(&user)).await;
-    let id = events::create_event(&state, &user, input, vc.tz).await?;
-    g.object(Store::Cal, &p, &c, &id);
-    g.commit().await;
-    Ok(Json(Created { id }))
+    create_object(&state, &user, Store::Cal, &p, &c, events::create_event(&state, &user, input, vc.tz)).await
 }
 
 pub(super) async fn get_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
