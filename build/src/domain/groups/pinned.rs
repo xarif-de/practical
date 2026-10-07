@@ -47,7 +47,7 @@ async fn group_rules() {
     trash(&app.state, &alice, &gid, Some(&gid)).await.unwrap();
     let alice = app.principal("alice").await;
     let t = trashed_for_user(&app.state, &alice).await.unwrap();
-    assert_eq!(t.iter().map(|g| (g.id.as_str(), g.displayname.as_str(), g.deleted_by.as_str(), g.n_calendars, g.members.len())).collect::<Vec<_>>(), [("group.lauftreff", "Lauftreff", "alice", 1, 2)]);
+    assert_eq!(t.iter().map(|g| (g.id.as_str(), g.displayname.as_str(), g.deleted_by.as_str())).collect::<Vec<_>>(), [("group.lauftreff", "Lauftreff", "alice")]);
     assert_eq!((t[0].expires_at - t[0].deleted_at).num_days(), 90);
     let bob = app.principal("bob").await;
     assert_eq!(trashed_for_user(&app.state, &bob).await.unwrap().len(), 1, "every former member sees it");

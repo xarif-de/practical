@@ -586,7 +586,7 @@ async fn prefs_save(State(state): State<SharedState>, user: Principal, session: 
         csrf::check(&session, &f.csrf).await?;
         let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
         let mut p = prefs::get(&state.db, &user.id).await?;
-        p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::LANGS.contains(&l.as_str()));
+        p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::supported(l));
         p.scheme = Some(f.scheme.clone()).filter(|s| s == "light" || s == "dark");
         p.timezone = Some(f.timezone.trim().to_string()).filter(|t| !t.is_empty() && t.parse::<chrono_tz::Tz>().is_ok());
         // holiday colours: "" = the theme's; the switches live in the calendar's filter (holiday_display_save)

@@ -96,10 +96,6 @@ impl Contact {
         let s: String = self.full_name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect();
         if s.is_empty() { "?".into() } else { s.to_uppercase() }
     }
-    pub fn letter(&self) -> String {
-        let key = if !self.family.is_empty() { &self.family } else { &self.full_name };
-        key.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "#".into())
-    }
     /// the page's default order and grouping: given name first (app.js regroups for the other sorts)
     fn given_or_full(&self) -> &str {
         if self.given.is_empty() { &self.full_name } else { &self.given }
@@ -880,7 +876,6 @@ mod tests {
         assert_eq!(c.birthday, "1984-03-12");
         assert_eq!(c.birthday_label(), "12.03.1984");
         assert_eq!(c.categories, vec!["Familie"]);
-        assert_eq!(c.letter(), "L");
         assert_eq!((c.given_letter().as_str(), c.given_key().as_str()), ("C", "christin lang"));
         assert_eq!(norm_partial("--0312"), "--03-12");
         assert_eq!(fmt_partial("--03-12"), "12.03.");

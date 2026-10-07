@@ -83,7 +83,6 @@ pub struct CalendarFragment {
     pub date: NaiveDate,
     pub title: String,
     pub body: String,
-    pub cals_param: String,
     pub view_label: String,
     pub in_more: bool,
 }
@@ -199,7 +198,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let (view_label, in_more) = view_label(&view, &vc.l);
     let cals_param = q.cals.clone().unwrap_or_default();
     if q.fragment.is_some() {
-        let f = CalendarFragment { ctx, view, date, title, body, cals_param, view_label, in_more };
+        let f = CalendarFragment { ctx, view, date, title, body, view_label, in_more };
         return Ok(Html(f.render().map_err(|e| crate::error::AppError::Internal(e.to_string()))?).into_response());
     }
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);

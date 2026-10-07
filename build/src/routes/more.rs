@@ -411,7 +411,6 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         label: String,
         icon: &'static str,
         over: bool,
-        color: usize,
     }
     let mut items = vec![];
     for c in &y.birthdays {
@@ -421,26 +420,26 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         let age = |yr: i32| by.map(|b| format!(" · {}", yr - b)).unwrap_or_default();
         let ago = (y.today - this).num_days();
         if ago > 0 && ago <= 30 {
-            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true, color: c.color_index() });
+            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true });
         }
-        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false, color: c.color_index() });
+        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false });
     }
     for v in &y.vacations {
         if v.start_date() >= y.today {
-            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false, color: 6 });
+            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false });
         } else {
             let ago = (y.today - v.last_date()).num_days();
             if ago > 0 && ago <= 30 {
-                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true, color: 6 });
+                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true });
             }
         }
     }
     for h in &y.public {
         if h.start >= y.today {
-            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false, color: 3 });
+            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false });
         }
     }
-    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false, color: 5 });
+    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false });
     items.sort_by_key(|i| i.date);
     let tile = |i: &Item| {
         if i.over {

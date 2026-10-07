@@ -69,16 +69,6 @@ impl Task {
     pub fn open(&self) -> bool {
         !self.completed() && self.status != "CANCELLED"
     }
-    pub fn due_label(&self) -> String {
-        match self.due {
-            Some(d) if self.due_all_day => d.format("%d.%m.%Y").to_string(),
-            Some(d) => d.format("%d.%m.%Y %H:%M").to_string(),
-            None => String::new(),
-        }
-    }
-    pub fn overdue(&self, today: NaiveDate) -> bool {
-        self.open() && self.due.is_some_and(|d| d.date() < today)
-    }
     pub fn key(&self) -> String {
         format!("{}/{}/{}", self.principal, self.cal_id, self.object_id)
     }

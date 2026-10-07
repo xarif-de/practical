@@ -1,7 +1,7 @@
 //! /contacts — letter panels or sheet table, detail editor on wide screens.
 
 use crate::ctx::PageCtx;
-use crate::domain::collections::{self, AbInfo, Owner};
+use crate::domain::collections::{self, AbInfo};
 use crate::domain::contacts::{self, Contact};
 use crate::domain::prefs;
 use crate::error::AppResult;
@@ -34,16 +34,13 @@ pub struct LetterGroup {
 pub struct ContactsPage {
     pub ctx: PageCtx,
     pub addressbooks: Vec<AbInfo>,
-    pub owners: Vec<Owner>,
     pub groups: Vec<LetterGroup>,
     pub contacts: Vec<Contact>,
     pub categories: Vec<String>,
     pub table: bool,
-    pub abs_param: String,
     pub columns: Vec<String>,
     /// fields shown per entry in the list view
     pub list_fields: Vec<String>,
-    pub today: chrono::NaiveDate,
 }
 
 impl ContactsPage {
@@ -82,19 +79,15 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
     let p = prefs::get(&state.db, &user.id).await?;
     let columns: Vec<String> = p.contact_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_COLUMNS.iter().take(5).map(|s| s.to_string()).collect());
     let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(6).map(|s| s.to_string()).collect());
-    let today = crate::clock::now().date_naive();
     Ok(ContactsPage {
         ctx,
-        owners: collections::owners(&state, &user).await?,
         addressbooks: all,
         groups: by_letter.into_iter().map(|(letter, contacts)| LetterGroup { letter, contacts }).collect(),
         contacts,
         categories,
         table: q.view.as_deref() == Some("table"),
-        abs_param: q.abs.unwrap_or_default(),
         columns,
         list_fields,
-        today,
     })
 }
 

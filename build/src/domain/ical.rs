@@ -3,7 +3,6 @@
 //! into the user's zone, and line folding for generated objects.
 
 use caldata::component::Component;
-use caldata::parser::ContentLine;
 use caldata::types::{CalDateOrDateTime, Tz};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone};
 
@@ -69,10 +68,6 @@ pub fn text<C: Component>(c: &C, name: &str) -> Option<String> {
     c.get_property(name).map(|p| unescape(&p.value)).filter(|s| !s.is_empty())
 }
 
-pub fn text_line(line: &ContentLine) -> String {
-    unescape(&line.value)
-}
-
 pub fn list<C: Component>(c: &C, name: &str) -> Vec<String> {
     c.get_named_properties(name).flat_map(|p| split_list(&p.value)).collect()
 }
@@ -126,10 +121,6 @@ pub fn local(dt: &CalDateOrDateTime, tz: chrono_tz::Tz) -> (NaiveDateTime, bool)
             }
         }
     }
-}
-
-pub fn local_date(dt: &CalDateOrDateTime, tz: chrono_tz::Tz) -> NaiveDate {
-    local(dt, tz).0.date()
 }
 
 /// Format a local wall-clock time for an iCalendar DTSTART/DTEND with TZID.

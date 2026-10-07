@@ -22,9 +22,6 @@ pub struct GroupInfo {
 pub struct TrashedGroup {
     pub id: String,
     pub displayname: String,
-    pub members: Vec<String>,
-    pub n_calendars: usize,
-    pub n_addressbooks: usize,
     pub deleted_by: String,
     pub deleted_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -253,9 +250,6 @@ fn to_public(r: TrashRow, retention_days: u32) -> TrashedGroup {
         expires_at: r.deleted_at + chrono::Duration::days(i64::from(retention_days)),
         id: r.id,
         displayname: r.displayname,
-        n_calendars: r.calendars.len(),
-        n_addressbooks: r.addressbooks.len(),
-        members: r.members,
         deleted_by: r.deleted_by,
         deleted_at: r.deleted_at,
     }

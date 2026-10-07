@@ -113,9 +113,9 @@ fn reminder_anchors() {
     assert_eq!(reminder_at(&a(10, false), None, None), None);
     assert_eq!(reminder_at(&Alarm { at: Some(dt("2026-01-01T00:00")), ..Default::default() }, None, None), Some(dt("2026-01-01T00:00")));
     let t = Task { principal: "p".into(), cal_id: "c".into(), cal_name: String::new(), color: String::new(), object_id: "o".into(), uid: "u".into(), summary: String::new(), description: String::new(), location: String::new(), start: None, start_all_day: false, due: Some(dt("2026-10-13T08:00")), due_all_day: false, status: String::new(), percent: None, completed_at: None, priority: 0, class: String::new(), categories: vec![], alarms: 0, links: 0, created: None, extra: TaskExtra::default() };
-    assert_eq!((t.completed(), t.open(), t.overdue(date("2026-10-14")), t.due_label(), t.key()), (false, true, true, "13.10.2026 08:00".to_string(), "p/c/o".to_string()));
+    assert_eq!((t.completed(), t.open(), t.key()), (false, true, "p/c/o".to_string()));
     let done = Task { completed_at: Some(dt("2026-10-13T09:00")), due_all_day: true, ..t.clone() };
-    assert_eq!((done.completed(), done.open(), done.overdue(date("2026-10-14")), done.due_label()), (true, false, false, "13.10.2026".to_string()));
+    assert_eq!((done.completed(), done.open()), (true, false));
     let explicit = Task { status: "NEEDS-ACTION".into(), ..done.clone() };
     assert!(!explicit.completed(), "a stamp counts only without a STATUS");
     let cancelled = Task { status: "CANCELLED".into(), ..t };

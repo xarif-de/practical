@@ -190,14 +190,6 @@ pub fn month_weeks(year: i32, month: u32) -> Vec<[NaiveDate; 7]> {
     weeks
 }
 
-pub fn week_of(d: NaiveDate) -> [NaiveDate; 7] {
-    let mon = d - Duration::days(i64::from(d.weekday().num_days_from_monday()));
-    let mut w = [mon; 7];
-    for (i, s) in w.iter_mut().enumerate() {
-        *s = mon + Duration::days(i as i64);
-    }
-    w
-}
 
 /// The instances by each day of [from, to) they touch — only the days the caller looks up: one entry per
 /// covered day of an all-day event running until 9999 took a month view to 505 MiB (audit3-robustness R7a).
@@ -787,7 +779,6 @@ mod tests {
         assert_eq!(w.len(), 5);
         assert_eq!(w[0][0], NaiveDate::from_ymd_opt(2026, 8, 31).unwrap());
         assert_eq!(w[4][6], NaiveDate::from_ymd_opt(2026, 10, 4).unwrap());
-        assert_eq!(week_of(NaiveDate::from_ymd_opt(2026, 9, 15).unwrap())[0], NaiveDate::from_ymd_opt(2026, 9, 14).unwrap());
     }
 
     #[test]

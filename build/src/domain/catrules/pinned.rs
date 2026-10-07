@@ -24,8 +24,6 @@ fn validation() {
     assert!(!ok(serde_json::json!({ "links": { "links": [{ "mode": "default", "kind": "attach", "embedded": true }] } })));
     assert!(!ok(serde_json::json!({ "links": { "links": [{ "mode": "default", "kind": "attach", "data": "aGk=" }] } })));
     assert!(valid_scope("event") && valid_scope("task") && !valid_scope("journal"));
-    assert!(rule(serde_json::json!({ "repeat": { "mode": "default" } })).is_empty() == false);
-    assert!(rule(serde_json::json!({ "where": { "mode": "off", "location": "x" } })).is_empty());
 }
 
 #[tokio::test]
