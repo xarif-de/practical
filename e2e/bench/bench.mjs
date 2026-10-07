@@ -59,6 +59,10 @@ const RULES = [
   [/^ui\..*\.reqs$/, { rel: 0.20, abs: 0.5 }],
   [/^ui\..*\.busy$/, { rel: 0.25, abs: 10 }],
   [/^ui\..*\.cpu4$/, { rel: 0.25, abs: 20 }],
+  // bimodal on identical code: a sample is ~9 or ~23 ms (every bench log since w3) while its busy time stays 15-18 ms,
+  // i.e. the ~14 ms gap is waiting, not work (cause not pinned; openEditor awaits fetches). With 5 samples, 3 in the
+  // late mode alarmed (2026-10-07: ×2.26, Δ 13.9 ms): the floor sits above that gap; a 50 ms click cost still alarms.
+  [/^ui\.editor-open$/, { rel: 0.20, abs: 20 }],
   [/^ui\./, { rel: 0.20, abs: 10 }],
 ];
 // size.binary is judged only between two builds of one non-incremental profile (release, dist): the e2e profile's
@@ -383,7 +387,10 @@ function staticSizes(bin, m) {
 
 // ---------------------------------------------------------------- summary, comparison, output
 const TOTAL = /^idle\./; // judged on the ratio of the totals over all windows
-const POOLED = /\.p90$/; // judged on the pooled samples (a p90 of 4 samples per round would be their maximum)
+// p90: judged per round like every time metric (the median of the rounds' p90 ratios; a round's p90 of 4 samples
+// sits near its maximum), shown pooled. Judged pooled, 2 host-load outliers among 20 samples alarmed (2026-10-07:
+// contacts ×1.37, history ×1.75, both sides 20-75 ms in one round); one bad round no longer moves the median.
+const P90 = /\.p90$/;
 
 /** Per side and metric: the pooled value (median, p90 for latency; idle: the mean rate), sample count, spread (IQR/median). */
 function summarize(raw) {
@@ -407,12 +414,13 @@ function compare(rawRef, rawCand, sumRef, sumCand) {
     const base = id.replace(/\.p(50|90)$/, '');
     const A = rawRef[base], B = rawCand[base];
     let ratio, delta, noise;
-    if (POOLED.test(id) || TOTAL.test(id) || !A || !B) {
+    if (TOTAL.test(id) || !A || !B) {
       ratio = sumRef[id].value ? sumCand[id].value / sumRef[id].value : 1; delta = sumCand[id].value - sumRef[id].value;
       if (TOTAL.test(id) && A && B) { const q = A.map((a, i) => (median(a) ? median(B[i]) / median(a) : 1)); noise = quant(q, 0.75) - quant(q, 0.25); }
     } else {
       const n = Math.min(A.length, B.length), q = [], d = [];
-      for (let i = 0; i < n; i++) { const a = median(A[i]), b = median(B[i]); q.push(a ? b / a : 1); d.push(b - a); }
+      const stat = P90.test(id) ? v => quant(v, 0.9) : median;
+      for (let i = 0; i < n; i++) { const a = stat(A[i]), b = stat(B[i]); q.push(a ? b / a : 1); d.push(b - a); }
       ratio = median(q); delta = median(d); noise = q.length > 2 ? quant(q, 0.75) - quant(q, 0.25) : undefined;
     }
     const rl = rule(id), alarm = !!rl && ratio > 1 + rl.rel && delta > rl.abs;
