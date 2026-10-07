@@ -3,7 +3,7 @@
 (function () {
   const root = document.getElementById('viewroot');
   if (!root) return;
-  const { $, $$, esc, pad, ymd, parseYmd: parse } = practical, csrf = practical.csrf();
+  const { $, $$, esc, pad, ymd, parseYmd: parse } = practical;
   const MON = MONTHS;
   const DOW = WEEKDAYS;
   const T = trs('js-ed-', ['copied']);

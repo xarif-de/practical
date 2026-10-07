@@ -6,7 +6,7 @@
 (() => {
   const root = document.getElementById('hx');
   if (!root) return;
-  const { $, $$, escN: esc, csrf } = practical; // app.js runs first (both deferred, in document order)
+  const { $, $$, escN: esc } = practical; // app.js runs first (both deferred, in document order)
   const LOC = window.LOC;
   const fmtDay = new Intl.DateTimeFormat(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
   const fmtShort = new Intl.DateTimeFormat(LOC, { weekday: 'short', day: 'numeric', month: 'numeric' });

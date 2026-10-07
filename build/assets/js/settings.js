@@ -2,7 +2,7 @@
 (function () {
   const settings = document.querySelector('.settings');
   if (!settings) return;
-  const { esc } = practical, csrf = practical.csrf();
+  const { esc } = practical;
   const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
   // import: read the chosen file, POST its bytes (no multipart)
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => { const w = practical.writer(inp.closest('form') || inp); inp.addEventListener('change', async () => {

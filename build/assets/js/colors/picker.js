@@ -3,7 +3,7 @@
    already in use (GET /api/colors), each named by its sources, plus "like the calendar" or "standard"
    where the element has such a fallback; ＋ opens the dialog for a new colour: a fan deck or a text
    field with three sliders, the distance to the colours in use, and a light and dark preview. ===== */
-  const { $, $$, csrf, esc, ico } = practical;
+  const { $, $$, esc, ico } = practical;
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const num = new Intl.NumberFormat(window.LOC, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 

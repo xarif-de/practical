@@ -7,7 +7,7 @@
 (function () {
   const root = document.getElementById('taskroot');
   if (!root) return;
-  const { $, $$, parseYmd: parse, ymd: iso } = practical, csrf = practical.csrf();
+  const { $, $$, parseYmd: parse, ymd: iso } = practical;
   const T = trs('js-tk-', ['open', 'doing', 'done', 'cancelled', 'nodate', 'overdue', 'today', 'week', 'later', 'del', 'err', 'sort', 'askDone', 'yes', 'no', 'asc', 'desc', 'done_at', 'due', 'wasdue', 'empty', 'prio', 'pct', 'count', 'keys', 'hist', 'histNone', 'nodateBox', 'loading', 'start', 'cats', 'edit']);
   const SORTL = trs('js-sort-', ['due', 'done', 'prio', 'pct', 'title', 'cal', 'created']);
 
@@ -53,8 +53,7 @@
   const day = d => Math.round((d - TODAY) / 864e5);
   const esc = practical.escN;
   const ic = (n, cl) => practical.ico(n, cl || 's');
-  const L = LOC;
-  // dfmt: cached formatters, the same text as toLocale*String(L, o) (o names its fields, so no defaults are added)
+  // dfmt: cached formatters, the same text as toLocale*String(LOC, o) (o names its fields, so no defaults are added)
   const de = d => d ? dfmt(d, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const deS = d => d ? dfmt(d, { day: '2-digit', month: '2-digit' }) : '';
   const deT = d => d ? dfmt(d, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';

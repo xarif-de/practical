@@ -5,7 +5,7 @@
 // calendar and the tasks page both include. The page it runs on publishes `window.rusticalHost`
 // (where "now" is and how to reload); everything else lives here. ----
   if (!document.getElementById('edform')) return;
-  const { $, $$, esc, ico, pad, ymd: fmt, parseYmd: parse, placeUnder } = practical, csrf = practical.csrf();
+  const { $, $$, esc, ico, pad, ymd: fmt, parseYmd: parse, placeUnder } = practical;
   const lang = document.body.dataset.lang || 'de';
   const MON = MONTHS;
   const DOW = WEEKDAYS;

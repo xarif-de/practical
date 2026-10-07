@@ -2,7 +2,7 @@
 (function () {
   const wrap = document.getElementById('contacts');
   if (!wrap) return;
-  const { $, $$ } = practical, csrf = practical.csrf();
+  const { $, $$ } = practical;
   const lang = document.body.dataset.lang || 'de';
   const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
   // view switch; the picked contact (activeKey) stays picked and in view

@@ -1,6 +1,6 @@
 // js/shell/base.js — the shell IIFE starts here (src/bundle.rs: its parts share one function scope): dev reload, sticky header, .seg, ask/askYesNo, toast,
 // colour scheme, confirmations, clipboard; window.segPress ask askYesNo toast applyScheme
-  const { $, $$, csrf, ico } = practical;
+  const { $, $$, ico } = practical;
 
   // development only (body[data-dev]): reload after a rebuild (new boot id) or an asset edit
   if (document.body.dataset.dev) {

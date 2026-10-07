@@ -3,7 +3,6 @@
   // settings: grouped lists with drill-in pages, one <section class="page"> per URL hash (without JS all are shown)
   const settings = $('.settings');
   if (settings) {
-    const csrfTok = csrf();
     // old hashes: the tabs of the previous layout and the server's redirect anchors
     const OLD = { profile: 'account', tokens: 'account', prefs: 'home', '': 'home' };
     let show = () => {

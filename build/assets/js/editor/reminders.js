@@ -1,6 +1,5 @@
 // js/editor/reminders.js — part of the editor IIFE (src/bundle.rs; shares its scope): list rows from <template>, the reminders strip
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
-  const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
   const w = (row, k) => $(`[data-w=${k}]`, row);
   const setSel = (sel, v, unit = '') => { v = String(v); if (![...sel.options].some(o => o.value === v)) sel.add(new Option(v + unit, v)); sel.value = v; };
