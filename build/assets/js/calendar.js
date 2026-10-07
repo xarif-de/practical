@@ -382,6 +382,8 @@
   /* the endless day ledger is ONE Tab stop (the picked day, else today, else its top row), ↑/↓ move along it, Enter
      opens the day: Tab through every row never reached the day's entries (the ledger grows while it scrolls) */
   function ledgerStop() { const rows = $$('.ledger .lrow', root); if (!rows.length || rows.some(r => r.tabIndex === 0)) return; (rows.find(r => r.classList.contains('sel')) || rows.find(r => r.classList.contains('today')) || rows[0]).tabIndex = 0; }
+  // Enter/Space on an entry (a Tab stop, wireItems) acts as its click; one listener instead of one per entry (the week stream holds hundreds)
+  root.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.key && e.target.tabIndex === 0) { e.preventDefault(); e.target.click(); } });
   root.addEventListener('keydown', e => { const r = e.target.closest && e.target.closest('.ledger .lrow'); if (!r || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return; const n = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling; if (!n || !n.matches('.lrow')) return; e.preventDefault(); r.tabIndex = -1; n.tabIndex = 0; n.focus(); });
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
     $$('.heat i[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
@@ -394,7 +396,7 @@
     markPicked();
     $$('[data-key]', scope).forEach(el => {
       el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, (el.closest('[data-date]') || el).dataset.date); }; // a week entry on its start day: the day block's date
-      practical.keyClick(el);
+      el.tabIndex = 0; if (el.tagName !== 'ARTICLE') el.setAttribute('role', 'button'); // the keyboard opens it too: Enter/Space below (an article holds links: no button role)
     });
     // the day document's details sit inside the clickable entry, so each of them stops the click
     $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
