@@ -258,3 +258,40 @@ async fn html_responses_carry_the_content_security_policy() {
     let login = s.app.anonymous().get("/login").await;
     assert_eq!(login.header("content-security-policy").as_deref(), Some(want.as_str()));
 }
+
+/// GET /editor?kind= (routes/editor.rs): the dialog and the islands of the page that holds it for that kind — equal to
+/// the calendar's (event) and the tasks page's (task), their own rules included — and nothing of a page around them;
+/// behind the login, never consuming a pending flash.
+#[tokio::test]
+async fn editor_fragment_per_kind_matches_its_page_behind_the_login() {
+    let s = seed().await;
+    let r = s.app.anonymous().get("/editor?kind=event").await;
+    assert_eq!((r.status, r.location().as_deref()), (StatusCode::SEE_OTHER, Some("/login?redirect_uri=%2Feditor%3Fkind%3Devent")));
+    assert_eq!(s.app.anonymous().get_json("/editor?kind=task").await.status, StatusCode::UNAUTHORIZED);
+    let mut c = s.app.login("alice").await;
+    for (kind, scope) in [("event", "Sport"), ("task", "Putzen")] {
+        c.json(axum::http::Method::PUT, &format!("/api/category-rules/{scope}?scope={kind}"), serde_json::json!({ "when": { "color": { "mode": "default", "value": "#ff0000" } } })).await.ok();
+    }
+    let select = |b: &str| { let at = b.find("id=\"ed-cal\"").expect("calendar choice"); b[at..at + b[at..].find("</select>").unwrap()].to_string() };
+    for (kind, page, own, other) in [("event", "/calendar?view=month&date=2026-10-14", "Sport", "Putzen"), ("task", "/tasks", "Putzen", "Sport")] {
+        let (r, p) = (c.get(&format!("/editor?kind={kind}")).await, c.get(page).await);
+        r.ok().has(&format!("<div id=\"ed-host\" data-kind=\"{kind}\">")).has("<form id=\"edform\"").has("id=\"geomap\"");
+        assert_eq!(r.header("cache-control").as_deref(), Some("private, no-cache"), "{kind}");
+        assert!(!r.body.contains("<html") && !r.body.contains("id=\"viewroot\"") && !r.body.contains("id=\"tasks-data\""), "{kind}: the dialog only");
+        assert_eq!(r.body.contains("class=\"ed taskmode\""), kind == "task");
+        assert_eq!(r.body.contains("data-card=\"repeat\""), kind == "event", "{kind}: the kind's cards");
+        for id in ["alarm-presets-data", "category-rules-data", "alarm-snaps-data"] {
+            assert_eq!(r.island(id), p.island(id), "{kind}: #{id} as on {page}");
+        }
+        let rules = r.island("category-rules-data");
+        assert!(rules.get(own).is_some() && rules.get(other).is_none(), "{kind}: its scope's rules: {rules}");
+        assert_eq!(select(&r.body), select(&p.body), "{kind}: the calendar choice of {page}");
+    }
+    assert!(!select(&c.get("/editor?kind=task").await.body).contains(">Privat<"), "a task's calendars hold VTODOs");
+    assert_eq!(c.get("/editor?kind=journal").await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(c.get("/editor").await.status, StatusCode::BAD_REQUEST);
+    // a flash waiting for the next page stays for it
+    c.post_form("/settings/tokens", &[("name", " ")]).await;
+    c.get("/editor?kind=event").await.ok();
+    c.get("/settings").await.ok().has("<div class=\"toast error\"");
+}

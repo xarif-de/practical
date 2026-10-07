@@ -37,7 +37,7 @@ append-only; `db::check_schema` logs drift.
 | .cargo/config.toml | target-dir outside build/ (dagger uploads build/); SHARED by worktrees → use e2e/cargo.sh |
 | askama.toml, LICENSE (copy of /LICENSE, test keeps equal), tools/gen_regions.py (→ src/data/regions.json, CLDR) | |
 | locales/{de,en,fr,es}.ftl | Fluent; prefixes: `ed-` editor, `ct-` contacts, `tk-`/`task-` tasks, `hx-`/`hxj-` history (`hxj-`, `js-` ship to the browser), `v-`/`view-` views, `err-` AppError messages, `set-` settings, `js-search-f-*`, `hx-a-*` (dynamic prefixes) |
-| templates/ | layout.html (head: theme.js, i18n-<lang>.js, app.js `defer blocking="render"`; top bar, nav, toast) · macros.html (`m::ico`, `pop_btn`, `card_h`, `act`, `add_btn`, `coll_page`, `restore`/`purge`/`trash_empty` …) · calendar.html + calendar_fragment.html (`?fragment=1`) · editor.html (one dialog: event, task, category rule) · contacts, tasks, settings (drill-in per hash), history, login |
+| templates/ | layout.html (head: theme.js, i18n-<lang>.js, app.js `defer blocking="render"`; top bar, nav, toast) · macros.html (`m::ico`, `pop_btn`, `card_h`, `act`, `add_btn`, `coll_page`, `restore`/`purge`/`trash_empty` …) · calendar.html + calendar_fragment.html (`?fragment=1`) · editor.html (one dialog: event, task, category rule) + editor_islands.html (its JSON islands) + editor_fragment.html (/editor) · contacts, tasks, settings (drill-in per hash), history, login |
 | assets/ | js/** + css/** = parts of app.js / style.css (order: src/bundle.rs `BUNDLES`) · history.js/.css (/history only) · sw.js (Web Push) · theme.js (scheme before first paint) · icons.svg (sprite `<symbol id="i-…">`; `i-sort` dims an arrow via `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · icon.svg · leaflet.* (vendored 1.9.4, BSD-2, loaded on first map use) |
 | tests/fixtures, tests/snapshots | goldens (`UPDATE_SNAPSHOTS=1 mise run test` rewrites) · recurrence-real.json (60 anonymised real series × 60 instances by python-dateutil) · demo-event-full.ics (every VEVENT property) |
 
@@ -69,6 +69,7 @@ append-only; `db::check_schema` logs drift.
 | calendar.rs | /calendar (+`?fragment=1`, `?rule=<name>&back=`), /api/{events (window), days, weeks, density}; `ViewCtx`, `PageView`, `render_view` |
 | more.rs | "Mehr" views (Jahresplaner, Freie Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen); `YearCache` |
 | tasks.rs | /tasks (JSON island `#tasks-data`, app.js draws 6 views); lookback cookie `tk_back` (URL `back=` wins) |
+| editor.rs | /editor?kind=event\|task: editor.html + islands alone (editor_fragment.html, `#ed-host`), loaded by the settings' categories; `islands`/`calendars` = what every editor page feeds the dialog; a taken flash goes back |
 | contacts.rs | /contacts (letter panels / sheet) |
 | history.rs | /history, /api/history(/{id}/plan,/undo); `HistoryCache` |
 | settings.rs + settings/{group,collection,token,pref}_forms.rs, transfer.rs | /settings/* POST forms → `finish`/`form` envelope (redirect + flash); export/import |
@@ -126,12 +127,12 @@ Test: it/caches.rs (mutate, read back = uncached answer).
 ## Assets (shipped bytes = build.rs OUT_DIR)
 Bundle order source of truth: `build/src/bundle.rs` `BUNDLES` (order = JS run order / CSS cascade). app.js = js/core.js,
 prefetch.js, req.js, IIFE(shell/base, settings-pages, popovers-stream), IIFE(colors/picker, fields, optimise), calendar.js,
-IIFE(editor/setup … wiring, 18 parts), search.js, contacts.js, tasks.js, settings.js. style.css = css/base, frame, grid,
+`practical.editorInit = function` (editor/setup … wiring, 18 parts; run at load, again after GET /editor), search.js, contacts.js, tasks.js, settings.js. style.css = css/base, frame, grid,
 chrome, dialogs, generic, views, icon-buttons, card-form, reminders, recurrence, editor-cards, links-location, tasks,
 settings, color-picker, color-optimiser. A Wrap part is a fragment of one function scope (no script alone).
 Client contract: `window.practical` (core.js: `$ $$ csrf esc escN escQ pad ymd parseYmd sprite ico keepCals send
 placeUnder noteRe noteHtml`; req.js: `req tell progress online keep authLost stash unstash guard writer copy`;
-prefetch.js: `prefetch prefetched intent stream`; shell: `fitPop leaving`), `window.{ask,askYesNo,toast,colorPicker,
+prefetch.js: `prefetch prefetched intent stream`; shell: `fitPop leaving`; editor: `editorInit`), `window.{ask,askYesNo,toast,colorPicker,
 plural,tr,trs,MONTHS,WEEKDAYS,rusticalCal,rusticalEd,rusticalTasks,rusticalContacts}`; strings `window.I18N` from
 /assets/i18n-<lang>.js (placeholders `%name`, plurals via `Intl.PluralRules`). history.js loads after app.js.
 No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
@@ -147,7 +148,7 @@ No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
 | people | js/editor/people.js, contacts::matches | display only: RustiCal does no scheduling (RFC 6638); every parameter saved back unchanged |
 | reminders | js/editor/reminders.js, events/alarms.rs | presets per user (`alarm_presets_json`, /api/alarm-presets; built-in list until changed); PROXIMITY/ACKNOWLEDGED kept as written |
 | recurrence | js/editor/{recurrence,strip}.js | client preview only, caldata authoritative; rules the strip cannot paint (BYSETPOS, several ordinals, BYHOUR…) saved as typed |
-| category rules | catrules.rs, js/editor/{categories,rule-editor}.js | locks hold in this UI only; rule editor from an event stacks over it; from settings via `/calendar?rule=<name>&back=` |
+| category rules | catrules.rs, js/editor/{categories,rule-editor}.js, routes/editor.rs | locks hold in this UI only; rule editor from an event stacks over it; on /settings#categories over the page: dialog of the scope's kind loaded on first use (GET /editor, `practical.editorInit`, `rusticalEd.rule`), the other kind's removed hidden; list redrawn via `rusticalHost.rulesChanged`; links keep the deep link `/calendar\|/tasks?rule=<name>&back=` |
 | colours | colors.rs, js/colors/* | a picked colour becomes a source; category colour = its rule's `when.color.value`; optimiser constants/levels in optimise.js; calendars, holidays, user-picked colours never move |
 | search | domain/search/*, js/search.js | client debounce 180 ms, aborts stale, keeps answers 30 s; drop-down ≤5/kind ≤10, dialog ≤200/kind; prefixes `termin:`/`event:`, `kontakt:`/`contact:`, `aufgabe:`/`task:` (+fr/es) |
 | title templates | search/rank.rs `suggest`, js/editor/templates.js | new events only; ≥2 letters, 200 ms; ≤3; date stays the dialog's; UNTIL/EXDATE/RDATE/PARTSTAT/ACKNOWLEDGED not copied |

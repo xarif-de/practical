@@ -134,7 +134,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     // the navigation keeps it; a `back` in the URL wins, a search hit's `back=all` too
     let back = one_of(q.back.as_ref().or(crate::extract::cookie(&headers, "tk_back").as_ref()), LOOKBACKS, "month");
     let all_cals = events::visible_calendars(&state, &user, None).await?;
-    let calendars: Vec<CalInfo> = all_cals.iter().filter(|c| c.components.iter().any(|x| x == "VTODO")).cloned().collect();
+    let calendars = crate::routes::editor::calendars(&all_cals, "task");
     let picked = pick_calendars(&all_cals, q.cals.as_deref());
     let all = tasks::tasks_for(&state, &picked, vc.tz).await?;
     let days = lookback_days(back);
@@ -160,6 +160,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     .unwrap_or_else(|_| "{}".into());
     let tasks_json = crate::render::script_json(tasks_json);
     let p = vc.prefs;
+    let isl = crate::routes::editor::islands(&state, &user, &p, "task").await?;
     Ok(TasksPage {
         ctx,
         calendars,
@@ -172,9 +173,9 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         open_count,
         done_total,
         tasks_json,
-        alarm_snaps_json: crate::render::script_json(serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap()),
-        alarm_presets_json: crate::render::script_json(p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into())),
-        category_rules_json: crate::render::script_json(serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "task").await?).unwrap()),
+        alarm_snaps_json: isl.alarm_snaps_json,
+        alarm_presets_json: isl.alarm_presets_json,
+        category_rules_json: isl.category_rules_json,
         columns: p.task_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| DEFAULT_COLUMNS.iter().map(|s| s.to_string()).collect()),
     })
 }

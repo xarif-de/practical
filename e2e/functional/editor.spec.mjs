@@ -262,6 +262,45 @@ test('rule mode: save and delete a rule for a new category', async ({ page }) =>
   expect(Object.keys(rules)).toEqual(expect.arrayContaining(['Urlaub', 'Arbeit']));
 });
 
+test('rule mode from an event: stacks over it and returns to it, on the calendar and on the tasks page', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  await page.goto('/calendar?view=day&date=2026-11-16');
+  const key = await createApi(page, { summary: 'F2 Stapel', start: '2026-11-16T09:00:00', end: '2026-11-16T10:00:00', categories: ['Arbeit'], cal: CAL.work });
+  try {
+    await openEdit(page, key, '2026-11-16');
+    const url = page.url();
+    await page.locator('#edh').fill('F2 Stapel geändert'); // unsaved work in the event survives the detour
+    await page.locator('#edh').press('Tab'); // the title's suggestions close (a click while they are open only closes them)
+    await page.locator('#ed-ct-rows [data-ct-rule="Arbeit"]').click();
+    await page.locator('#ed.rulemode:not([hidden])').waitFor();
+    await expect(page.locator('#ed-sub')).toContainText('Arbeit');
+    await expect(page.locator('#ed-locin')).toHaveValue('Büro, Hauptstraße 10, Dresden'); // the stored rule
+    await page.locator('#ed-close').click();
+    await expect(page.locator('#ed')).toBeVisible();
+    await expect(page.locator('#ed')).not.toHaveClass(/rulemode/);
+    await expect(page.locator('#edh')).toHaveValue('F2 Stapel geändert');
+    await expect(page.locator('#ed-ct-rows .chip')).toHaveText(['Arbeit']);
+    expect(page.url()).toBe(url);
+    expect(await page.evaluate(() => document.querySelectorAll('#ed-host').length)).toBe(0); // the page's own dialog
+    await page.locator('#ed-close').click(); // the event's unsaved title: discarded
+    await page.locator('#ed-discard').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    // the tasks page: the same detour (board: the editor as a dialog; the docked groups pane falls back to the new-task
+    // form when any dialog closes, tasks.js rusticalHost.closed)
+    await page.goto('/tasks?view=board');
+    await page.locator('#tkmain .tkkc').filter({ hasText: 'Keller aufräumen' }).click(); // Haushalt
+    await expect(page.locator('#edh')).toHaveValue('Keller aufräumen');
+    await page.locator('#ed-lock').click();
+    await page.locator('#ed-ct-rows [data-ct-rule="Haushalt"]').click();
+    await page.locator('#ed.rulemode:not([hidden])').waitFor();
+    await expect(page.locator('#ed-sub')).toContainText('Haushalt');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#ed')).not.toHaveClass(/rulemode/);
+    await expect(page.locator('#edh')).toHaveValue('Keller aufräumen');
+  } finally { await api(page, 'DELETE', `/api/events/${key}`).catch(() => {}); }
+  expect(errors).toEqual([]);
+});
+
 test('template suggestion fills a new event from a past one', async ({ page }) => {
   await openNew(page, '2026-11-17');
   const sug = page.waitForResponse(r => r.url().includes('/api/events/suggest'));

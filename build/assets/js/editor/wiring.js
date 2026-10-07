@@ -63,5 +63,7 @@
     if (window.rusticalHost && rusticalHost.restored) rusticalHost.restored(k.rule || k.isNew ? null : f.key.value);
   });
 
-  window.rusticalEd = { open: openEditor };
+  // rule(): a rule over a page that loaded the dialog itself (the settings' categories): no way back but closing, the
+  // focus into the dialog and, on closing, back to what had it
+  window.rusticalEd = { open: openEditor, rule: name => { if (ed.hidden) opener = document.activeElement; openRuleEditor(name); $('#ed-close').focus(); } };
   { const sp = new URLSearchParams(location.search), rp = sp.get('rule'); if (rp) { const b = sp.get('back'); ruleBack = b && /^\/(?![/\\])/.test(b) ? b : null; openRuleEditor(rp); } } // ?back=: a path of this site only, the link may come from anywhere

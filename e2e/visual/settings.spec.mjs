@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { shot } from '../lib/visual.mjs';
 import { WORK } from '../lib/env.mjs';
 import { fakePrefsSave, hash, keepToasts } from './_set.mjs';
+import { edReady, edSnap } from './_editor.mjs';
 
 const CAL = 'cal-alice-5eed0000-0000-4000-8000-000000000001';
 const CAL_G = 'cal-group.familie-5eed0000-0000-4000-8000-000000000004';
@@ -124,6 +125,16 @@ shot('settings categories', async (page, snap) => {
   await page.locator('#cat-scope button[data-scope="task"]').click();
   await page.locator('#cat-list a', { hasText: 'Haushalt' }).waitFor();
   await snap('set-categories-task');
+  // a category's rule opens over the page (GET /editor); last: afterwards the page holds the (hidden) dialog
+  await page.locator('#cat-list a', { hasText: 'Haushalt' }).click();
+  await edReady(page);
+  await edSnap(page, snap, 'set-categories-rule-task');
+  await page.keyboard.press('Escape');
+  await page.locator('#cat-scope button[data-scope="event"]').click();
+  await page.locator('#cat-list a', { hasText: 'Arbeit' }).click();
+  await page.locator('#ed-host[data-kind="event"] #ed:not([hidden])').waitFor();
+  await edReady(page);
+  await edSnap(page, snap, 'set-categories-rule-event');
 });
 
 shot('settings groups + typed confirmation', async (page, snap) => {

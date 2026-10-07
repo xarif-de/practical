@@ -1,6 +1,7 @@
 /* css/dialogs.css — the editor dialog (blurred backdrop), the yes/no question, the day line, contact editor additions, the editor layout */
 /* ---- Termin-Editor (dialog, blurred backdrop) ---- */
 .ed { position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); display: grid; place-items: center; padding: 16px; }
+#ed-host { display: contents; } /* the dialog loaded into a page later (routes/editor.rs): no box of its own in the page's grid */
 /* the yes/no question (window.askYesNo): above every dialog, the same backdrop */
 .ask { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
 .ask-box { width: min(400px, 100%); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 18px 18px 14px; }

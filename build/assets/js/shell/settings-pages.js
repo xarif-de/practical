@@ -310,20 +310,49 @@
       loadCats(); // before any switch, so the switch finds its list
       showKind(); if (vacKind.value === 'title') run();
     }
-    // categories: the index with counts; a click opens the category's rule in the calendar's (or tasks') editor
+    /* categories: the index with counts; a click (or the new-category form) opens the category's rule in the editor over
+       this page. The dialog (GET /editor?kind=, routes/editor.rs) is loaded on first use and again when the scope changes:
+       one #ed per page (its ids and JSON islands are the editor's globals), the other kind's leaves the page first, hidden
+       (its window listeners — Escape, the map's and the strip's keys, the kept work, the leave-page question — all ask
+       `ed.hidden` and do nothing). The link's href stays the calendar's or tasks' deep link (`?rule=&back=`): a new tab
+       or a middle click lands there, as before. */
     const catPanel = $('#categories');
     if (catPanel) {
-      const t = catPanel.dataset, list = $('#cat-list'), h = practical.esc;
-      let scope = 'event';
+      const t = catPanel.dataset, list = $('#cat-list'), h = practical.esc, newName = $('#cat-new-name');
+      let scope = 'event', edKind = null, edChain = Promise.resolve();
       const ruleUrl = n => (scope === 'task' ? '/tasks' : '/calendar') + '?rule=' + encodeURIComponent(n) + '&back=' + encodeURIComponent('/settings#categories');
+      const edUrl = k => '/editor?kind=' + k;
       const load = async () => {
         const first = scope === 'event' && catsFirst; catsFirst = null;
         let d; if (first) d = await first; else { const r = practical.tell(await practical.req('/api/categories?scope=' + scope)); d = r.ok ? r.data : []; }
         if (scope === 'event') $('#cat-total').textContent = d.length;
+        const a = document.activeElement, back = list.contains(a) && a.firstElementChild ? a.firstElementChild.textContent : null; // the row the closed editor gave the focus back to
         list.innerHTML = d.length ? d.map(c => `<a class="cell noic link" href="${ruleUrl(c.name)}"><span>${h(c.name)}</span><span class="val">${c.rule ? `<span class="badge">${h(t.tRule)}</span>` : ''}${c.count ? h(plural(scope === 'task' ? t.tCountTask : t.tCount, c.count).replace('{n}', c.count)) : ''}<span class="chev">›</span></span></a>`).join('') : `<div class="cell noic"><span class="muted">${h(t.tNone)}</span></div>`;
+        if (back != null) { const row = $$('a', list).find(x => x.firstElementChild.textContent === back); if (row) row.focus(); }
       };
+      // the editor of kind `k` in the page (true), one load at a time: a later one waits, so the last scope asked for wins
+      const editor = k => (edChain = edChain.catch(() => false).then(async () => {
+        if (edKind === k) return true;
+        const cur = $('#ed-host'), ed = cur && $('#ed', cur); if (ed && !ed.hidden) return false; // never under an open dialog
+        let html = await practical.prefetched(edUrl(k));
+        if (html == null) { const r = practical.tell(await practical.req(edUrl(k), { headers: { Accept: 'text/html' }, as: 'text', wait: 300 })); if (!r.ok) return false; html = r.data; }
+        const box = document.createElement('div'); box.innerHTML = html; const host = $('#ed-host', box); if (!host) return false;
+        const old = $('#ed-host'); if (old) { $$('#ed, #geomap', old).forEach(x => { x.hidden = true; }); old.remove(); }
+        settings.closest('.main').appendChild(host); edKind = k; practical.editorInit();
+        return true;
+      }));
+      const openRule = async n => { const k = scope; if (await editor(k) && scope === k) rusticalEd.rule(n); };
+      // the editor's host hooks (js/editor/setup.js HOST): a saved or deleted rule redraws the list (badge, counts)
+      window.rusticalHost = { rulesChanged: n => { if (newName.value.trim() === n) newName.value = ''; load(); } };
+      list.addEventListener('click', e => { const a = e.target.closest('a'); if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); openRule(a.firstElementChild.textContent); });
+      practical.intentIn(list, 'a', () => edKind === scope ? [] : [edUrl(scope)]);
       $$('#cat-scope button').forEach(b => b.onclick = () => { scope = b.dataset.scope; segPress(b); load(); });
-      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = $('#cat-new-name').value.trim(); if (n) location.href = ruleUrl(n); });
+      $('#cat-new').addEventListener('submit', e => { e.preventDefault(); const n = newName.value.trim(); if (n) openRule(n); });
+      // a rule kept over a lost session (the editor's practical.keep → stash on this path): its editor loads at once and takes
+      // the rule back itself (js/editor/wiring.js, unstash)
+      const kept = k => { try { const s = JSON.parse(sessionStorage['practical.stash.ed-' + k] || 'null'); return !!s && s.path === location.pathname; } catch (_) { return false; } };
+      const k0 = ['event', 'task'].find(kept);
+      if (k0) { scope = k0; segPress($(`#cat-scope button[data-scope="${k0}"]`)); if (location.hash !== '#categories') location.hash = '#categories'; editor(k0); }
       load();
     }
   }
