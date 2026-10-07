@@ -438,7 +438,13 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
                 } else {
                     let _ = write!(items, "{}", i.start.format("%H:%M"));
                 }
-                let _ = write!(items, "</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\">{}</span></li>", if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, E(&i.color), EKey(i), i.start_date(), E(&i.summary));
+                // the start date only where it is not the day's own (a multi-day event's later days): app.js
+                // reads the nearest data-date, the day block's (−18 % of the week's gzip bytes, audit3-perf3 #9)
+                let _ = write!(items, "</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\"", if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, E(&i.color), EKey(i));
+                if i.start_date() != d {
+                    let _ = write!(items, " data-date=\"{}\"", i.start_date());
+                }
+                let _ = write!(items, ">{}</span></li>", E(&i.summary));
             }
             let marks = hol_labels(hol, d, "span", false);
             if items.is_empty() && marks.is_empty() {

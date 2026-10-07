@@ -1654,7 +1654,7 @@
     $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
     $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();
-    $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, el.dataset.date); });
+    $$('[data-key]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, (el.closest('[data-date]') || el).dataset.date); }); // a week entry on its start day: the day block's date
     // the day document's details sit inside the clickable entry, so each of them stops the click
     $$('.doc [data-copytext]', scope).forEach(b => b.onclick = e => { e.stopPropagation(); e.preventDefault(); // not data-copy: that one takes a selector (top of this file)
       navigator.clipboard.writeText(b.dataset.copytext).then(() => { b.classList.add('ok'); b.title = T.copied; setTimeout(() => b.classList.remove('ok'), 1200); }); });
