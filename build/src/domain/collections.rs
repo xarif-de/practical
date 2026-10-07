@@ -1,4 +1,4 @@
-//! Calendars and address books for the user and their groups (plan D4/D5/D16).
+//! Calendars and address books for the user and their groups.
 
 use crate::domain::history_text::Store;
 use crate::error::{AppError, AppResult};

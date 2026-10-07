@@ -1,6 +1,5 @@
-//! The "Mehr ▾" views (plan D13/D14, design round 8): Jahresplaner, Freie
-//! Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen — ported from
-//! views_more.py, fed with real instances, holidays and birthdays.
+//! The "Mehr ▾" views: Jahresplaner, Freie Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen —
+//! fed with real instances, holidays and birthdays.
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::{self, CalInfo};
@@ -54,7 +53,7 @@ type YearKey = (String, String, i64, chrono_tz::Tz, i32);
 
 /// The year views' expansions per (calendar, synctoken, zone, year): a year is outside `InstanceCache`'s
 /// windows, so every planner/weekends/vacation/countdown/numbers request and every live-change refetch read
-/// and parsed the whole year again (~94 % of a planner request's samples on the bench DB, audit3-perf3 #7).
+/// and parsed the whole year again (~94 % of a planner request's samples on the bench DB).
 /// RustiCal moves the synctoken on every object write, so a write is never answered from before it.
 /// Least recently used entries go first above `YEAR_CACHE_BYTES` (estimated heap).
 #[derive(Default)]
@@ -351,7 +350,7 @@ pub fn vacation(y: &YearData, l: &L) -> String {
     };
     let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.label(), h.start, h.end)).collect();
     let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.to_string(), i.start_date(), i.last_date())).collect();
-    // workdays used by vacation instances (weekends + public holidays excluded, plan D14)
+    // workdays used by vacation instances (weekends + public holidays excluded)
     let mut used_days: std::collections::BTreeSet<NaiveDate> = Default::default();
     for (_, a, b) in &vacs {
         let mut d = *a;

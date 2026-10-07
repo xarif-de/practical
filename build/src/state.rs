@@ -6,7 +6,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// A change in a collection, fanned out to SSE clients (plan NFR "Live-Updates").
+/// A change in a collection, fanned out to SSE clients.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ChangeEvent {
     pub kind: &'static str, // "calendar" | "addressbook"

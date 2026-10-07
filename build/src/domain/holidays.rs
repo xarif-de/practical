@@ -1,4 +1,4 @@
-//! Public and school holidays (plan D13) and the region choice behind them.
+//! Public and school holidays and the region choice behind them.
 //!
 //! Sources form a chain, tried in order until one answers (each with its own timeout):
 //! - public holidays: OpenHolidays (36 countries, regions down to municipalities) →

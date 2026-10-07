@@ -43,7 +43,7 @@ use search_api::*;
 use push_api::*;
 use geo_api::*;
 
-/// Live updates (plan NFR): one SSE stream per browser tab; events are filtered
+/// Live updates: one SSE stream per browser tab; events are filtered
 /// to the collections the user can see (own principal + groups).
 async fn changes(State(state): State<SharedState>, user: Principal) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.changes.subscribe();

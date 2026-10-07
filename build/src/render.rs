@@ -1,6 +1,4 @@
-//! HTML generation for the calendar views — a direct port of the round-10
-//! prototype generators (gen.py / gen6.py), so markup and class names match
-//! the design-system CSS one to one.
+//! HTML generation for the calendar views; markup and class names are the ones style.css is written for.
 
 use crate::domain::events::{EventDetail, Instance};
 use chrono::{Datelike, Duration, NaiveDate};

@@ -21,15 +21,15 @@ pub struct Config {
     /// Where to send the browser after the local logout so the IdP session ends too.
     /// `{url}` is replaced by the URL-encoded public_url. Empty = local logout only.
     pub logout_url: String,
-    /// Days a deleted group stays restorable (D6).
+    /// Days a deleted group stays restorable.
     pub trash_retention_days: u32,
     /// Days a change stays in the change history (and can be undone).
     pub history_retention_days: u32,
-    /// PEM (PKCS#8) private key for Web Push (D12); None = push disabled.
+    /// PEM (PKCS#8) private key for Web Push; None = push disabled.
     pub vapid_private_key_pem: Option<String>,
     /// `mailto:` or https contact for the VAPID JWT `sub` claim.
     pub vapid_subject: String,
-    /// OpenHolidays defaults (D13): ISO country + subdivision code, e.g. DE / DE-SN.
+    /// OpenHolidays defaults: ISO country + subdivision code, e.g. DE / DE-SN.
     pub holidays_country: String,
     pub holidays_subdivision: String,
     /// Disable the OpenHolidays fetch entirely (no egress).

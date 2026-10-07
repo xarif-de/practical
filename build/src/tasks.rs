@@ -81,7 +81,7 @@ async fn poll_changes(state: &SharedState, seen: &mut HashMap<(String, String, S
     ok
 }
 
-/// Final deletion of trashed groups after the retention period (plan D6), the change history's,
+/// Final deletion of trashed groups after the retention period, the change history's,
 /// the push sent-log's and the expired sessions' housekeeping.
 pub fn spawn_trash_purger(state: SharedState) {
     tokio::spawn(async move {

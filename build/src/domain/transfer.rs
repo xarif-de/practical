@@ -1,4 +1,4 @@
-//! Import/export (plan D16) — export serialises RustiCal's objects with caldata's
+//! Import/export — export serialises RustiCal's objects with caldata's
 //! generator, import parses with caldata and stores via the store crate
 //! (`put_objects`), so nothing but RustiCal's own code touches the data.
 
@@ -85,7 +85,7 @@ fn readable(objects: Vec<CalendarObject>) -> Vec<CalendarObject> {
 
 /// Import limits (the pod has 192 MiB). A file is read in chunks of `IMPORT_CHUNK` objects and written in chunks of
 /// as many, so the parse costs one chunk plus the file's object texts (25.8 MiB / 60 000 events peaked at 904 MiB
-/// parsed whole, audit3-robustness R7b). What stays proportional is the history's record of the import
+/// parsed whole). What stays proportional is the history's record of the import
 /// (`history::ingest` holds every object's text twice): 35 000 objects (15 MiB) still peaked at +198 MiB RSS in a
 /// release build, hence the object cap.
 pub const IMPORT_MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -341,7 +341,7 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
 /// without UID gets one, as RustiCal's own IMPORT does. The colour (ours, not RustiCal's) is written
 /// after the import succeeded. Returns (id, cards).
 /// Every card of a .vcf file as (id, object), all parsed before the caller writes any (a broken third card
-/// used to answer 400 with the first two already stored, audit3-robustness R15). A card without UID gets one, as
+/// used to answer 400 with the first two already stored). A card without UID gets one, as
 /// RustiCal's own IMPORT does; a UID with a slash is skipped. Same size limits as an .ics import.
 fn file_cards(vcf: &[u8]) -> AppResult<Vec<(String, AddressObject)>> {
     if vcf.len() > IMPORT_MAX_BYTES {

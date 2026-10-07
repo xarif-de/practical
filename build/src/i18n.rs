@@ -1,4 +1,4 @@
-//! Fluent translations embedded at compile time (D9). One bundle per language in LANGS,
+//! Fluent translations embedded at compile time. One bundle per language in LANGS,
 //! shared read-only across requests (`concurrent::FluentBundle`). A key a language lacks
 //! falls back to English, then German, so a new language can grow file by file; the
 //! test below keeps every shipped file complete.

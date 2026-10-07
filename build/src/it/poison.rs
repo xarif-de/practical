@@ -1,4 +1,4 @@
-//! Tier-0 chaos corpus (audit3-robustness §4, audit3-security #1/#7/#8/#9): stored objects and inputs that once
+//! Tier-0 chaos corpus: stored objects and inputs that once
 //! dropped the connection (a handler panic) or blew a request's memory up, run through every view and API path.
 //! The router runs in-process, so a panic anywhere fails the test; the memory-heavy cases are held to a bound
 //! measured on the request's own thread (`testkit::peak_of`).
@@ -287,7 +287,7 @@ async fn hostile_inputs_are_answered() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// S6 / audit3-security #8, #9: a parameter value with `:`/`;` survives an editor round trip, and a CR/LF in a
+/// A parameter value with `:`/`;` survives an editor round trip, and a CR/LF in a
 /// non-TEXT field never starts a property of its own.
 #[tokio::test]
 async fn params_round_trip_and_crlf_stays_inside_its_line() {
@@ -316,7 +316,7 @@ async fn params_round_trip_and_crlf_stays_inside_its_line() {
     assert_eq!(c.get_json(&format!("/api/events/alice/{}/{id}", s.arbeit)).await.ok().json()["rrule"], json!(null));
 }
 
-/// audit3-security #7: an attachment is never served as a script or a page of this origin.
+/// An attachment is never served as a script or a page of this origin.
 #[tokio::test]
 async fn a_stored_script_attachment_is_a_download() {
     let s = seed().await;

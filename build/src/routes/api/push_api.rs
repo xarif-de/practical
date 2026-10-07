@@ -28,7 +28,7 @@ pub(super) async fn push_subscribe(State(state): State<SharedState>, user: Princ
     if state.vapid.is_none() {
         return Err(AppError::bad("err-push-disabled"));
     }
-    // the server POSTs to the endpoint: only a browser push service's (domain::push, audit3-security #2/#3)
+    // the server POSTs to the endpoint: only a browser push service's (domain::push::guard)
     crate::domain::push::check_subscription(&b.endpoint, &b.keys.p256dh, &b.keys.auth).map_err(AppError::bad)?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth, user_agent) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET principal=excluded.principal, p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent")

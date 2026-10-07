@@ -191,7 +191,7 @@ async fn push_with_vapid() {
     assert_eq!(key["key"].as_str().unwrap(), kp.public().encode_b64().0);
     let r = c.json(Method::POST, "/api/push/subscriptions", json!({ "endpoint": "http://push.example.org/x", "keys": { "p256dh": "a", "auth": "b" } })).await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Der Endpunkt muss https sein."));
-    // audit3-security #2/#3: the server POSTs to the endpoint — only a browser push service, with keys
+    // the server POSTs to the endpoint — only a browser push service, with keys
     // the encryption can use (the endpoint cut mid-character used to panic every reminder round)
     let (p256dh, auth) = (crate::domain::push::guard::P256DH, crate::domain::push::guard::AUTH);
     for e in ["https://push.example.org/x", "https://127.0.0.1:4000/", "https://127.0.0.1:4598/xxxxxxxxxxxxxxxxä", "https://plan.xarif.de/api/events", "https://fcm.googleapis.com.evil.example/x"] {
@@ -222,7 +222,7 @@ async fn push_with_vapid() {
     assert_eq!(two["user_agent"].as_str().unwrap().len(), 300);
     // the page offers push now
     c.get("/settings").await.ok();
-    // logout drops what this session subscribed (audit3-security #11), not alice's other devices
+    // logout drops what this session subscribed, not alice's other devices
     sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('o', 'alice', 'https://web.push.apple.com/other-device', ?, ?)").bind(p256dh).bind(auth).execute(&app.state.db).await.unwrap();
     let csrf = c.csrf.clone();
     assert_eq!(c.post_form_raw("/logout", &[("csrf", &csrf)]).await.location().as_deref(), Some("/login?manual=1"));

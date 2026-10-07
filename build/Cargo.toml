@@ -12,7 +12,7 @@ publish = false
 name = "practical"
 path = "src/main.rs"
 
-# Dependency policy (plan NFR "wenige Rust-Dependencies"): everything below is
+# Dependency policy (few Rust dependencies): everything below is
 # either a RustiCal crate, already in RustiCal's own dependency graph (same
 # major version, so it resolves to ONE copy), or carries a one-line reason.
 # `cargo deny check advisories bans sources` (mise run deny) is the gate.
@@ -63,7 +63,7 @@ password-auth = { version = "1.0", features = ["argon2", "pbkdf2"] }
 serde_path_to_error = "0.1"
 serde_urlencoded = "0.7"
 # --- new direct crates (each with its reason)
-# D9: translations as Fluent .ftl files. fluent-bundle + unic-langid are the
+# Translations as Fluent .ftl files. fluent-bundle + unic-langid are the
 # minimal pair; fluent-templates would add ignore/flume/walkdir for a feature
 # (runtime directory scanning) we do not use.
 fluent-bundle = "0.16"

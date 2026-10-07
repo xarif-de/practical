@@ -1,5 +1,5 @@
-//! /settings — groups (D2/D3/D6), collections (D4/D5), app tokens (D8),
-//! trash, preferences (D9/D13/D14). All mutations are POST forms with CSRF.
+//! /settings — groups, collections, app tokens, trash, preferences, import/export. All mutations are POST
+//! forms with CSRF (the form field, or X-CSRF-Token for the JSON saves).
 
 use crate::csrf;
 use crate::ctx::{PageCtx, set_flash};

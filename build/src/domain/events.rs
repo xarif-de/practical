@@ -1,5 +1,5 @@
-//! Calendar events: window expansion for the views (caldata's rrule engine —
-//! validated against the real calendar, plan D11), plus create/update/delete
+//! Calendar events: window expansion for the views (caldata's rrule engine — checked against python-dateutil
+//! on 60 real series, tests.rs `recurrence_matches_dateutil_oracle`), plus create/update/delete
 //! through RustiCal's store. Every view works on `Instance`s in the user's zone.
 
 use crate::domain::collections::{self, CalInfo};
@@ -25,7 +25,7 @@ pub use ics::*;
 pub use write::*;
 
 /// Text an instance shares with every other instance of its series: one allocation per expanded object, not one
-/// per occurrence (a minutely series with a 20 KB description added 60 MiB per week view; audit3-security #1).
+/// per occurrence (a minutely series with a 20 KB description added 60 MiB per week view).
 pub type Text = std::sync::Arc<str>;
 
 #[derive(Debug, Clone, serde::Serialize)]

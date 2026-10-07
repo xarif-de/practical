@@ -1,7 +1,7 @@
 use super::*;
 use chrono::Datelike;
 
-/// D11: the real calendar's 60 recurring series, anonymised, against frozen
+/// The real calendar's 60 recurring series, anonymised, against frozen
 /// python-dateutil expectations (first 60 instances each, tz-normalised).
 #[test]
 fn recurrence_matches_dateutil_oracle() {

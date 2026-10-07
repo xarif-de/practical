@@ -49,7 +49,7 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
                     let _ = write!(items, "{}", i.start.format("%H:%M"));
                 }
                 // the start date only where it is not the day's own (a multi-day event's later days): app.js
-                // reads the nearest data-date, the day block's (−18 % of the week's gzip bytes, audit3-perf3 #9)
+                // reads the nearest data-date, the day block's (−18 % of the week's gzip bytes)
                 let _ = write!(items, "</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\"", if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, E(&i.color), EKey(i));
                 if i.start_date() != d {
                     let _ = write!(items, " data-date=\"{}\"", i.start_date());

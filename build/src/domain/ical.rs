@@ -188,7 +188,7 @@ pub fn param(name: &str, value: &str) -> String {
 
 /// The longest DURATION read or written: ±400 years. caldata's `parse_duration` unwraps its integer parse and
 /// `TimeDelta::minutes/weeks` panics past ±1.5e14 minutes (caldata 0.17.3 src/types/duration.rs:46-60): one stored
-/// `TRIGGER:-PT99999999999999999999M` made every view of its calendar drop the connection (audit3-robustness R1).
+/// `TRIGGER:-PT99999999999999999999M` made every view of its calendar drop the connection.
 pub const MAX_DURATION_SECS: i64 = 400 * 366 * 86_400;
 
 /// RFC 5545 §3.3.6 DURATION — the grammar caldata's `parse_duration` accepts (`[+-]P` then `nW`, or `nD` and/or
@@ -240,7 +240,7 @@ pub fn parse_duration(s: &str) -> Option<chrono::Duration> {
 
 /// The years a date PractiCal writes or a view asks for may have: four digits, as an iCalendar DATE carries
 /// them (RFC 5545 §3.3.4) — and far enough inside chrono's ±262 143 that every ± day/week/month a view or a
-/// default end adds stays representable (`NaiveDate + TimeDelta` panics on overflow; audit3-robustness R3).
+/// default end adds stays representable (`NaiveDate + TimeDelta` panics on overflow).
 pub const YEARS: std::ops::RangeInclusive<i32> = 1..=9999;
 
 pub fn year_ok(d: NaiveDate) -> bool {

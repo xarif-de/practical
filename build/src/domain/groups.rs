@@ -1,4 +1,4 @@
-//! Groups = RustiCal `group` principals owned by their members (plan D2/D3/D6).
+//! Groups = RustiCal `group` principals owned by their members.
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -174,7 +174,7 @@ pub async fn remove_member(state: &AppState, user: &Principal, gid: &str, member
 }
 
 /// Soft-delete: memberships are detached, collections go to RustiCal's trash,
-/// the principal stays until purge (plan D6). `typed_name` = confirmation input.
+/// the principal stays until purge. `typed_name` = confirmation input.
 pub async fn trash(state: &AppState, user: &Principal, gid: &str, typed_name: Option<&str>) -> AppResult<()> {
     let group = ensure_member(state, user, gid).await?;
     let displayname = group.displayname.clone().unwrap_or_else(|| gid.to_string());

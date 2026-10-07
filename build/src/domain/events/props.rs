@@ -88,8 +88,7 @@ pub(crate) fn links_of(props: &[String]) -> Vec<Link> {
 
 /// Media types an attachment download is served as; any other FMTTYPE (`text/html`, `text/javascript`,
 /// `image/svg+xml`, … — written by any client or group member) becomes `application/octet-stream`: served
-/// from the app's origin under its own type, a stored script would be a `script-src 'self'` source
-/// (audit3-security #7).
+/// from the app's origin under its own type, a stored script would be a `script-src 'self'` source.
 const SAFE_MEDIA: &[&str] = &["application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "text/plain"];
 
 /// The n-th embedded ATTACH of a stored master: (media type, file name, bytes).

@@ -23,7 +23,7 @@ pub fn month_weeks(year: i32, month: u32) -> Vec<[NaiveDate; 7]> {
 
 
 /// The instances by each day of [from, to) they touch — only the days the caller looks up: one entry per
-/// covered day of an all-day event running until 9999 took a month view to 505 MiB (audit3-robustness R7a).
+/// covered day of an all-day event running until 9999 took a month view to 505 MiB.
 pub fn by_day(instances: &[Instance], from: NaiveDate, to: NaiveDate) -> HashMap<NaiveDate, Vec<&Instance>> {
     let mut m: HashMap<NaiveDate, Vec<&Instance>> = HashMap::new();
     for i in instances {

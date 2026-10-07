@@ -3,7 +3,7 @@
 use super::*;
 
 /// Text and list limits of what the editors write (characters / entries) — far above what a person types or a
-/// client stores, low enough that one object cannot hold hundreds of MiB of views (audit3-robustness R7).
+/// client stores, low enough that one object cannot hold hundreds of MiB of views.
 pub const MAX_TITLE: usize = 1_000;
 
 pub const MAX_NOTE: usize = 100_000;
