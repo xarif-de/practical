@@ -35,8 +35,7 @@ pub struct YearData {
 }
 
 pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, year: i32, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<YearData> {
-    let start = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
-    let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
+    let (Some(start), Some(end)) = (NaiveDate::from_ymd_opt(year, 1, 1).filter(|d| crate::domain::ical::year_ok(*d)), NaiveDate::from_ymd_opt(year + 1, 1, 1)) else { return Err(crate::error::AppError::bad("err-date-range")) };
     let instances = events::instances(state, cals, start, end, vc.tz).await?;
     let p = &vc.prefs;
     let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
@@ -85,8 +84,9 @@ fn workday(d: NaiveDate, public: &[Holiday]) -> bool {
 }
 
 pub fn planner(y: &YearData, l: &L) -> String {
-    let idx = render::by_day(&y.instances);
-    let vac = render::by_day(&y.vacations);
+    let (jan1, next) = (NaiveDate::from_ymd_opt(y.year, 1, 1).unwrap_or_default(), NaiveDate::from_ymd_opt(y.year + 1, 1, 1).unwrap_or_default());
+    let idx = render::by_day(&y.instances, jan1, next);
+    let vac = render::by_day(&y.vacations, jan1, next);
     let mut cols = String::new();
     for mi in 1..=12u32 {
         let mut rows = String::new();
@@ -97,8 +97,8 @@ pub fn planner(y: &YearData, l: &L) -> String {
             };
             let hol = in_hol(&y.public, d);
             let fer = in_hol(&y.school, d);
-            let u = vac.get(&d).and_then(|v| v.first().map(|i| i.summary.clone()));
-            let ev = idx.get(&d).and_then(|v| v.iter().find(|i| !y.vacations.iter().any(|x| x.key() == i.key() && x.start == i.start)).map(|i| i.summary.clone()));
+            let u = vac.get(&d).and_then(|v| v.first().map(|i| i.summary.to_string()));
+            let ev = idx.get(&d).and_then(|v| v.iter().find(|i| !y.vacations.iter().any(|x| x.key() == i.key() && x.start == i.start)).map(|i| i.summary.to_string()));
             let txt = hol.map(Holiday::label).or(u.clone()).or(ev).unwrap_or_default();
             let mut cls = String::from("c");
             if d.weekday().num_days_from_monday() >= 5 {
@@ -132,8 +132,8 @@ pub fn planner(y: &YearData, l: &L) -> String {
 }
 
 pub fn weekends(y: &YearData, l: &L) -> String {
-    let idx = render::by_day(&y.instances);
     let mut d = NaiveDate::from_ymd_opt(y.year, 1, 1).unwrap();
+    let idx = render::by_day(&y.instances, d, d + Duration::days(373));
     while d.weekday() != Weekday::Sat {
         d += Duration::days(1);
     }
@@ -145,8 +145,8 @@ pub fn weekends(y: &YearData, l: &L) -> String {
         let mut busy: Vec<String> = vec![];
         for x in [sa, so] {
             for i in idx.get(&x).map(|v| v.as_slice()).unwrap_or(&[]) {
-                if !busy.contains(&i.summary) {
-                    busy.push(i.summary.clone());
+                if !busy.iter().any(|b| **b == *i.summary) {
+                    busy.push(i.summary.to_string());
                 }
             }
         }
@@ -200,7 +200,7 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         out
     };
     let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.label(), h.start, h.end)).collect();
-    let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.clone(), i.start_date(), i.last_date())).collect();
+    let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.to_string(), i.start_date(), i.last_date())).collect();
     // workdays used by vacation instances (weekends + public holidays excluded, plan D14)
     let mut used_days: std::collections::BTreeSet<NaiveDate> = Default::default();
     for (_, a, b) in &vacs {

@@ -179,7 +179,7 @@ pub fn norm_partial(v: &str) -> String {
     let v = v.split('T').next().unwrap_or("").trim();
     if let Some(md) = v.strip_prefix("--") {
         let md = md.replace('-', "");
-        if md.len() == 4 {
+        if md.len() == 4 && md.bytes().all(|b| b.is_ascii_digit()) {
             return format!("--{}-{}", &md[..2], &md[2..]);
         }
         return String::new();
@@ -512,7 +512,7 @@ pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Con
 
 fn cached_contact(ab: &AbInfo, id: &str, vcf: &str, etag: String) -> Option<Contact> {
     match parse_vcf(vcf) {
-        Ok(vc) => Some(contact_from(&vc, &raw_lines(vcf), ab, id, etag)),
+        Ok(vc) => crate::domain::events::per_object(&format!("{}/{}/{id}", ab.principal, ab.id), || contact_from(&vc, &raw_lines(vcf), ab, id, etag)),
         Err(e) => {
             tracing::warn!("contact {}/{}/{}: {e}", ab.principal, ab.id, id);
             None

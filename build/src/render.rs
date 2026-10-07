@@ -199,12 +199,14 @@ pub fn week_of(d: NaiveDate) -> [NaiveDate; 7] {
     w
 }
 
-pub fn by_day(instances: &[Instance]) -> HashMap<NaiveDate, Vec<&Instance>> {
+/// The instances by each day of [from, to) they touch — only the days the caller looks up: one entry per
+/// covered day of an all-day event running until 9999 took a month view to 505 MiB (audit3-robustness R7a).
+pub fn by_day(instances: &[Instance], from: NaiveDate, to: NaiveDate) -> HashMap<NaiveDate, Vec<&Instance>> {
     let mut m: HashMap<NaiveDate, Vec<&Instance>> = HashMap::new();
     for i in instances {
-        let mut d = i.start_date();
-        let last = i.last_date();
-        while d <= last {
+        let mut d = i.start_date().max(from);
+        let last = i.last_date().min(to.pred_opt().unwrap_or(to));
+        while d <= last && d < to {
             m.entry(d).or_default().push(i);
             d += Duration::days(1);
         }
@@ -237,7 +239,7 @@ fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
 /// Month grid with continuous multi-day bars (lane-aligned per week row).
 pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate, hol: &Hols) -> String {
     let weeks = month_weeks(year, month);
-    let idx = by_day(instances);
+    let idx = by_day(instances, weeks[0][0], weeks[weeks.len() - 1][6] + Duration::days(1));
     let mut out = String::from("<div class=\"month\" role=\"grid\">");
     for d in 0..7 {
         let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
@@ -339,7 +341,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
 }
 
 pub fn agenda(date: NaiveDate, instances: &[Instance], l: &L, title: &str, hol: &Hols) -> String {
-    let idx = by_day(instances);
+    let idx = by_day(instances, date, date + Duration::days(1));
     let evs = idx.get(&date).cloned().unwrap_or_default();
     let mut out = format!("<section class=\"agenda\"><h2>{}</h2>{}<ul>", e(title), hol_labels(hol, date, "div", true));
     if evs.is_empty() {
@@ -411,8 +413,8 @@ pub fn week_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 /// `count` week blocks from the Monday of `start`. Each block stands on its own — no month
 /// context — so the stream can run on endlessly in both directions.
 pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: &[Instance], l: &L, hol: &Hols) -> String {
-    let idx = by_day(instances);
     let (mon, today_mon) = (monday_of(start), monday_of(today));
+    let idx = by_day(instances, mon, mon + Duration::days(7 * count as i64));
     let mut out = String::with_capacity(count * 4096);
     let all_day = if instances.iter().any(|i| i.all_day) { l.t("v-all-day") } else { String::new() };
     for wi in 0..count {
@@ -458,10 +460,11 @@ pub fn week_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance],
     let (start, end) = week_window(view_date);
     let count = ((end - start).num_days() / 7) as usize;
     let stream = week_blocks(start, count, today, instances, l, hol);
-    let idx = by_day(instances);
     // the panel follows the focus week's month, the same rule the client applies while scrolling
     let focus = monday_of(view_date);
     let (hy, hm) = (focus.year(), focus.month());
+    let hw = month_weeks(hy, hm);
+    let idx = by_day(instances, hw[0][0], hw[hw.len() - 1][6] + Duration::days(1));
     let mut heat = String::new();
     for w in &month_weeks(hy, hm) {
         let _ = write!(heat, "<div class=\"hw{}\" data-week=\"{}\"><b>{}</b>", if w[0] == focus { " focus" } else { "" }, w[0], w[0].iso_week().week());
@@ -542,7 +545,7 @@ pub fn rrule_text(rule: &str, start: NaiveDate, l: &L) -> String {
         let _ = write!(out, ", {}", l.tn("v-rr-count", c));
     } else if get("UNTIL").len() >= 8 {
         let u = get("UNTIL");
-        if let Ok(d) = NaiveDate::parse_from_str(&u[..8], "%Y%m%d") {
+        if let Some(d) = u.get(..8).and_then(|u| NaiveDate::parse_from_str(u, "%Y%m%d").ok()) {
             let _ = write!(out, ", {}", l.ta("v-rr-until", &[("date", l.date(d).into())]));
         }
     }
@@ -570,7 +573,7 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
             let _ = write!(v, "<button type=\"button\" class=\"cp\" data-copytext=\"{c}\" title=\"{}\">{}{c}</button>", l.t("v-copy-coordinates"), ico("copy"));
         }
         // the map query: coordinates when we have them, the address otherwise
-        let q = geo.map(|(a, b)| format!("{a:.6},{b:.6}")).unwrap_or_else(|| i.location.clone());
+        let q = geo.map(|(a, b)| format!("{a:.6},{b:.6}")).unwrap_or_else(|| i.location.to_string());
         let _ = write!(v, "<div class=\"maps\"><button type=\"button\" class=\"mb\" data-map=\"osm\" data-q=\"{0}\">{1}OpenStreetMap</button><button type=\"button\" class=\"mb\" data-map=\"gmaps\" data-q=\"{0}\">{1}Google Maps</button></div>", e(&q), ico("map"));
         row(ico("pin"), v, " loc");
     }
@@ -650,7 +653,7 @@ pub fn day_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 /// `count` ledger rows from `start`. The selection is the client's business once the ledger runs
 /// endlessly, so it is only marked on the rows the page itself brings.
 pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<NaiveDate>, instances: &[Instance], l: &L, hol: &Hols) -> String {
-    let idx = by_day(instances);
+    let idx = by_day(instances, start, start + Duration::days(count as i64));
     let mut out = String::new();
     for i in 0..count {
         let d = start + Duration::days(i as i64);
@@ -665,10 +668,12 @@ pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<Na
 }
 
 pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], l: &L, cal_names: &str, details: &HashMap<String, EventDetail>, hol: &Hols) -> String {
-    let idx = by_day(instances);
+    let idx = by_day(instances, view_date, view_date + Duration::days(1));
     let (ds, de) = day_window(view_date);
     let led = day_rows(ds, (de - ds).num_days() as usize, today, Some(view_date), instances, l, hol);
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
+    // the notes up to `NOTES_PER_RESPONSE` (`events::limit_notes`); the entries all stay
+    let mut notes_left = crate::domain::events::NOTES_PER_RESPONSE;
     let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} · {}</div>{}", e(&l.long_date(view_date)), l.tn("v-n-events", evs.len()), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
     if evs.is_empty() {
         let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
@@ -677,7 +682,7 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
         let time = if i.all_day { l.t("v-all-day").to_string() } else if i.end > i.start { format!("{}–{}", i.time_label(), i.end_label()) } else { i.time_label() };
         let _ = write!(doc, "<article class=\"lnk\" data-key=\"{}\" data-date=\"{}\"><time>{time}</time><div><h3>{}</h3>{}{}</div></article>",
             e(&i.key()), i.start_date(), e(&i.summary),
-            if i.description.is_empty() { String::new() } else { format!("<p>{}</p>", e(&i.description)) },
+            if i.description.is_empty() || i.description.len() > notes_left { String::new() } else { notes_left -= i.description.len(); format!("<p>{}</p>", e(&i.description)) },
             day_facts(i, details.get(&i.key()), l));
     }
     doc.push_str("</section>");

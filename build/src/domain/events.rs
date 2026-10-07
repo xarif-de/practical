@@ -7,12 +7,15 @@ use crate::domain::ical;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use caldata::component::{CalendarInnerData, Component, IcalEvent};
-use caldata::types::parse_duration;
 use chrono::{Duration, NaiveDate, NaiveDateTime, TimeZone};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
 use rustical_store::{CalendarQuery, CalendarReadStore, CalendarWriteStore};
 use std::collections::HashSet;
+
+/// Text an instance shares with every other instance of its series: one allocation per expanded object, not one
+/// per occurrence (a minutely series with a 20 KB description added 60 MiB per week view; audit3-security #1).
+pub type Text = std::sync::Arc<str>;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Instance {
@@ -22,9 +25,9 @@ pub struct Instance {
     pub color: String,
     pub object_id: String,
     pub uid: String,
-    pub summary: String,
-    pub location: String,
-    pub description: String,
+    pub summary: Text,
+    pub location: Text,
+    pub description: Text,
     pub start: NaiveDateTime,
     /// exclusive end
     pub end: NaiveDateTime,
@@ -65,7 +68,8 @@ impl Instance {
 
 /// Relative alarms of an event as minutes before its start (a trigger after the start or
 /// relative to the end comes out negative/shifted). Absolute (VALUE=DATE-TIME) triggers are
-/// left out: they do not follow the instance.
+/// left out: they do not follow the instance. A TRIGGER `ical::parse_duration` refuses (beyond
+/// ±400 years, or no duration at all) is skipped.
 pub fn alarm_offsets(ev: &IcalEvent) -> Vec<i64> {
     let dur = ev.get_duration().map(|d| d.num_minutes()).unwrap_or(0);
     let mut out = vec![];
@@ -74,15 +78,58 @@ pub fn alarm_offsets(ev: &IcalEvent) -> Vec<i64> {
         if t.params.get_param("VALUE").is_some_and(|v| v.eq_ignore_ascii_case("DATE-TIME")) {
             continue;
         }
-        if let Ok(d) = parse_duration(&t.value) {
+        if let Some(d) = ical::parse_duration(&t.value) {
             let related_end = t.params.get_param("RELATED").is_some_and(|v| v.eq_ignore_ascii_case("END"));
-            out.push(-d.num_minutes() - if related_end { dur } else { 0 });
+            out.push((-d.num_minutes()).saturating_sub(if related_end { dur } else { 0 }));
         }
     }
     out
 }
 
+/// What `instance_from` reads from an event's own properties, read once from the master: the
+/// instances a light master (`light_master`) generates carry none of it.
+struct MasterText {
+    summary: Text,
+    location: Text,
+    description: Text,
+    color: Option<String>,
+    categories: Vec<String>,
+    cancelled: bool,
+}
+
+/// The longest note a view instance carries (characters; longer ones end in "…"): the views and the window JSON
+/// repeat it per occurrence, the editor reads the whole text (`get_event`).
+pub const VIEW_NOTE_MAX: usize = 10_000;
+
+/// `s` cut to `max` characters with an ellipsis; unchanged (no copy) when it is shorter.
+fn cut(s: String, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        Some((at, _)) if s.len() > max => format!("{}…", &s[..at]),
+        _ => s,
+    }
+}
+
+impl MasterText {
+    /// Titles and places longer than an editor writes (`MAX_TITLE`, only another client stores them) are cut too:
+    /// a week view prints each title twice per occurrence.
+    fn of(ev: &IcalEvent) -> Self {
+        MasterText {
+            summary: cut(ical::text(ev, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()), MAX_TITLE).into(),
+            location: cut(ical::text(ev, "LOCATION").unwrap_or_default(), MAX_TITLE).into(),
+            description: cut(ical::text(ev, "DESCRIPTION").unwrap_or_default(), VIEW_NOTE_MAX).into(),
+            // RFC 7986 COLOR on the event wins over the calendar colour
+            color: ical::text(ev, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)),
+            categories: ical::list(ev, "CATEGORIES"),
+            cancelled: ical::text(ev, "STATUS").is_some_and(|s| s.eq_ignore_ascii_case("CANCELLED")),
+        }
+    }
+}
+
 fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, recurring: bool, alarms: Vec<i64>) -> Instance {
+    instance_with(ev, &MasterText::of(ev), cal, object_id, tz, recurring, alarms)
+}
+
+fn instance_with(ev: &IcalEvent, text: &MasterText, cal: &CalInfo, object_id: &str, tz: chrono_tz::Tz, recurring: bool, alarms: Vec<i64>) -> Instance {
     let (start, all_day) = ical::local(&ev.dtstart.0, tz);
     let end = if all_day {
         // Whole days: DTEND is an exclusive DATE. Go through the duration, not the converted
@@ -90,11 +137,11 @@ fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::
         // UTC DateTime (caldata event/mod.rs:259) that ical::local would shift into the zone
         // (+2 h in summer → the instance spilled into the next day).
         let days = ev.get_duration().map(|d| d.num_days()).filter(|d| *d > 0).unwrap_or(1);
-        start + Duration::days(days)
+        start.checked_add_signed(Duration::days(days)).unwrap_or(start)
     } else {
         match (&ev.dtend, ev.get_duration()) {
             (Some(e), _) => ical::local(&e.0, tz).0,
-            (None, Some(d)) => start + d,
+            (None, Some(d)) => start.checked_add_signed(d).unwrap_or(start),
             (None, None) => start,
         }
         .max(start)
@@ -103,23 +150,30 @@ fn instance_from(ev: &IcalEvent, cal: &CalInfo, object_id: &str, tz: chrono_tz::
         principal: cal.principal.clone(),
         cal_id: cal.id.clone(),
         cal_name: cal.displayname.clone(),
-        // RFC 7986 COLOR on the event wins over the calendar colour
-        color: ical::text(ev, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_else(|| cal.color.clone()),
+        color: text.color.clone().unwrap_or_else(|| cal.color.clone()),
         object_id: object_id.to_string(),
         uid: ev.get_uid().to_string(),
-        summary: ical::text(ev, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
-        location: ical::text(ev, "LOCATION").unwrap_or_default(),
-        description: ical::text(ev, "DESCRIPTION").unwrap_or_default(),
+        summary: text.summary.clone(),
+        location: text.location.clone(),
+        description: text.description.clone(),
         start,
         end,
         all_day,
         recurring,
-        categories: ical::list(ev, "CATEGORIES"),
+        categories: text.categories.clone(),
         alarm_minutes: alarms.first().copied(),
         alarms,
         is_group: cal.is_group,
-        cancelled: ical::text(ev, "STATUS").is_some_and(|s| s.eq_ignore_ascii_case("CANCELLED")),
+        cancelled: text.cancelled,
     }
+}
+
+/// The view window clamped to `ical::YEARS` (no stored date lies outside, and ±days on its edges stay
+/// representable); `None` when nothing of it is left.
+fn clamp_window(start: NaiveDate, end: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
+    let (lo, hi) = (NaiveDate::from_ymd_opt(*ical::YEARS.start(), 1, 1)?, NaiveDate::from_ymd_opt(*ical::YEARS.end(), 12, 31)?);
+    let (s, e) = (start.clamp(lo, hi), end.clamp(lo, hi));
+    (s < e).then_some((s, e))
 }
 
 /// Calendars the user may see, optionally narrowed to a filter set of "principal/id".
@@ -135,6 +189,7 @@ pub async fn visible_calendars(state: &AppState, user: &Principal, filter: Optio
 /// comes from `InstanceCache` when that calendar was expanded for the same window, zone and synctoken.
 pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz) -> AppResult<Vec<Instance>> {
     let mut out = vec![];
+    let Some((start, end)) = clamp_window(start, end) else { return Ok(out) };
     for cal in cals {
         if !cal.components.iter().any(|c| c == "VEVENT") {
             continue;
@@ -173,41 +228,172 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
     Ok(out)
 }
 
+/// Note text one response repeats at most (bytes): past it the further instances go without their note. A day
+/// with a minutely series and a 10 000-character note would otherwise be 1 440 copies of it in one page or JSON.
+pub const NOTES_PER_RESPONSE: usize = 1 << 20;
+
+/// Empties the notes of `v` past `NOTES_PER_RESPONSE` (in order).
+pub fn limit_notes(v: &mut [Instance]) {
+    let mut left = NOTES_PER_RESPONSE;
+    for i in v.iter_mut() {
+        match left.checked_sub(i.description.len()) {
+            Some(l) => left = l,
+            None => i.description = Text::from(""),
+        }
+    }
+}
+
 fn sort_instances(v: &mut [Instance]) {
     v.sort_by(|a, b| a.start.cmp(&b.start).then(b.all_day.cmp(&a.all_day)).then(a.summary.cmp(&b.summary)));
+}
+
+/// Instances one `expand` call keeps at most: caldata stops a series at 2 048 occurrences per window
+/// (event/mod.rs:210), so only many such series together reach it — then the rest of the calendar is
+/// left out of that window (logged) rather than the process running out of memory (192 MiB in prod).
+const EXPAND_MAX: usize = 50_000;
+
+/// A master whose properties beyond what the expansion needs (`LIGHT_KEEP`) exceed this many bytes is
+/// expanded from a light copy (`light_master`): caldata clones every property of the master into every
+/// generated occurrence (event/mod.rs:230), a 20 KB DESCRIPTION 2 048 times = 40 MB per view.
+const LIGHT_MIN_BYTES: usize = 2048;
+
+/// What the expansion and `instance_with` read of a generated occurrence: dates, rule parts, UID, DTSTAMP.
+const LIGHT_KEEP: &[&str] = &["UID", "DTSTAMP", "DTSTART", "DTEND", "DURATION", "RRULE", "RDATE", "EXDATE", "EXRULE"];
+
+/// Marks the light master (`light_master`); every occurrence generated from it carries the line.
+const LIGHT_MARK: &str = "X-PRACTICAL-LIGHT";
+
+/// The object again with its master VEVENT cut down to `LIGHT_KEEP` (no VALARMs) plus `LIGHT_MARK`;
+/// overrides and VTIMEZONEs stay as stored, so the expansion — time zones, a THISANDFUTURE override
+/// that becomes the template — is caldata's own. `None` when the copy does not parse (the full master
+/// is expanded then).
+fn light_master(ics: &str) -> Option<CalendarObject> {
+    let mut out = String::with_capacity(ics.len().min(64 * 1024));
+    let mut block: Option<Vec<String>> = None;
+    for l in unfold(&ics.replace("\r\n", "\n")) {
+        if let Some(b) = block.as_mut() {
+            b.push(l);
+            if b.last().is_some_and(|l| l.starts_with("END:VEVENT")) {
+                let b = block.take().unwrap_or_default();
+                let master = !b.iter().any(|l| prop_name(l) == "RECURRENCE-ID");
+                let mut depth = 0;
+                for l in &b {
+                    let top = depth == 1;
+                    if l.starts_with("BEGIN:") {
+                        depth += 1;
+                    }
+                    let keep = !master || (depth == 1 && (l.starts_with("BEGIN:VEVENT") || (top && LIGHT_KEEP.contains(&prop_name(l).as_str())))) || l.starts_with("END:VEVENT");
+                    if l.starts_with("END:") {
+                        depth -= 1;
+                    }
+                    if master && l.starts_with("END:VEVENT") {
+                        out.push_str(LIGHT_MARK);
+                        out.push_str(":1\r\n");
+                    }
+                    if keep {
+                        out.push_str(&ical::fold(l));
+                        out.push_str("\r\n");
+                    }
+                }
+            }
+        } else if l.starts_with("BEGIN:VEVENT") {
+            block = Some(vec![l]);
+        } else if !l.is_empty() {
+            out.push_str(&ical::fold(&l));
+            out.push_str("\r\n");
+        }
+    }
+    CalendarObject::from_ics(out).ok()
+}
+
+/// Bytes of the master's properties a light copy leaves out (VALARMs do not count: caldata gives a generated
+/// occurrence none).
+fn heavy_bytes(main: &IcalEvent) -> usize {
+    main.get_properties().iter().filter(|p| !LIGHT_KEEP.contains(&p.name.as_str())).map(|p| p.value.len() + p.name.len()).sum()
+}
+
+/// What a read already logged as skipped (an object key, a calendar over `EXPAND_MAX`): once per process.
+static LOGGED: std::sync::Mutex<Option<HashSet<String>>> = std::sync::Mutex::new(None);
+
+fn first_time(what: String) -> bool {
+    LOGGED.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(HashSet::new).insert(what)
+}
+
+/// Runs `f` for one stored object; a panic in it (an object no parser here was written for) skips the object
+/// and is logged once per key, so one broken object never takes the view of a whole calendar down with it.
+pub(crate) fn per_object<T>(key: &str, f: impl FnOnce() -> T) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            if first_time(key.to_string()) {
+                let msg = e.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| e.downcast_ref::<String>().cloned()).unwrap_or_default();
+                tracing::warn!("object {key} skipped: reading it panicked: {msg}");
+            }
+            None
+        }
+    }
 }
 
 /// One calendar's instances touching [start, end), unsorted (in the store's object order), and with
 /// `extras` the `SearchExtra` of every object read.
 async fn expand(state: &AppState, cal: &CalInfo, start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz, mut extras: Option<&mut std::collections::HashMap<String, SearchExtra>>) -> AppResult<Vec<Instance>> {
-    let ws = ical::to_utc(start.and_hms_opt(0, 0, 0).unwrap(), tz) - Duration::days(1);
-    let we = ical::to_utc(end.and_hms_opt(0, 0, 0).unwrap(), tz) + Duration::days(1);
-    let win_start = start.and_hms_opt(0, 0, 0).unwrap();
-    let win_end = end.and_hms_opt(0, 0, 0).unwrap();
+    let Some((start, end)) = clamp_window(start, end) else { return Ok(vec![]) };
+    let ws = ical::to_utc(start.and_time(chrono::NaiveTime::MIN), tz) - Duration::days(1);
+    let we = ical::to_utc(end.and_time(chrono::NaiveTime::MIN), tz) + Duration::days(1);
+    let win_start = start.and_time(chrono::NaiveTime::MIN);
+    let win_end = end.and_time(chrono::NaiveTime::MIN);
     let mut out = vec![];
     let objs = state
         .calendars
         .calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) })
         .await?;
     for (id, obj) in objs {
+        let key = format!("{}/{}/{id}", cal.principal, cal.id);
         if let Some(x) = extras.as_deref_mut() {
-            x.insert(format!("{}/{}/{id}", cal.principal, cal.id), search_extra(&obj));
+            x.insert(key.clone(), per_object(&key, || search_extra(&obj)).unwrap_or_default());
         }
-        let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { continue };
-        let recurring = main.has_rruleset();
-        // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
-        // would never remind; an instance without own alarms takes the master's
-        let master_alarms = alarm_offsets(main);
-        let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
-        for ev in &expanded {
-            let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
-            let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
-            if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
-                out.push(inst);
+        if out.len() >= EXPAND_MAX {
+            if first_time(format!("{}/{} over the instance limit", cal.principal, cal.id)) {
+                tracing::warn!("calendar {}/{}: more than {EXPAND_MAX} instances in {start}..{end}, the rest is left out", cal.principal, cal.id);
+            }
+            break;
+        }
+        let before = out.len();
+        if per_object(&key, || expand_object(&obj, cal, &id, tz, (ws, we), (win_start, win_end), LIGHT_MIN_BYTES, &mut out)).is_none() {
+            out.truncate(before);
+        }
+    }
+    out.truncate(EXPAND_MAX);
+    Ok(out)
+}
+
+/// `light_min`: `LIGHT_MIN_BYTES` (tests force both paths with 0 and `usize::MAX`).
+#[allow(clippy::too_many_arguments)]
+fn expand_object(obj: &CalendarObject, cal: &CalInfo, id: &str, tz: chrono_tz::Tz, (ws, we): (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>), (win_start, win_end): (NaiveDateTime, NaiveDateTime), light_min: usize, out: &mut Vec<Instance>) {
+    let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { return };
+    let recurring = main.has_rruleset();
+    // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
+    // would never remind; an instance without own alarms takes the master's
+    let master_alarms = alarm_offsets(main);
+    let light = if recurring && heavy_bytes(main) > light_min { light_master(&obj.get_ics()) } else { None };
+    let expanded = match light.as_ref().map(|l| l.get_inner().get_inner()) {
+        Some(CalendarInnerData::Event(lm, lov)) => lm.expand_recurrence(Some(ws), Some(we), lov),
+        _ => main.expand_recurrence(Some(ws), Some(we), overrides),
+    };
+    let master_text = light.is_some().then(|| MasterText::of(main));
+    for ev in &expanded {
+        let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
+        let inst = match &master_text {
+            Some(t) if ev.get_property(LIGHT_MARK).is_some() => instance_with(ev, t, cal, id, tz, recurring, alarms),
+            _ => instance_from(ev, cal, id, tz, recurring, alarms),
+        };
+        if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
+            out.push(inst);
+            if out.len() >= EXPAND_MAX {
+                return;
             }
         }
     }
-    Ok(out)
 }
 
 type WinKey = (String, String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
@@ -236,7 +422,7 @@ const INSTANCE_CACHE_MAX_DAYS: i64 = 120;
 /// 16 of allocator overhead (macOS `heap` size classes; synthetic DB: 6.0 MB estimated for 5.7 MB live-heap growth).
 fn est_bytes(v: &[Instance]) -> usize {
     let a = |n: usize| if n == 0 { 0 } else { n.div_ceil(16) * 16 + 16 };
-    v.iter().map(|i| std::mem::size_of::<Instance>() + [&i.principal, &i.cal_id, &i.object_id, &i.uid, &i.summary, &i.location, &i.description, &i.color].iter().map(|s| a(s.len())).sum::<usize>() + a(i.categories.len() * 24) + i.categories.iter().map(|c| a(c.len())).sum::<usize>() + a(i.alarms.len() * 8)).sum::<usize>() + 64
+    v.iter().map(|i| std::mem::size_of::<Instance>() + [i.principal.len(), i.cal_id.len(), i.object_id.len(), i.uid.len(), i.summary.len(), i.location.len(), i.description.len(), i.color.len()].iter().map(|n| a(*n)).sum::<usize>() + a(i.categories.len() * 24) + i.categories.iter().map(|c| a(c.len())).sum::<usize>() + a(i.alarms.len() * 8)).sum::<usize>() + 64
 }
 
 impl InstanceCache {
@@ -376,9 +562,10 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         cal_id: cal_id.into(),
         object_id: object_id.into(),
         uid: i.uid,
-        summary: i.summary,
-        location: i.location,
-        description: i.description,
+        // the whole texts: an Instance carries cut ones (`MasterText`)
+        summary: ical::text(main, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
+        location: ical::text(main, "LOCATION").unwrap_or_default(),
+        description: ical::text(main, "DESCRIPTION").unwrap_or_default(),
         start: i.start,
         end: i.end,
         all_day: i.all_day,
@@ -533,7 +720,7 @@ pub(crate) fn related_lines(list: &[Related]) -> Vec<String> {
             line.push_str(&format!(";RELTYPE={t}"));
         }
         for (k, v) in &r.extra {
-            line.push_str(&format!(";{k}={v}"));
+            line.push_str(&ical::param(k, v));
         }
         format!("{line}:{}", r.uid.trim())
     }).collect()
@@ -751,13 +938,19 @@ pub(crate) fn links_of(props: &[String]) -> Vec<Link> {
     }).collect()
 }
 
+/// Media types an attachment download is served as; any other FMTTYPE (`text/html`, `text/javascript`,
+/// `image/svg+xml`, … — written by any client or group member) becomes `application/octet-stream`: served
+/// from the app's origin under its own type, a stored script would be a `script-src 'self'` source
+/// (audit3-security #7).
+const SAFE_MEDIA: &[&str] = &["application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "text/plain"];
+
 /// The n-th embedded ATTACH of a stored master: (media type, file name, bytes).
 pub fn embedded_attachment(props: &[String], n: usize) -> Option<(String, String, Vec<u8>)> {
     use base64ct::Encoding;
     let line = props.iter().filter(|l| prop_name(l) == "ATTACH" && is_binary_attach(&ical::split_line(l).1)).nth(n)?;
     let (_, params, value) = ical::split_line(line);
     let get = |k: &str| params.iter().find(|(pk, _)| pk == k).map(|(_, v)| v.trim_matches('"').to_string());
-    let fmt = get("FMTTYPE").filter(|f| f.contains('/')).unwrap_or_else(|| "application/octet-stream".into());
+    let fmt = get("FMTTYPE").map(|f| f.trim().to_ascii_lowercase()).filter(|f| SAFE_MEDIA.contains(&f.as_str())).unwrap_or_else(|| "application/octet-stream".into());
     let name = get("FILENAME").or_else(|| get("X-FILENAME")).map(|n| n.trim_start_matches('/').to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("anhang-{}", n + 1));
     let clean: String = value.chars().filter(|c| !c.is_whitespace()).collect();
     let bytes = base64ct::Base64::decode_vec(&clean).ok()?;
@@ -811,7 +1004,7 @@ fn link_params(l: &Link, conference: bool) -> String {
         p.push_str(&format!(";FEATURE={}", l.features.iter().map(|f| clean(f).to_ascii_uppercase()).collect::<Vec<_>>().join(",")));
     }
     for (k, v) in &l.extra {
-        p.push_str(&format!(";{k}={v}"));
+        p.push_str(&ical::param(k, v));
     }
     p
 }
@@ -897,16 +1090,15 @@ fn person_line(name: &str, p: &Person) -> Option<String> {
     }
     let mut l = name.to_string();
     if !p.name.trim().is_empty() {
-        let n = p.name.trim().replace('"', "");
-        if n.contains([';', ':', ',']) { l.push_str(&format!(";CN=\"{n}\"")) } else { l.push_str(&format!(";CN={n}")) }
+        l.push_str(&ical::param("CN", p.name.trim()));
     }
     for (k, v) in [("ROLE", &p.role), ("PARTSTAT", &p.status), ("CUTYPE", &p.cutype)] {
         if !v.trim().is_empty() {
-            l.push_str(&format!(";{k}={}", v.trim().to_ascii_uppercase()));
+            l.push_str(&ical::param(k, &v.trim().to_ascii_uppercase()));
         }
     }
     for (k, v) in &p.extra {
-        l.push_str(&format!(";{k}={v}"));
+        l.push_str(&ical::param(k, v));
     }
     Some(format!("{l}:mailto:{email}"))
 }
@@ -946,10 +1138,12 @@ fn date_lines(name: &str, values: &[String], all_day: bool, tz: chrono_tz::Tz) -
     for v in values {
         let v = v.trim();
         if all_day || v.len() == 10 {
-            if let Ok(d) = NaiveDate::parse_from_str(&v[..v.len().min(10)], "%Y-%m-%d") {
+            if let Some(d) = v.get(..v.len().min(10)).and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()).filter(|d| ical::year_ok(*d)) {
                 out.push(format!("{name};VALUE=DATE:{}", ical::fmt_date(d)));
             }
-        } else if let Ok(dt) = NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S").or_else(|_| NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M")) {
+        } else if let Ok(dt) = NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S").or_else(|_| NaiveDateTime::parse_from_str(v, "%Y-%m-%dT%H:%M"))
+            && ical::year_ok(dt.date())
+        {
             out.push(format!("{name};TZID={}:{}", tz.name(), ical::fmt_dt(dt)));
         }
     }
@@ -963,7 +1157,7 @@ fn rrule_until_local(rrule: &str, tz: chrono_tz::Tz) -> Option<NaiveDate> {
     if let Ok(dt) = NaiveDateTime::parse_from_str(v.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
         return Some(if v.ends_with('Z') { chrono::Utc.from_utc_datetime(&dt).with_timezone(&tz).date_naive() } else { dt.date() });
     }
-    NaiveDate::parse_from_str(&v[..v.len().min(8)], "%Y%m%d").ok()
+    NaiveDate::parse_from_str(v.get(..v.len().min(8))?, "%Y%m%d").ok()
 }
 
 /// A bare `UNTIL=YYYYMMDD` on a timed event becomes the end of that local day in UTC (RFC 5545
@@ -974,7 +1168,7 @@ fn normalize_until(rrule: &str, all_day: bool, tz: chrono_tz::Tz) -> String {
         let date = rrule_until_local(&format!("UNTIL={v}"), tz);
         match date {
             Some(d) if all_day => format!("UNTIL={}", ical::fmt_date(d)),
-            Some(d) if v.len() <= 8 => format!("UNTIL={}", ical::to_utc(d.and_hms_opt(23, 59, 59).unwrap(), tz).format("%Y%m%dT%H%M%SZ")),
+            Some(d) if v.len() <= 8 && ical::year_ok(d) => format!("UNTIL={}", ical::to_utc(d.and_hms_opt(23, 59, 59).unwrap(), tz).format("%Y%m%dT%H%M%SZ")),
             _ => p.to_string(),
         }
     }).collect::<Vec<_>>().join(";")
@@ -1239,14 +1433,14 @@ pub(crate) fn parse_alarm(idx: usize, lines: &[String], tz: chrono_tz::Tz) -> Al
                     if let Ok(utc) = NaiveDateTime::parse_from_str(value.trim_end_matches('Z'), "%Y%m%dT%H%M%S") {
                         a.at = Some(chrono::Utc.from_utc_datetime(&utc).with_timezone(&tz).naive_local());
                     }
-                } else if let Ok(d) = parse_duration(&value) {
+                } else if let Some(d) = ical::parse_duration(&value) {
                     a.minutes = -d.num_minutes();
                     a.related_end = param("RELATED").as_deref() == Some("END");
                 }
             }
             "DESCRIPTION" => a.description = ical::unescape(&value),
             "SUMMARY" => a.summary = ical::unescape(&value),
-            "DURATION" => a.duration_minutes = parse_duration(&value).map(|d| d.num_minutes()).unwrap_or(0),
+            "DURATION" => a.duration_minutes = ical::parse_duration(&value).map(|d| d.num_minutes()).unwrap_or(0),
             "REPEAT" => a.repeat = value.trim().parse().unwrap_or(0),
             "ATTENDEE" => a.attendees.push(ical::strip_mailto(value.trim()).to_string()),
             "ATTACH" if attach.is_empty() && !is_binary_attach(&params) => attach = value.trim().to_string(),
@@ -1333,6 +1527,35 @@ pub(crate) fn build_valarm(a: &Alarm, summary: &str, raw: Option<&RawMaster>, tz
     l
 }
 
+/// Text and list limits of what the editors write (characters / entries) — far above what a person types or a
+/// client stores, low enough that one object cannot hold hundreds of MiB of views (audit3-robustness R7).
+pub const MAX_TITLE: usize = 1_000;
+pub const MAX_NOTE: usize = 100_000;
+pub const MAX_LIST: usize = 1_000;
+
+/// One alarm as the editor may send it: offsets within `ical::MAX_DURATION_SECS` (what the read path accepts,
+/// so a stored alarm survives a save), absolute times within `ical::YEARS`.
+fn validate_alarm(a: &Alarm) -> AppResult<()> {
+    let max = ical::MAX_DURATION_SECS / 60;
+    let date_ok = |d: Option<NaiveDateTime>| d.is_none_or(|d| ical::year_ok(d.date()));
+    if a.minutes.checked_abs().is_none_or(|m| m > max) || !(0..=max).contains(&a.duration_minutes) || !(0..=1_000_000).contains(&a.repeat) || !date_ok(a.at) || !date_ok(a.acknowledged) {
+        return Err(AppError::bad("err-alarm-range"));
+    }
+    Ok(())
+}
+
+/// The checks every event and task save shares: text lengths, list lengths, alarm bounds.
+pub(crate) fn validate_common(summary: &str, location: &str, description: &str, categories: &[String], alarms: &[Alarm], links: &[Link], related: &[Related]) -> AppResult<()> {
+    let long = |s: &str, max: usize| s.len() > max && s.chars().count() > max;
+    if long(summary, MAX_TITLE) || long(location, MAX_TITLE) || long(description, MAX_NOTE) || categories.iter().any(|c| long(c, MAX_TITLE)) {
+        return Err(AppError::bad("err-too-long"));
+    }
+    if categories.len() > MAX_LIST || alarms.len() > MAX_LIST || links.len() > MAX_LIST || related.len() > MAX_LIST {
+        return Err(AppError::bad("err-too-long"));
+    }
+    alarms.iter().try_for_each(validate_alarm)
+}
+
 pub fn validate_rrule(r: &str) -> AppResult<String> {
     let r = ical::rrule_canon(r);
     if r.is_empty() {
@@ -1355,6 +1578,13 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
     if input.end < input.start {
         return Err(AppError::bad("err-end-before-start"));
     }
+    if !ical::write_date_ok(input.start.date()) || !ical::write_date_ok(input.end.date()) {
+        return Err(AppError::bad("err-date-range"));
+    }
+    validate_common(&input.summary, &input.location, &input.description, &input.categories, &input.alarms, &input.links, &input.related)?;
+    if input.attendees.len() > MAX_LIST || input.exdates.len() > MAX_LIST || input.rdates.len() > MAX_LIST {
+        return Err(AppError::bad("err-too-long"));
+    }
     let mut l = vec![
         format!("UID:{uid}"),
         format!("DTSTAMP:{}", ical::fmt_utc_now()),
@@ -1365,12 +1595,12 @@ fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chrono_tz::Tz,
         let s = input.start.date();
         let mut e = input.end.date();
         if e <= s {
-            e = s + Duration::days(1);
+            e = s.succ_opt().unwrap_or(s);
         }
         l.push(format!("DTSTART;VALUE=DATE:{}", ical::fmt_date(s)));
         l.push(format!("DTEND;VALUE=DATE:{}", ical::fmt_date(e)));
     } else {
-        let e = if input.end <= input.start { input.start + Duration::hours(1) } else { input.end };
+        let e = if input.end <= input.start { input.start.checked_add_signed(Duration::hours(1)).unwrap_or(input.start) } else { input.end };
         l.push(format!("DTSTART;TZID={}:{}", tz.name(), ical::fmt_dt(input.start)));
         l.push(format!("DTEND;TZID={}:{}", tz.name(), ical::fmt_dt(e)));
     }
@@ -1569,9 +1799,11 @@ pub async fn delete_event(state: &AppState, user: &Principal, principal: &str, c
 /// kept in `DensityCache`. `instances` expands every calendar on its own, so the set's counts are the
 /// sum of its calendars' and a calendar filter reuses them.
 pub async fn month_density(state: &AppState, cals: &[CalInfo], year: i32, tz: chrono_tz::Tz) -> AppResult<[usize; 12]> {
-    let start = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
-    let end = NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
     let mut d = [0usize; 12];
+    if !ical::YEARS.contains(&year) {
+        return Ok(d);
+    }
+    let (Some(start), Some(end)) = (NaiveDate::from_ymd_opt(year, 1, 1), NaiveDate::from_ymd_opt(year + 1, 1, 1)) else { return Ok(d) };
     for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
         let counts = match state.caches.density.get(cal, tz, year) {
             Some(c) => c,
@@ -1737,8 +1969,8 @@ mod tests {
         let cal = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: "Test".into(), color: "#000".into(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
         let i = instance_from(&ex[1], &cal, "uid-1", tz, true, alarm_offsets(main));
         assert_eq!(i.start.date().day(), 10);
-        assert_eq!(i.summary, "Zahnarzt, Kontrolle");
-        assert_eq!(i.description, "Karte\nmitnehmen");
+        assert_eq!(&*i.summary, "Zahnarzt, Kontrolle");
+        assert_eq!(&*i.description, "Karte\nmitnehmen");
         assert_eq!((i.end - i.start).num_minutes(), 45);
         assert!(validate_rrule("DAILY").is_err());
     }
@@ -1950,5 +2182,47 @@ mod tests {
         assert_eq!(normalize_until("FREQ=DAILY;UNTIL=20260930", false, tz), "FREQ=DAILY;UNTIL=20260930T215959Z");
         assert_eq!(normalize_until("FREQ=DAILY;UNTIL=20260930T215959Z", true, tz), "FREQ=DAILY;UNTIL=20260930");
         assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=20260930T215959Z", tz), NaiveDate::from_ymd_opt(2026, 9, 30));
+        // multi-byte rule text: no panic, no date
+        assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=2026103€", tz), None);
+        assert_eq!(rrule_until_local("FREQ=DAILY;UNTIL=20€", tz), None);
+        assert!(date_lines("EXDATE", &["2026-10-2€x".into(), "ääääää".into(), "+10000-01-01".into()], true, tz).is_empty());
+    }
+
+    /// Both expansions of a series — from the stored master, and from its light copy (`light_master`, taken for
+    /// a heavy master) — give the same instances: the 60 real series, overrides of both ranges, a VTIMEZONE of
+    /// a non-Olson name, alarms on the master and on an override.
+    #[test]
+    fn light_expansion_equals_the_full_one() {
+        #[derive(serde::Deserialize)]
+        struct Fx {
+            ics: String,
+        }
+        let mut files: Vec<String> = serde_json::from_str::<Vec<Fx>>(include_str!("../../tests/fixtures/recurrence-real.json")).unwrap().into_iter().map(|f| f.ics).collect();
+        let note = format!("DESCRIPTION:{}\r\nX-ALT-DESC;FMTTYPE=text/html:<p>x</p>\r\nCATEGORIES:A,B\r\nLOCATION:Ort\r\nCOLOR:tomato\r\nSTATUS:CANCELLED\r\n", "Notiz ".repeat(500));
+        let master = |extra: &str| format!("BEGIN:VEVENT\r\nUID:s\r\nDTSTAMP:20260901T000000Z\r\nSUMMARY:Serie\r\nDTSTART;TZID=Europe/Berlin:20261001T090000\r\nDTEND;TZID=Europe/Berlin:20261001T100000\r\nRRULE:FREQ=DAILY;COUNT=40\r\nEXDATE;TZID=Europe/Berlin:20261005T090000\r\n{note}BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:x\r\nTRIGGER;RELATED=END:-PT15M\r\nEND:VALARM\r\n{extra}END:VEVENT\r\n");
+        let over = |rid: &str, range: &str, summary: &str| format!("BEGIN:VEVENT\r\nUID:s\r\nDTSTAMP:20260901T000000Z\r\nRECURRENCE-ID;TZID=Europe/Berlin{range}:{rid}\r\nSUMMARY:{summary}\r\nDTSTART;TZID=Europe/Berlin:{rid}\r\nDTEND;TZID=Europe/Berlin:20261020T120000\r\nDESCRIPTION:eigene Notiz\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:x\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT\r\n");
+        let cal = |body: String| format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//t//EN\r\n{}\r\n{body}END:VCALENDAR\r\n", ical::vtimezone("Europe/Berlin").unwrap());
+        files.push(cal(master("")));
+        files.push(cal(master("") + &over("20261010T090000", "", "Ausnahme")));
+        files.push(cal(master("") + &over("20261010T090000", ";RANGE=THISANDFUTURE", "Ab hier anders")));
+        files.push(cal(master("TRANSP:TRANSPARENT\r\n").replace("Europe/Berlin", "W. Europe Standard Time")).replace("BEGIN:VCALENDAR\r\n", "BEGIN:VCALENDAR\r\n").replacen(&ical::vtimezone("Europe/Berlin").unwrap(), &ical::vtimezone("Europe/Berlin").unwrap().replace("TZID:Europe/Berlin", "TZID:W. Europe Standard Time"), 1));
+        let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+        let ci = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: String::new(), color: "#000".into(), description: String::new(), components: vec!["VEVENT".into()], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
+        let (start, end) = (NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 1).unwrap());
+        let ws = ical::to_utc(start.and_time(chrono::NaiveTime::MIN), tz) - Duration::days(1);
+        let we = ical::to_utc(end.and_time(chrono::NaiveTime::MIN), tz) + Duration::days(1);
+        let win = (start.and_time(chrono::NaiveTime::MIN), end.and_time(chrono::NaiveTime::MIN));
+        let shown = |v: &[Instance]| v.iter().map(|i| format!("{} {} {} {} {} {:?} {:?} {} {} {} {}", i.start, i.end, i.all_day, i.summary, i.description.len(), i.categories, i.alarms, i.location, i.color, i.cancelled, i.uid)).collect::<Vec<_>>();
+        let mut light_taken = 0;
+        for f in &files {
+            let obj = CalendarObject::from_ics(f.clone()).unwrap_or_else(|e| panic!("{e}: {f}"));
+            let (mut full, mut light) = (vec![], vec![]);
+            expand_object(&obj, &ci, "o", tz, (ws, we), win, usize::MAX, &mut full);
+            expand_object(&obj, &ci, "o", tz, (ws, we), win, 0, &mut light);
+            assert_eq!(shown(&light), shown(&full), "{f}");
+            light_taken += usize::from(light_master(&obj.get_ics()).is_some());
+        }
+        assert_eq!(light_taken, files.len(), "every light copy parsed");
+        assert!(files.len() > 60);
     }
 }

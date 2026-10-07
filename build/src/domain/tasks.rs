@@ -272,7 +272,7 @@ async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppRes
             for (id, obj) in changed {
                 tasks.remove(&id);
                 seeds.remove(&id);
-                if let Some((t, seed)) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                if let Some((t, seed)) = events::per_object(&format!("{}/{}/{id}", cal.principal, cal.id), || task_of(&cal.principal, &cal.id, id.clone(), &obj, tz)).flatten() {
                     if let Some(seed) = seed {
                         seeds.insert(id.clone(), seed);
                     }
@@ -287,7 +287,7 @@ async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppRes
             let objects = state.calendars.get_objects(&cal.principal, &cal.id).await?;
             let (mut tasks, mut seeds) = (std::collections::HashMap::new(), std::collections::HashMap::new());
             for (id, obj) in objects {
-                if let Some((t, seed)) = task_of(&cal.principal, &cal.id, id.clone(), &obj, tz) {
+                if let Some((t, seed)) = events::per_object(&format!("{}/{}/{id}", cal.principal, cal.id), || task_of(&cal.principal, &cal.id, id.clone(), &obj, tz)).flatten() {
                     if let Some(seed) = seed {
                         seeds.insert(id.clone(), seed);
                     }
@@ -501,6 +501,10 @@ fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz::Tz, raw: 
     {
         return Err(AppError::bad("err-due-before-start"));
     }
+    if [i.start, i.due, i.completed_at].iter().flatten().any(|d| !ical::write_date_ok(d.date())) {
+        return Err(AppError::bad("err-date-range"));
+    }
+    events::validate_common(&i.summary, &i.location, &i.description, &i.categories, &i.alarms, &i.links, &i.related)?;
     let mut l = vec![
         format!("UID:{uid}"),
         format!("DTSTAMP:{}", ical::fmt_utc_now()),
@@ -867,7 +871,7 @@ pub fn reminder_at(a: &Alarm, start: Option<NaiveDateTime>, due: Option<NaiveDat
         return Some(abs);
     }
     let anchor = if a.related_end { due.or(start) } else { start.or(due) }?;
-    Some(anchor - chrono::Duration::minutes(a.minutes))
+    anchor.checked_sub_signed(chrono::Duration::try_minutes(a.minutes)?)
 }
 
 /// A reminder a task carries, resolved to the moment it fires (wall clock in the user's zone).

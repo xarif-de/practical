@@ -124,6 +124,10 @@ pub fn view_label(view: &str, l: &L) -> (String, bool) {
 /// `shown` is the month or week view's month / week on screen; the other views follow `date`.
 pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, view: &str, date: NaiveDate, shown: Option<NaiveDate>, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<(String, String)> {
     let l = &vc.l;
+    // every view adds weeks to its date: keep it where that stays representable (chrono panics past ±262 143)
+    if !crate::domain::ical::year_ok(date) || shown.is_some_and(|s| !crate::domain::ical::year_ok(s)) {
+        return Err(crate::error::AppError::bad("err-date-range"));
+    }
     let (y, m) = (date.year(), date.month());
     let month_start = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
     let grid_start = month_start - Duration::days(i64::from(month_start.weekday().num_days_from_monday()));
@@ -241,7 +245,9 @@ pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: 
         return Err(crate::error::AppError::bad("err-window-too-large"));
     }
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
-    Ok(axum::Json(events::instances(&state, &cals, q.start, q.end, vc.tz).await?))
+    let mut inst = events::instances(&state, &cals, q.start, q.end, vc.tz).await?;
+    events::limit_notes(&mut inst);
+    Ok(axum::Json(inst))
 }
 
 /// Ledger rows for the endless day list (app.js `mountLedger`).
@@ -257,6 +263,9 @@ pub struct DaysQuery {
 pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<DaysQuery>) -> AppResult<Response> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let count = q.count.unwrap_or(30).clamp(1, 120);
+    if !crate::domain::ical::year_ok(q.start) {
+        return Err(crate::error::AppError::bad("err-date-range"));
+    }
     let end = q.start + Duration::days(i64::from(count));
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
     let inst = events::instances(&state, &cals, q.start, end, vc.tz).await?;
@@ -277,6 +286,9 @@ pub struct WeeksQuery {
 pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<WeeksQuery>) -> AppResult<Response> {
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let count = q.count.unwrap_or(8).clamp(1, 16);
+    if !crate::domain::ical::year_ok(q.start) {
+        return Err(crate::error::AppError::bad("err-date-range"));
+    }
     let start = render::monday_of(q.start);
     let end = start + Duration::days(7 * count as i64);
     let cals = events::visible_calendars(&state, &user, parse_cals(q.cals.as_deref()).as_ref()).await?;
