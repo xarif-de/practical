@@ -33,9 +33,7 @@ headers = "0.4"
 http = "1.4"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
 tower = "0.5"
-# compression-br: pages, fragments and JSON as brotli (quality 5, main.rs `build_router_with`) — the same `brotli`
-# crate build.rs uses for the assets; gzip stays for clients without br.
-tower-http = { version = "0.7", features = ["trace", "compression-gzip", "compression-br"] }
+tower-http = { version = "0.7", features = ["trace", "compression-gzip"] }
 tower-sessions = "0.15"
 askama = { version = "0.16", features = ["serde_json"] }
 askama_web = { version = "0.16", features = ["axum-0.8"] }
@@ -73,6 +71,10 @@ fluent-syntax = "0.12"
 # .gz asset once for a client that accepts no compression (routes/assets.rs) and the region-name tables
 # build.rs embeds gzip-compressed (domain/holidays.rs).
 flate2 = "1.1"
+# Pages, fragments and JSON as brotli (etag.rs `revalidate`, one shot over the buffered body, the window sized
+# to it); the same crate and version build.rs compresses the assets with. tower-http's compression-br streams
+# with brotli's default 4 MiB window: +80-100 MB RSS after the bench burst (2026-10-07, 2 runs).
+brotli = "9"
 # Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06
 # (arm64 musl image build, 1 CPU / 192 MiB container like prod, synthetic 3,920-object DB, 20 requests
 # per path, 2 rounds, vs the musl build of e74c076): CPU per request −23…30 % (/calendar month 109.5 →
@@ -80,10 +82,6 @@ flate2 = "1.1"
 # Dockerfile's MIMALLOC_PURGE_DELAY=0 + MIMALLOC_ARENA_EAGER_COMMIT=0 — mimalloc's defaults held 66-103 MB.
 # Adds libmimalloc-sys (C, built with cc — already a build dependency of the bundled SQLite).
 mimalloc = { version = "0.1", default-features = false }
-
-# Tests only: it/validators.rs decodes the brotli answers (the same crate tower-http's compression-br links).
-[dev-dependencies]
-brotli = "9"
 
 # Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
 [build-dependencies]

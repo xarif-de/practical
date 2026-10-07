@@ -96,7 +96,7 @@ enum Coding {
 }
 
 /// RFC 9110 §12.5.3: a coding is acceptable when listed (or matched by `*`) with q > 0.
-fn accepts(headers: &HeaderMap, coding: &str) -> bool {
+pub(crate) fn accepts(headers: &HeaderMap, coding: &str) -> bool {
     let (mut named, mut star) = (None, None);
     for v in headers.get_all(header::ACCEPT_ENCODING).iter().filter_map(|v| v.to_str().ok()) {
         for item in v.split(',') {

@@ -5,8 +5,11 @@
 //! Content-Type), so a 304 can only stand for those bytes: whatever made the body differ — another
 //! user, a write, a zone or language switch, a flash, the CSRF token of a new session — makes the tag
 //! differ. The handler still runs; what is saved is the transfer. Weak (RFC 9110 §8.8.1): the same tag
-//! for the identity, gzip and brotli forms CompressionLayer makes of the body afterwards.
+//! for the identity, gzip and brotli forms of the body.
 //! `no-cache`, not `no-store`: no-store would end the back/forward cache.
+//! Brotli is made here, of the buffered body in one go, the window no larger than the body: tower-http's
+//! streaming encoder reserves brotli's default 4 MiB window per response. Gzip (a client without br) is
+//! left to CompressionLayer.
 
 use axum::body::{Body, HttpBody};
 use axum::extract::Request;
@@ -33,6 +36,7 @@ pub async fn revalidate(req: Request, next: Next) -> Response {
         return next.run(req).await;
     }
     let inm = req.headers().get_all(header::IF_NONE_MATCH).iter().cloned().collect::<Vec<_>>();
+    let br = crate::routes::assets::accepts(req.headers(), "br");
     let res = next.run(req).await;
     let h = res.headers();
     let ct_ok = h.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/html") || t.starts_with("application/json"));
@@ -62,5 +66,29 @@ pub async fn revalidate(req: Request, next: Next) -> Response {
         parts.headers.remove(header::CONTENT_LENGTH);
         return Response::from_parts(parts, Body::empty());
     }
+    if br && bytes.len() >= MIN_BR {
+        let body = brotli(&bytes);
+        parts.headers.insert(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
+        parts.headers.remove(header::CONTENT_LENGTH);
+        return Response::from_parts(parts, Body::from(body));
+    }
     Response::from_parts(parts, Body::from(bytes))
+}
+
+/// Smaller bodies go out as they are (CompressionLayer's own floor is 32 bytes; a brotli stream of a few
+/// bytes is no smaller).
+const MIN_BR: usize = 64;
+
+/// Quality 4, the window the smallest power of two that holds the body (16 KiB … 4 MiB). Measured 2026-10-07 on
+/// the bench DB (e2e build; RSS after the bench's request loop + burst, macOS, 3 runs each): gzip only 156-160 MB,
+/// br 3 173-177, br 4 179-194, br 5 318-405, br 4 with the window capped at 256 KiB 347-357 (befd301, gzip
+/// only: 183-205; tower-http's streaming br 5: 259-282). Bytes and CPU on the 15 main pages/JSON (1.37 MB
+/// raw; release, best of 9): gzip 6 333.0 KB / 34.8 ms, br 4 300.6 KB / 20.6 ms (−10 %, −41 %), br 5 279.9 KB /
+/// 36.9 ms — br 5's extra 6 % of bytes cost 1.7-2.2× the memory.
+pub fn brotli(body: &[u8]) -> Vec<u8> {
+    let lgwin = (usize::BITS - body.len().saturating_sub(1).leading_zeros()).clamp(14, 22) as i32;
+    let params = brotli::enc::BrotliEncoderParams { quality: 4, lgwin, size_hint: body.len(), ..Default::default() };
+    let mut out = Vec::with_capacity(body.len() / 6);
+    brotli::BrotliCompress(&mut &body[..], &mut out, &params).expect("in memory");
+    out
 }

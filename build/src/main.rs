@@ -153,13 +153,10 @@ fn build_router_with(state: &SharedState, session_store: sessions::MemoryStore) 
         .layer(AuthenticationLayer::new(state.principals.clone()))
         .layer(axum::middleware::from_fn_with_state(activity, sessions::activity))
         .layer(session_layer)
-        // inside the compression: the tag is taken of the identity body, the 304 has none to compress
+        // inside the compression: the tag is taken of the identity body (and br made of it), the 304 has none
         .layer(axum::middleware::from_fn(etag::revalidate))
-        // br for every client that takes it, else gzip. Quality 5 for both (one setting in tower-http). Measured
-        // 2026-10-07 on the 15 main pages/JSON of the bench DB (1.37 MB raw; release build, brotli/flate2 crates as
-        // linked, best of 9): gzip 6 333.0 KB / 34.8 ms, br 4 300.6 KB / 20.6 ms, br 5 279.9 KB / 36.9 ms —
-        // br 5 = gzip 6's CPU for 16 % fewer bytes (br 4: −10 %); history −27 %, contacts −28 %.
-        .layer(CompressionLayer::new().quality(tower_http::CompressionLevel::Precise(5)))
+        // gzip for what etag::revalidate did not already encode as brotli (a client without br, other types)
+        .layer(CompressionLayer::new())
         // Merged AFTER the layers above, so none of them runs for these two: static files and the
         // kubelet probe read no session, look up no principal (a DB query per request with a session
         // cookie or Basic auth), need no CSRF check (GET only) and are never compressed per request
