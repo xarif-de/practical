@@ -21,6 +21,12 @@ use chrono::{Datelike, NaiveDate};
 use serde::de::{DeserializeOwned, Error as _};
 use serde::{Deserialize, Deserializer};
 
+/// The value of cookie `name` (a choice app.js keeps per browser: `tk_back`, `ctview`), if the request has it.
+pub fn cookie(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+    let want = format!("{name}=");
+    headers.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).find_map(|c| c.trim().strip_prefix(want.as_str()).map(str::to_string))
+}
+
 /// The longest path segment (a calendar, address book or object id): CalDAV clients' ids are UUIDs or
 /// Exchange-style hex ids with a suffix, far below this.
 const MAX_SEGMENT: usize = 1024;
@@ -234,4 +240,17 @@ pub fn color<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
 pub fn tz<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     let s = String::deserialize(d)?;
     if s.trim().is_empty() || s.trim().parse::<chrono_tz::Tz>().is_ok() { Ok(s) } else { Err(D::Error::custom("unknown time zone")) }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_cookie_is_found_among_others() {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert(axum::http::header::COOKIE, "id=abc; xtk_back=day; tk_back=year; x=1".parse().unwrap());
+        h.append(axum::http::header::COOKIE, "ctview=table".parse().unwrap());
+        assert_eq!(super::cookie(&h, "tk_back").as_deref(), Some("year"));
+        assert_eq!(super::cookie(&h, "ctview").as_deref(), Some("table"));
+        assert_eq!(super::cookie(&axum::http::HeaderMap::new(), "tk_back"), None);
+    }
 }

@@ -475,7 +475,8 @@ of this checkout's server build (`E2E_PROFILE`, default `e2e`: relative numbers 
   `srv.rss.burst`/`srv.peak.burst` (RSS / peak footprint after the latency loop + every endpoint 3× concurrently);
   `idle.cpu`/`idle.inst`/`idle.wakeups` (60 s, one SSE client, VAPID + one push subscriber); `wire.*` (bytes as
   served to Chromium's Accept-Encoding: pages gzip, assets br); `dom.*` (nodes per page); `ui.<action>` input →
-  result laid out (open editor, save event, month → week, next month by wheel, toggle task, one search keystroke;
+  result laid out (open editor, save event, month → week, next month by wheel, toggle task, contacts list → table,
+  one search keystroke;
   `.cpu4` with CDP CPU throttling ×4, `.busy` main-thread task time, `.reqs` requests); `size.binary`,
   `size.src.*` (build/assets as written). 5 server rounds (fresh processes), 5 UI samples per side.
 - **Verdict** (`bench-compare`): both binaries run in the same session, ref and candidate alternating per round,

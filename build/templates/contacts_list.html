@@ -1,0 +1,11 @@
+{#- /contacts list view: the letter panels (contacts.html, and alone for its first switch: routes/contacts.rs `part`) -#}
+{% for g in groups %}<section class="lpanel" data-letter="{{ g.letter }}"><h3>{{ g.letter }}</h3><ul class="list">
+{% for c in g.contacts %}<li data-key="{{ c.principal }}/{{ c.ab_id }}/{{ c.object_id }}" data-cat="{{ c.category() }}" data-ab="{{ c.principal }}/{{ c.ab_id }}" data-name="{{ c.full_name }}" data-given="{{ c.given }}" data-family="{{ c.family }}" data-bday="{{ c.birthday }}" data-email="{{ c.primary_email() }}"><span class="av" style="background:var(--c{{ c.color_index() }})">{{ c.initials() }}</span><div class="ci">
+<div class="name"><span>{{ c.full_name }}</span>{% if !c.birthday.is_empty() %}<span class="bday" data-lf="birthday">{{ m::ico("cake") }}{{ c.birthday_label() }}</span>{% endif %}</div>
+{% if !c.primary_address().is_empty() %}<div class="line" data-lf="address">{{ c.primary_address() }}</div>{% endif %}
+<div class="line sub">{% if !c.primary_phone().is_empty() %}<span data-lf="phone">{{ c.primary_phone() }}</span>{% endif %}{% if !c.primary_email().is_empty() %}<span data-lf="email">{{ c.primary_email() }}</span>{% endif %}</div>
+<div class="line" data-lf="addressbook"><span class="abchip" style="--c:{{ c.ab_color }}">{{ m::ico("book-user") }}{{ c.ab_name }}</span></div>
+{% if !c.categories.is_empty() %}<div class="line cats" data-lf="category">{% for k in c.categories %}<span class="tag">{{ k }}</span>{% endfor %}</div>{% endif %}
+{% if !c.note.is_empty() %}<div class="line note" data-lf="note">{{ c.note }}</div>{% endif %}
+</div></li>
+{% endfor %}</ul></section>{% endfor %}
