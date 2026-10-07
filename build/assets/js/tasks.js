@@ -393,6 +393,7 @@
     main.classList.toggle('view-table', view === 'table');
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
+    $$('.tkcard, .tkkc, .bar2, .tchip[data-key], .ri', main).forEach(el => practical.keyClick(el)); // the table edits in place, the deck has its own keys
     watchSentinel();
     syncSort();
     alignEd();
@@ -496,7 +497,7 @@
     const fab = $('#fab'), withFab = FAB_VIEWS.includes(view) || (view === 'groups' && !dock);
     fab.hidden = !withFab; fab.classList.toggle('fab-add', withFab);
     root.classList.toggle('dock', dock);
-    ed.classList.toggle('docked', dock);
+    ed.classList.toggle('docked', dock); $('.box', ed).setAttribute('aria-modal', String(!dock)); // docked, it is a pane of the page
     if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
     else ed.hidden = !(cur || wantNew);
     alignEd();

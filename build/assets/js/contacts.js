@@ -146,7 +146,7 @@
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
   async function open(key) { const r = practical.tell(await practical.req('/api/contacts/' + key)); if (r.ok) show(r.data); return r.ok; }
-  $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
+  $$('.list li[data-key]').forEach(li => { li.onclick = () => open(li.dataset.key); practical.keyClick(li); });
   $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
   // editing: dirty tracking, display name follows given + family, dates re-evaluate
   form.addEventListener('input', e => { if (e.target === f.given || e.target === f.family) { if (fnAuto) f.full_name.value = [f.given.value, f.family.value].filter(Boolean).join(' '); } else if (e.target === f.full_name) fnAuto = !f.full_name.value; const p = e.target.closest('.pdate'); if (p) dateInfo(p); updateButtons(); });

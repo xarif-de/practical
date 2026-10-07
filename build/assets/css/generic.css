@@ -19,6 +19,9 @@ form.inline { display: inline; }
 .inline-form input[type=text], .inline-form select, .login input { font: inherit; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; min-width: 200px; }
 /* the focus ring of every text field on a tile background (after their rules: it replaces the tile) */
 .usearch input:focus, .sdlg .sd-head input:focus, .ask-type input:focus, .ed input:focus, .ed select:focus, .ed textarea:focus, .inline-form input:focus, .login input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg); }
+/* keyboard focus (:focus-visible: not on a click) of the controls whose own rule drops the browser's focus ring — `all:
+   unset` resets the outline too, the selects set none: that ring again (`revert` = the browser's own) */
+.cardform .act:focus-visible, .cardform .pref:focus-visible, .cardform .rm:focus-visible, .cardform .add:focus-visible, .cardform .addmenu .pop button:focus-visible, .ed .cardform .pillbtn:focus-visible, .ed .cardform .lk-pill:focus-visible, .ed .cardform .lk-detail .lk-dh button:focus-visible, .ed .cardform .sugg button:focus-visible, .ed .cardform .locsub .chip.ghost:focus-visible, .ed .cardform .pchip:focus-visible, .ed .cardform .stile:focus-visible, .ed .cardform .ct-row .ct-x:focus-visible, .ed .cardform .ct-tag:focus-visible, .rrpop button:focus-visible, .sres .r.hist .hx:focus-visible, .cfo-ticks button:focus-visible, .ct-rail button:focus-visible, .toolbar .sel select:focus-visible { outline: revert; }
 .chip, .hx-chip { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; color: var(--fg-2); background: var(--tile); } /* .hx-chip: the history filter chips (history.css: padding) */
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .danger-zone summary { list-style: none; display: inline-block; }

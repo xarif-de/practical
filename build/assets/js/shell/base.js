@@ -60,6 +60,19 @@
     document.body.appendChild(t);
   };
 
+  /* the keyboard stays inside the topmost open modal dialog (aria-modal="true" and rendered; dialogs are appended in
+     opening order): Tab on its last control wraps to its first, Shift+Tab on its first to its last, and a Tab from
+     outside it enters it — the page behind it is out of reach, as it is for the pointer */
+  const tabbable = 'a[href], button, input, select, textarea, [tabindex]';
+  addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+    const m = $$('[aria-modal="true"]').filter(d => d.getClientRects().length).pop(); if (!m) return;
+    const f = $$(tabbable, m).filter(x => x.tabIndex >= 0 && !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility === 'visible');
+    if (!f.length) return;
+    const a = document.activeElement, i = f.indexOf(a);
+    if (!m.contains(a) || (e.shiftKey ? i === 0 : i === f.length - 1)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+  });
+
   window.segPress = btn => { const seg = btn.closest('.seg'); if (seg) seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === btn ? 'true' : 'false')); };
 
   // colour scheme: the user's setting (auto | light | dark, stored on the server, rendered into <html>);
