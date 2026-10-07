@@ -82,7 +82,8 @@ test('save after a change elsewhere (409): Escape keeps editing, "mine" overwrit
   await page.goto('/calendar?view=month&date=2026-11-12');
   const key = await createApi(page, { summary: 'F9 Konflikt', start: '2026-11-12T09:00:00', end: '2026-11-12T10:00:00', cal: CAL.privat });
   const [principal, cal_id] = CAL.privat.split('/');
-  const theirs = summary => api(page, 'PUT', '/api/events/' + key, { principal, cal_id, summary, start: '2026-11-12T09:00:00', end: '2026-11-12T10:00:00', all_day: false, categories: [], alarms: [], color: '', location: '' });
+  // another client's save: based on the version stored now (a write without one is refused with 428)
+  const theirs = async summary => api(page, 'PUT', '/api/events/' + key, { principal, cal_id, summary, start: '2026-11-12T09:00:00', end: '2026-11-12T10:00:00', all_day: false, categories: [], alarms: [], color: '', location: '', etag: (await detail(page, key)).etag });
   await openEdit(page, key, '2026-11-12');
   await fillWhen(page, { title: 'F9 Meins' });
   await theirs('F9 Deren');
