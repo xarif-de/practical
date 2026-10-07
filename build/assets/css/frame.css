@@ -14,6 +14,9 @@ html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [ar
    is not: the top bar and tab bar stay live); old and new snapshot move by transform only, clipped to .main's box */
 html[data-slide] { view-transition-name: none; } html[data-slide] .main { view-transition-name: pc-view; }
 ::view-transition-group(pc-view) { animation: none; overflow: clip; }
+/* the toolbar with the view switch stays where it is: its own capture, the new one shown at once (no slide, no fade) */
+html[data-slide] .main .toolbar:has(.seg [aria-pressed]) { view-transition-name: pc-bar; }
+::view-transition-group(pc-bar), ::view-transition-new(pc-bar) { animation: none; } ::view-transition-old(pc-bar) { display: none; }
 ::view-transition-old(pc-view), ::view-transition-new(pc-view) { animation: 240ms cubic-bezier(.2, .7, .3, 1) both; mix-blend-mode: normal; }
 html[data-slide=next]::view-transition-old(pc-view) { animation-name: pc-to-l; } html[data-slide=next]::view-transition-new(pc-view) { animation-name: pc-from-r; }
 html[data-slide=prev]::view-transition-old(pc-view) { animation-name: pc-to-r; } html[data-slide=prev]::view-transition-new(pc-view) { animation-name: pc-from-l; }
