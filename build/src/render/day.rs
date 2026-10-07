@@ -105,6 +105,7 @@ pub fn day_window(view_date: NaiveDate) -> (NaiveDate, NaiveDate) {
 pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<NaiveDate>, instances: &[Instance], l: &L, hol: &Hols) -> String {
     let idx = by_day(instances, start, start + Duration::days(count as i64));
     let mut out = String::new();
+    let add = add_btn(l);
     for i in 0..count {
         let d = start + Duration::days(i as i64);
         let evs = idx.get(&d).cloned().unwrap_or_default();
@@ -112,7 +113,7 @@ pub fn day_rows(start: NaiveDate, count: usize, today: NaiveDate, sel: Option<Na
         // (the others are tinted); the entries follow
         let marks = hol.get(&d).map(|v| v.as_slice()).unwrap_or(&[]);
         let names: Vec<String> = joined(marks.iter().filter(|m| !m.school)).into_iter().chain(joined(marks.iter().filter(|m| m.school && m.start == d))).map(|n| e(&n)).chain(evs.iter().map(|i| e(&i.summary))).collect();
-        let _ = write!(out, "<a class=\"lrow{}{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{ADD}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d), evs.len().min(6), names.join(", "));
+        let _ = write!(out, "<a class=\"lrow{}{}{}{}\" href=\"/calendar?view=day&date={d}\" data-date=\"{d}\"><b>{:02}</b><span>{}</span><i style=\"--n:{}\"></i><em>{}</em>{add}</a>", if d == today { " today" } else { "" }, if sel == Some(d) { " sel" } else { "" }, if d.weekday().num_days_from_monday() >= 5 { " we" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d), evs.len().min(6), names.join(", "));
     }
     out
 }
@@ -124,7 +125,8 @@ pub fn day_view(view_date: NaiveDate, today: NaiveDate, instances: &[Instance], 
     let evs = idx.get(&view_date).cloned().unwrap_or_default();
     // the notes up to `NOTES_PER_RESPONSE` (`events::limit_notes`); the entries all stay
     let mut notes_left = crate::domain::events::NOTES_PER_RESPONSE;
-    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {ADD}</h2><div class=\"sub\">{} · {}</div>{}", e(&l.long_date(view_date)), l.tn("v-n-events", evs.len()), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
+    let add = add_btn(l);
+    let mut doc = format!("<section class=\"doc\" data-date=\"{view_date}\"><h2>{} {add}</h2><div class=\"sub\">{} · {}</div>{}", e(&l.long_date(view_date)), l.tn("v-n-events", evs.len()), e(cal_names), { let m = hol_labels(hol, view_date, "span", true); if m.is_empty() { m } else { format!("<div class=\"hols\">{m}</div>") } });
     if evs.is_empty() {
         let _ = write!(doc, "<p class=\"muted\">{}</p>", l.t("v-no-events-on-this-day"));
     }

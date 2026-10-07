@@ -35,7 +35,7 @@
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
     d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn icon-btn" type="button" data-a="0"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-a="1"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-check"/></svg></button></div></div>';
-    d.querySelector('p').textContent = text;
+    d.querySelector('p').textContent = text; d.setAttribute('aria-label', text); // the question names the dialog
     for (const [a, t] of [['0', no], ['1', yes]]) { const b = d.querySelector(`[data-a="${a}"]`); b.title = t; b.setAttribute('aria-label', t); }
     const prev = document.activeElement;
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
@@ -54,7 +54,7 @@
   window.toast = (text, err) => {
     $$('.toast:not(.net)').forEach(t => t.remove()); // the offline notice stays (practical.online)
     const t = document.createElement('div'); t.className = 'toast' + (err ? ' error' : ''); t.setAttribute('role', err ? 'alert' : 'status');
-    t.innerHTML = '<span></span><button type="button" class="toast-x" aria-label="×">×</button>'; t.firstChild.textContent = text;
+    t.innerHTML = '<span></span><button type="button" class="toast-x">×</button>'; t.firstChild.textContent = text; t.lastChild.setAttribute('aria-label', tr('js-close'));
     const bye = () => { t.classList.add('gone'); setTimeout(() => t.remove(), 400); };
     t.lastChild.onclick = bye; if (!err) setTimeout(bye, 3000);
     document.body.appendChild(t);

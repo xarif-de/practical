@@ -10,7 +10,7 @@
   const tplMark = () => $$('.lk-hit', tplPop).forEach((b, i) => b.setAttribute('aria-selected', i === tplSel ? 'true' : 'false'));
   function tplShow(hits) {
     if (tplPop) tplPop.remove(); tplPop = null; tplSel = -1; tplHits = hits; if (!hits.length) return;
-    tplPop = document.createElement('div'); tplPop.className = 'rrpop tplpop'; tplPop.setAttribute('role', 'listbox');
+    tplPop = document.createElement('div'); tplPop.className = 'rrpop tplpop'; tplPop.setAttribute('role', 'listbox'); tplPop.setAttribute('aria-label', D.tTplHead);
     tplPop.innerHTML = `<div class="q">${esc(D.tTplHead)}</div>` + hits.map((h, i) => `<button type="button" class="lk-hit" role="option" data-h="${i}" aria-selected="false"><svg class="ico" style="color:${esc(h.color)}"><use href="${practical.sprite}#i-calendar"/></svg><span>${esc(h.summary)}</span><small>${esc([D.tTplCount.replace('{n}', h.count), D.tTplLast.replace('{date}', fmtD(h.last) + (h.time ? ' ' + h.time : '')), h.cal_name].filter(Boolean).join(' · '))}</small></button>`).join('');
     document.body.appendChild(tplPop);
     placeUnder(tplPop, f.summary);

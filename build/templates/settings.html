@@ -118,7 +118,7 @@
   {{ m::back("#", ctx.t("nav-settings")) }}
   <h2 id="pick-title"></h2>
   <div class="group pick-q"><input type="search" id="pick-q" placeholder="{{ ctx.t("set-pick-search") }}" autocomplete="off" aria-label="{{ ctx.t("set-pick-search") }}"></div>
-  <div class="group" id="pick-list" role="listbox"></div>
+  <div class="group" id="pick-list" role="listbox" aria-labelledby="pick-title"></div>
   <script type="application/json" id="pick-data">{{ picker_json|safe }}</script>
 </section>
 
@@ -245,7 +245,7 @@
     {% endfor %}
     <form class="cell noic" method="post" action="/settings/groups/{{ g.id }}/members">
       {{ m::csrf() }}
-      <select name="member" required><option value="">{{ ctx.t("member-pick") }}</option>{% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}</select>
+      <select name="member" required aria-label="{{ ctx.t("member-pick") }}"><option value="">{{ ctx.t("member-pick") }}</option>{% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}</select>
       <button class="btn" type="submit">{{ m::ico("member-add") }}<span>{{ ctx.t("member-add") }}</span></button>
     </form>
     <form method="post" action="/settings/groups/{{ g.id }}/leave">{{ m::csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ m::ico("logout") }}<span>{{ ctx.t("group-leave") }}</span></button></form>

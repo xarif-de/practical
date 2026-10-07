@@ -187,6 +187,8 @@ filter-mine = Solo los míos
 filter-categories = Categorías
 pick-date = Elegir una fecha
 today = Hoy
+nav-prev = Anterior
+nav-next = Siguiente
 cancel = Cancelar
 view-day = Día
 view-week = Semana
@@ -817,6 +819,7 @@ v-n-minutes = { $n ->
 ## app.js (shipped as JSON by layout.html; placeholders are %name, not Fluent variables)
 js-yes = Sí
 js-no = No
+js-close = Cerrar
 js-copied = Copiado.
 js-req-offline = Sin conexión con el servidor.
 js-req-offline-bar = Sin conexión: ahora no se pueden guardar los cambios.
