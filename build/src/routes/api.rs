@@ -207,6 +207,11 @@ async fn colors_batch(State(state): State<SharedState>, user: Principal, session
             g.object(Store::Cal, p, cal, id);
         }
     }
+    // holiday colours are a read-modify-write of the user's settings (colors::apply)
+    let _lock = match b.changes.iter().any(|c| matches!(c.kind.as_str(), "holiday" | "school")) {
+        true => Some(state.guards.prefs(&user.id).await),
+        false => None,
+    };
     let (count, failed) = crate::domain::colors::apply(&state, &user, &b.changes).await?;
     g.commit().await;
     Ok(Json(BatchDone { count, failed }))
@@ -637,6 +642,7 @@ async fn alarm_presets_get(State(state): State<SharedState>, user: Principal) ->
 async fn alarm_presets_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(list): Json<Vec<events::AlarmPreset>>) -> AppResult<Json<Vec<events::AlarmPreset>>> {
     check_csrf(&session, &headers).await?;
     events::validate_presets(&list)?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.alarm_presets_json = Some(serde_json::to_string(&list).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;

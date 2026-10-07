@@ -273,3 +273,19 @@ async fn logout_ends_this_devices_push_subscription() {
     let left: Vec<String> = sqlx::query_scalar("SELECT endpoint FROM practical_push_subscriptions ORDER BY endpoint").fetch_all(&s.app.state.db).await.unwrap();
     assert_eq!(left, ["https://push.example.org/bob", "https://push.example.org/other"]);
 }
+
+/// Fails on the code before (TESTED there with HTTP: 39 of 40 rounds lost a write): two settings saves of
+/// different fields at the same time both land.
+#[tokio::test]
+async fn concurrent_settings_saves_lose_nothing() {
+    let s = seed().await;
+    let c = s.app.login("alice").await;
+    for round in 0..40 {
+        let (scheme, cols) = if round % 2 == 0 { ("dark", vec!["email"]) } else { ("light", vec!["phone"]) };
+        let (mut a, mut b) = (c.clone(), c.clone());
+        let (ra, rb) = tokio::join!(a.json(Method::POST, "/settings/scheme", json!({ "scheme": scheme })), b.json(Method::POST, "/settings/columns", json!(cols)));
+        assert_eq!((ra.status, rb.status), (StatusCode::NO_CONTENT, StatusCode::OK));
+        let p = crate::domain::prefs::get(&s.app.state.db, "alice").await.unwrap();
+        assert_eq!((p.scheme.as_deref(), p.contact_columns_json), (Some(scheme), Some(serde_json::to_string(&cols).unwrap())), "round {round}");
+    }
+}

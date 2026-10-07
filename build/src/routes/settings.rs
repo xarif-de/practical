@@ -578,6 +578,7 @@ struct PrefsForm {
 async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, headers: axum::http::HeaderMap, Form(f): Form<PrefsForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
+        let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
         let mut p = prefs::get(&state.db, &user.id).await?;
         p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::LANGS.contains(&l.as_str()));
         p.scheme = Some(f.scheme.clone()).filter(|s| s == "light" || s == "dark");
@@ -640,6 +641,7 @@ struct HolidayDisplay {
 /// Show public holidays / school holidays in the calendar (its filter popover, app.js).
 async fn holiday_display_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     if let Some(v) = d.public {
         p.holidays_enabled = v;
@@ -659,6 +661,7 @@ struct SchemeChoice {
 /// The colour scheme from the button in the bar (app.js): auto | light | dark.
 async fn scheme_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.scheme = Some(d.scheme).filter(|s| s == "light" || s == "dark");
     prefs::set(&state.db, &user.id, &p).await?;
@@ -669,6 +672,7 @@ async fn scheme_save(State(state): State<SharedState>, user: Principal, session:
 async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::contacts::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.contact_columns_json = Some(serde_json::to_string(&cols).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
@@ -679,6 +683,7 @@ async fn columns_save(State(state): State<SharedState>, user: Principal, session
 async fn task_columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::tasks::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.task_columns_json = Some(serde_json::to_string(&cols).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
@@ -689,6 +694,7 @@ async fn task_columns_save(State(state): State<SharedState>, user: Principal, se
 async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(fields): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let fields: Vec<String> = fields.into_iter().filter(|c| crate::routes::contacts::ALL_LIST_FIELDS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.contact_list_fields_json = Some(serde_json::to_string(&fields).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
