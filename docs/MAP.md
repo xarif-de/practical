@@ -186,3 +186,14 @@ subscriber; login on a start of its own before the measured one), `wire.*`, `dom
 ratio > 1+rel AND median Δ > abs (`RULES`); stored numbers are information. `size.binary` is judged only between two
 builds of one non-e2e profile (`E2E_PROFILE=release` against a release-profile ref); on `e2e` (256 codegen units,
 module-partitioned) it is information. Power state (pmset) recorded per phase; a change → exit 4.
+Calibration 2026-10-07 (901d09e vs itself, M4 Pro on battery, Low Power Mode, host shared with other agents): idle.*
+ratios 0.94-1.06 in 3 runs (idle.inst 5.1-6.2 Minstr/min; before the separate login start 9.7-12.2 at up to ±103 %
+noise); size.binary release vs release 1.000. Under host load (load avg 12-16) 2 of 3 runs raised false alarms in
+p90 latency (contacts ×1.37, history ×1.75: single 20-75 ms samples on both sides) and ui.editor-open (×2.26 at
+±107 % noise): rerun before acting on those classes. Injected and caught: poller every 100 ms without the
+`db::Watch` gate → idle.cpu ×95, idle.inst ×188, idle.wakeups ×16; a 300 KB static → release size.binary ×1.013
+(threshold ×1.01: smallest catch ≈ 226 KB), e2e ×1.010 reported only. Earlier injections (2026-10-07, befd301):
+20 ms sleep in a handler → srv.lat ×11.9; app.js + 5 KB → wire ×1.054; 30 MB per burst → srv.rss.burst ×1.12;
+50 ms busy loop on click → 12 ui.* metrics.
+Runtime: bench ~2 min, bench-compare ~3 min + build; env BENCH_ROUNDS, BENCH_UI_SAMPLES, BENCH_IDLE_S, BENCH_PHASES
+(server,count,idle,client), BENCH_SKIP_BUILD=1.

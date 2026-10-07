@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Performance regression bench (README "Performance bench"): a small set of key metrics of this checkout's server
+// Performance regression bench (docs/MAP.md "bench"): a small set of key metrics of this checkout's server
 // build on a large synthetic DB; with --ref, A/B against a reference build, interleaved on this machine in this run.
 //   node e2e/bench/bench.mjs [--out <dir>]              measure this checkout → <dir>/result.json, table.txt, the binary
 //   node e2e/bench/bench.mjs --ref <dir> [--out <dir>]  A/B against <dir> (a former --out; default out bench-<sha>-vs-<ref sha>); exit 1 on a regression,
@@ -41,7 +41,7 @@ const T0 = Date.now();
 let DB; // the cached bench DB (main)
 const log = m => console.error(`[bench ${((Date.now() - T0) / 1000).toFixed(0).padStart(3)} s] ${m}`);
 
-// ---------------------------------------------------------------- thresholds (calibration: README "Performance bench")
+// ---------------------------------------------------------------- thresholds (calibration: docs/MAP.md "bench")
 // alarm ⇔ ratio (cand/ref) > 1 + rel AND delta (cand − ref) > abs: small values and small relative moves stay quiet
 const RULES = [
   [/^srv\.lat\..*\.p50$/, { rel: 0.15, abs: 2 }],
@@ -61,7 +61,11 @@ const RULES = [
   [/^ui\..*\.cpu4$/, { rel: 0.25, abs: 20 }],
   [/^ui\./, { rel: 0.20, abs: 10 }],
 ];
-const rule = id => (RULES.find(([re]) => re.test(id)) || [null, null])[1];
+// size.binary is judged only between two builds of one non-incremental profile (release, dist): the e2e profile's
+// 256 codegen units are partitioned per module, so moving code between modules alone moves its size (w4/rust's split
+// of 10 modules into ~37: e2e +2.5 %, release −0.2 %). Otherwise it is information only.
+let SIZE_JUDGED = false;
+const rule = id => (id === 'size.binary' && !SIZE_JUDGED ? null : (RULES.find(([re]) => re.test(id)) || [null, null])[1]);
 const UNITS = [[/^ui\..*\.reqs$/, 'req'], [/^srv\.(lat|first|cpu)\.|^ui\./, 'ms'], [/^srv\.inst\./, 'Minstr'], [/^srv\.sql\./, 'stmts'], [/^srv\.(rss|peak)\./, 'MB'],
   [/^idle\.cpu$/, 'mcores'], [/^idle\.inst$/, 'Minstr/min'], [/^idle\.wakeups$/, '/min'], [/^(wire|size)\./, 'B'], [/^dom\./, 'nodes']];
 const unit = id => UNITS.find(([re]) => re.test(id))[1];
@@ -181,16 +185,18 @@ function serverEnv(port, db, extra = {}) {
   };
 }
 
-/** Starts every side on a fresh copy of the bench DB (prepare(db) may change the copy first); resolves once all
- *  answer /healthz and their CPU time stood still (start-up work done). */
-async function startSides(sides, proc, { env = {}, prepare, tag = 'server' } = {}) {
+/** Starts every side on a fresh copy of the bench DB (prepare(db) may change the copy first; reuse: the copy the
+ *  side's last start left); resolves once all answer /healthz and (settle) their CPU time stood still (start-up work done). */
+async function startSides(sides, proc, { env = {}, prepare, tag = 'server', reuse = false, settle = true } = {}) {
   for (const s of sides) {
     const dir = path.join(WORK, s.name);
     fs.mkdirSync(dir, { recursive: true });
     const db = path.join(dir, 'db.sqlite3');
-    for (const x of ['', '-wal', '-shm']) fs.rmSync(db + x, { force: true });
-    fs.copyFileSync(DB, db, fs.constants.COPYFILE_FICLONE);
-    if (prepare) prepare(db);
+    if (!reuse) {
+      for (const x of ['', '-wal', '-shm']) fs.rmSync(db + x, { force: true });
+      fs.copyFileSync(DB, db, fs.constants.COPYFILE_FICLONE);
+      if (prepare) prepare(db);
+    }
     s.log = path.join(dir, `${tag}.log`);
     const out = fs.openSync(s.log, 'w');
     s.child = spawn(s.bin, ['serve'], { env: serverEnv(s.port, db, env), stdio: ['ignore', out, out] });
@@ -206,6 +212,7 @@ async function startSides(sides, proc, { env = {}, prepare, tag = 'server' } = {
       await new Promise(r => setTimeout(r, 20)); // readiness probe
     }
   }
+  if (!settle) return;
   // quiescence: < 2 ms CPU per side over the last 500 ms (100-ms probes), at most 20 s
   const hist = [];
   for (let i = 0; i < 200; i++) {
@@ -297,16 +304,29 @@ async function countPhase(sides, proc, M) {
 }
 
 /** Both sides at once (the same CPU state by construction) for IDLE_S, sampled in IDLE_WINDOWS windows: the verdict
- *  is the ratio of the totals (the reminder loop ticks once a minute, in one window only). */
+ *  is the ratio of the totals (the reminder loop ticks once a minute, in one window only).
+ *  The login runs on a start of its own: a login commits to practical_sessions, and in the measured process that
+ *  commit cost one change-poller round (next 2-s tick) and one reminder-plan rebuild (its next tick, start + 60 s,
+ *  within the window; w4 trace: 3.2 and 7.7 Minstr in 10-s windows that otherwise hold ~1). The measured process reads the stored session and writes
+ *  nothing (the SSE request is no page view, sessions::activity). Statement log over the window (2026-10-07):
+ *  31 × `PRAGMA data_version` and nothing else per side. */
 async function idlePhase(sides, proc, M) {
   const pem = execFileSync(sides.at(-1).bin, ['gen-vapid']).toString().match(/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/)[0];
   // one push subscriber the reminder loop accepts (allowlisted host, valid keys; since w3/push a malformed one is
   // skipped and would leave the loop idle) whose name does not resolve: it does its per-minute work as in production
   const prepare = db => execFileSync('sqlite3', [db, "INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES ('bench1', 'alice', 'https://bench.invalid.push.apple.com/push', 'BLMbF9ffKBiWQLCKvTHb6LO8Nb6dcUh6TItC455vu2kElga6PQvUmaFyCdykxY2nOSSL3yKgfbmFLRTUaGv4yV8', 'xS03Fi5ErfTNH_l9WHE9Ig')"]);
-  await startSides(sides, proc, { env: { PRACTICAL__VAPID_PRIVATE_KEY_PEM: pem }, prepare, tag: 'idle' });
-  const streams = [];
+  const env = { PRACTICAL__VAPID_PRIVATE_KEY_PEM: pem };
+  await startSides(sides, proc, { env, prepare, tag: 'idle-login', settle: false });
   try {
     for (const s of sides) await login(s);
+  } finally {
+    await stopSides(sides);
+  }
+  const sessions = sides.map(s => s.cookie);
+  await startSides(sides, proc, { env, tag: 'idle', reuse: true });
+  sides.forEach((s, i) => { s.cookie = sessions[i]; });
+  const streams = [];
+  try {
     for (const s of sides) {
       await new Promise((res, rej) => {
         const req = http.request({ host: '127.0.0.1', port: s.port, path: '/api/changes', headers: { Cookie: s.cookie, Accept: 'text/event-stream' } }, r => { r.on('data', () => {}); r.statusCode === 200 ? res() : rej(new Error(`${s.name}: SSE ${r.statusCode}`)); });
@@ -422,6 +442,7 @@ async function main() {
     refMeta = JSON.parse(fs.readFileSync(path.join(REF, 'result.json'), 'utf8'));
     if (!fs.existsSync(path.join(REF, 'practical'))) throw new Error(`${REF}/practical: no reference binary`);
     if (refMeta.profile !== PROFILE) log(`warning: reference built with profile ${refMeta.profile}, this run ${PROFILE}`);
+    SIZE_JUDGED = PROFILE !== 'e2e' && refMeta.profile === PROFILE;
   }
   const rev = git('rev-parse', '--short', 'HEAD') + (git('status', '--porcelain', '--', 'build') ? '+dirty' : '');
   const OUT = opt('--out') || path.join(CACHE, REF ? `bench-${rev}-vs-${refMeta.rev}` : `bench-${rev}`); // never the reference's dir
@@ -476,6 +497,7 @@ async function main() {
   fs.writeFileSync(path.join(OUT, 'table.txt'), tbl + '\n');
   console.log(tbl);
   console.log(`\n${REF ? `${refMeta.rev} (ref) vs ${rev}` : rev}: ${result.seconds} s, ${ROUNDS} server rounds, ${UI_SAMPLES} UI samples per side, idle ${IDLE_S} s, power ${powerKey(pw.start)} → ${OUT}`);
+  if (REF && !SIZE_JUDGED) console.log(`size.binary: information only (profiles ${refMeta.profile} → ${PROFILE}); judged between two release/dist builds: E2E_PROFILE=release against a release-profile reference`);
   for (const s of sides) fs.rmSync(path.join(WORK, s.name), { recursive: true, force: true });
   if (pw.changed) { console.log('UNRELIABLE: the power state changed during the run (see result.json power) — rerun on a steady power state'); if (REF) process.exitCode = 4; return; }
   if (REF) {
