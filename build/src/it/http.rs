@@ -289,3 +289,129 @@ async fn concurrent_settings_saves_lose_nothing() {
         assert_eq!((p.scheme.as_deref(), p.contact_columns_json), (Some(scheme), Some(serde_json::to_string(&cols).unwrap())), "round {round}");
     }
 }
+
+/// Fails on the code before (TESTED there: a PUT without `etag` overwrote blindly, 200): a write names the
+/// version it is based on — the body's `etag` or `If-Match` — else 428.
+#[tokio::test]
+async fn a_write_without_its_version_is_refused() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let path = format!("/api/events/alice/{}/review", s.arbeit);
+    let d = c.get_json(&path).await.ok().json();
+    let mut upd = json!({ "principal": "alice", "cal_id": s.arbeit, "summary": "Blind", "start": "2026-10-14T14:00:00", "end": "2026-10-14T15:30:00" });
+    let r = c.json(Method::PUT, &path, upd.clone()).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::PRECONDITION_REQUIRED, "Die Version, auf der die Änderung beruht, fehlt – bitte neu laden und erneut speichern."));
+    assert_eq!(c.get_json(&path).await.json()["summary"], "Quartalsreview", "nothing written");
+    // If-Match carries it as well
+    let csrf = c.csrf.clone();
+    let etag = d["etag"].as_str().unwrap().to_string();
+    let r = c.send(Method::PUT, &path, &[("content-type", "application/json"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", &csrf), ("if-match", &etag)], Body::from(upd.to_string())).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    upd["etag"] = json!(etag);
+    assert_eq!(c.json(Method::PUT, &path, upd).await.status, StatusCode::CONFLICT, "the version is gone now");
+    // tasks and contacts alike; the tick box (`completed`) needs none
+    let tpath = format!("/api/tasks/alice/{}/steuer", s.aufgaben);
+    let r = c.json(Method::PUT, &tpath, json!({ "principal": "alice", "cal_id": s.aufgaben, "summary": "Blind" })).await;
+    assert_eq!(r.status, StatusCode::PRECONDITION_REQUIRED);
+    c.json(Method::PUT, &tpath, json!({ "principal": "alice", "cal_id": s.aufgaben, "summary": "", "completed": true })).await.ok();
+    let r = c.json(Method::PUT, &tpath, json!({ "principal": "alice", "cal_id": s.aufgaben, "summary": "", "completed": false, "etag": "\"stale\"" })).await;
+    assert_eq!(r.status, StatusCode::CONFLICT, "a version given with the tick is checked");
+    let cpath = format!("/api/contacts/alice/{}/anna", s.freunde);
+    let r = c.json(Method::PUT, &cpath, json!({ "principal": "alice", "ab_id": s.freunde, "full_name": "Blind" })).await;
+    assert_eq!(r.status, StatusCode::PRECONDITION_REQUIRED);
+}
+
+/// Fails on the code before (VERIFIED there): a move read the source object before any owner check (an
+/// existence/UID oracle), copied it into the mover's calendar and only then failed on the delete — an orphan
+/// copy — and ignored the ETag.
+#[tokio::test]
+async fn a_move_checks_the_owner_first_and_honours_the_version() {
+    let s = seed().await;
+    let carols = s.app.calendar("carol", "Carol", "#000000", &["VEVENT"]).await;
+    let mut carol = s.app.login("carol").await;
+    let path = format!("/api/events/alice/{}/review", s.arbeit);
+    let mv = json!({ "principal": "carol", "cal_id": carols, "summary": "Mitgenommen", "start": "2026-10-14T14:00:00", "end": "2026-10-14T15:00:00", "etag": "\"x\"" });
+    assert_eq!(carol.json(Method::PUT, &path, mv).await.status, StatusCode::FORBIDDEN);
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM calendarobjects WHERE cal_id = ?").bind(&carols).fetch_one(&s.app.state.db).await.unwrap();
+    assert_eq!(n, 0, "no copy in carol's calendar");
+    // alice moving with a stale version: refused, nothing created, the source stays
+    let mut c = s.app.login("alice").await;
+    let mv = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Quartalsreview", "start": "2026-10-14T14:00:00", "end": "2026-10-14T15:30:00", "etag": "\"stale\"" });
+    let r = c.json(Method::PUT, &path, mv).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::CONFLICT, "Der Termin wurde anderswo geändert – bitte neu laden."));
+    c.get_json(&path).await.ok();
+    assert_eq!(c.get_json(&format!("/api/events/alice/{}/review", s.privat)).await.status, StatusCode::NOT_FOUND);
+    // contacts alike
+    let cpath = format!("/api/contacts/alice/{}/anna", s.freunde);
+    let other = s.app.addressbook("carol", "C", "#000000").await;
+    let r = carol.json(Method::PUT, &cpath, json!({ "principal": "carol", "ab_id": other, "full_name": "Anna", "etag": "\"x\"" })).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM addressobjects WHERE addressbook_id = ?").bind(&other).fetch_one(&s.app.state.db).await.unwrap();
+    assert_eq!(n, 0);
+}
+
+/// Fails on the code before (each TESTED there by the audit's fuzzer): dates at chrono's range edge dropped
+/// the connection (panic), and every malformed input got axum's English text with 400/415/422 mixed. Now
+/// one gate (extract.rs): 400 naming the field, 413 / 415 with their own status, all in the user's language.
+#[tokio::test]
+async fn malformed_input_gets_one_kind_of_answer() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let long_q = format!("/api/search?q={}", "x".repeat(201));
+    for (path, field) in [
+        ("/api/density?year=262143", "year"),
+        ("/calendar?date=%2B262142-12-31&fragment=1", "date"),
+        ("/calendar?view=week&date=2026-10-14&week=0000-12-31&fragment=1", "week"),
+        ("/api/events?start=2026-10-01&end=%2B262142-01-01", "end"),
+        ("/api/days?start=9999-99-99", "start"),
+        ("/api/weeks?start=-0001-01-01", "start"),
+        (long_q.as_str(), "q"),
+    ] {
+        let r = c.get_json(path).await;
+        assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, format!("Ungültige Angabe im Feld „{field}“.").as_str()), "{path}");
+    }
+    // the edge that stays valid
+    c.get_json("/api/density?year=9999").await.ok();
+    c.get("/calendar?date=9999-12-31&fragment=1").await.ok();
+    c.get("/calendar?view=month&month=%2B262142-12&fragment=1").await.ok();
+    // bodies: malformed, wrong type, too large
+    let csrf = c.csrf.clone();
+    let h = |ct: &'static str| vec![("content-type", ct), ("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    let r = c.send(Method::PUT, "/api/alarm-presets", &h("application/json"), Body::from("[{")).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Die Anfrage ließ sich nicht lesen."));
+    let r = c.send(Method::PUT, "/api/alarm-presets", &h("text/plain"), Body::from("[]")).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Dieser Inhaltstyp wird nicht unterstützt."));
+    let r = c.send(Method::POST, "/api/tasks", &h("application/json"), Body::from(format!("{{\"summary\":\"{}\"}}", "x".repeat(9 << 20)))).await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::PAYLOAD_TOO_LARGE, "Zu groß."));
+    // path segments: no control characters, no encoded slash, no endless ids
+    for p in ["/api/events/alice/a%0Ab/x", "/api/events/alice/a%2Fb/x", &format!("/api/events/alice/{}/x", "a".repeat(1100))] {
+        assert_eq!(c.get_json(p).await.status, StatusCode::BAD_REQUEST, "{p}");
+    }
+    let r = c.get_json("/api/history/notanumber/plan").await;
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Ungültige Angabe im Feld „id“."));
+}
+
+/// Fails on the code before (TESTED there): a settings form with a bad or missing field showed a bare text
+/// page ("Failed to deserialize form body: missing field `csrf`"); a calendar took any time zone and colour
+/// text (CR/LF included). Now the settings answer: a flash and back, or {ok, msg} for the autosave.
+#[tokio::test]
+async fn a_rejected_settings_form_answers_like_the_settings_page() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let r = c.post_form_raw("/settings/groups", &[("name", "ohne Token")]).await;
+    assert_eq!((r.status, r.location().as_deref()), (StatusCode::SEE_OTHER, Some("/settings")));
+    c.get("/settings").await.ok().has("<div class=\"toast error\" role=\"alert\"><span>Ungültige Angabe im Feld „csrf“.</span>");
+    for (k, v) in [("timezone", "Mars/Phobos"), ("color", "#fff\r\nX-EVIL:1"), ("name", &"n".repeat(201))] {
+        let mut f = vec![("owner", "alice"), ("name", "Neu"), ("comp_event", "on")];
+        f.retain(|(x, _)| *x != k);
+        f.push((k, v));
+        let r = c.post_form_json("/settings/calendars", &f).await;
+        assert_eq!(r.json(), json!({ "ok": false, "msg": format!("Ungültige Angabe im Feld „{k}“.") }), "{k}");
+    }
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM calendars WHERE principal = 'alice' AND displayname = 'Neu'").fetch_one(&s.app.state.db).await.unwrap();
+    assert_eq!(n, 0);
+    // what the colour picker and DAV clients send stays accepted
+    for color in ["#A1b2C3", "#a1b2c3ff", ""] {
+        c.post_form_json("/settings/calendars", &[("owner", "alice"), ("name", "Neu"), ("comp_event", "on"), ("color", color), ("timezone", "Europe/Berlin")]).await.json()["ok"].as_bool().filter(|ok| *ok).expect(color);
+    }
+}

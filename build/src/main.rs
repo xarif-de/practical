@@ -9,6 +9,7 @@ mod ctx;
 mod db;
 mod domain;
 mod error;
+mod extract;
 mod i18n;
 mod render;
 mod routes;

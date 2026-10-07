@@ -23,6 +23,10 @@ pub enum AppError {
     Ical(#[from] rustical_ical::Error),
     #[error("{0}")]
     Internal(String),
+    /// A request refused before it is looked at, with its own status (413 body too large, 415 content type,
+    /// 428 write without the version it is based on).
+    #[error("{1}")]
+    Rejected(StatusCode, Msg),
 }
 
 /// A message for a user: a Fluent key and its arguments. PractiCal's own errors (BadRequest, Conflict) carry
@@ -76,7 +80,7 @@ impl AppError {
     /// The message for a user; None where no user reads it (Unauthorized: a client without a login).
     pub fn user_text(&self) -> Option<Msg> {
         let key = match self {
-            Self::BadRequest(m) | Self::Conflict(m) => return Some(m.clone()),
+            Self::BadRequest(m) | Self::Conflict(m) | Self::Rejected(_, m) => return Some(m.clone()),
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => "flash-not-found",
             Self::Forbidden | Self::Store(rustical_store::Error::ReadOnly) => "flash-forbidden",
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
@@ -119,6 +123,7 @@ impl IntoResponse for AppError {
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => StatusCode::NOT_FOUND,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Rejected(s, _) => *s,
             Self::BadRequest(_) | Self::Ical(_) => StatusCode::BAD_REQUEST,
             Self::Conflict(_) | Self::Store(rustical_store::Error::AlreadyExists) => StatusCode::CONFLICT,
             _ if self.is_busy() => StatusCode::SERVICE_UNAVAILABLE,
