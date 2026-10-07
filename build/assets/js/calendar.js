@@ -1,4 +1,5 @@
-/* ===== calendar page ===== */
+// js/calendar.js — the calendar page (#viewroot): filter, fragment navigation, timeline, week stream, day ledger, orbit picker;
+// window.rusticalCal, rusticalHost
 (function () {
   const root = document.getElementById('viewroot');
   if (!root) return;

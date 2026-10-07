@@ -1,4 +1,5 @@
-  /* ---- "Farben optimieren" (round 14): one dialog per view whose colours meet — the calendar (calendars,
+// js/colors/optimise.js — part of the colour IIFE (src/bundle.rs; shares its scope): "Farben optimieren" (families, palette plan, the dialog)
+  /* ---- "Farben optimieren": one dialog per view whose colours meet — the calendar (calendars,
      events, their categories, holidays) and the task list (calendars, tasks, their categories). Elements
      that belong together (same title, word stem, abbreviation, category) form a family and get one colour;
      families whose colours look alike are pulled apart. A flow chart shows element → action → colour after;

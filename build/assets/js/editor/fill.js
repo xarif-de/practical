@@ -1,3 +1,4 @@
+// js/editor/fill.js — part of the editor IIFE (src/bundle.rs; shares its scope): filling the form, openEditor
   // `asNew`: `d` is a template (`tplUse`) — its attributes fill a new event
   function fill(d, date, asNew) {
     const old = d && !asNew; current = old ? d : null; openDate = date; touched = false; form.reset(); $('#ed-error').textContent = '';

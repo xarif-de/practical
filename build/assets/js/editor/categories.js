@@ -1,4 +1,5 @@
-  // ---- categories and category rules (round 17): `CATS` is the ordered list mirrored into `cats_json`. A rule
+// js/editor/categories.js — part of the editor IIFE (src/bundle.rs; shares its scope): categories and category rules applied to the fields
+  // ---- categories and category rules: `CATS` is the ordered list mirrored into `cats_json`. A rule
   // (`RULES`, per user, see domain::catrules) puts values on the event as a template ("Vorlage": prefilled,
   // editable) or a lock ("Vorgabe": fixed here). Where and repeat carry one mode per card; when and status one
   // per setting; reminders and links one per entry. Order matters: per setting the first category wins, the

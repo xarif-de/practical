@@ -1,3 +1,5 @@
+// js/shell/settings-pages.js — part of the shell IIFE (src/bundle.rs; shares its scope): the settings pages — drill-in per hash, autosave, region
+// pickers, segments, danger zones, reminder snap points, vacation rule, categories index
   // settings: grouped lists with drill-in pages, one <section class="page"> per URL hash (without JS all are shown)
   const settings = $('.settings');
   if (settings) {

@@ -1,4 +1,4 @@
-/* "Farben optimieren" (settings "Farben"): a block head with the button, and the flow-chart dialog —
+/* css/color-optimiser.css — "Farben optimieren" (settings "Farben"): a block head with the button, and the flow-chart dialog —
    elements today → action → colour after, lines drawn in an SVG under the boxes */
 .cfo-block { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 4px 2px; }
 .cfo-block h3 { margin: 0; font: 600 16px/1.3 var(--font-display); }

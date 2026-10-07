@@ -1,4 +1,5 @@
-/* ---- Tag (Ledger + Dokument), from the prototype's css05 ---- */
+/* css/views.css — day view (ledger + document), contacts sheet, the "Mehr" views, the fixed page header, contacts layout */
+/* ---- Tag (Ledger + Dokument) ---- */
 .cal.v-day { grid-template-columns: minmax(280px,420px) 1fr; gap: 0; padding: 0; }
 .ledger { border-right: 1px solid var(--line); overflow: auto; overflow-anchor: none; max-height: calc(100dvh - var(--sticky-top) - 30px); } /* app.js `mountLedger` restores the position itself when it prepends */
 .lhd { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--fg-2); } /* the month of the topmost row */
@@ -30,7 +31,7 @@
 .doc .lk .ico { color: var(--accent); }
 @media (max-width: 899px) { .cal.v-day { grid-template-columns: 1fr !important; } .ledger { border: 0; } .doc { padding: 16px; } }
 
-/* ---- Kontakte: Sheet (css10) + panels ---- */
+/* ---- Kontakte: Sheet + panels ---- */
 .sheetwrap { grid-area: list; display: none; overflow: auto; max-height: calc(100dvh - var(--sticky-top) - 40px); scrollbar-width: none; }
 .view-table .sheetwrap { display: block; } .view-table .panels { display: none; }
 .view-table.contacts { grid-template-columns: 1fr; grid-template-areas: "cols" "list"; }
@@ -53,7 +54,7 @@
 @media (max-width: 1099px) { .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; align-self: stretch; max-height: none; } } /* both undo desktop-pane rules on the full-screen editor (measured on a 844px-high phone, Chrome 154): `align-self: start` (`.contacts .detail`) now also applies to fixed boxes and shrank it to its content (576px, the list showing below), and the pane's max-height alone would still cap it at 657px */
 
 
-/* ---- Mehr-Ansichten (views_more.py) ---- */
+/* ---- Mehr-Ansichten: planner, weekends, vacation, countdown, numbers ---- */
 .cal.v-planner, .cal.v-weekends, .cal.v-vacation, .cal.v-countdown, .cal.v-numbers { grid-template-columns: 1fr 88px; }
 .mv > * { max-width: 100%; }
 .ybox { background: var(--tile); border-radius: 14px; padding: 16px; } h2.yh { margin: 0 0 10px; font-size: 18px; letter-spacing: -.02em; }

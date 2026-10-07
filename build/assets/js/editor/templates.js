@@ -1,3 +1,4 @@
+// js/editor/templates.js — part of the editor IIFE (src/bundle.rs; shares its scope): templates from past events while a new title is typed
   /* templates: while a NEW event's title is typed, up to three past events with a like title (GET
      /api/events/suggest, the most frequent title first). Picking one takes every attribute but the
      date: the day stays the dialog's, times, duration, series pattern and absolute reminders move

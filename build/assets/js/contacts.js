@@ -1,4 +1,4 @@
-/* ===== contacts page ===== */
+// js/contacts.js — the contacts page: list/table, column picker, sorting, the contact editor; window.rusticalContacts
 (function () {
   const wrap = document.getElementById('contacts');
   if (!wrap) return;

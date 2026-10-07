@@ -1,3 +1,4 @@
+/* css/dialogs.css — the editor dialog (blurred backdrop), the yes/no question, the day line, contact editor additions, the editor layout */
 /* ---- Termin-Editor (dialog, blurred backdrop) ---- */
 .ed { position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(10px); display: grid; place-items: center; padding: 16px; }
 /* the yes/no question (window.askYesNo): above every dialog, the same backdrop */

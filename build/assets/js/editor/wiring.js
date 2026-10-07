@@ -1,3 +1,4 @@
+// js/editor/wiring.js — part of the editor IIFE (src/bundle.rs; shares its scope): form events, save, delete, the day line, work kept over a lost session; window.rusticalEd
   // typing: the save/reset buttons follow at once (Enter must find them right), the derived parts (when line,
   // rule sentence, note height, reminder strip, footers — two of them force a layout) once per frame; whatever
   // reads them (save, close) runs a pending refresh first

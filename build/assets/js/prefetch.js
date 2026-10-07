@@ -1,3 +1,4 @@
+// js/prefetch.js — prefetch on intent: wraps window.fetch; practical.prefetch/prefetched/intent/stream
 /* prefetch on intent: what a navigation will fetch (practical.prefetch(url)) is fetched on hover (after HOVER_MS),
    focus or press of its control (practical.intent) and handed to that navigation once (practical.prefetched(url)),
    if it is younger than TTL and nothing happened since that could change it: every live change (`rustical:change`),

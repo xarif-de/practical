@@ -1,3 +1,5 @@
+// js/editor/setup.js — the editor IIFE starts here (src/bundle.rs joins every js/editor/ part into ONE function: shared
+// scope, a part alone is no script, the early return below covers all): shared state and helpers
 // ---- editor: the card dialog. One implementation for THREE consumers — the calendar's events,
 // the category rules and the tasks page; the markup comes from templates/editor.html, which the
 // calendar and the tasks page both include. The page it runs on publishes `window.rusticalHost`

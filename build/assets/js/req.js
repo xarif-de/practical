@@ -1,6 +1,7 @@
+// js/req.js — practical.req/writer/tell/progress/online, work kept over a lost session (keep/stash/guard), practical.copy
 /* requests and writes: every request a user waits for goes through practical.req, every write of an editor or a
    form through practical.writer. A failure is told (toast, the editor's error line, the offline notice), never
-   thrown, and never drawn as a page inside the page (audit3-robustness R5, R6, R10, R13). */
+   thrown, and never drawn as a page inside the page. */
 (function () {
   const P = window.practical, nap = ms => new Promise(r => setTimeout(r, ms));
   const KIND = s => s === 401 ? 'auth' : s === 403 ? 'forbidden' : s === 404 ? 'notfound' : s === 409 ? 'conflict' : s === 429 || s === 503 ? 'busy' : s >= 500 ? 'server' : 'invalid';
@@ -37,7 +38,7 @@
   // a failed answer as a toast ('auth': the page is leaving; 'aborted': the caller's own doing); returns the answer
   P.tell = r => { if (r && !r.ok && r.kind !== 'auth' && r.kind !== 'aborted') toast(r.msg, true); return r; };
 
-  // the progress line (the top bar's bottom edge in the accent colour) for a navigation slower than `ms` (perf3 #10)
+  // the progress line (the top bar's bottom edge in the accent colour) for a navigation slower than `ms`
   let busyN = 0;
   P.progress = ms => { let on = false, off = false; const t = setTimeout(() => { on = true; if (!busyN++) document.documentElement.setAttribute('data-busy', ''); }, ms);
     return () => { if (off) return; off = true; clearTimeout(t); if (on && !--busyN) document.documentElement.removeAttribute('data-busy'); }; }; // stop(): once, however often called
@@ -52,7 +53,7 @@
   };
   addEventListener('offline', () => P.online(false)); addEventListener('online', () => P.online(true));
 
-  /* the session ended (every server restart ends all sessions, R6): what an editor holds unsaved is kept
+  /* the session ended (every server restart ends all sessions): what an editor holds unsaved is kept
      (practical.keep → practical.stash, sessionStorage), then the page goes to the login, which brings the user back to
      this address; the editor takes its work back from there (practical.unstash) */
   const keepers = []; let gone = false;

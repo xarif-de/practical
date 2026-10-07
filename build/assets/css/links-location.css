@@ -1,3 +1,4 @@
+/* css/links-location.css — editor cards: links and attachments, location, the map dialog */
 /* status / links cards, colour and coordinates */
 .ev.cancelled { text-decoration: line-through; opacity: .55; }
 .ed .cardform .field.color .inl, .ed .cardform .field.geo .inl { display: flex; gap: 10px; align-items: center; grid-area: v; }
@@ -5,7 +6,7 @@
 .ed .cardform .field.geo > .mapbtn { grid-area: map; }
 .ed .cardform .field.geo .inl { min-width: 0; } /* number inputs have a wide intrinsic width that would push the track past the card */
 .ed .cardform .field.geo .inl input[type=number] { flex: 1 1 0; width: 0; min-width: 0; }
-/* links & attachments (round 17 K): add box (paste, search, drop), rows in three groups (conference
+/* links & attachments: add box (paste, search, drop), rows in three groups (conference
    with a join card, in this calendar, on the internet), an edit card for the selected row */
 .ed .cardform .lk-add { margin: 0 0 8px 26px; display: grid; gap: 6px; }
 .ed .cardform .lk-in { display: flex; gap: 6px; align-items: center; }
@@ -82,7 +83,7 @@
 .geomap .confirm span, .ed .confirm span { flex: 1; }
 .ed .confirm { position: sticky; bottom: 58px; z-index: 2; border-top: 1px solid var(--line); }
 .leaflet-control-attribution { font-size: 10px; }
-/* location (design G): one primary field, the other part derived and shown as a chip below; errors in red */
+/* location: one primary field, the other part derived and shown as a chip below; errors in red */
 .ed .cardform .field.loc.err input { color: var(--err); border-bottom-color: color-mix(in srgb, var(--err) 55%, transparent); }
 .ed .cardform .locsub { padding: 4px 0 2px 26px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ed .cardform .locsub:empty { display: none; }

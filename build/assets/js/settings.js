@@ -1,4 +1,4 @@
-/* ===== settings: import files, browser push ===== */
+// js/settings.js — the settings page: file import, browser push subscription
 (function () {
   const settings = document.querySelector('.settings');
   if (!settings) return;

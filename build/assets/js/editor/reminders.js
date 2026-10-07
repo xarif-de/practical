@@ -1,9 +1,10 @@
+// js/editor/reminders.js — part of the editor IIFE (src/bundle.rs; shares its scope): list rows from <template>, the reminders strip
   // ---- list rows from <template>: reminders, links, exceptions, extra dates ----
   const rows = list => $$(`[data-list="${list}"] .row`, form);
   const addRow = list => { const box = $(`[data-list="${list}"]`, form); box.appendChild($('template', box).content.cloneNode(true)); return box.lastElementChild; };
   const w = (row, k) => $(`[data-w=${k}]`, row);
   const setSel = (sel, v, unit = '') => { v = String(v); if (![...sel.options].some(o => o.value === v)) sel.add(new Option(v + unit, v)); sel.value = v; };
-  // ---- reminders (design K): a model of alarms rendered as a timeline strip (markers snap to the
+  // ---- reminders: a model of alarms rendered as a timeline strip (markers snap to the
   // usual offsets), a bar of per-user preset chips (a click adds or removes the matching alarm) and
   // one expandable entry per alarm whose settings follow the chosen kind and trigger. The model is
   // mirrored into the hidden `alarms_json` input so dirty tracking and reset work like for any field. ----

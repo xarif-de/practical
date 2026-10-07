@@ -1,4 +1,5 @@
-  // ---- location (design G): ONE editable field — the address or the coordinates — the other part is
+// js/editor/location.js — part of the editor IIFE (src/bundle.rs; shares its scope): the location card
+  // ---- location: ONE editable field — the address or the coordinates — the other part is
   // derived from it (geocoder) and shown as a chip below, never edited by hand. The user may swap
   // which part is primary, or drop a part; errors of the derivation show in red. ----
   const sugg = $('#ed-sugg'), ring = $('#ed-ring'), locin = $('#ed-locin'), locsub = $('#ed-loc-sub'), LT = locsub.dataset;

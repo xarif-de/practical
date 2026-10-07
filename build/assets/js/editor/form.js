@@ -1,3 +1,4 @@
+// js/editor/form.js — part of the editor IIFE (src/bundle.rs; shares its scope): the card form, view/edit mode, dirty tracking
   // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
   const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;

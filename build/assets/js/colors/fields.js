@@ -1,3 +1,4 @@
+// js/colors/fields.js — part of the colour IIFE (src/bundle.rs; shares its scope): colour fields in forms, the settings page "Farben"
   /* ---- a colour field in a form: <input type=hidden name=…> + <button class="cpk-btn" data-cpk-…>.
      A pick writes the field and fires `change` (the settings' autosave). data-cpk-kind/-key name the
      element (its own colour then counts as its), data-cpk-std a fallback ("standard"; the field's "" ) ---- */

@@ -1,4 +1,4 @@
-/* ===== settings: grouped lists (round 12, prototype C) — a home page and drill-in pages (one per hash,
+/* css/settings.css — settings: grouped lists — a home page and drill-in pages (one per hash,
    app.js), rows ("cells") with a coloured symbol, the label and the value or control on the right ===== */
 .set { max-width: 680px; width: 100%; margin: 0 auto; padding: 8px var(--pad) 90px; box-sizing: border-box; min-width: 0; }
 .set.paged .page { display: none; } .set.paged .page.on { display: block; }

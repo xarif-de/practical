@@ -1,3 +1,4 @@
+// js/editor/rule-editor.js — part of the editor IIFE (src/bundle.rs; shares its scope): the dialog in rule mode
   // ---- rule editor: the dialog in rule mode. The cards are the event cards; the footer chips carry the mode per
   // setting or entry (`RM`, `_mode`); "beliebig" disables the setting. `sig()` extends the dirty check by the modes. ----
   const RULE_NEW = { color: () => '#3478f6', status: () => 'CONFIRMED', transp: () => 'OPAQUE', class: () => 'PUBLIC', priority: () => 5 };

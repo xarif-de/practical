@@ -1,3 +1,4 @@
+// js/editor/strip.js — part of the editor IIFE (src/bundle.rs; shares its scope): the recurrence week strip, exception and extra dates
   // ---- the strip: NWEEKS rows of ROWH px, starting a year before the event on a Monday; the separators are the
   // only variable spacing (a GAP margin above / below at most three rows), so every row position is arithmetic ----
   const ROWH = 32, GAP = 16, NWEEKS = 130;

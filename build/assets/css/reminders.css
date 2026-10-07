@@ -1,5 +1,6 @@
+/* css/reminders.css — the event editor's lists and the reminders strip */
 /* event editor lists: reminder rows, series options, exception/extra dates, people */
-/* ---- reminders (design K): a timeline strip with draggable markers, per-user preset chips and one
+/* ---- reminders: a timeline strip with draggable markers, per-user preset chips and one
    expandable entry per alarm whose settings follow the chosen kind and trigger ---- */
 .ed .cardform .tline { margin: 4px 0 8px 26px; position: relative; height: 84px; user-select: none; }
 .ed .cardform .tline .axis { position: absolute; left: 0; right: 0; top: 52px; height: 2px; background: var(--line); }

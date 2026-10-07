@@ -1,6 +1,5 @@
-/* PractiCal style — design system from the round-10 prototype (base + Fusion B theme + round-6 chrome), prototype-only bits removed, app-specific parts appended at the end. */
-/* base.css — layout & components shared by all variants. Themes override the custom properties
-   and may add structural tweaks. Mobile-first, CSS grid, no framework. */
+/* css/base.css — style.css starts here (parts joined in src/bundle.rs order = cascade order): the light scheme's custom
+   properties (the dark scheme's: grid.css), resets, buttons. Mobile-first, CSS grid, no framework. */
 :root {
   --font: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; --font-display: var(--font);
   --radius: 12px; --radius-s: 8px; --gap: 10px; --pad: 16px; --shadow: 0 1px 2px rgba(0,0,0,.05);

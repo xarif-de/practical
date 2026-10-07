@@ -1,4 +1,5 @@
-  // ---- note (round 17): the textarea stays plain text (DESCRIPTION). Suggestions while typing come from a
+// js/editor/note.js — part of the editor IIFE (src/bundle.rs; shares its scope): the note card
+  // ---- note: the textarea stays plain text (DESCRIPTION). Suggestions while typing come from a
   // lazily loaded index (contacts, categories, events, tasks) even without a prefix; picking one inserts
   // @Name / #Category / !Title. Detected persons, links and categories are offered as chips that create the
   // entry in the matching card. The view mode renders links, mentions and "- " lists. ----

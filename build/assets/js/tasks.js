@@ -1,4 +1,5 @@
-/* ===== tasks page: six views over one list, the shared card editor beside them =====
+/* js/tasks.js — the tasks page (#taskroot): six views over one list, the shared card editor beside them;
+   window.rusticalTasks, rusticalHost.
    The server puts the tasks it wants shown into `#tasks-data` (the lookback decides how far
    back finished ones reach); everything here is drawing and picking. The editor is the same
    dialog the calendar uses (templates/editor.html) — on a wide window it is docked to the

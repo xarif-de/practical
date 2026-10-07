@@ -1,3 +1,4 @@
+/* css/icon-buttons.css — icons and icon buttons */
 /* ---- icon buttons: the sprite assets/icons.svg, currentColor, text kept in title/aria-label ---- */
 .ico { width: 18px; height: 18px; display: block; flex: none; }
 .nav a { display: grid; place-items: center; padding: 6px 9px; }
@@ -7,7 +8,7 @@
 #scheme .ico { display: none; } html[data-pref-scheme=auto] #scheme .s-auto, html[data-pref-scheme=light] #scheme .s-light, html[data-pref-scheme=dark] #scheme .s-dark { display: block; }
 .seg button { min-height: 32px; min-width: 36px; box-sizing: border-box; } /* icon-only segments (contacts list/table, reminder settings) get the height of the text ones and of .icon-btn */
 .seg button .ico { width: 16px; height: 16px; }
-/* a symbol beside a label (design round 16): buttons, links, menu rows and segments */
+/* a symbol beside a label: buttons, links, menu rows and segments */
 .btn:not(.icon-btn):has(> .ico), button.link:has(> .ico), summary.link:has(> .ico), .seg button:has(> .ico + span), .more .pop a:has(> .ico), .filter .row a:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; }
 .btn:not(.icon-btn) > .ico, button.link > .ico, summary.link > .ico { width: 16px; height: 16px; }
 /* button rule: symbol + label = no frame, coloured text (blue, red for danger); symbol only = framed button */

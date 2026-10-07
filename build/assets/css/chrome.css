@@ -1,4 +1,5 @@
-/* Round 6 chrome: no sidebar, top-bar search + filter, scrollable timelines, year variants, panels, add buttons */
+/* css/chrome.css — top-bar search + filter, popovers, scrollable timelines, week view, year variants, panels, add buttons,
+   the date picker, the "Mehr" views menu */
 @media (min-width: 900px) { .topbar { grid-column: 1; } }
 .usearch { position: relative; flex: 1; max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 6px; }
 .usearch .sfield { position: relative; flex: 1; min-width: 0; }
@@ -114,7 +115,7 @@
 .doc h2 { position: relative; padding-right: 40px; font-size: 34px; letter-spacing: -.03em; margin: 0; } .doc h2 .add { top: 50%; transform: translateY(-50%); width: 26px; height: 26px; --pl: 12px; }
 @media (hover: none) { .add { opacity: .9; } }
 
-/* picker (from round 5) */
+/* the date picker (#picker) */
 .picker { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(8px); z-index: 40; display: grid; place-items: center; }
 .picker .stage { position: relative; width: min(92vw, 92vh, 820px); aspect-ratio: 1; }
 .orbit { position: absolute; inset: 0; width: 100%; height: 100%; } .orbit .ring { fill: none; stroke: var(--line); stroke-width: 2; }

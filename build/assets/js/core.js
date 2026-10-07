@@ -1,4 +1,5 @@
-/* PractiCal — shared behaviour (vanilla ES2020, no framework). */
+// js/core.js — app.js starts here (classic script, vanilla ES2020; parts joined in src/bundle.rs order): OIDC auto-submit,
+// i18n and dates (window.LOC tr trs plural dfmt MONTHS WEEKDAYS WEEKDAYS_LONG), window.practical helpers
 /* i18n: the page loads its js-* strings first (window.I18N: /assets/i18n-<lang>.js, build.rs from locales/*.ftl; placeholders %name);
    month and weekday names and date formats come from Intl in the page's locale */
 // login: the single sign-on form submits itself when it is the only way in (login.html `data-auto`; was an
@@ -13,7 +14,7 @@
   window.plural = (s, n) => { if (typeof s === 'string' && s.startsWith('{"')) try { s = JSON.parse(s); } catch (_) { return s; } return s && typeof s === 'object' ? s[PR.select(n)] ?? s.other : s; };
   window.tr = (k, v) => { let s = S[k] ?? k; if (s && typeof s === 'object') s = plural(s, +(v || {})[s.$]); if (v) for (const [n, x] of Object.entries(v)) s = s.split('%' + n).join(x); return s; };
   window.trs = (prefix, names) => Object.fromEntries(names.map(n => [n, tr(prefix + n)]));
-  // one formatter per option set: building one per call cost 65 ms for 1,700 history times, reusing it 1.1 ms (perf3 #2, node)
+  // one formatter per option set: building one per call cost 65 ms for 1,700 history times, reusing it 1.1 ms (measured in node)
   const fmts = new Map(), f = o => { const k = JSON.stringify(o); let x = fmts.get(k); if (!x) fmts.set(k, x = new Intl.DateTimeFormat(LOC, o)); return x; };
   window.dfmt = (d, o) => f(o).format(d);
   const days = style => Array.from({ length: 7 }, (_, i) => f({ weekday: style }).format(new Date(2024, 0, 1 + i)).replace(/\.$/, '')); // 2024-01-01 was a Monday

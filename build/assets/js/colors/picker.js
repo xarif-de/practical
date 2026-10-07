@@ -1,4 +1,5 @@
-/* ===== colour picker (round 13): one picker for every colour in the app. The popover offers the colours
+// js/colors/picker.js — the colour IIFE starts here (src/bundle.rs: its parts share one function scope): colour maths, the picker popover, the new-colour dialog; window.colorPicker
+/* ===== colour picker: one picker for every colour in the app. The popover offers the colours
    already in use (GET /api/colors), each named by its sources, plus "like the calendar" or "standard"
    where the element has such a fallback; ＋ opens the dialog for a new colour: a fan deck or a text
    field with three sliders, the distance to the colours in use, and a light and dark preview. ===== */

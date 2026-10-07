@@ -1,3 +1,4 @@
+// js/editor/map.js — part of the editor IIFE (src/bundle.rs; shares its scope): the map dialog (Leaflet)
   // ---- map dialog: the crosshair is the position; with the address part in use the address must be
   // determined for a moved map before "apply" — apply writes both parts at once ----
   const gm = $('#geomap'); let map = null, gmSeq = 0, gmMoved = false, gmAddrKnown = false, gmAddrErr = false, gmAddr = '', gmMoving = false;

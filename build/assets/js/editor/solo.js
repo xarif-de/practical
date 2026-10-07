@@ -1,3 +1,4 @@
+// js/editor/solo.js — part of the editor IIFE (src/bundle.rs; shares its scope): one-card mode
   /* solo: the dialog shows one card, already in edit mode, and saves the whole entry as usual. A
      category rule can fill other cards (location, reminders …): every card whose content changed
      since the dialog opened is shown too, so nothing is written unseen. */

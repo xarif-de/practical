@@ -1,4 +1,4 @@
-/* ===== colour picker (app.js colorPicker, round 13): a colour field is a button (.cpk-btn); it opens a popover
+/* css/color-picker.css — colour picker (app.js colorPicker): a colour field is a button (.cpk-btn); it opens a popover
    (.cpk) with the colours in use, and ＋ there the dialog for a new one (.cpk-dlg: fan deck | field + sliders).
    The preview panels are fixed light and dark pages, independent of the scheme shown. ===== */
 .cpk-btn { display: inline-flex; align-items: center; gap: 8px; padding: 2px; border: 0; background: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--fg-2); border-radius: 999px; }

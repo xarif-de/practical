@@ -1,4 +1,5 @@
-/* ---- recurrence (design C): frequency switch, a scrollable week strip (one month in full with a neighbouring
+/* css/recurrence.css — the recurrence card: week strip, pills, end-date picking */
+/* ---- recurrence: frequency switch, a scrollable week strip (one month in full with a neighbouring
    week on each side, separators moving with the month), legend, two pills for interval and end, mode switch ---- */
 .ed .cardform .rr { display: grid; gap: 4px; }
 .ed .cardform .rr .rrsegs { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 4px 0 2px 26px; }

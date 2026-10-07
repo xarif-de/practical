@@ -1,4 +1,5 @@
-  // ---- recurrence (design C): the rule is a model painted on a scrollable week strip — the month in full
+// js/editor/recurrence.js — part of the editor IIFE (src/bundle.rs; shares its scope): the recurrence model
+  // ---- recurrence: the rule is a model painted on a scrollable week strip — the month in full
   // with a neighbouring week on each side and separators around it; a click on a day toggles the pattern
   // (weekday, day of month) or, in the exception mode, strikes an occurrence or adds an extra date. Interval
   // and end are two pills with popovers; the end date is picked on the strip. Rules the strip cannot paint

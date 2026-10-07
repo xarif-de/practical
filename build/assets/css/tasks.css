@@ -1,4 +1,4 @@
-/* ===== tasks page: six views over one list =====
+/* css/tasks.css — the tasks page: six views over one list, the docked editor, the toolbar groups.
    The atoms (.chip, .sw, .pb, .seg, .sel) are the app's; only the view shells live here. */
 /* .main is a grid: without min-width 0 a wide table stretches the whole page (toolbar included) past
    the screen edge instead of scrolling inside its own box */

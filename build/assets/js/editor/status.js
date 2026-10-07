@@ -1,4 +1,5 @@
-  // ---- status card (design K): the four hidden selects stay the model (dirty tracking, reset, submit work as
+// js/editor/status.js — part of the editor IIFE (src/bundle.rs; shares its scope): the status card
+  // ---- status card: the four hidden selects stay the model (dirty tracking, reset, submit work as
   // before); the tiles are their face. Each select carries its label and one icon per option (`data-icons`),
   // so the tile's icon follows the value; a priority outside 1/5/9 (Outlook writes 2) maps by the RFC bands. ----
   const SC = $x('#ed-status-card');

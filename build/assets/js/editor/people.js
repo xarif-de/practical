@@ -1,4 +1,5 @@
-  // ---- people (design C, display only): ORGANIZER/ATTENDEE are shown as chips whose ring colour is the
+// js/editor/people.js — part of the editor IIFE (src/bundle.rs; shares its scope): the people card
+  // ---- people (display only): ORGANIZER/ATTENDEE are shown as chips whose ring colour is the
   // reply, a click opens a detail card with role, reply, delegation, address and the actions. Nothing is
   // editable: RustiCal does no scheduling, so the list is a record, not an invitation tool; the persons are
   // sent back unchanged on save (with every preserved parameter). `contacts` per person come from the

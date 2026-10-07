@@ -1,9 +1,10 @@
+{#- /settings: grouped lists, one drill-in page per URL hash -#}
 {% extends "layout.html" %}
 {% import "macros.html" as m %}
 {% block title %}{{ ctx.t("nav-settings") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block head %}{% if !holiday_css.is_empty() %}<style>{{ holiday_css|safe }}</style>{% endif %}{% endblock %}
 {% block content %}
-{# Grouped lists (round 12, prototype C): a home page with drill-in pages, one <section class="page"> each,
+{# Grouped lists: a home page with drill-in pages, one <section class="page"> each,
    switched by the URL hash (app.js). Preference fields save themselves (fetch, JSON answer); lists keep
    their POST forms, which redirect back to their page. Without JS every page is visible. #}
 <div class="settings set" id="settings" data-t-saved="{{ ctx.t("flash-saved") }}">

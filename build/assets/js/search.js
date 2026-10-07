@@ -1,4 +1,4 @@
-/* ===== universal search =====
+/* js/search.js — the universal search of the top bar.
    The drop-down shows at most 5 hits per category and 10 in all, shared by each category's share of
    the matches (the server ranks them, domain::search); "all results" (Enter without a pick) opens a
    dialog with every hit, filtered by category. Finished searches — a result opened, or Enter — go to

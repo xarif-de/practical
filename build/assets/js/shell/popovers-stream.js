@@ -1,3 +1,5 @@
+// js/shell/popovers-stream.js — part of the shell IIFE (src/bundle.rs; shares its scope): user menu, popovers kept on screen (practical.fitPop), "/" hotkey,
+// the live change stream (`rustical:change`)
   // user menu: click toggles (hover works via CSS, touch needs the click)
   $$('.filter > button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); b.parentElement.classList.toggle('open'); }));
   document.addEventListener('click', e => { if (!e.target.closest('.filter')) $$('.filter.open').forEach(f => f.classList.remove('open')); });
@@ -38,7 +40,7 @@
   // while hidden waits. Back in view the stream reopens and, if anything may have been missed, the views get
   // ONE `rustical:change` ({ resync: true }). After an error the retry waits 5–10 s, doubling up to 5–10 min; the
   // browser coming back online retries at once; a stream that opens again after an error resyncs too, since the changes
-  // broadcast meanwhile never arrive (perf3 #1: a write during a 6.7 s gap stayed invisible).
+  // broadcast meanwhile never arrive (measured: a write during a 6.7 s gap stayed invisible).
   if (document.body.dataset.user && 'EventSource' in window) {
     const HIDE_GRACE = 15000, RETRY = 5000, RETRY_MAX = 300000;
     let es = null, fails = 0, retryT = 0, graceT = 0, away = false, missed = false, broke = false;

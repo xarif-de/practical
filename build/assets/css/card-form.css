@@ -1,3 +1,4 @@
+/* css/card-form.css — the card editor of contacts and events: cards, view/edit mode, rows, pill action groups, the event card grid */
 /* ---- card editor (contacts and events): cards ("Symbolgeführt"), view/edit mode, pill action groups ----
    view mode: fields read-only, empty ones hidden, per-row actions in a pill; edit mode: type left,
    value, edit controls; cards without data are hidden unless added via the menu. ---- */

@@ -1,4 +1,5 @@
-  // ---- links & attachments (round 17, design K): one model `LK` for URL/ATTACH/CONFERENCE (`links`) and
+// js/editor/links.js — part of the editor IIFE (src/bundle.rs; shares its scope): links and attachments
+  // ---- links & attachments: one model `LK` for URL/ATTACH/CONFERENCE (`links`) and
   // RELATED-TO (`related`), mirrored into the hidden `links_json` for dirty tracking. Adding: a paste field that
   // detects the kind, a search over events and tasks, a drop zone that embeds files as base64 (2 MiB each).
   // Rows in three groups; a conference gets a join card with provider, meeting id and dial-in numbers. ----
