@@ -673,10 +673,8 @@ v-coming-up = Coming up
 v-confidential = Confidential
 v-copy-address = Copy address
 v-copy-coordinates = Copy coordinates
-v-countdown-wall = Countdown wall
 v-counting-rule = Counting rule:
 v-daily = Daily
-v-day = Day
 v-day-off = day off
 v-days = { $n ->
     [one] day
@@ -707,7 +705,6 @@ v-free-weekends = { $n ->
     [one] free weekend
    *[other] free weekends
 }
-v-free-weekends-2 = Free weekends
 v-high-priority = High priority
 v-holidays = Holidays
 v-just-passed = Just passed
@@ -716,7 +713,6 @@ v-load-per-week = Load per week
 v-long-weekend = long weekend
 v-low-priority = Low priority
 v-medium-priority = Medium priority
-v-month = Month
 v-monthly = Monthly
 v-more = more
 v-new-year = New year
@@ -749,14 +745,11 @@ v-vacation-days-planned = { $n ->
     [one] vacation day planned
    *[other] vacation days planned
 }
-v-vacation-planner = Vacation planner
 v-was = was
-v-week = Week
 v-week-abbr = Wk
 v-weekend = Weekend
 v-weekends = Weekends
 v-weekly = Weekly
-v-year-in-numbers = Year in numbers
 v-year-planner = Year planner
 v-yearly = Yearly
 mon-1 = January

@@ -672,10 +672,8 @@ v-coming-up = Próximamente
 v-confidential = Confidencial
 v-copy-address = Copiar dirección
 v-copy-coordinates = Copiar coordenadas
-v-countdown-wall = Muro de cuenta atrás
 v-counting-rule = Regla de cómputo:
 v-daily = Cada día
-v-day = Día
 v-day-off = día libre
 v-days = { $n ->
     [one] día
@@ -707,7 +705,6 @@ v-free-weekends = { $n ->
     [one] fin de semana libre
    *[other] fines de semana libres
 }
-v-free-weekends-2 = Fines de semana libres
 v-high-priority = Prioridad alta
 v-holidays = Festivos
 v-just-passed = Recién pasado
@@ -716,7 +713,6 @@ v-load-per-week = Carga por semana
 v-long-weekend = fin de semana largo
 v-low-priority = Prioridad baja
 v-medium-priority = Prioridad media
-v-month = Mes
 v-monthly = Cada mes
 v-more = más
 v-new-year = Año nuevo
@@ -751,14 +747,11 @@ v-vacation-days-planned = { $n ->
     [one] día de vacaciones planificado
    *[other] días de vacaciones planificados
 }
-v-vacation-planner = Planificador de vacaciones
 v-was = fue
-v-week = Semana
 v-week-abbr = Sem.
 v-weekend = Fin de semana
 v-weekends = Fines de semana
 v-weekly = Cada semana
-v-year-in-numbers = El año en cifras
 v-year-planner = Planificador anual
 v-yearly = Cada año
 mon-1 = enero

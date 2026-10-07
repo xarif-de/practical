@@ -122,15 +122,15 @@ pub fn parse_cals(cals: Option<&str>) -> Option<HashSet<String>> {
 
 pub fn view_label(view: &str, l: &L) -> (String, bool) {
     match view {
-        "day" => (l.t("v-day").into(), false),
-        "week" => (l.t("v-week").into(), false),
-        "month" => (l.t("v-month").into(), false),
+        "day" => (l.t("view-day").into(), false),
+        "week" => (l.t("view-week").into(), false),
+        "month" => (l.t("view-month").into(), false),
         "planner" => (l.t("v-year-planner").into(), false),
-        "weekends" => (l.t("v-free-weekends-2").into(), true),
-        "vacation" => (l.t("v-vacation-planner").into(), true),
-        "countdown" => (l.t("v-countdown-wall").into(), true),
-        "numbers" => (l.t("v-year-in-numbers").into(), true),
-        _ => (l.t("v-month").into(), false),
+        "weekends" => (l.t("view-weekends").into(), true),
+        "vacation" => (l.t("view-vacation").into(), true),
+        "countdown" => (l.t("view-countdown").into(), true),
+        "numbers" => (l.t("view-numbers").into(), true),
+        _ => (l.t("view-month").into(), false),
     }
 }
 
