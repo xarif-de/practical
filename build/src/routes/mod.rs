@@ -5,6 +5,7 @@ pub mod assets;
 pub mod calendar;
 pub mod contacts;
 pub mod dev;
+pub mod editor;
 pub mod history;
 pub mod more;
 pub mod pages;

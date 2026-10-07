@@ -2,9 +2,10 @@
 // Shared DB with the other functional specs: own objects carry "F4", changed prefs go back to the seed.
 import fs from 'node:fs';
 import path from 'node:path';
-import { test, expect, settle, loginAs } from '../lib/test.mjs';
+import { test, expect, settle, loginAs, api } from '../lib/test.mjs';
 import { BASE, WORK } from '../lib/env.mjs';
 import { savePrefs, settingsForm, nextSave, basic } from './_set.mjs';
+import { addCard, answer } from './_editor.mjs';
 
 const go = async (page, h) => { await page.evaluate(x => { location.hash = x; }, h); };
 // a real reload: goto() to the same path with another hash only scrolls (same-document navigation)
@@ -287,21 +288,149 @@ test('import: a new calendar from a file, then more into it; a new address book;
   for (const p of [`/settings/calendars/alice/${calId}`, `/settings/addressbooks/alice/${abId}`]) { await settingsForm(page, p + '/delete'); await settingsForm(page, p + '/purge'); }
 });
 
-test('categories page: counts, rule badges, links into the rule editors', async ({ page }) => {
+// the categories page opens a rule in the editor over itself (GET /editor, js/shell/settings-pages.js): no navigation
+const watch = page => { const w = { errors: [], navs: 0, loads: [] }; page.on('pageerror', e => w.errors.push(String(e))); page.on('framenavigated', f => { if (f === page.mainFrame()) w.navs++; }); page.on('request', r => { const u = new URL(r.url()); if (u.pathname === '/editor') w.loads.push(u.search); }); return w; };
+const ruleEd = page => page.locator('#ed.rulemode:not([hidden])');
+const catRow = (page, n) => page.locator('#cat-list a', { hasText: n });
+const unrule = (page, n, scope) => api(page, 'DELETE', `/api/category-rules/${encodeURIComponent(n)}?scope=${scope}`).catch(() => {});
+
+test('categories page: an event category\'s rule opens over the page, saves and deletes, the list follows', async ({ page }) => {
   await reloadAt(page, '#categories');
-  const arbeit = page.locator('#cat-list a', { hasText: 'Arbeit' });
-  await expect(arbeit.locator('.badge')).toBeVisible();
-  await arbeit.click();
-  await expect(page).toHaveURL(/\/calendar\?rule=Arbeit&back=/);
-  await expect(page.locator('#ed.rulemode, #ed .rulemode, #edform.rulemode').first()).toBeAttached();
+  const w = watch(page), row = catRow(page, 'Kunde');
+  await expect(catRow(page, 'Arbeit').locator('.badge')).toBeVisible();
+  await expect(row.locator('.badge')).toHaveCount(0);
+  await expect(row).toHaveAttribute('href', '/calendar?rule=Kunde&back=%2Fsettings%23categories'); // the deep link stays the link's target (new tab)
+  try {
+    await row.click();
+    await ruleEd(page).waitFor();
+    await expect(page).toHaveURL(/\/settings#categories$/);
+    await expect(page.locator('#ed-host')).toHaveAttribute('data-kind', 'event');
+    await expect(page.locator('#ed')).not.toHaveClass(/taskmode/);
+    await expect(page.locator('#ed-sub')).toContainText('Kunde');
+    await expect(page.locator('#ed-close')).toBeFocused();
+    await expect(page.locator('#ed-delete')).toBeDisabled(); // no rule yet
+    await addCard(page, 'where');
+    await page.locator('#ed-locin').fill('F4 Ort, Dresden');
+    await page.locator('#edh').focus();
+    await page.locator('#ed-save').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    await expect(row.locator('.badge')).toBeVisible();
+    await expect(row).toBeFocused(); // back on its row, redrawn
+    expect((await api(page, 'GET', '/api/category-rules?scope=event')).Kunde.where.location).toBe('F4 Ort, Dresden');
+    // again: the same dialog (one load), the rule as saved
+    await row.click();
+    await ruleEd(page).waitFor();
+    await expect(page.locator('#ed-locin')).toHaveValue('F4 Ort, Dresden');
+    await page.locator('#ed-delete').click();
+    await answer(page, true);
+    await expect(page.locator('#ed')).toBeHidden();
+    await expect(row.locator('.badge')).toHaveCount(0);
+    expect((await api(page, 'GET', '/api/category-rules?scope=event')).Kunde).toBeUndefined();
+    // by keyboard: Enter on the row, the focus into the dialog, Escape back to the row
+    await row.focus();
+    await page.keyboard.press('Enter');
+    await ruleEd(page).waitFor();
+    await expect(page.locator('#ed-close')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#ed')).toBeHidden();
+    await expect(row).toBeFocused();
+    await expect(page).toHaveURL(/\/settings#categories$/);
+    expect(w.loads).toEqual(['?kind=event']);
+    expect(w.navs).toBe(0);
+  } finally { await unrule(page, 'Kunde', 'event'); }
+  expect(w.errors).toEqual([]);
+});
+
+test('categories page: a task category\'s rule, Escape and ×, then an event one: the dialog changes kind', async ({ page }) => {
   await reloadAt(page, '#categories');
+  const w = watch(page);
   await page.locator('#cat-scope button[data-scope="task"]').click();
-  await page.locator('#cat-list a', { hasText: 'Haushalt' }).click();
-  await expect(page).toHaveURL(/\/tasks\?rule=Haushalt/);
+  const row = catRow(page, 'Auto');
+  await expect(row).toHaveAttribute('href', '/tasks?rule=Auto&back=%2Fsettings%23categories');
+  try {
+    await row.click();
+    await ruleEd(page).waitFor();
+    await expect(page.locator('#ed-host')).toHaveAttribute('data-kind', 'task');
+    await expect(page.locator('#ed')).toHaveClass(/taskmode/);
+    await expect(page.locator('#ed-sub')).toContainText('Auto');
+    await addCard(page, 'where');
+    await page.locator('#ed-locin').fill('F4 Werkstatt, Dresden');
+    await page.locator('#edh').focus();
+    await page.locator('#ed-save').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    await expect(row.locator('.badge')).toBeVisible();
+    expect((await api(page, 'GET', '/api/category-rules?scope=task')).Auto.where.location).toBe('F4 Werkstatt, Dresden');
+    // Escape and × close an untouched rule; with a change both ask first, "discard" keeps the stored rule
+    await row.click();
+    await ruleEd(page).waitFor();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#ed')).toBeHidden();
+    await row.click();
+    await ruleEd(page).waitFor();
+    await page.locator('#ed-close').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    await row.click();
+    await ruleEd(page).waitFor();
+    await page.locator('#ed-locin').fill('F4 anders');
+    await page.locator('#edh').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#ed-confirm')).toBeVisible();
+    await page.locator('#ed-discard').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    expect((await api(page, 'GET', '/api/category-rules?scope=task')).Auto.where.location).toBe('F4 Werkstatt, Dresden');
+    // the other scope: the task dialog leaves the page, the event one comes
+    await page.locator('#cat-scope button[data-scope="event"]').click();
+    await catRow(page, 'Kunde').click();
+    await ruleEd(page).waitFor();
+    await expect(page.locator('#ed-host')).toHaveAttribute('data-kind', 'event');
+    await expect(page.locator('#ed, #edform, #geomap, #category-rules-data')).toHaveCount(4); // one of each
+    await expect(page.locator('#ed')).not.toHaveClass(/taskmode/);
+    await page.keyboard.press('Escape'); // the removed dialog's listeners stay quiet
+    await expect(page.locator('#ed')).toBeHidden();
+    await page.keyboard.press('Escape');
+    expect(w.loads).toEqual(['?kind=task', '?kind=event']);
+    expect(w.navs).toBe(0);
+  } finally { await unrule(page, 'Auto', 'task'); }
+  expect(w.errors).toEqual([]);
+});
+
+test('categories page: a new category from the form gets its rule over the page', async ({ page }) => {
   await reloadAt(page, '#categories');
-  await page.locator('#cat-new-name').fill('F4Kat');
-  await page.locator('#cat-new button[type=submit], #cat-new button').first().click();
-  await expect(page).toHaveURL(/\/calendar\?rule=F4Kat/);
+  const w = watch(page);
+  try {
+    await page.locator('#cat-new-name').fill('F4Kat');
+    await page.locator('#cat-new button[type=submit]').click();
+    await ruleEd(page).waitFor();
+    await expect(page.locator('#ed-sub')).toContainText('F4Kat');
+    await expect(page.locator('#ed-delete')).toBeDisabled();
+    await addCard(page, 'where');
+    await page.locator('#ed-locin').fill('F4 Neu, Dresden');
+    await page.locator('#edh').focus();
+    await page.locator('#ed-save').click();
+    await expect(page.locator('#ed')).toBeHidden();
+    await expect(catRow(page, 'F4Kat').locator('.badge')).toBeVisible();
+    await expect(page.locator('#cat-new-name')).toHaveValue(''); // saved: the form is done
+    await expect(page).toHaveURL(/\/settings#categories$/);
+    expect(w.navs).toBe(0);
+  } finally { await unrule(page, 'F4Kat', 'event'); }
+  expect(w.errors).toEqual([]);
+});
+
+test('categories page: a rule kept over a lost session comes back over the page', async ({ page }) => {
+  await reloadAt(page, '');
+  // what the editor's practical.keep stashes (js/editor/wiring.js) on this path before the login
+  await page.evaluate(() => { sessionStorage['practical.stash.ed-task'] = JSON.stringify({ path: '/settings', t: Date.now(), v: { rule: 'F4Kept', r: { where: { mode: 'default', location: 'F4 Keller' } }, ret: null, back: null } }); });
+  await page.reload();
+  await ruleEd(page).waitFor();
+  await expect(page).toHaveURL(/\/settings#categories$/);
+  await expect(page.locator('#ed-host')).toHaveAttribute('data-kind', 'task');
+  await expect(page.locator('#cat-scope button[data-scope="task"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#ed-sub')).toContainText('F4Kept');
+  await expect(page.locator('#ed-locin')).toHaveValue('F4 Keller');
+  await page.locator('#ed-close').click();
+  await page.locator('#ed-discard').click();
+  await expect(page.locator('#ed')).toBeHidden();
+  expect((await api(page, 'GET', '/api/category-rules?scope=task')).F4Kept).toBeUndefined();
 });
 
 test('search history page: entries listed, one removed, all cleared after the question', async ({ page }) => {

@@ -15,6 +15,10 @@ use Part::{File, Wrap};
 
 const IIFE: &str = "(function () {";
 const END: &str = "})();";
+/// The editor's function: run once at load (it returns at once on a page without #edform) and again by a page that
+/// loads the dialog later (`practical.editorInit`: the settings' categories, js/shell/settings-pages.js)
+const ED_OPEN: &str = "practical.editorInit = function () {";
+const ED_END: &str = "};\npractical.editorInit();";
 
 pub const BUNDLES: &[(&str, &[Part])] = &[
     ("app.js", &[
@@ -24,7 +28,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         Wrap(IIFE, &[File("js/shell/base.js"), File("js/shell/settings-pages.js"), File("js/shell/popovers-stream.js")], END),
         Wrap(IIFE, &[File("js/colors/picker.js"), File("js/colors/fields.js"), File("js/colors/optimise.js")], END),
         File("js/calendar.js"),
-        Wrap(IIFE, &[
+        Wrap(ED_OPEN, &[
             File("js/editor/setup.js"),
             File("js/editor/form.js"),
             File("js/editor/categories.js"),
@@ -43,7 +47,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
             File("js/editor/templates.js"),
             File("js/editor/solo.js"),
             File("js/editor/wiring.js"),
-        ], END),
+        ], ED_END),
         File("js/search.js"),
         File("js/contacts.js"),
         File("js/tasks.js"),

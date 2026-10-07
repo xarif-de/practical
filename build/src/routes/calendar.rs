@@ -217,6 +217,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
     let p = vc.prefs;
+    let isl = crate::routes::editor::islands(&state, &user, &p, "event").await?;
     let has_school = p.regions(&state.config, true).iter().any(|r| crate::domain::holidays::has_school(crate::domain::holidays::split(r).0));
     Ok(CalendarPage {
         holidays_on: p.holidays_enabled,
@@ -225,7 +226,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         holiday_css: p.holiday_css(),
         editor_kind: "event",
         ctx,
-        calendars: all_cals,
+        calendars: all_cals, // = routes::editor::calendars(&all_cals, "event"), without the copy
         view,
         date,
         title,
@@ -236,9 +237,9 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         today: vc.today,
         view_label,
         in_more,
-        alarm_snaps_json: crate::render::script_json(serde_json::to_string(&events::alarm_snaps(p.alarm_snaps_json.as_deref())).unwrap()),
-        alarm_presets_json: crate::render::script_json(p.alarm_presets_json.filter(|j| serde_json::from_str::<Vec<events::AlarmPreset>>(j).is_ok()).unwrap_or_else(|| "null".into())),
-        category_rules_json: crate::render::script_json(serde_json::to_string(&crate::domain::catrules::all(&state.db, &user.id, "event").await?).unwrap()),
+        alarm_snaps_json: isl.alarm_snaps_json,
+        alarm_presets_json: isl.alarm_presets_json,
+        category_rules_json: isl.category_rules_json,
     }
     .into_response())
 }

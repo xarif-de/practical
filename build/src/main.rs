@@ -149,6 +149,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .merge(routes::calendar::router())
         .merge(routes::contacts::router())
         .merge(routes::tasks::router())
+        .merge(routes::editor::router())
         .merge(routes::history::router())
         .merge(routes::settings::router())
         .merge(routes::api::router())

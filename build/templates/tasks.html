@@ -35,7 +35,5 @@
 </div>
 <button class="fab" id="fab" type="button" title="{{ ctx.t("ed-title-new-task") }}" aria-label="{{ ctx.t("ed-title-new-task") }}" hidden>+</button>
 <script type="application/json" id="tasks-data">{{ tasks_json|safe }}</script>
-<script type="application/json" id="alarm-presets-data">{{ alarm_presets_json|safe }}</script>
-<script type="application/json" id="category-rules-data">{{ category_rules_json|safe }}</script>
-<script type="application/json" id="alarm-snaps-data">{{ alarm_snaps_json|safe }}</script>
+{% include "editor_islands.html" %}
 {% endblock %}

@@ -1,0 +1,5 @@
+{#- /editor?kind=: the editor dialog and its islands in one box, loaded into a page without one (routes/editor.rs) -#}
+<div id="ed-host" data-kind="{{ editor_kind }}">
+{% include "editor.html" %}
+{% include "editor_islands.html" %}
+</div>
