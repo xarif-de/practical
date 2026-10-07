@@ -336,3 +336,64 @@ async fn history_document_follows_every_change() {
     assert!(crate::domain::history::purge(&app.state).await.unwrap() > 0);
     assert!(!check(app, &mut c, "purge").await["changes"].as_array().unwrap().iter().any(|x| x["id"] == first));
 }
+
+/// The search corpus is brought up to date per object (`search::index`): after a UI write, a DAV write, a
+/// series override, a deletion, a RELATED-TO target's new title, a calendar rename, a contact change and a
+/// zone change, every query answers exactly as a corpus built from scratch; objects nobody touched keep
+/// their document.
+#[tokio::test]
+async fn search_corpus_follows_writes_per_object() {
+    let s = crate::it::seed::seed().await;
+    let app = &s.app;
+    let mut c = app.login("alice").await;
+    let queries = ["standup", "review", "zahn", "anna", "steuer", "garten", "ostsee", "lauf", "familie", "14.10.", "ev: arbeit", "tk: keller", "partner"];
+    async fn both(app: &TestApp, c: &mut crate::testkit::Client, qs: &[&str], what: &str) {
+        for q in qs {
+            let path = format!("/api/search?q={}&limit=200", url::form_urlencoded::byte_serialize(q.as_bytes()).collect::<String>());
+            let kept = c.get_json(&path).await.ok().json();
+            app.state.search_index.clear();
+            let fresh = c.get_json(&path).await.ok().json();
+            assert_eq!(kept, fresh, "{what}: {q}");
+        }
+    }
+    both(app, &mut c, &queries, "start").await;
+    let ptrs = app.state.search_index.doc_ptrs("alice");
+    assert!(ptrs.len() > 5, "{ptrs:?}");
+    // a UI write: one new object, every other document kept
+    let input = json!({ "principal": "alice", "cal_id": s.privat, "summary": "Lauftreff im Garten", "start": "2026-10-23T18:00:00", "end": "2026-10-23T19:00:00" });
+    let id = c.json(Method::POST, "/api/events", input.clone()).await.ok().json()["id"].as_str().unwrap().to_string();
+    c.get_json("/api/search?q=lauf").await.ok();
+    let now = app.state.search_index.doc_ptrs("alice");
+    assert_eq!(now.len(), ptrs.len() + 1);
+    // (one with RELATED-TO gets its titles filled in anew on every rebuild: "review" names the standup)
+    assert!(ptrs.iter().filter(|(k, _)| !k.ends_with("/review")).all(|(k, p)| now.get(k) == Some(p)), "untouched objects keep their documents");
+    assert_ne!(ptrs.iter().find(|(k, _)| k.ends_with("/review")).map(|x| x.1), None);
+    both(app, &mut c, &queries, "UI write").await;
+    // a DAV write with RELATED-TO the new event, then the event's title changes: the relation follows
+    app.put_ics("alice", &s.arbeit, "partner", &vevent("partner", "Partnertermin", &format!("DTSTART;TZID=Europe/Berlin:20261026T090000\nDTEND;TZID=Europe/Berlin:20261026T100000\nRELATED-TO:{id}"))).await;
+    both(app, &mut c, &queries, "DAV write").await;
+    let mut upd = input.clone();
+    upd["summary"] = json!("Lauftreff an der Elbe");
+    c.json(Method::PUT, &format!("/api/events/alice/{}/{id}", s.privat), upd).await.ok();
+    c.get_json("/api/search?q=partner").await.ok();
+    both(app, &mut c, &["partner", "elbe", "lauf", "garten"], "related title").await;
+    let r = c.get_json("/api/search?q=partner%20elbe").await.json();
+    assert_eq!(r["events"][0]["summary"], "Partnertermin", "{r}");
+    // an override of one standup occurrence; a deletion
+    let series = "BEGIN:VEVENT\nUID:standup\nDTSTAMP:20260901T000000Z\nSUMMARY:Standup\nDTSTART;TZID=Europe/Berlin:20260902T090000\nDTEND;TZID=Europe/Berlin:20260902T091500\nRRULE:FREQ=WEEKLY;BYDAY=WE\nEND:VEVENT";
+    let over = "BEGIN:VEVENT\nUID:standup\nDTSTAMP:20260901T000000Z\nRECURRENCE-ID;TZID=Europe/Berlin:20261021T090000\nSUMMARY:Standup im Garten\nDTSTART;TZID=Europe/Berlin:20261021T100000\nDTEND;TZID=Europe/Berlin:20261021T101500\nEND:VEVENT";
+    app.put_ics("alice", &s.arbeit, "standup", &crate::testkit::ics(&format!("{series}\n{over}"))).await;
+    both(app, &mut c, &queries, "override").await;
+    app.state.calendars.delete_object("alice", &s.privat, "zahnarzt", true).await.unwrap();
+    both(app, &mut c, &queries, "deletion").await;
+    // a rename moves no synctoken; a contact; another zone
+    let user = app.principal("alice").await;
+    crate::domain::collections::update_calendar(&app.state, &user, "alice", &s.arbeit, "Büro", "#123456", "").await.unwrap();
+    both(app, &mut c, &["ev: büro", "review", "standup"], "rename").await;
+    assert_eq!(c.get_json("/api/search?q=review").await.json()["events"][0]["cal_name"], "Büro");
+    app.put_vcf("alice", &s.freunde, "anna", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:anna\r\nFN:Anna Gärtner\r\nN:Gärtner;Anna;;;\r\nEND:VCARD\r\n").await;
+    both(app, &mut c, &["anna", "gärtner", "schmidt"], "contact").await;
+    c.post_form_json("/settings/prefs", &[("timezone", "America/New_York")]).await.ok();
+    both(app, &mut c, &queries, "zone").await;
+    assert_eq!(app.state.search_index.users(), 1);
+}

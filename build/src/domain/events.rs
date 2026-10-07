@@ -180,10 +180,6 @@ fn sort_instances(v: &mut [Instance]) {
 /// One calendar's instances touching [start, end), unsorted (in the store's object order), and with
 /// `extras` the `SearchExtra` of every object read.
 async fn expand(state: &AppState, cal: &CalInfo, start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz, mut extras: Option<&mut std::collections::HashMap<String, SearchExtra>>) -> AppResult<Vec<Instance>> {
-    let ws = ical::to_utc(start.and_hms_opt(0, 0, 0).unwrap(), tz) - Duration::days(1);
-    let we = ical::to_utc(end.and_hms_opt(0, 0, 0).unwrap(), tz) + Duration::days(1);
-    let win_start = start.and_hms_opt(0, 0, 0).unwrap();
-    let win_end = end.and_hms_opt(0, 0, 0).unwrap();
     let mut out = vec![];
     let objs = state
         .calendars
@@ -193,21 +189,30 @@ async fn expand(state: &AppState, cal: &CalInfo, start: NaiveDate, end: NaiveDat
         if let Some(x) = extras.as_deref_mut() {
             x.insert(format!("{}/{}/{id}", cal.principal, cal.id), search_extra(&obj));
         }
-        let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { continue };
-        let recurring = main.has_rruleset();
-        // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
-        // would never remind; an instance without own alarms takes the master's
-        let master_alarms = alarm_offsets(main);
-        let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
-        for ev in &expanded {
-            let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
-            let inst = instance_from(ev, cal, &id, tz, recurring, alarms);
-            if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
-                out.push(inst);
-            }
-        }
+        expand_object(&obj, cal, &id, start, end, tz, &mut out);
     }
     Ok(out)
+}
+
+/// One object's instances touching [start, end) (`expand`; the search corpus re-reads single objects).
+pub(crate) fn expand_object(obj: &CalendarObject, cal: &CalInfo, id: &str, start: NaiveDate, end: NaiveDate, tz: chrono_tz::Tz, out: &mut Vec<Instance>) {
+    let ws = ical::to_utc(start.and_hms_opt(0, 0, 0).unwrap(), tz) - Duration::days(1);
+    let we = ical::to_utc(end.and_hms_opt(0, 0, 0).unwrap(), tz) + Duration::days(1);
+    let win_start = start.and_hms_opt(0, 0, 0).unwrap();
+    let win_end = end.and_hms_opt(0, 0, 0).unwrap();
+    let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else { return };
+    let recurring = main.has_rruleset();
+    // caldata builds generated instances without VALARMs (event/mod.rs:262), so a series
+    // would never remind; an instance without own alarms takes the master's
+    let master_alarms = alarm_offsets(main);
+    let expanded = main.expand_recurrence(Some(ws), Some(we), overrides);
+    for ev in &expanded {
+        let alarms = if ev.get_alarms().is_empty() { master_alarms.clone() } else { alarm_offsets(ev) };
+        let inst = instance_from(ev, cal, id, tz, recurring, alarms);
+        if inst.start < win_end && inst.end > win_start || (inst.start == inst.end && inst.start >= win_start && inst.start < win_end) {
+            out.push(inst);
+        }
+    }
 }
 
 type WinKey = (String, String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
@@ -306,7 +311,7 @@ pub struct SearchExtra {
     pub related: Vec<String>,
 }
 
-fn search_extra(obj: &CalendarObject) -> SearchExtra {
+pub(crate) fn search_extra(obj: &CalendarObject) -> SearchExtra {
     let (raw, _) = split_ics(&obj.get_ics());
     let p = &raw.props;
     let get = |n: &str| p.iter().find(|l| prop_name(l) == n).map(|l| ical::split_line(l).2.trim().to_ascii_uppercase()).unwrap_or_default();
