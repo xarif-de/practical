@@ -2,7 +2,7 @@
 # Reusable workflow: https://git.xarif.de/base/dagger-modules
 
 [tasks.pipeline]
-description = "The CI pipeline, locally: cargo-deny + image build + tests/tests.yaml (dagger-ci.yaml); never publishes"
+description = "The CI pipeline, locally: cargo-deny + image build (with cargo test, build/Dockerfile) + tests/tests.yaml (dagger-ci.yaml); never publishes"
 run = "DAGGER_NO_NAG=1 dagger call -m git.xarif.de/base/dagger-modules.git@main ci --source=."
 
 [tasks.image]

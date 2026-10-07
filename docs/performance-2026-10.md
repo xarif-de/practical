@@ -20,7 +20,7 @@ stages byte-identical between e74c076 and 79fedc3 apart from the asset `?v=` has
 differing state mapped to its item. Determinism: 3 consecutive full runs on one binary = 0 differences
 pairwise after two harness fixes (phone emulation's load-time `resize` re-dispatched after
 DOMContentLoaded; icon sprite response held until the first paint — both in `e2e/lib`).
-CI runs neither `cargo test` nor e2e — both are local gates.
+CI runs `cargo test` (since 2026-10-07, inside the image build: build/Dockerfile) but no e2e — e2e is a local gate.
 Test net, mutation-tested (study of 2026-10-06, 45 mutants; gaps closed 2026-10-07): 38/45 killed; of the
 7 survivors two sat on dead CSS (removed), the other five are now killed (plural golden, history chip test, three
 dark states found by theme-cover); 5/5 new random holdout mutants of the same kinds killed. Warm gate without an edit:

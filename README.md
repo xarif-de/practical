@@ -387,7 +387,7 @@ mise run dev-db                # COPY of the production DB → ~/.cache/practica
 mise run dev                   # http://localhost:4001, login <user>/devpass — the feedback loop below
 mise run test                  # cargo test (rust-toolchain.toml = the builder image's Rust version; e2e/cargo.sh)
 mise run deny                  # cargo-deny: advisories, bans, sources
-mise run pipeline              # the CI pipeline locally (cargo-deny + image build + tests), never publishes
+mise run pipeline              # the CI pipeline locally (cargo-deny + image build with cargo test + image tests), never publishes
 mise run image                 # the image, loaded into docker as xarif-practical
 ```
 
@@ -525,7 +525,7 @@ of this checkout's server build (`E2E_PROFILE`, default `e2e`: relative numbers 
 Standard xarif docker repo: `build/` (Rust crate, `Dockerfile`, `deny.toml`, `templates/`,
 `assets/`, `locales/`), `tests/tests.yaml` (image tests), `mise.toml`, and `dagger-ci.yaml`: the whole
 CI is one `dagger call … ci` (`base/dagger-modules` docs/ci.md), which `.forgejo/workflows/ci.yml`
-only triggers. Every push runs cargo-deny and builds + tests the image; `main` publishes with the
+only triggers. Every push runs cargo-deny and builds + tests the image (the build step runs `cargo test`); `main` publishes with the
 `release` profile (skipped when the build inputs are unchanged), `v*` tags with the `dist` profile.
 Deployment follows a release tag only (policy 2026-10-06): `main` images are build versions, never
 deployed; a `vX.Y.Z` tag publishes the release image, Renovate pins it in `kubernetes/rustical` (PR,
