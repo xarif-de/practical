@@ -258,6 +258,10 @@ async fn live_update_stream_is_sse() {
     assert_eq!(headers.get("content-type").unwrap(), "text/event-stream");
     let (status, _) = app.anonymous().open("/api/changes").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    // the browser's EventSource: the session's end comes as an event (a 401 never reaches the page), then the stream ends
+    let r = app.anonymous().send(Method::GET, "/api/changes", &[("accept", "text/event-stream")], axum::body::Body::empty()).await;
+    assert_eq!((r.status, r.header("content-type").as_deref(), r.body.as_str()), (StatusCode::OK, Some("text/event-stream"), "event: auth\ndata: login\n\n"));
+    assert_eq!(r.header("set-cookie"), None);
 }
 
 #[tokio::test]

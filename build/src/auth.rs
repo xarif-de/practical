@@ -316,6 +316,11 @@ pub async fn require_user(request: Request, next: Next) -> Response {
         .get(header::ACCEPT)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|a| a.contains("text/html"));
+    // a live stream cannot read a 401 (EventSource hides the status and asks again): it is told in the stream, which then
+    // ends; app.js answers the `auth` event with the login (practical.authLost), as any request does on a 401
+    if request.method() == axum::http::Method::GET && request.headers().get(header::ACCEPT).and_then(|v| v.to_str().ok()).is_some_and(|a| a.contains("text/event-stream")) {
+        return ([(header::CONTENT_TYPE, "text/event-stream"), (header::CACHE_CONTROL, "no-cache")], "event: auth\ndata: login\n\n").into_response();
+    }
     if request.method() == axum::http::Method::GET && wants_html {
         let path = request.uri().path_and_query().map(|p| p.as_str().to_string()).unwrap_or_default();
         return Redirect::to(&format!("/login?redirect_uri={}", urlenc(&path))).into_response();

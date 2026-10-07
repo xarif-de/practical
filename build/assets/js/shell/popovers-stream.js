@@ -48,6 +48,9 @@
     const connect = () => {
       retryT = 0; es = new EventSource('/api/changes');
       es.onopen = () => { fails = 0; practical.stream(true); if (broke) { broke = false; if (document.hidden) missed = true; else fire({ resync: true }); } };
+      // the session ended (the server says so in the stream: EventSource hides a 401 and would ask again forever): to the login, the
+      // editors' unsaved work kept (practical.authLost) — before, only the next request noticed
+      es.addEventListener('auth', () => { es.close(); es = null; practical.stream(false); practical.authLost(); });
       es.addEventListener('change', ev => { let d; try { d = JSON.parse(ev.data); } catch (_) { return; } if (document.hidden) missed = true; else fire(d); });
       es.onerror = () => { practical.stream(false); es.close(); es = null; broke = true; const ms = Math.min(RETRY_MAX, RETRY * 2 ** fails++); retryT = setTimeout(connect, ms + Math.random() * ms); };
     };

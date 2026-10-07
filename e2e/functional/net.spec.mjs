@@ -4,7 +4,7 @@
 // Own data only ("F9 …" in November 2026).
 import { api, expect, settle, test } from '../lib/test.mjs';
 import { LOGIN_BASE } from '../lib/env.mjs';
-import { CAL, createApi, detail, fillWhen, instances, openEdit, openNew, save } from './_editor.mjs';
+import { CAL, addCard, createApi, detail, fillWhen, instances, openEdit, openNew, save } from './_editor.mjs';
 
 const tr = (page, k) => page.evaluate(k => window.tr(k), k);
 /** Holds every `method` request to `pattern` until release(); `first` resolves when one arrived. */
@@ -14,6 +14,9 @@ async function gate(page, pattern, method) {
   return { first, release: () => open(), count: () => n };
 }
 const errors = page => { const out = []; page.on('pageerror', e => out.push(String(e))); return out; };
+// every EventSource of the page in window.__es (an init script); streamOpen: the live stream's is open
+const trackStreams = () => { const E = window.EventSource; window.__es = []; window.EventSource = class extends E { constructor(...a) { super(...a); window.__es.push(this); } }; };
+const streamOpen = page => page.waitForFunction(() => window.__es.filter(e => e.url.endsWith('/api/changes')).at(-1)?.readyState === 1);
 
 test.afterEach(async ({ page }) => {
   expect(page.__dialogs.filter(d => d), 'no alert() from the app').toEqual([]);
@@ -126,11 +129,16 @@ test('a session that ended on save (401): to the login and back to the same view
 });
 
 test('a real session loss (login server): navigation and save go to the login page, never into the view; the work comes back', async ({ page, context }) => {
+  await page.addInitScript(trackStreams);
   const login = async () => { await page.locator('form.pwform input[name=username]').fill('alice'); await page.locator('form.pwform input[name=password]').fill('devpass'); await page.locator('form.pwform button[type=submit]').click(); };
   const url = LOGIN_BASE + '/calendar?view=planner&date=2026-11-16'; // the year view turns with ‹ ›
   await page.goto(url); await login();
   await expect(page).toHaveURL(url);
-  // the server restarted (every session gone): the next page turn
+  // the server restarted (every session gone): the next page turn. The live stream is open first: one that connects
+  // without the session ends in the login by itself (the test below); with it open, the pointer resting on the year
+  // prefetches the neighbours while the session lives — refused here, so the turn asks the server itself
+  await page.route(u => u.href.startsWith(LOGIN_BASE), r => r.request().headers().purpose === 'prefetch' ? r.abort() : r.fallback());
+  await streamOpen(page);
   await context.clearCookies();
   await page.locator('[data-nav=next]').click();
   await page.waitForURL(/\/login\?redirect_uri=%2Fcalendar%3Fview%3Dplanner%26date%3D2026-11-16$/);
@@ -143,6 +151,7 @@ test('a real session loss (login server): navigation and save go to the login pa
   const day = page.locator('.v-month .day[data-date="2026-11-16"]');
   await day.hover(); await day.locator('.add').click();
   await page.locator('#edh').fill('F9 Echt');
+  await streamOpen(page);
   await context.clearCookies();
   await page.locator('#ed-save').click();
   await page.waitForURL(/\/login\?redirect_uri=/);
@@ -255,4 +264,61 @@ test('the category field: a 3,000-character name never widens the page', async (
   await page.locator('#ed-ct-in').fill('Kategorie mit einem recht langen Namen');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('work kept over a new login stays open in a tasks view that does not dock the editor, also through a resize', async ({ page, context }) => {
+  await page.goto('/tasks?view=table');
+  await page.click('#fab');
+  await page.locator('#edh').fill('F9 Behalten');
+  await context.clearCookies(); // the save answers 401
+  const toLogin = page.waitForRequest(r => r.isNavigationRequest() && r.url().includes('/login?redirect_uri=%2Ftasks%3Fview%3Dtable'));
+  await page.locator('#ed-save').click();
+  await toLogin; // development mode signs alice in again and sends her back
+  await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue('F9 Behalten');
+  // the page lays its editor out again on a resize (tasks.js fit): the restored work is what it holds
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: size.width - 200, height: size.height });
+  await page.setViewportSize(size);
+  await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue('F9 Behalten');
+  await page.locator('#ed-save').click();
+  await expect(page.locator('#ed')).toBeHidden();
+  await expect(page.locator('.sheet tbody [data-f=summary]', { hasText: 'F9 Behalten' })).toHaveCount(1);
+});
+
+test('a rule being edited when the session ends comes back after the login and saves', async ({ page, context }) => {
+  await page.goto('/calendar?rule=F9-Kat&back=%2Fsettings%23categories');
+  await page.locator('#ed.rulemode:not([hidden])').waitFor();
+  await addCard(page, 'where');
+  await page.locator('#ed-locin').fill('F9 Ort, Leipzig');
+  await page.locator('#edh').focus();
+  await context.clearCookies();
+  const toLogin = page.waitForRequest(r => r.isNavigationRequest() && r.url().includes('/login?redirect_uri=%2Fcalendar%3Frule%3DF9-Kat'));
+  await page.locator('#ed-save').click();
+  await toLogin;
+  await expect(page.locator('#ed.rulemode:not([hidden]) #ed-locin')).toHaveValue('F9 Ort, Leipzig');
+  await expect(page.locator('.toast')).toContainText(await tr(page, 'js-req-restored'));
+  await expect(page.locator('#ed-delete')).toBeDisabled(); // still no stored rule
+  await page.locator('#ed-save').click();
+  await page.waitForURL(/\/settings#categories/); // its way back
+  expect((await api(page, 'GET', '/api/category-rules?scope=event'))['F9-Kat'].where.location).toBe('F9 Ort, Leipzig');
+});
+
+test('the live stream tells an ended session (EventSource hides the 401): to the login and back, the typed work restored', async ({ page, context }) => {
+  await page.addInitScript(trackStreams);
+  const login = async () => { await page.locator('form.pwform input[name=username]').fill('alice'); await page.locator('form.pwform input[name=password]').fill('devpass'); await page.locator('form.pwform button[type=submit]').click(); };
+  const url = LOGIN_BASE + '/calendar?view=month&date=2026-11-19';
+  await page.goto(url); await login();
+  await expect(page).toHaveURL(url);
+  await streamOpen(page);
+  const day = page.locator('.v-month .day[data-date="2026-11-19"]');
+  await day.hover(); await day.locator('.add').click();
+  await page.locator('#edh').fill('F9 Strom');
+  await settle(page); // what the typing asks of the server (suggestions) is answered: only the stream may notice the end
+  await context.clearCookies(); // the session is gone
+  await page.evaluate(() => window.__es.filter(e => e.url.endsWith('/api/changes')).at(-1).dispatchEvent(new Event('error'))); // the stream breaks …
+  await page.evaluate(() => dispatchEvent(new Event('online'))); // … and is asked for again at once
+  await page.waitForURL(/\/login\?redirect_uri=%2Fcalendar%3Fview%3Dmonth%26date%3D2026-11-19$/);
+  await login();
+  await expect(page).toHaveURL(url);
+  await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue('F9 Strom');
 });

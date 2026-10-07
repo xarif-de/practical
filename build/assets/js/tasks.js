@@ -529,6 +529,9 @@
     },
     // closing the docked pane falls back to the new-task form; a dialog just goes away
     closed: () => { if (docked()) act = null; cur = null; wantNew = false; held = undefined; render(); fit(); }, // the docked pane falls back to the new-task form: nothing is picked
+    // the editor brought back work kept over a new login (a task's key, or null: a new task or a rule): it holds that now, so a
+    // resize or the docking keeps it open, as one opened here
+    restored: k => { cur = act = k; held = k; wantNew = !k; markAct(); fit(); },
   };
 
   $('#tk-back').onchange = e => { document.cookie = `tk_back=${e.target.value}; path=/tasks; max-age=31536000; SameSite=Lax`; const u = new URL(url()); u.searchParams.set('back', e.target.value); location.href = u.toString(); }; // the cookie: the page reached from the navigation keeps the choice (routes/tasks.rs)
