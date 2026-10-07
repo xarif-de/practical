@@ -28,11 +28,8 @@ rustical_dav_push = { git = "https://github.com/lennart-k/rustical", tag = "v0.1
 # --- in RustiCal's graph (same versions as its workspace)
 caldata = { version = "0.17", features = ["chrono-tz"] }
 axum = "0.8"
-axum-extra = { version = "0.12", features = ["typed-header"] }
-headers = "0.4"
 http = "1.4"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
-tower = "0.5"
 tower-http = { version = "0.7", features = ["trace", "compression-gzip"] }
 tower-sessions = "0.15"
 askama = { version = "0.16", features = ["serde_json"] }
@@ -89,6 +86,10 @@ brotli = "9"
 # Dockerfile's MIMALLOC_PURGE_DELAY=0 + MIMALLOC_ARENA_EAGER_COMMIT=0 — mimalloc's defaults held 66-103 MB.
 # Adds libmimalloc-sys (C, built with cc — already a build dependency of the bundled SQLite).
 mimalloc = { version = "0.1", default-features = false }
+
+# Tests only (testkit.rs, it/http.rs: `ServiceExt::oneshot` drives the router without a socket); in axum's graph.
+[dev-dependencies]
+tower = "0.5"
 
 # Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
 [build-dependencies]
