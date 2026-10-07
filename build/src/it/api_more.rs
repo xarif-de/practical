@@ -332,3 +332,19 @@ async fn own_error_texts_speak_the_session_language_api_clients_read_english() {
         assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, text), "{lang}");
     }
 }
+
+#[tokio::test]
+async fn download_names_outside_ascii_are_sent_as_rfc6266_filename_star() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    // a contact whose object id (the .vcf file name) is not ASCII, as another DAV client may name it
+    s.app.put_vcf("alice", &s.freunde, "jörg \"ö\".vcf", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:joerg\r\nFN:Jörg\r\nN:;Jörg;;;\r\nEND:VCARD\r\n").await;
+    let r = c.get_json(&format!("/api/contacts/alice/{}/j%C3%B6rg%20%22%C3%B6%22.vcf/vcf", s.freunde)).await;
+    r.ok().has("FN:Jörg");
+    assert_eq!(r.header("content-disposition").as_deref(), Some("attachment; filename=\"j_rg ___.vcf.vcf\"; filename*=UTF-8''j%C3%B6rg%20%22%C3%B6%22.vcf.vcf"));
+    // an address book named outside ASCII: its export
+    let ab = s.app.addressbook("alice", "Grüße", "#000000").await;
+    let v = c.get(&format!("/settings/export/addressbooks/alice/{ab}")).await;
+    v.ok();
+    assert_eq!(v.header("content-disposition").as_deref(), Some("attachment; filename=\"Gr__e.vcf\"; filename*=UTF-8''Gr%C3%BC%C3%9Fe.vcf"));
+}

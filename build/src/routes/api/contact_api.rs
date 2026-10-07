@@ -9,7 +9,7 @@ pub(super) async fn get_contact(State(state): State<SharedState>, user: Principa
 pub(super) async fn contact_vcf(State(state): State<SharedState>, user: Principal, Path((p, a, id)): Path<(String, String, String)>) -> AppResult<axum::response::Response> {
     use axum::response::IntoResponse;
     let vcf = contacts::get_vcf(&state, &user, &p, &a, &id).await?;
-    Ok(([(axum::http::header::CONTENT_TYPE, "text/vcard; charset=utf-8".to_string()), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{id}.vcf\""))], vcf).into_response())
+    Ok(([(axum::http::header::CONTENT_TYPE, "text/vcard; charset=utf-8".to_string()), (axum::http::header::CONTENT_DISPOSITION, crate::routes::attachment(&format!("{id}.vcf")))], vcf).into_response())
 }
 
 pub(super) async fn create_contact(State(state): State<SharedState>, user: Principal, _: csrf::TokenOrBasic, Json(input): Json<ContactInput>) -> AppResult<Json<Created>> {

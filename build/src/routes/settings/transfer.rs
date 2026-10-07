@@ -5,7 +5,7 @@ use super::*;
 fn download(name: &str, ext: &str, mime: &'static str, body: String) -> Response {
     let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
     (
-        [(axum::http::header::CONTENT_TYPE, mime.to_string()), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{safe}.{ext}\""))],
+        [(axum::http::header::CONTENT_TYPE, mime.to_string()), (axum::http::header::CONTENT_DISPOSITION, crate::routes::attachment(&format!("{safe}.{ext}")))],
         body,
     )
         .into_response()
