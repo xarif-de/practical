@@ -43,6 +43,13 @@
     keepCals: (page, cals) => { let m = {}; try { m = JSON.parse(localStorage.calCals || '{}'); } catch (_) {} m[page] = [localStorage.calHidden || '[]', cals]; localStorage.calCals = JSON.stringify(m); },
     // a JSON write: practical.req's answer (below), never a thrown error
     send: (url, method, body) => window.practical.req(url, { method, json: body }),
+    /* an entry a click opens (a calendar event, a task card, a contact) works from the keyboard too: a Tab stop, Enter
+       or Space on it is the click; role "button" only on a plain div/span that holds no control of its own (a list
+       item or an article keeps its own role) */
+    keyClick: el => {
+      el.tabIndex = 0; if (/^(DIV|SPAN)$/.test(el.tagName) && !el.querySelector('a, button, input, select, textarea')) el.setAttribute('role', 'button');
+      el.onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === el) { e.preventDefault(); el.click(); } };
+    },
     // a suggestion list (body-level .rrpop) under `anchor`, kept inside the dialog box; `r` = the anchor's rect
     placeUnder: (pop, anchor, r = anchor.getBoundingClientRect()) => { const box = anchor.closest('.box'), maxRight = (box ? box.getBoundingClientRect().right : innerWidth) - 8;
       pop.style.left = `${Math.max(8, Math.min(r.left, maxRight - pop.offsetWidth)) + scrollX}px`; pop.style.top = `${r.bottom + scrollY + 4}px`; },

@@ -4,7 +4,10 @@
 //   visual-<vp>-<scheme>  — e2e/visual, every surface; de; desktop 1440×900 / phone 390×844 × light / dark
 //   visual-en-*           — the @main states again in en (desktop light, phone light)
 //   chaos                 — e2e/chaos, the seeded UI monkey with network chaos (Tier 1), one worker, desktop, de
-// E2E_SUITE=visual selects the visual projects, E2E_SUITE=chaos the chaos one, otherwise the functional one runs.
+//   a11y-<vp>-<scheme>    — e2e/a11y: axe over fixed states (desktop light + dark, phone light) and the keyboard
+//                           flows (desktop light); each file on fresh servers like the functional suite
+// E2E_SUITE=visual selects the visual projects, E2E_SUITE=chaos the chaos one, E2E_SUITE=a11y the a11y ones, otherwise
+// the functional one runs.
 // global-setup.mjs builds the server and starts the visual/perf suites' shared pair (the functional workers start
 // their own); artifacts of the visual suite go to E2E_OUT.
 import { defineConfig } from '@playwright/test';
@@ -26,6 +29,11 @@ for (const [vp, dev] of [['desktop', desktop], ['phone', phone]])
 for (const [vp, dev, scheme] of [['desktop', desktop, 'light'], ['phone', phone, 'light']])
   visual.push({ name: `visual-en-${vp}-${scheme}`, testDir: './visual', grep: /@main/, use: { ...common, ...dev, colorScheme: scheme, locale: 'en-GB' } });
 
+// no phone-dark: its contrast pairs are desktop-dark's (one palette per scheme), its layout phone-light's — over the
+// full visual suite (E2E_AXE=1, 2026-10-07) it showed no finding the three projects here do not
+const a11y = [['desktop', desktop, 'light'], ['desktop', desktop, 'dark'], ['phone', phone, 'light']].map(([vp, dev, scheme]) =>
+  ({ name: `a11y-${vp}-${scheme}`, testDir: './a11y', testIgnore: vp === 'desktop' && scheme === 'light' ? undefined : /keys\.spec/, use: { ...common, ...dev, colorScheme: scheme, locale: 'de-DE' } }));
+
 export default defineConfig({
   globalSetup: './global-setup.mjs',
   globalTeardown: './global-teardown.mjs',
@@ -40,7 +48,8 @@ export default defineConfig({
   // perf: interaction latency (e2e/perf), opt-in, never part of the gate
   projects: process.env.E2E_SUITE === 'chaos' ? [{ name: 'chaos', testDir: './chaos', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
     : process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
-    : process.env.E2E_SUITE === 'visual' ? visual : [
+    : process.env.E2E_SUITE === 'visual' ? visual
+    : process.env.E2E_SUITE === 'a11y' ? a11y : [
     { name: 'functional', testDir: './functional', fullyParallel: false, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } },
   ],
 });

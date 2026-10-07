@@ -167,8 +167,9 @@ No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
 | cargo.sh, build-server.sh | per-checkout cargo (see AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
 | gate.sh | quick / full gate |
 | seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…` |
-| lib/ | env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
-| functional/, visual/, chaos/, perf/ | suites (`E2E_SUITE`=visual/chaos/perf, else functional); `_editor.mjs`/`_set.mjs` = helpers |
+| lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
+| functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs` = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
+| a11y-check.mjs (+ a11y-allow.txt: key = contrast colour pair or target without positions/values; only shrinks) | after the a11y suite: NEW / STALE allow-list lines → exit 1 |
 | compare.mjs, theme-cover.mjs (+ theme-cover-allow.txt: backlog only shrinks), baseline.sh | visual diff (pixels, DOM, computed style), dark coverage, baseline capture |
 | bench/ | bench.mjs (driver, RULES), client.mjs (UI interactions), gen-db.py (big synthetic DB), proc.py (CPU/RSS/wakeups/instructions per PID) |
 

@@ -84,7 +84,7 @@
   function fanPicker(onPick) {
     const D = deck(); let act = 8;
     const el = document.createElement('div'); el.className = 'cpk-fanbox';
-    el.innerHTML = `<div class="cpk-fan">${D.map(([nm, ts]) => `<div class="cpk-card">${ts.map((t, j) => `<button type="button" data-v="${t}" style="background:${t}" title="${esc(nm)} ${j + 1}" aria-checked="false"></button>`).join('')}<span class="nm">${esc(nm)}</span></div>`).join('')}</div>
+    el.innerHTML = `<div class="cpk-fan">${D.map(([nm, ts]) => `<div class="cpk-card">${ts.map((t, j) => `<button type="button" data-v="${t}" style="background:${t}" title="${esc(nm)} ${j + 1}" role="radio" aria-checked="false"></button>`).join('')}<span class="nm">${esc(nm)}</span></div>`).join('')}</div>
       <div class="cpk-nav"><button class="btn icon-btn" type="button" data-d="-1" aria-label="${esc(tr('js-color-prev'))}">‹</button><span></span><button class="btn icon-btn" type="button" data-d="1" aria-label="${esc(tr('js-color-next'))}">›</button></div>`;
     const fan = $('.cpk-fan', el), cards = $$('.cpk-card', fan), lab = $('.cpk-nav span', el);
     const lay = () => cards.forEach((c, i) => { const d = i - act; c.style.transform = `rotate(${d * 11}deg) translateY(${Math.abs(d) * 2}px)`; c.style.zIndex = 50 - Math.abs(d); c.style.opacity = Math.abs(d) > 5 ? .25 : 1; });
@@ -114,7 +114,7 @@
     const el = document.createElement('div'); el.className = 'cpk-field';
     el.innerHTML = `<div class="cpk-in"><span class="cpk-chip"></span><input type="text" spellcheck="false" autocomplete="off" aria-label="${esc(tr('js-color-text'))}"><button class="btn icon-btn" type="button" title="${esc(tr('js-color-dice'))}" aria-label="${esc(tr('js-color-dice'))}">${ico('dice')}</button></div><div class="cpk-err" hidden></div>
       <span class="seg">${Object.keys(MODES).map(m => `<button type="button" data-m="${m}" aria-pressed="${m === mode}">${esc(tr('js-color-m-' + m))}</button>`).join('')}</span><div class="cpk-sl"></div>
-      <div class="cpk-cap">${esc(tr('js-color-sugg'))}</div><div class="cpk-sugg">${SUGG.map(x => `<button type="button" data-v="${x}" style="background:${x}" title="${x}" aria-checked="false"></button>`).join('')}</div>`;
+      <div class="cpk-cap">${esc(tr('js-color-sugg'))}</div><div class="cpk-sugg">${SUGG.map(x => `<button type="button" data-v="${x}" style="background:${x}" title="${x}" role="radio" aria-checked="false"></button>`).join('')}</div>`;
     const box = $('.cpk-in', el), chip = $('.cpk-chip', el), inp = $('input', el), err = $('.cpk-err', el), sl = $('.cpk-sl', el), sugg = $$('.cpk-sugg button', el);
     // `from` keeps the source of a change as it is: the field what is being typed, a slider its exact value
     const paint = from => { const M = MODES[mode]; if (from !== 'slider') vals = M.get(hex); chip.style.background = hex;
@@ -188,7 +188,7 @@
     const list = await load(), pal = palette(list), cur = () => o.value ? toHex(o.value) : '';
     const extra = cur() && !pal.some(p => p.hex === cur()) ? cur() : ''; // a colour nothing else has yet (a form not yet saved)
     pop = document.createElement('div'); pop.className = 'cpk'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', o.title);
-    const circle = (v, hex, text, cls = '') => `<button type="button" class="cpk-sw${cls}" data-v="${v}" style="--c:${hex};--ink:${ink(hex)}" title="${esc(text)}" aria-label="${esc(text)}" aria-checked="false"></button>`;
+    const circle = (v, hex, text, cls = '') => `<button type="button" class="cpk-sw${cls}" data-v="${v}" style="--c:${hex};--ink:${ink(hex)}" title="${esc(text)}" aria-label="${esc(text)}" role="radio" aria-checked="false"></button>`;
     pop.innerHTML = `<div class="cpk-h"><span class="sq">${ico('calendar')}</span><span><b>${esc(o.title)}</b><small>${esc(o.sub || '')}</small></span></div>
       <div class="cpk-sws" role="radiogroup" aria-label="${esc(o.title)}">${o.inherit ? circle('', o.inherit.hex, o.inherit.text, ' inh') : ''}${pal.map(p => circle(p.hex, p.hex, srcText(p.src))).join('')}${extra ? circle(extra, extra, tr('js-color-current')) : ''}<button type="button" class="cpk-sw cpk-add" data-new title="${esc(tr('js-color-add'))}" aria-label="${esc(tr('js-color-add'))}">${ico('plus')}</button></div>
       <div class="cpk-name"></div>`;

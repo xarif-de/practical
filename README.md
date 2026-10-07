@@ -87,8 +87,9 @@ mise run e2e                            # functional Playwright suite (E2E_WORKE
 mise run e2e-baseline -- <dir>          # visual baseline of every UI state (PNG + DOM + computed style)
 mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff; exit 1 on any difference
 mise run chaos                          # seeded UI monkey + network chaos
+mise run a11y                           # axe-core over fixed states + keyboard flows (e2e/a11y, ~30 s)
 mise run gate-quick                     # cargo test → server build → functional suite
-mise run gate -- <ref-dir>              # gate-quick → chaos → visual baseline → compare → dark-theme coverage
+mise run gate -- <ref-dir>              # gate-quick → chaos → a11y → visual baseline → compare → dark-theme coverage
 mise run bench                          # performance bench → ~/.cache/practical-e2e/bench-<sha>
 mise run bench-compare -- <bench-dir>   # A/B against a former bench dir; exit 1 on a regression
 ```

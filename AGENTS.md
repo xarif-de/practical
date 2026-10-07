@@ -27,7 +27,8 @@ Where code lives: `docs/MAP.md`. Deploy/config/commands: `README.md`. These rule
 | command | runs | when |
 |---|---|---|
 | `mise run gate-quick` | cargo test → server build (`e2e` profile) → functional suite | every commit (~80 s warm) |
-| `mise run gate -- <ref-dir>` | quick → chaos → visual baseline → compare vs `<ref-dir>` → theme-cover | anything that can change a page's look (CSS, template, locale, Rust value) — i.e. before most commits |
+| `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~30 s) | part of `gate`; alone after UI/ARIA/focus edits |
+| `mise run gate -- <ref-dir>` | quick → chaos → a11y → visual baseline → compare vs `<ref-dir>` → theme-cover | anything that can change a page's look (CSS, template, locale, Rust value) — i.e. before most commits |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
 | `E2E_PROFILE=release <any of the above>` | the shipped profile | release candidates, Cargo profile changes, binary size |
 
@@ -35,6 +36,8 @@ Where code lives: `docs/MAP.md`. Deploy/config/commands: `README.md`. These rule
   existing `~/.cache/practical-e2e/<…>-<base-sha>`.
 - Visual rule: every state that `gate` reports as different must map to one intended change of yours, named per
   state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
+- a11y rule: a new axe finding fails (fix it, or add `<rule>⇥<key>⇥<reason>` to e2e/a11y-allow.txt); a line no state
+  shows any more is STALE and fails — delete it: the list only shrinks. Icon-only controls need aria-label/title.
 - A fixed bug gets a test that fails on the old code. A new cache gets a test that writes and reads back.
 - An intended bench cost is named in the commit with its ratio from the bench table.
 

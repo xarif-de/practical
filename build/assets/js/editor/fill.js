@@ -39,5 +39,8 @@
       const r = await practical.req(API + '/' + key); if (!r.ok) { practical.tell(r); return; } fill(r.data);
     } else fill(null, date);
     if (key && only) soloStart(only);
-    ed.hidden = false; if (!key && !quiet) f.summary.focus(); dayline();
+    const was = ed.hidden; if (was) opener = document.activeElement; ed.hidden = false;
+    // the focus moves into the dialog: a new entry's title, an existing one's unlock button (Enter edits)
+    if (!key && !quiet) f.summary.focus(); else if (key && was && !ed.contains(document.activeElement)) $('#ed-lock').focus();
+    dayline();
   }

@@ -24,6 +24,7 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
     let (mon, today_mon) = (monday_of(start), monday_of(today));
     let idx = by_day(instances, mon, mon + Duration::days(7 * count as i64));
     let mut out = String::with_capacity(count * 4096);
+    let add = add_btn(l);
     let all_day = if instances.iter().any(|i| i.all_day) { l.t("v-all-day") } else { String::new() };
     for wi in 0..count {
         let w0 = mon + Duration::days(7 * wi as i64);
@@ -63,7 +64,7 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
             if !marks.is_empty() {
                 items = format!("<li class=\"hols\"><time></time><span>{marks}</span></li>{items}");
             }
-            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{ADD}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d));
+            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{add}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d));
         }
         out.push_str("</div>");
     }

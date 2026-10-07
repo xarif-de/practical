@@ -202,6 +202,8 @@
   }
   // the entries of both views: one listener per view, not one per entry (entries come with the sort and the first switch)
   panels.addEventListener('click', e => { const li = e.target.closest('.list li[data-key]'); if (li) open(li.dataset.key); });
+  // the keyboard opens one too: a row is a Tab stop (contacts_list.html tabindex), Enter or Space on it is the click
+  panels.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.list li[data-key]')) { e.preventDefault(); open(e.target.dataset.key); } });
   // the table picks a contact with a click on its row; ↗ opens it in the list, a card cell opens that card (openSolo)
   tbody.addEventListener('click', e => {
     const tr = e.target.closest('tr[data-key]'); if (!tr) return;

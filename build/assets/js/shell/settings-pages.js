@@ -151,7 +151,7 @@
       const w = document.createElement('div');
       w.className = 'ask'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-modal', 'true');
       w.innerHTML = '<form class="ask-box"><p></p><label class="ask-type"><span></span> <b></b><input type="text" autocomplete="off"></label><div class="ask-acts"><button class="btn icon-btn" type="button"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-x"/></svg></button><button class="btn danger icon-btn" type="submit" disabled><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-trash-2"/></svg></button></div></form>';
-      $('p', w).textContent = ($('p', form) || {}).textContent || ''; $('.ask-type span', w).textContent = form.dataset.tType; $('.ask-type b', w).textContent = want;
+      $('p', w).textContent = ($('p', form) || {}).textContent || ''; w.setAttribute('aria-label', $('p', w).textContent || go.textContent.trim()); $('.ask-type span', w).textContent = form.dataset.tType; $('.ask-type b', w).textContent = want;
       const [no, yes] = $$('.ask-acts button', w); const goText = go.textContent.trim(); no.title = form.dataset.tCancel; no.setAttribute('aria-label', no.title); yes.title = goText; yes.setAttribute('aria-label', goText);
       const typed = $('.ask-type input', w); // no placeholder: a greyed copy of the answer reads as already filled in
       const end = () => { removeEventListener('keydown', key, true); w.remove(); };

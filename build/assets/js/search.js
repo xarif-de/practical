@@ -196,7 +196,7 @@
   function openAll(v) {
     close();
     const w = document.createElement('div'); w.className = 'ask sdlg-wrap';
-    w.innerHTML = `<div class="ask-box sdlg" role="dialog" aria-modal="true" aria-label="${esc(T.dlg)}"><div class="sd-head"><div class="sfield"><input type="search" autocomplete="off" spellcheck="false" aria-label="${esc(T.dlg)}"></div><button class="btn icon-btn" type="button" data-x title="${esc(T.close)}" aria-label="${esc(T.close)}">${ico('x')}</button></div><div class="seg sd-tabs" role="tablist"></div><div class="sres sd-list" role="listbox"></div><p class="sd-foot">${esc(T.keys)}</p></div>`;
+    w.innerHTML = `<div class="ask-box sdlg" role="dialog" aria-modal="true" aria-label="${esc(T.dlg)}"><div class="sd-head"><div class="sfield"><input type="search" autocomplete="off" spellcheck="false" aria-label="${esc(T.dlg)}"></div><button class="btn icon-btn" type="button" data-x title="${esc(T.close)}" aria-label="${esc(T.close)}">${ico('x')}</button></div><div class="seg sd-tabs" role="group"></div><div class="sres sd-list" role="listbox" aria-label="${esc(T.dlg)}"></div><p class="sd-foot">${esc(T.keys)}</p></div>`;
     document.body.appendChild(w);
     const inp = $('input', w), tabs = $('.sd-tabs', w), list = $('.sd-list', w);
     let d = null, cat = 'all', its = [], s = -1, t2, c2 = null;

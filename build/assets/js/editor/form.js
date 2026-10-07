@@ -2,7 +2,7 @@
   // ---- editor: a card form like the contact editor — view mode behind the lock, cards shown only
   // when they hold data, "add card" menu in edit mode, icon buttons, dirty tracking ----
   const ed = $('#ed'), form = $('#edform'), f = form.elements, D = form.dataset;
-  let current = null, openDate = null, baseline = '';
+  let current = null, openDate = null, baseline = '', opener = null; // opener: what had the focus before the dialog opened
   // the user worked in the dialog since it was filled: the leave-page guard and the work kept over a new login ask for it
   // (a rule editor opened by a link can differ from its baseline untouched; nothing to lose there)
   let touched = false;
@@ -13,7 +13,7 @@
   const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
-  function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const h = HOST(); if (h.closed) h.closed(); }
+  function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode) ruleLeave(); soloEnd(); const back = opener; opener = null; const a = document.activeElement; if (back && back.isConnected && (!a || a === document.body || ed.contains(a))) back.focus(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };
   // while a write is pending the dialog stays (its answer closes it, or shows why not): ×, Escape and "discard" wait
   function requestClose() { if (W.busy) return; if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }

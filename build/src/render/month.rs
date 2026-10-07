@@ -37,7 +37,10 @@ pub fn by_day(instances: &[Instance], from: NaiveDate, to: NaiveDate) -> HashMap
     m
 }
 
-pub const ADD: &str = "<button class=\"add\" type=\"button\" title=\"+\" aria-label=\"+\">+</button>";
+/// The "+" of a day (a new event on it): the sign stays "+", its accessible name says what it does.
+pub fn add_btn(l: &L) -> String {
+    format!("<button class=\"add\" type=\"button\" title=\"+\" aria-label=\"{}\">+</button>", e(&l.t("ed-title-new")))
+}
 
 pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
     out.push_str("<div class=\"ev");
@@ -63,7 +66,8 @@ pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
 pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate, hol: &Hols) -> String {
     let weeks = month_weeks(year, month);
     let idx = by_day(instances, weeks[0][0], weeks[weeks.len() - 1][6] + Duration::days(1));
-    let mut out = String::from("<div class=\"month\" role=\"grid\">");
+    let mut out = String::from("<div class=\"month\">");
+    let add = add_btn(l);
     for d in 0..7 {
         let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
     }
@@ -127,7 +131,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                 public.chain(school).collect()
             };
             let num = if fer.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{fer}</span>", d.day()) };
-            let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{ADD}<div class=\"dots\">");
+            let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{add}<div class=\"dots\">");
             for i in evs.iter().take(4) {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", E(&i.color));
             }

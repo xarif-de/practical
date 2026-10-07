@@ -105,11 +105,11 @@ async fn contacts_page_renders_its_view_and_the_part_the_other() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;
     let list = c.get("/contacts").await;
-    list.ok().has("<li data-key=\"alice/").has("<table class=\"sheet\">").has("data-jump=\"A\"");
+    list.ok().has("<li tabindex=\"0\" data-key=\"alice/").has("<table class=\"sheet\">").has("data-jump=\"A\"");
     assert!(!list.body.contains("<tr data-key="), "the list page has no table rows");
     let table = c.get("/contacts?view=table").await;
     table.ok().has("<tr data-key=\"alice/").has("data-name=\"Anna Schmidt\" data-given=\"Anna\" data-family=\"Schmidt\" data-bday=\"1985-04-02\" data-email=\"anna@example.org\"").has("data-jump=\"A\"");
-    assert!(!table.body.contains("<li data-key="), "the table page has no list entries");
+    assert!(!table.body.contains("<li tabindex=\"0\" data-key="), "the table page has no list entries");
     // the browser's pick; the URL wins over it
     c.cookie("ctview", "table");
     assert_eq!(c.get("/contacts").await.ok().body, table.body);

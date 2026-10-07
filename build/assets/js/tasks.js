@@ -153,16 +153,18 @@
   const optsOf = name => $$(`#ed select[name=${name}] option`).map(o => [o.value, o.textContent]);
   const shownCols = () => $$('#tk-colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col);
   const colLabel = c => { const i = $(`#tk-colpop input[data-col="${c}"]`); return i ? i.dataset.label : c; };
+  // a cell's input is named by its column (the header is out of its reach); one lookup per column, not per cell
+  const LBL = {}, cellName = f => ` aria-label="${esc(LBL[f] ??= colLabel(f === 'completed_at' ? 'completed' : f))}"`;
   const SORTABLE = { cal: 'cal', due: 'due', percent: 'pct', priority: 'prio', completed: 'done', created: 'created' };
   // a date input stays a date, a time stays a time: switching between the two is the dialog's job
   function dtIn(t, f) {
     const v = t[f] ? String(t[f]) : '';
     const allDay = f === 'completed_at' ? false : (v ? t[f + '_all_day'] : true);
-    return `<input type="${allDay ? 'date' : 'datetime-local'}" data-f="${f}" value="${esc(allDay ? v.slice(0, 10) : v.slice(0, 16))}"${f === 'due' && overdue(t) ? ' class="late"' : ''}${v ? '' : ' data-empty'}>`;
+    return `<input type="${allDay ? 'date' : 'datetime-local'}" data-f="${f}"${cellName(f)} value="${esc(allDay ? v.slice(0, 10) : v.slice(0, 16))}"${f === 'due' && overdue(t) ? ' class="late"' : ''}${v ? '' : ' data-empty'}>`;
   }
   function selIn(f, cur, opts) {
     const list = opts.some(([v]) => v === cur) ? opts : opts.concat([[cur, cur]]);
-    return `<select data-f="${f}">${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    return `<select data-f="${f}"${cellName(f)}>${list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   }
   const cardCell = (card, html, cl) => `<td class="cardcell${cl ? ' ' + cl : ''}" data-card="${card}" title="${esc(T.edit)}">${html || '<span class="mut">–</span>'}</td>`;
   const edTxt = (f, v) => `<span contenteditable="plaintext-only" data-f="${f}">${esc(v)}</span>`;
@@ -172,7 +174,7 @@
     start: t => `<td>${dtIn(t, 'start')}</td>`,
     due: t => `<td>${dtIn(t, 'due')}</td>`,
     status: t => `<td>${selIn('status', t.status, Object.entries(STL))}</td>`,
-    percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent" value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
+    percent: t => `<td class="tkc"><input type="number" min="0" max="100" step="5" data-f="percent"${cellName('percent')} value="${t.percent == null ? '' : t.percent}" placeholder="—"></td>`,
     priority: t => `<td>${selIn('priority', t.priority ? String(t.priority) : '', optsOf('priority'))}</td>`,
     completed: t => `<td>${dtIn(t, 'completed_at')}</td>`,
     // what a cell cannot hold opens the editor's own card for it (cardCell)
@@ -391,6 +393,7 @@
     main.classList.toggle('view-table', view === 'table');
     main.innerHTML = (VIEWS[view] || vGroups)() + (view === 'table' ? '' : SENTINEL());
     const sw2 = $('.sheetwrap', main); if (sw2) sw2.scrollTop = top;
+    $$('.tkcard, .tkkc, .bar2, .tchip[data-key], .ri', main).forEach(el => practical.keyClick(el)); // the table edits in place, the deck has its own keys
     watchSentinel();
     syncSort();
     alignEd();
@@ -494,7 +497,7 @@
     const fab = $('#fab'), withFab = FAB_VIEWS.includes(view) || (view === 'groups' && !dock);
     fab.hidden = !withFab; fab.classList.toggle('fab-add', withFab);
     root.classList.toggle('dock', dock);
-    ed.classList.toggle('docked', dock);
+    ed.classList.toggle('docked', dock); $('.box', ed).setAttribute('aria-modal', String(!dock)); // docked, it is a pane of the page
     if (dock) { ed.hidden = false; if (held === undefined) load(null, true); }
     else ed.hidden = !(cur || wantNew);
     alignEd();

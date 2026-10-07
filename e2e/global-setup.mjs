@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { BASE, BIN, E2E, FIRST_PORT, FIXTURE, LOGIN_BASE, PER_WORKER, REPO, RUN_DIR, WORK } from './lib/env.mjs';
 import { startPair } from './lib/servers.mjs';
+import { FINDINGS } from './lib/axe.mjs';
 
 /** The run dirs this run may use: one per worker slot (functional) or the shared pair's. */
 export const runDirs = config => (PER_WORKER ? [...Array(config.workers).keys()] : [0]).map(i => path.join(WORK, `run-${FIRST_PORT + 2 * i}`));
@@ -14,6 +15,7 @@ export default async function globalSetup(config) {
   if (!fs.existsSync(FIXTURE)) throw new Error(`no fixture at ${FIXTURE} — run: mise run e2e-seed`);
   for (const d of runDirs(config)) if (fs.existsSync(path.join(d, 'pids'))) throw new Error(`${d}/pids exists: a run on port ${FIRST_PORT} is active or was not torn down (stop those PIDs, delete the file)`);
   fs.mkdirSync(path.dirname(BIN), { recursive: true });
+  if (process.env.E2E_SUITE === 'a11y') fs.rmSync(FINDINGS, { recursive: true, force: true }); // this run's findings only (a11y-check.mjs)
   if (!process.env.E2E_SKIP_BUILD || !fs.existsSync(BIN) || !fs.existsSync(`${BIN}.assets`)) {
     const t0 = Date.now();
     execFileSync(path.join(E2E, 'build-server.sh'), [BIN], { stdio: 'inherit' });
