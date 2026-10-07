@@ -84,7 +84,7 @@ impl PlanMemo {
         if let Some(v) = self.objs.get(k) {
             return Ok(v.clone());
         }
-        let v = read_obj(state, k.0, &k.1, &k.2, &k.3).await?;
+        let v = read_obj(&state.db, k.0, &k.1, &k.2, &k.3).await?;
         self.objs.insert(k.clone(), v.clone());
         Ok(v)
     }
@@ -92,7 +92,7 @@ impl PlanMemo {
         if let Some(v) = self.blobs.get(h) {
             return Ok(v.clone());
         }
-        let v = blob(state, h).await?;
+        let v = blob(&state.db, h).await?;
         self.blobs.insert(h.to_string(), v.clone());
         Ok(v)
     }

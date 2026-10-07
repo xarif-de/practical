@@ -80,9 +80,9 @@ pub(super) async fn event_attachment(State(state): State<SharedState>, user: Pri
     let obj = state.calendars.get_object(&p, &c, &id, false).await?;
     let (raw, _) = events::split_ics(&obj.get_ics());
     let (fmt, name, bytes) = events::embedded_attachment(&raw.props, n).ok_or(AppError::NotFound)?;
-    let safe: String = name.chars().filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ')).collect();
+    let safe: String = name.chars().filter(|ch| ch.is_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ')).collect();
     // nosniff + a sandboxing CSP: the bytes are any client's; they are never a script or a page of this origin
-    Ok(([(axum::http::header::CONTENT_TYPE, fmt), (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", if safe.trim().is_empty() { format!("anhang-{}", n + 1) } else { safe })), (axum::http::header::CACHE_CONTROL, "private, max-age=0".into()), (axum::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()), (axum::http::header::CONTENT_SECURITY_POLICY, "sandbox; default-src 'none'".into())], bytes).into_response())
+    Ok(([(axum::http::header::CONTENT_TYPE, fmt), (axum::http::header::CONTENT_DISPOSITION, crate::routes::attachment(&if safe.trim().is_empty() { format!("anhang-{}", n + 1) } else { safe })), (axum::http::header::CACHE_CONTROL, "private, max-age=0".into()), (axum::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()), (axum::http::header::CONTENT_SECURITY_POLICY, "sandbox; default-src 'none'".into())], bytes).into_response())
 }
 
 #[derive(Deserialize)]

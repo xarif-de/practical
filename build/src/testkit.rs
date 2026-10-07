@@ -54,57 +54,111 @@ pub fn assert_snapshot(name: &str, actual: &str) {
 
 pub struct Counting;
 
-thread_local! {
-    /// (held now, highest since the last `peak_of` began); a Cell needs no allocation and no destructor
-    static HELD: std::cell::Cell<(isize, isize)> = const { std::cell::Cell::new((0, 0)) };
+/// One thread's bytes: held now, highest since the last `peak_of` began. Allocated once per thread straight from
+/// mimalloc and never freed: an allocation may be freed on another thread, or after its own thread ended.
+struct Ctr {
+    now: std::sync::atomic::AtomicIsize,
+    peak: std::sync::atomic::AtomicIsize,
 }
 
-fn count(delta: isize) {
-    let _ = HELD.try_with(|h| {
-        let (now, peak) = h.get();
-        h.set((now + delta, peak.max(now + delta)));
-    });
+/// a thread's first allocations before its counter exists, and those of a thread being torn down
+static ORPHAN: Ctr = Ctr { now: std::sync::atomic::AtomicIsize::new(0), peak: std::sync::atomic::AtomicIsize::new(0) };
+
+thread_local! {
+    static MINE: std::cell::Cell<*const Ctr> = const { std::cell::Cell::new(std::ptr::null()) };
+}
+
+fn mine() -> *const Ctr {
+    MINE.try_with(|m| {
+        if m.get().is_null() {
+            let p = unsafe { std::alloc::GlobalAlloc::alloc(&mimalloc::MiMalloc, std::alloc::Layout::new::<Ctr>()) } as *mut Ctr;
+            if p.is_null() {
+                return &ORPHAN as *const Ctr;
+            }
+            unsafe { p.write(Ctr { now: std::sync::atomic::AtomicIsize::new(0), peak: std::sync::atomic::AtomicIsize::new(0) }) };
+            m.set(p);
+        }
+        m.get()
+    })
+    .unwrap_or(&ORPHAN)
+}
+
+fn count(c: *const Ctr, delta: isize) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let c = unsafe { &*c };
+    let now = c.now.fetch_add(delta, Relaxed) + delta;
+    if delta > 0 {
+        c.peak.fetch_max(now, Relaxed);
+    }
+}
+
+/* Every block carries the counter of the thread that allocated it, just before the pointer handed out, so a free
+   counts against its owner wherever it happens: a value bound to a query goes to SQLite's worker thread and is freed
+   there, which a per-thread count kept as held forever (the history of a 4 000-object import: 18 MiB "held", most
+   of it the import's texts and diffs bound to INSERTs). */
+const HDR: usize = 16;
+
+fn outer(l: std::alloc::Layout) -> Option<(std::alloc::Layout, usize)> {
+    let off = l.align().max(HDR);
+    std::alloc::Layout::from_size_align(l.size().checked_add(off)?, off).ok().map(|o| (o, off))
+}
+
+unsafe fn owner(p: *mut u8) -> *const Ctr {
+    unsafe { (p.sub(8) as *const *const Ctr).read() }
 }
 
 unsafe impl std::alloc::GlobalAlloc for Counting {
     unsafe fn alloc(&self, l: std::alloc::Layout) -> *mut u8 {
-        let p = unsafe { std::alloc::GlobalAlloc::alloc(&mimalloc::MiMalloc, l) };
-        if !p.is_null() {
-            count(l.size() as isize);
+        let Some((o, off)) = outer(l) else { return std::ptr::null_mut() };
+        let base = unsafe { std::alloc::GlobalAlloc::alloc(&mimalloc::MiMalloc, o) };
+        if base.is_null() {
+            return base;
         }
+        let (p, c) = (unsafe { base.add(off) }, mine());
+        unsafe { (p.sub(8) as *mut *const Ctr).write(c) };
+        count(c, l.size() as isize);
         p
     }
     unsafe fn alloc_zeroed(&self, l: std::alloc::Layout) -> *mut u8 {
-        let p = unsafe { std::alloc::GlobalAlloc::alloc_zeroed(&mimalloc::MiMalloc, l) };
-        if !p.is_null() {
-            count(l.size() as isize);
+        let Some((o, off)) = outer(l) else { return std::ptr::null_mut() };
+        let base = unsafe { std::alloc::GlobalAlloc::alloc_zeroed(&mimalloc::MiMalloc, o) };
+        if base.is_null() {
+            return base;
         }
+        let (p, c) = (unsafe { base.add(off) }, mine());
+        unsafe { (p.sub(8) as *mut *const Ctr).write(c) };
+        count(c, l.size() as isize);
         p
     }
     unsafe fn dealloc(&self, p: *mut u8, l: std::alloc::Layout) {
-        unsafe { std::alloc::GlobalAlloc::dealloc(&mimalloc::MiMalloc, p, l) };
-        count(-(l.size() as isize));
+        let (o, off) = outer(l).expect("a layout this allocator handed out");
+        count(unsafe { owner(p) }, -(l.size() as isize));
+        unsafe { std::alloc::GlobalAlloc::dealloc(&mimalloc::MiMalloc, p.sub(off), o) };
     }
     unsafe fn realloc(&self, p: *mut u8, l: std::alloc::Layout, new: usize) -> *mut u8 {
-        let q = unsafe { std::alloc::GlobalAlloc::realloc(&mimalloc::MiMalloc, p, l, new) };
-        if !q.is_null() {
-            count(new as isize - l.size() as isize);
+        let (o, off) = outer(l).expect("a layout this allocator handed out");
+        let Some(size) = new.checked_add(off) else { return std::ptr::null_mut() };
+        let c = unsafe { owner(p) };
+        // the header moves along with the content: the block keeps its owner
+        let base = unsafe { std::alloc::GlobalAlloc::realloc(&mimalloc::MiMalloc, p.sub(off), o, size) };
+        if base.is_null() {
+            return base;
         }
-        q
+        count(c, new as isize - l.size() as isize);
+        unsafe { base.add(off) }
     }
 }
 
-/// `f`'s result and the most bytes this thread held during it beyond what it held before. A `#[tokio::test]`
-/// runs the router on its own thread (current-thread runtime), so this is the request's own peak; what the
-/// SQLite worker thread allocates for the rows is not in it.
+/// `f`'s result and the most bytes this thread held during it beyond what it held before: what it allocated and
+/// is not freed yet, wherever the free happens. A `#[tokio::test]` runs the router on its own thread (current-thread
+/// runtime), so this is the request's own peak; what the SQLite worker thread allocates for the rows is not in it.
 pub async fn peak_of<F: std::future::Future>(f: F) -> (F::Output, usize) {
-    let base = HELD.with(|h| {
-        let (now, _) = h.get();
-        h.set((now, now));
-        now
-    });
+    use std::sync::atomic::Ordering::Relaxed;
+    let c = unsafe { &*mine() };
+    let base = c.now.load(Relaxed);
+    c.peak.store(base, Relaxed);
     let out = f.await;
-    (out, HELD.with(|h| (h.get().1 - base).max(0) as usize))
+    (out, (c.peak.load(Relaxed) - base).max(0) as usize)
 }
 
 // ---- a running app ----

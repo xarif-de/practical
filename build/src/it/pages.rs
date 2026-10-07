@@ -98,6 +98,47 @@ async fn contacts_list_and_table() {
     assert!(!filtered.body.contains("Anna Schmidt"));
 }
 
+/// One view per page (perf3 #8): the URL's, else the browser's last pick (cookie `ctview`), else the list; the other
+/// comes from /contacts/part as the page would render it.
+#[tokio::test]
+async fn contacts_page_renders_its_view_and_the_part_the_other() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let list = c.get("/contacts").await;
+    list.ok().has("<li data-key=\"alice/").has("<table class=\"sheet\">").has("data-jump=\"A\"");
+    assert!(!list.body.contains("<tr data-key="), "the list page has no table rows");
+    let table = c.get("/contacts?view=table").await;
+    table.ok().has("<tr data-key=\"alice/").has("data-name=\"Anna Schmidt\" data-given=\"Anna\" data-family=\"Schmidt\" data-bday=\"1985-04-02\" data-email=\"anna@example.org\"").has("data-jump=\"A\"");
+    assert!(!table.body.contains("<li data-key="), "the table page has no list entries");
+    // the browser's pick; the URL wins over it
+    c.cookie("ctview", "table");
+    assert_eq!(c.get("/contacts").await.ok().body, table.body);
+    assert_eq!(c.get("/contacts?view=list").await.ok().body, list.body);
+    // the parts: exactly what the page of the other view renders (the rows without the sort keys: the list has them)
+    let lp = c.get("/contacts/part?view=list").await;
+    lp.ok();
+    assert!(lp.body.starts_with("<section class=\"lpanel\" data-letter=\"A\">") && lp.body.ends_with("</section>"), "{}", &lp.body[..80]);
+    assert!(list.body.contains(&format!("<div class=\"panels\">\n{}\n", lp.body)));
+    let tp = c.get("/contacts/part?view=table").await;
+    tp.ok();
+    let strip = |h: &str| ["data-name", "data-given", "data-family", "data-bday", "data-email"].iter().fold(h.to_string(), |h, a| {
+        let mut out = String::new();
+        let mut rest = h.as_str();
+        while let Some(i) = rest.find(&format!(" {a}=\"")) {
+            out.push_str(&rest[..i]);
+            let v = &rest[i + a.len() + 3..];
+            rest = &v[v.find('"').unwrap() + 1..];
+        }
+        out + rest
+    });
+    assert!(tp.body.starts_with("<tr data-key=") && !tp.body.contains("data-name="));
+    assert!(strip(&table.body).contains(&format!("<tbody>\n{}\n</tbody>", tp.body)));
+    assert!(list.body.contains("<tbody>\n\n</tbody>") && table.body.contains("<div class=\"panels\">\n\n"));
+    // the page's address book filter applies
+    let none = c.get("/contacts/part?view=table&abs=alice/none").await;
+    assert_eq!(none.ok().body, "");
+}
+
 #[tokio::test]
 async fn tasks_page_ships_its_json_island() {
     let s = seed().await;

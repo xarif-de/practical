@@ -90,6 +90,21 @@ const INTERACTIONS = [
     done: k => { const c = document.querySelector(`#tkmain .tkcard[data-key="${k}"]`); return !!c && c.classList.contains('off') && !document.querySelector('.ask'); },
   },
   {
+    // list → table on /contacts: with the table in the page a class switch and its layout; with one view per page
+    // (perf3 #8) the rows the hover fetched (prep: the pointer rests on the switch until the network is quiet), parsed
+    // and laid out. The view is picked in this browser (localStorage, cookie `ctview`): prep resets it to the list.
+    name: 'contacts-table',
+    prep: async s => {
+      await s.page.context().addCookies([{ name: 'ctview', value: 'list', domain: new URL(s.page.url()).hostname, path: '/contacts' }]); // the path app.js sets it for
+      await s.page.evaluate(() => { localStorage.ctview = 'list'; });
+      await s.page.goto('/contacts');
+      await s.page.locator('.list li[data-key]').first().waitFor();
+      await s.page.hover('[data-ctview=table]');
+    },
+    act: async s => rawClick(s.page, '[data-ctview=table]'),
+    done: () => !!document.querySelector('#contacts.view-table .sheet tbody tr[data-key]') && document.querySelector('.sheetwrap').getBoundingClientRect().height > 0,
+  },
+  {
     name: 'search-key',
     prep: async s => {
       await s.month();

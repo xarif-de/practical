@@ -5,10 +5,43 @@
   const { $, $$ } = practical;
   const lang = document.body.dataset.lang || 'de';
   const T = { ...trs('js-ct-', ['del', 'err', 'phone', 'email', 'create', 'save', 'reset', 'cancel', 'delete']), kinds: ['home', 'work', 'cell', 'other'] };
-  // view switch; the picked contact (activeKey) stays picked and in view
+  /* one view per page (perf3 #8: the table was 417 KB of the 764 KB page, and every row was wired at load): the
+     server renders the one the page opens in (?view=, else the `ctview` cookie set here, else the list); the other
+     comes from /contacts/part (the page's address book filter applies) on the first switch to it, fetched on the
+     intent to switch (practical.intent: hover, focus, press) and put in the page while hidden, so the click itself only
+     switches (a hover-fetched table parsed on the click took 270 ms instead of 172 at 4x CPU, measured). `has[v]`: the
+     view's entries are in the page. */
   let activeKey = null;
-  $$('[data-ctview]').forEach(b => b.onclick = () => { const table = b.dataset.ctview === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== (table ? 'table' : 'list')); segPress(b); localStorage.ctview = b.dataset.ctview; if (activeKey) reveal(activeKey); });
-  if (localStorage.ctview === 'table' && !wrap.classList.contains('view-table') && location.hash.length <= 1) $('[data-ctview=table]').click(); // a link to one contact (#key) opens the list
+  const panels = $('.panels', wrap), tbody = $('.sheet tbody', wrap), table0 = wrap.classList.contains('view-table');
+  const has = { list: !table0, table: table0 }, loading = {};
+  const partUrl = v => { const u = new URL('/contacts/part', location.href), abs = new URLSearchParams(location.search).get('abs'); u.searchParams.set('view', v); if (abs) u.searchParams.set('abs', abs); return u.href; };
+  // quiet (the intent): only what the prefetch brought (practical.prefetch keeps to its rules: an open live stream, no Save-Data), unseen
+  function load(v, quiet) {
+    if (has[v]) return Promise.resolve(true);
+    let l = loading[v];
+    if (!l) {
+      l = loading[v] = { quiet, p: (async () => {
+        const u = partUrl(v); let html = await practical.prefetched(u);
+        if (html !== null && !/^(<tr |<section |$)/.test(html)) html = null; // a prefetch sent on to the login page: ask again (req tells why)
+        if (html === null && !quiet) { const r = practical.tell(await practical.req(u, { as: 'text', wait: 300 })); if (r.ok) html = r.data; }
+        if (html === null) return false;
+        if (!has[v]) arrive(v, html);
+        return true;
+      })().finally(() => { loading[v] = null; }) };
+    }
+    return quiet || !l.quiet ? l.p : l.p.then(ok => ok || load(v)); // a click during the intent's load: that one, else its own
+  }
+  // the view switch; the picked contact (activeKey) stays picked and in view. The choice is kept at once (this
+  // browser: localStorage, and the cookie the server reads), the view shows once its entries are there.
+  let want = null;
+  async function setView(b, remember = true) {
+    const v = b.dataset.ctview; want = v;
+    if (remember) { localStorage.ctview = v; document.cookie = `ctview=${v}; path=/contacts; max-age=31536000; SameSite=Lax`; }
+    if (!await load(v) || want !== v) return;
+    const table = v === 'table'; wrap.classList.toggle('view-table', table); $$('#colpop [data-for]').forEach(g => g.hidden = g.dataset.for !== v); segPress(b); if (activeKey) reveal(activeKey);
+    railTick();
+  }
+  $$('[data-ctview]').forEach(b => { b.onclick = () => setView(b); practical.intent(b, () => { const v = b.dataset.ctview; if (has[v]) return []; setTimeout(() => load(v, true)); return [partUrl(v)]; }); }); // the load takes the prefetch made right after this
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
   $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); practical.send('/settings/columns', 'POST', on).then(practical.tell); }));
@@ -21,10 +54,13 @@
   const fb = $('#abfilter');
   function applyFilter() {
     const abs = $$('input[data-ab]', fb).filter(i => !i.checked).map(i => i.dataset.ab); const cats = $$('input[data-cat]', fb).filter(i => !i.checked).map(i => i.dataset.cat);
-    $$('[data-key][data-ab]', wrap).forEach(el => el.classList.toggle('hide', abs.includes(el.dataset.ab) || cats.includes(el.dataset.cat)));
+    const off = el => abs.includes(el.dataset.ab) || cats.includes(el.dataset.cat);
+    $$('[data-key][data-ab]', wrap).forEach(el => el.classList.toggle('hide', off(el)));
     $$('.lpanel', wrap).forEach(p => p.classList.toggle('hide', !$$('li:not(.hide)', p).length));
-    $$('.ct-rail [data-jump]', wrap).forEach(b => { const p = $(`.lpanel[data-letter="${CSS.escape(b.dataset.jump)}"]`, wrap); b.classList.toggle('hide', !p || p.classList.contains('hide')); });
-    if (typeof railMark === 'function') setTimeout(railMark, 0);
+    // a letter of the rail shows while one of its contacts does (the list may not be in the page)
+    const shown = new Set(recs.filter(r => !off(r.li || r.tr)).map(r => r.g));
+    $$('.ct-rail [data-jump]', wrap).forEach(b => b.classList.toggle('hide', !shown.has(b.dataset.jump)));
+    railTick(); // with the frame: a timer before it laid the page out once more (measured: +47 ms at 4x CPU on a switch)
   }
   if (fb) $$('input', fb).forEach(i => i.addEventListener('change', applyFilter));
   if (fb) $$('[data-filter]', fb).forEach(a => a.addEventListener('click', e => { e.preventDefault(); $$('input[data-ab]', fb).forEach(i => { i.checked = a.dataset.filter === 'all' || (a.dataset.filter === 'mine' && !i.parentElement.querySelector('small')); }); applyFilter(); })); // as the calendar filter
@@ -47,7 +83,6 @@
   }
   const railTick = () => { if (!railTick._q) { railTick._q = true; requestAnimationFrame(() => { railTick._q = false; railMark(); }); } };
   $('.main').addEventListener('scroll', railTick); $('.sheetwrap', wrap).addEventListener('scroll', railTick);
-  $$('[data-ctview]').forEach(b => b.addEventListener('click', () => setTimeout(railMark, 0)));
   /* sort field + direction, the same box as on the tasks page. The list regroups (initial letter, or
      birth month), the table reorders, the rail follows; entries without the value stay at the end. */
   const SL = trs('js-ctsort-', ['given', 'family', 'bday', 'email', 'none']), TS = trs('js-tk-', ['sort', 'asc', 'desc']);
@@ -57,37 +92,49 @@
   const coll = new Intl.Collator(lang, { sensitivity: 'base', numeric: true });
   const MONTHS = Array.from({ length: 12 }, (_, i) => dfmt(new Date(2000, i, 1), { month: 'long' }));
   const initial = v => { const c = v.normalize('NFD').charAt(0).toUpperCase(); return /\p{L}/u.test(c) ? c : '#'; };
-  const rowOf = new Map(); $$('tr[data-key]', wrap).forEach(tr => { if (!rowOf.has(tr.dataset.key)) rowOf.set(tr.dataset.key, tr); }); // one pass, not one search per contact
-  const recs = $$('.panels li[data-key]', wrap).map(li => {
-    const d = li.dataset, name = d.name.trim(), md = d.bday.match(/(\d{2})-(\d{2})$/);
-    return { li, tr: rowOf.get(d.key) || null, given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
+  // a contact's sort keys, from its list entry or — the list not in the page — its table row (contacts_rows.html `keys`)
+  const recs = $$(table0 ? 'tr[data-key]' : '.panels li[data-key]', wrap).map(el => {
+    const d = el.dataset, name = d.name.trim(), md = d.bday.match(/(\d{2})-(\d{2})$/);
+    return { key: d.key, li: table0 ? null : el, tr: table0 ? el : null, g: null, given: `${d.given || name} ${d.family}`.trim(), family: `${d.family || name} ${d.given}`.trim(), bday: md ? `${md[1]}-${md[2]}` : '', email: d.email.trim().toLowerCase() };
   });
+  // the entries of the view that came later to their contacts: the first of each key (one pass, not one search per contact)
+  const attach = () => {
+    const of = new Map(); $$(table0 ? '.panels li[data-key]' : 'tr[data-key]', wrap).forEach(el => { if (!of.has(el.dataset.key)) of.set(el.dataset.key, el); });
+    recs.forEach(r => { r[table0 ? 'li' : 'tr'] = of.get(r.key) || null; });
+  };
   const groupOf = r => !r[sort] ? '-' : sort === 'bday' ? r.bday.slice(0, 2) : initial(r[sort]);
   const label = g => g === '-' ? SL.none : sort === 'bday' ? MONTHS[+g - 1] : g;
   const short = g => g === '-' ? '–' : sort === 'bday' ? MONTHS[+g - 1].slice(0, 3) : g;
+  // the groups of the last sort, [[group, contacts]]: a view that comes later is laid out in them (place)
+  let order = [];
   function resort() {
-    const has = recs.filter(r => r[sort]), none = recs.filter(r => !r[sort]);
-    has.sort((a, b) => coll.compare(a[sort], b[sort]) || coll.compare(a.given, b.given));
-    if (desc) has.reverse();
+    const valued = recs.filter(r => r[sort]), none = recs.filter(r => !r[sort]);
+    valued.sort((a, b) => coll.compare(a[sort], b[sort]) || coll.compare(a.given, b.given));
+    if (desc) valued.reverse();
     none.sort((a, b) => coll.compare(a.given, b.given));
     const groups = new Map();
-    for (const r of has.concat(none)) { const g = groupOf(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); }
-    const panels = $('.panels', wrap), tbody = $('.sheet tbody', wrap), ph = $('.placeholder', panels);
-    $$('.lpanel', panels).forEach(p => p.remove());
+    for (const r of valued.concat(none)) { const g = groupOf(r); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); }
+    order = [...groups];
+    place(has.list, has.table);
     let rail = '';
-    for (const [g, rs] of groups) {
-      const sec = document.createElement('section'); sec.className = 'lpanel'; sec.dataset.letter = g;
-      sec.innerHTML = `<h3>${hesc(label(g))}</h3><ul class="list"></ul>`;
-      const ul = sec.lastElementChild;
-      rs.forEach(r => { ul.appendChild(r.li); if (r.tr) { r.tr.dataset.letter = g; tbody.appendChild(r.tr); } });
-      panels.insertBefore(sec, ph);
-      rail += `<button type="button" data-jump="${hesc(g)}" title="${hesc(label(g))}">${hesc(short(g))}</button>`;
-    }
+    for (const [g] of order) rail += `<button type="button" data-jump="${hesc(g)}" title="${hesc(label(g))}">${hesc(short(g))}</button>`;
     $('.ct-rail', wrap).innerHTML = rail;
     sortSel.value = sort;
     sortDir.innerHTML = `<svg class="ico s" aria-hidden="true"><use href="${practical.sprite}#i-${desc ? 'sort-desc' : 'sort-asc'}"/></svg>`;
     sortDir.title = desc ? TS.desc : TS.asc; sortDir.setAttribute('aria-label', sortDir.title);
     applyFilter();
+  }
+  // the entries of the list (letter panels) and/or the table (rows, their letter) in the order of the last sort
+  function place(list, table) {
+    const ph = $('.placeholder', panels);
+    if (list) $$('.lpanel', panels).forEach(p => p.remove());
+    for (const [g, rs] of order) {
+      let sec = null;
+      if (list) { sec = document.createElement('section'); sec.className = 'lpanel'; sec.dataset.letter = g; sec.innerHTML = `<h3>${hesc(label(g))}</h3><ul class="list"></ul>`; }
+      const ul = sec && sec.lastElementChild;
+      rs.forEach(r => { r.g = g; if (ul && r.li) ul.appendChild(r.li); if (table && r.tr) { r.tr.dataset.letter = g; tbody.appendChild(r.tr); } });
+      if (sec) panels.insertBefore(sec, ph);
+    }
   }
   const sortBox = $('#ct-sortbox');
   sortBox.innerHTML = `<span class="sel" title="${hesc(TS.sort)}"><svg class="ico s" aria-hidden="true"><use href="${practical.sprite}#i-swap"/></svg><select id="ct-sort" aria-label="${hesc(TS.sort)}">${FIELDS.map(v => `<option value="${v}">${hesc(SL[v])}</option>`).join('')}</select></span><button class="btn icon-btn" id="ct-dir" type="button"></button>`;
@@ -145,9 +192,34 @@
     activeKey = c ? KEY(c) : null; markRow(activeKey);
     $$('.list li.on').forEach(l => l.classList.remove('on')); if (c) { const li = $(`.list li[data-key="${f.key.value}"]`); if (li) li.classList.add('on'); }
   }
-  async function open(key) { const r = practical.tell(await practical.req('/api/contacts/' + key)); if (r.ok) show(r.data); return r.ok; }
-  $$('.list li[data-key]').forEach(li => li.onclick = () => open(li.dataset.key));
-  $$('[data-open]').forEach(b => b.onclick = () => { wrap.classList.remove('view-table'); $('[data-ctview=list]').click(); open(b.dataset.open); });
+  // one load per contact at a time: a switch to the list reveals the picked contact while its own open is on the way
+  let opening = null;
+  function open(key) {
+    if (opening && opening.key === key) return opening.p;
+    const p = (async () => { const r = practical.tell(await practical.req('/api/contacts/' + key)); if (r.ok) show(r.data); return r.ok; })();
+    opening = { key, p }; p.finally(() => { if (opening && opening.p === p) opening = null; });
+    return p;
+  }
+  // the entries of both views: one listener per view, not one per entry (entries come with the sort and the first switch)
+  panels.addEventListener('click', e => { const li = e.target.closest('.list li[data-key]'); if (li) open(li.dataset.key); });
+  // the table picks a contact with a click on its row; ↗ opens it in the list, a card cell opens that card (openSolo)
+  tbody.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+    const b = e.target.closest('[data-open]'), td = e.target.closest('td.cardcell');
+    if (b) { setView($('[data-ctview=list]')); open(b.dataset.open); } else if (td) openSolo(tr.dataset.key, td.dataset.card);
+    activeKey = tr.dataset.key; markRow(activeKey);
+  });
+  const preList = e => { if (!has.list && e.target.closest && e.target.closest('[data-open]')) practical.prefetch(partUrl('list')); }; // ↗ needs the list
+  tbody.addEventListener('pointerover', preList); tbody.addEventListener('focusin', preList);
+  // the other view's entries, as its page renders them (contacts_list.html, contacts_rows.html), sorted and filtered as this one
+  function arrive(v, html) {
+    has[v] = true;
+    (v === 'list' ? panels : tbody).insertAdjacentHTML('afterbegin', html);
+    attach();
+    if (v === 'list') applyListFields(); else applyCols();
+    place(v === 'list', v === 'table'); applyFilter();
+    if (v === 'table') markRow(activeKey); else if (current) { const li = $(`.list li[data-key="${CSS.escape(KEY(current))}"]`, wrap); if (li) li.classList.add('on'); }
+  }
   // editing: dirty tracking, display name follows given + family, dates re-evaluate
   form.addEventListener('input', e => { if (e.target === f.given || e.target === f.family) { if (fnAuto) f.full_name.value = [f.given.value, f.family.value].filter(Boolean).join(' '); } else if (e.target === f.full_name) fnAuto = !f.full_name.value; const p = e.target.closest('.pdate'); if (p) dateInfo(p); updateButtons(); });
   form.addEventListener('change', updateButtons);
@@ -179,7 +251,7 @@
       case 'gmaps': open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(adrText())); break;
       case 'copy': practical.copy(row.classList.contains('adr') ? adrText() : val).then(ok => { if (!ok) return; b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); break;
       case 'im': { const svc = $('select.typ', row).value; const u = { Signal: 'https://signal.me/#p/' + digits, WhatsApp: 'https://wa.me/' + digits.replace(/^\+/, ''), Telegram: 'https://t.me/' + val.replace(/^@/, ''), Matrix: 'https://matrix.to/#/' + val, XMPP: 'xmpp:' + val, Threema: 'https://threema.id/' + val }[svc]; if (u) open_(u); break; }
-      case 'goto': { const li = $$('.list li[data-key]').find(l => (l.dataset.name || '').toLowerCase() === val.toLowerCase()); if (li) { open(li.dataset.key); const sc = $('.main'); sc.scrollTop += li.getBoundingClientRect().top - sc.getBoundingClientRect().top - 120; } else toast(D.tMissing, true); break; }
+      case 'goto': load('list').then(() => { const li = $$('.list li[data-key]').find(l => (l.dataset.name || '').toLowerCase() === val.toLowerCase()); if (li) { open(li.dataset.key); const sc = $('.main'); sc.scrollTop += li.getBoundingClientRect().top - sc.getBoundingClientRect().top - 120; } else toast(D.tMissing, true); }); break; // the names are the list's
     }
   }
   $('#ct-lock').onclick = () => mode('edit');
@@ -193,13 +265,16 @@
     if (wrap.classList.contains('view-table')) { const tr = markRow(key); if (tr) tr.scrollIntoView({ block: 'center' }); return; }
     if (!current || KEY(current) !== key) await open(key); const li = $(`.list li[data-key="${CSS.escape(key)}"]`, wrap); if (li) li.scrollIntoView({ block: 'center' });
   }
-  // the table picks a contact with a click on its row; the list opens it (above)
-  $$('.sheet tr[data-key]', wrap).forEach(tr => tr.addEventListener('click', () => { activeKey = tr.dataset.key; markRow(activeKey); }));
   window.rusticalContacts = { reveal };
   // the work an ended session left unsaved (practical.keep above) comes back before anything else is opened
   const kept = practical.unstash('ct');
   if (kept) { show(kept.d); if (kept.isNew) { f.key.value = f.etag.value = ''; form.classList.add('new'); const b = $('#ct-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); baseline = ''; updateButtons(); toast(tr('js-req-restored')); }
-  else if (location.hash.length > 1) reveal(decodeURIComponent(location.hash.slice(1))); else if (wide()) show(null);
+  else if (location.hash.length > 1) {
+    // a link to one contact opens the list — also where the remembered view is the table (?view=table shows it there)
+    const key = decodeURIComponent(location.hash.slice(1));
+    if (table0 && !new URLSearchParams(location.search).has('view')) { activeKey = key; setView($('[data-ctview=list]'), false); } else reveal(key);
+  } else if (wide()) show(null);
+  if (localStorage.ctview === 'table' && !table0 && location.hash.length <= 1) setView($('[data-ctview=table]')); // picked before the cookie existed
   function collect() {
     const [principal, ab_id] = f.ab.value.split('/');
     const g = k => f[k].value.trim();
@@ -219,28 +294,27 @@
   form.addEventListener('submit', e => { e.preventDefault(); W.run(put); });
   $('#ct-delete').onclick = async () => { if (W.busy || !await ask(T.del)) return; W.run(async () => { const r = await practical.req('/api/contacts/' + f.key.value, { method: 'DELETE' }); if (r.ok) { location.hash = ''; practical.leaving = true; location.reload(); } return r; }); };
   // table inline edit: fetch → patch one field → PUT
-  $$('.sheet td[contenteditable][data-f], .sheet .pin [contenteditable][data-f]').forEach(cell => {
-    let before = '';
-    cell.addEventListener('focus', () => before = cell.textContent);
-    cell.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cell.blur(); } });
-    cell.addEventListener('blur', async () => {
-      const v = cell.textContent.trim(); if (v === before.trim()) return;
-      const tr = cell.closest('tr'); const key = tr.dataset.key;
-      try {
-        const got = await practical.req('/api/contacts/' + key); if (!got.ok) throw got;
-        const c = got.data, body = { ...c }; // the contact JSON is a superset of the input: nothing gets dropped
-        switch (cell.dataset.f) {
-          case 'full_name': { body.full_name = v; const parts = v.split(/\s+/); body.given = parts.slice(0, -1).join(' '); body.family = parts.slice(-1)[0] || ''; break; }
-          case 'phone': body.phones = v ? [{ kind: (c.phones[0] || {}).kind || 'cell', value: v }, ...c.phones.slice(1)] : c.phones.slice(1); break;
-          case 'email': body.emails = v ? [{ kind: (c.emails[0] || {}).kind || 'home', value: v }, ...c.emails.slice(1)] : c.emails.slice(1); break;
-          case 'birthday': { const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/); body.birthday = m ? (m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`) : v; break; }
-          case 'org': body.org = v; break;
-        }
-        const r = await practical.send('/api/contacts/' + key, 'PUT', body);
-        if (!r.ok) throw r;
-        cell.style.outline = '2px solid var(--c2)'; setTimeout(() => cell.style.outline = '', 800);
-      } catch (e) { cell.textContent = before; if (e && e.kind) practical.tell(e); else console.error(e); }
-    });
+  const before = new WeakMap(), editable = e => e.target.closest && e.target.closest('[contenteditable][data-f]');
+  tbody.addEventListener('focusin', e => { const cell = editable(e); if (cell) before.set(cell, cell.textContent); });
+  tbody.addEventListener('keydown', e => { const cell = editable(e); if (cell && e.key === 'Enter') { e.preventDefault(); cell.blur(); } });
+  tbody.addEventListener('focusout', async e => {
+    const cell = editable(e); if (!cell) return;
+    const was = before.get(cell) || '', v = cell.textContent.trim(); if (v === was.trim()) return;
+    const tr = cell.closest('tr'); const key = tr.dataset.key;
+    try {
+      const got = await practical.req('/api/contacts/' + key); if (!got.ok) throw got;
+      const c = got.data, body = { ...c }; // the contact JSON is a superset of the input: nothing gets dropped
+      switch (cell.dataset.f) {
+        case 'full_name': { body.full_name = v; const parts = v.split(/\s+/); body.given = parts.slice(0, -1).join(' '); body.family = parts.slice(-1)[0] || ''; break; }
+        case 'phone': body.phones = v ? [{ kind: (c.phones[0] || {}).kind || 'cell', value: v }, ...c.phones.slice(1)] : c.phones.slice(1); break;
+        case 'email': body.emails = v ? [{ kind: (c.emails[0] || {}).kind || 'home', value: v }, ...c.emails.slice(1)] : c.emails.slice(1); break;
+        case 'birthday': { const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/); body.birthday = m ? (m[3] ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : `--${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`) : v; break; }
+        case 'org': body.org = v; break;
+      }
+      const r = await practical.send('/api/contacts/' + key, 'PUT', body);
+      if (!r.ok) throw r;
+      cell.style.outline = '2px solid var(--c2)'; setTimeout(() => cell.style.outline = '', 800);
+    } catch (e) { cell.textContent = was; if (e && e.kind) practical.tell(e); else console.error(e); }
   });
   // table view: + opens the editor as a dialog over the table (the list view has it beside the list)
   const dlgClose = () => { wrap.classList.remove('dlg', 'solo'); form.classList.remove('solo'); f.full_name.readOnly = false; det.classList.remove('on'); if (!wide()) det.hidden = true; };
@@ -257,6 +331,5 @@
     const add = $('[data-add]', c); if (add && !$('.rows .row', c)) add.click();
     const first = $('input:not([type=hidden]):not([readonly]), textarea', c) || $('select', c); if (first) first.focus();
   }
-  $$('.sheet td.cardcell').forEach(td => td.onclick = () => openSolo(td.closest('tr').dataset.key, td.dataset.card));
   addEventListener('keydown', e => { if (e.key === 'Escape' && wrap.classList.contains('dlg')) dlgClose(); });
 })();

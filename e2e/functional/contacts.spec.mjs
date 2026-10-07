@@ -72,8 +72,10 @@ test('create a contact from the table view (+ dialog)', async ({ page }) => {
   const saved = waitFor(page, 'POST', /^\/api\/contacts$/);
   await page.click('#ct-save');
   expect((await saved).ok()).toBe(true);
-  await expect(page.locator('.list li[data-name="F3 Tabea Tisch"]')).toHaveCount(1);
-  const key = await page.locator('.list li[data-name="F3 Tabea Tisch"]').getAttribute('data-key');
+  // back in the table (?view=table): the new row is there, picked (the list is not in this page)
+  const row = page.locator('.sheet tr[data-name="F3 Tabea Tisch"]');
+  await expect(row).toHaveClass(/\bon\b/);
+  const key = await row.getAttribute('data-key');
   expect((await api(page, 'GET', `/api/contacts/${key}`)).full_name).toBe('F3 Tabea Tisch');
 });
 
@@ -273,4 +275,50 @@ test('the display name is the editor\'s title: 20 px semibold like the event tit
   expect(await font()).toEqual(['20px', '600', '0px']);
   expect(await name.evaluate(el => getComputedStyle(el).borderBottomStyle)).toBe('solid'); // the edit underline stays
   await expect(page.locator('#ct-error')).toHaveAttribute('role', 'alert'); // a failed save is announced
+});
+
+test('one view per page: the other arrives on the first switch, sorted and filtered as the first; the server remembers the pick', async ({ page }) => {
+  const parts = []; page.on('request', r => { if (new URL(r.url()).pathname === '/contacts/part') parts.push(new URL(r.url()).search); });
+  await list(page);
+  await expect(page.locator('.sheet tbody tr')).toHaveCount(0); // the table is not in the list's page
+  await page.selectOption('#ct-sort', 'family');
+  await page.click('#ct-dir'); // descending
+  await page.click('.topbar .filter:has(#abfilter) > button');
+  await page.locator('#abfilter input[data-cat="Arbeit"]').uncheck();
+  await page.click('.toolbar h1');
+  // the intent fetches it, the click shows it
+  await page.hover('[data-ctview=table]');
+  await expect.poll(() => parts).toEqual(['?view=table']);
+  await page.click('[data-ctview=table]');
+  await expect(page.locator('#contacts.view-table .sheet tbody tr').first()).toBeVisible();
+  const order = sel => page.locator(sel).evaluateAll(els => els.map(e => [e.dataset.key, e.classList.contains('hide'), e.dataset.letter || e.closest('.lpanel').dataset.letter]));
+  expect(await order('.sheet tbody tr')).toEqual(await order('.panels li[data-key]'));
+  expect(await page.locator('.sheet tbody tr.hide').count()).toBeGreaterThan(0);
+  // the column picker's choice holds for the rows that came (a column that is off is off in every row)
+  const offCols = await page.locator('.sheet thead th.off').evaluateAll(ths => ths.map(t => t.dataset.c));
+  for (const c of offCols) expect(await page.locator(`.sheet tbody td[data-c="${c}"]:not(.off)`).count()).toBe(0);
+  // the rows work: a card cell opens its card as a dialog
+  await page.locator(`.sheet tr[data-key="${ANNA}"] td[data-c="category"]`).click();
+  await expect(page.locator('#contacts.dlg.solo')).toBeVisible();
+  await page.keyboard.press('Escape');
+  expect(parts).toEqual(['?view=table']); // once
+  // the next visit opens in the table, the list comes on its switch
+  await page.goto('/contacts');
+  await expect(page.locator('#contacts.view-table')).toBeVisible();
+  await expect(page.locator('.panels li[data-key]')).toHaveCount(0);
+  await page.locator(`.sheet tr[data-key="${ANNA}"] [data-open]`).click(); // ↗: the contact in the list
+  await expect(page.locator('#contacts:not(.view-table)')).toBeVisible();
+  await expect(page.locator(`.list li[data-key="${ANNA}"]`)).toHaveClass(/\bon\b/);
+  await expect(page.locator('#ctform input[name=full_name]')).toHaveValue('Anna Albrecht');
+  // a link to one contact opens the list, the remembered table stays remembered
+  await page.click('[data-ctview=table]');
+  await page.goto('/tasks'); // from another page: a new document (a hash alone would not load one)
+  await page.goto(`/contacts#${AB}/c-dora@seed`);
+  await expect(page.locator('#contacts:not(.view-table)')).toBeVisible();
+  await expect(page.locator('#ctform input[name=full_name]')).toHaveValue('Dora Dahl');
+  await expect(li(page, 'Dora Dahl')).toHaveClass(/\bon\b/);
+  expect((await page.context().cookies()).find(c => c.name === 'ctview').value).toBe('table');
+  // back to the list for the other tests of this file (their pages open in the list)
+  await page.click('[data-ctview=list]');
+  expect((await page.context().cookies()).find(c => c.name === 'ctview').value).toBe('list');
 });

@@ -155,8 +155,8 @@ async fn embedded_attachment_download() {
     r.ok();
     assert_eq!(r.bytes, b"Hallo");
     assert_eq!(r.header("content-type").as_deref(), Some("text/plain"));
-    // non-ASCII letters are dropped from the file name
-    assert_eq!(r.header("content-disposition").as_deref(), Some("attachment; filename=\"gru.txt\""));
+    // a name outside ASCII: an ASCII stand-in and the name itself (RFC 6266 filename*)
+    assert_eq!(r.header("content-disposition").as_deref(), Some("attachment; filename=\"gru_.txt\"; filename*=UTF-8''gru%C3%9F.txt"));
     assert_eq!(r.header("cache-control").as_deref(), Some("private, max-age=0"));
     assert_eq!(c.get_json(&format!("/api/events/alice/{}/{id}/attach/1", s.privat)).await.status, StatusCode::NOT_FOUND);
 }

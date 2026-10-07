@@ -44,12 +44,23 @@
   });
   $('#ed-delete').onclick = async () => { if (W.busy) return; if (ruleMode) { if (await ask(T.delRule)) W.run(ruleDelete); return; } if (!await ask(TASK ? T.delTask : T.del)) return;
     W.run(async () => { const r = await practical.req(API + '/' + f.key.value, { method: 'DELETE' }); if (r.ok) { close(); load(false); } return r; }); };
-  // a session that ended while the dialog held unsaved work (practical.authLost): after the login the page comes back here, and so does the work
-  practical.keep(() => { if (!ed.hidden && !ruleMode && touched && dirty()) practical.stash('ed-' + ED_SCOPE, { date: openDate, isNew: form.classList.contains('new'), d: snapDetail() }); });
+  /* a session that ended while the dialog held unsaved work (practical.authLost): after the login the page comes back here, and so does
+     the work — an event or task, or a rule (as it would be saved, with the event it was opened from and its way back). The page is told
+     what the dialog holds (rusticalHost.restored), so its own layout keeps it open (the tasks page closes a dialog it did not open). */
+  practical.keep(() => {
+    if (ed.hidden || !touched || !dirty()) return;
+    practical.stash('ed-' + ED_SCOPE, ruleMode ? { rule: ruleMode, r: ruleOf(), ret: ruleReturn, back: ruleBack } : { date: openDate, isNew: form.classList.contains('new'), d: snapDetail() });
+  });
   practical.guard(() => !ed.hidden && touched && dirty());
-  setTimeout(() => { // after the page's own start (the tasks page fills its docked new-task form first)
+  setTimeout(() => { // after the page's own start (the tasks page fills its docked new-task form first; a ?rule= link opens its rule)
     const k = practical.unstash('ed-' + ED_SCOPE); if (!k) return;
-    soloEnd(); fill(k.d, k.date, k.isNew); mode('edit'); baseline = ''; touched = true; updateButtons(); ed.hidden = false; dayline(); toast(tr('js-req-restored'));
+    soloEnd();
+    if (k.rule) { // the rule editor builds itself from RULES: the kept rule stands in for the stored one while it does
+      const stored = RULES[k.rule]; RULES[k.rule] = k.r; openRuleEditor(k.rule); if (stored) RULES[k.rule] = stored; else delete RULES[k.rule];
+      ruleReturn = k.ret || null; ruleBack = ruleBack || k.back || null;
+    } else { fill(k.d, k.date, k.isNew); mode('edit'); }
+    baseline = ''; touched = true; updateButtons(); ed.hidden = false; if (k.rule) $('#ed-delete').disabled = !RULES[k.rule]; else dayline(); toast(tr('js-req-restored'));
+    if (window.rusticalHost && rusticalHost.restored) rusticalHost.restored(k.rule || k.isNew ? null : f.key.value);
   });
 
   window.rusticalEd = { open: openEditor };
