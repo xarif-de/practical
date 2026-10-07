@@ -205,7 +205,7 @@ async fn serve() -> Result<(), String> {
     }
     db::migrate(&db).await.map_err(|e| format!("migrations: {e}"))?;
     for d in db::check_schema(&db).await? {
-        tracing::error!("schema drift (the service runs; repair by hand): {d}");
+        tracing::error!("schema drift (the service runs; a repair is a migration): {d}");
     }
 
     let (cal_tx, _cal_rx) = tokio::sync::mpsc::channel(64);

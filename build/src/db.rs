@@ -202,7 +202,29 @@ CREATE TABLE practical_holidays (
         "CREATE TABLE practical_sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, expiry INTEGER NOT NULL);
          CREATE INDEX practical_sessions_expiry ON practical_sessions (expiry);",
     ),
+    (
+        15,
+        // repair (runs only where `needed` finds the drift): production's practical_category_rules was keyed
+        // (principal, category) with a hand-made unique index on (principal, scope, category) — not migration 7's
+        // key — so a task rule could not share its name with an event rule. Rebuilt with migration 7's schema,
+        // every row copied; the index goes with the old table.
+        "CREATE TABLE practical_category_rules_new (principal TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'event', category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, scope, category));
+         INSERT INTO practical_category_rules_new (principal, scope, category, rule_json, updated_at) SELECT principal, scope, category, rule_json, updated_at FROM practical_category_rules;
+         DROP INDEX IF EXISTS practical_category_rules_scope;
+         DROP TABLE practical_category_rules;
+         ALTER TABLE practical_category_rules_new RENAME TO practical_category_rules;",
+    ),
 ];
+
+/// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.
+/// A repair that finds nothing is recorded as applied without touching the table.
+async fn needed(version: i64, tx: &mut sqlx::SqliteConnection) -> Result<bool, sqlx::Error> {
+    Ok(match version {
+        // the drift: `scope` is not part of the primary key
+        15 => sqlx::query_scalar::<_, i64>("SELECT pk FROM pragma_table_info('practical_category_rules') WHERE name = 'scope'").fetch_optional(&mut *tx).await? == Some(0),
+        _ => true,
+    })
+}
 
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
@@ -220,9 +242,13 @@ pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
         if applied.contains(version) {
             continue;
         }
-        info!("applying migration {version}");
         let mut tx = db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
-        sqlx::raw_sql(*sql).execute(&mut *tx).await?;
+        if needed(*version, &mut tx).await? {
+            info!("applying migration {version}");
+            sqlx::raw_sql(*sql).execute(&mut *tx).await?;
+        } else {
+            info!("migration {version}: nothing to repair");
+        }
         sqlx::query("INSERT INTO practical_migrations (version) VALUES (?)")
             .bind(version)
             .execute(&mut *tx)
@@ -246,9 +272,8 @@ pub async fn rustical_schema_present(db: &SqlitePool) -> Result<bool, sqlx::Erro
 /// retyped column or a newer migration is refused (`Err`) — on 2026-10-05 a hand-applied change (table
 /// prefix, a dropped column) left a schema the migrations did not describe, and that showed only as 500s at
 /// runtime while /healthz stayed green. Other differences (primary key, NOT NULL, default) come back as
-/// `Ok(drift)` for the log: the copy of production of 2026-10-05 has one (practical_category_rules' key is
-/// (principal, category) plus a unique index with scope, not migration 7's (principal, scope, category)),
-/// and refusing it would stop the service.
+/// `Ok(drift)` for the log: refusing them would stop the service (the copy of production of 2026-10-05 had one
+/// in practical_category_rules' key, which migration 15 repairs).
 pub async fn check_schema(db: &SqlitePool) -> Result<Vec<String>, String> {
     let newest = MIGRATIONS.last().map_or(0, |m| m.0);
     let applied: Option<i64> = sqlx::query_scalar("SELECT max(version) FROM practical_migrations").fetch_one(db).await.map_err(|e| e.to_string())?;
@@ -256,8 +281,10 @@ pub async fn check_schema(db: &SqlitePool) -> Result<Vec<String>, String> {
         return Err(format!("the database has practical migration {v}, this binary knows up to {newest} (an older image on a newer database?) — refusing to start"));
     }
     let mut expected = <sqlx::SqliteConnection as sqlx::Connection>::connect("sqlite::memory:").await.map_err(|e| e.to_string())?;
-    for (_, sql) in MIGRATIONS {
-        sqlx::raw_sql(*sql).execute(&mut expected).await.map_err(|e| e.to_string())?;
+    for (version, sql) in MIGRATIONS {
+        if needed(*version, &mut expected).await.map_err(|e| e.to_string())? {
+            sqlx::raw_sql(*sql).execute(&mut expected).await.map_err(|e| e.to_string())?;
+        }
     }
     let want = practical_columns(&mut expected).await.map_err(|e| e.to_string())?;
     let mut live = db.acquire().await.map_err(|e| e.to_string())?;

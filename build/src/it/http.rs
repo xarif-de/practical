@@ -112,6 +112,12 @@ async fn the_schema_check_refuses_a_foreign_schema() {
         CREATE UNIQUE INDEX practical_category_rules_scope ON practical_category_rules (principal, scope, category);").execute(&mut *conn).await.unwrap();
     let drift = crate::db::check_schema(db).await.unwrap();
     assert!(drift.len() == 2 && drift[0].starts_with("practical_category_rules.category is TEXT notnull=1 default=None pk=2"), "{drift:?}");
+    // migration 15 repairs it (here re-run by hand)
+    sqlx::query("DELETE FROM practical_migrations WHERE version = 15").execute(&mut *conn).await.unwrap();
+    drop(conn);
+    crate::db::migrate(db).await.unwrap();
+    assert_eq!(crate::db::check_schema(db).await, Ok(vec![]));
+    let mut conn = db.acquire().await.unwrap();
     sqlx::query("INSERT INTO practical_migrations (version) VALUES (9999)").execute(&mut *conn).await.unwrap();
     assert!(crate::db::check_schema(db).await.unwrap_err().contains("has practical migration 9999"));
 }
@@ -406,4 +412,42 @@ async fn a_rejected_settings_form_answers_like_the_settings_page() {
     for color in ["#A1b2C3", "#a1b2c3ff", ""] {
         c.post_form_json("/settings/calendars", &[("owner", "alice"), ("name", "Neu"), ("comp_event", "on"), ("color", color), ("timezone", "Europe/Berlin")]).await.json()["ok"].as_bool().filter(|ok| *ok).expect(color);
     }
+}
+
+/// Fails on the code before (production's drifted key, VERIFIED on the 2026-10-05 copy): a task rule could
+/// not share its name with an event rule (UNIQUE constraint → 500). Migration 15 rebuilds the table with
+/// migration 7's key, keeping every row; on a correct table it changes nothing.
+#[tokio::test]
+async fn migration_15_repairs_the_category_rule_key_and_leaves_a_correct_table_alone() {
+    let s = seed().await;
+    let db = &s.app.state.db;
+    let mut c = s.app.login("alice").await;
+    let rule = json!({ "when": { "color": { "mode": "default", "value": "#8d6e63" } } });
+    // any DDL moves SQLite's schema cookie: the repair on a correct table must leave it alone
+    let cookie = || async { sqlx::query_scalar::<_, i64>("PRAGMA schema_version").fetch_one(db).await.unwrap() };
+    let before = cookie().await;
+    sqlx::query("DELETE FROM practical_migrations WHERE version = 15").execute(db).await.unwrap();
+    crate::db::migrate(db).await.unwrap();
+    assert_eq!(cookie().await, before, "a correct table: recorded, not rebuilt");
+    // production's shape, one rule in it
+    sqlx::raw_sql("DELETE FROM practical_migrations WHERE version = 15;
+        CREATE TABLE cr (principal TEXT NOT NULL, category TEXT NOT NULL, rule_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, scope TEXT NOT NULL DEFAULT 'event', PRIMARY KEY (principal, category));
+        DROP TABLE practical_category_rules; ALTER TABLE cr RENAME TO practical_category_rules;
+        CREATE UNIQUE INDEX practical_category_rules_scope ON practical_category_rules (principal, scope, category);").execute(db).await.unwrap();
+    c.json(Method::PUT, "/api/category-rules/Sport?scope=event", rule.clone()).await.ok();
+    let r = c.json(Method::PUT, "/api/category-rules/Sport?scope=task", rule.clone()).await;
+    assert_eq!(r.status, StatusCode::INTERNAL_SERVER_ERROR, "the drifted key refuses the task rule");
+    crate::db::migrate(db).await.unwrap();
+    assert_eq!(crate::db::check_schema(db).await, Ok(vec![]));
+    let idx: i64 = sqlx::query_scalar("SELECT count(*) FROM sqlite_master WHERE name = 'practical_category_rules_scope'").fetch_one(db).await.unwrap();
+    assert_eq!(idx, 0, "the obsolete index is gone");
+    c.json(Method::PUT, "/api/category-rules/Sport?scope=task", rule.clone()).await.ok();
+    for scope in ["event", "task"] {
+        assert!(c.get_json(&format!("/api/category-rules?scope={scope}")).await.ok().json().get("Sport").is_some(), "{scope}");
+    }
+    // once more on the repaired table: a no-op
+    let before = cookie().await;
+    sqlx::query("DELETE FROM practical_migrations WHERE version = 15").execute(db).await.unwrap();
+    crate::db::migrate(db).await.unwrap();
+    assert_eq!(cookie().await, before);
 }
