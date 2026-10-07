@@ -274,21 +274,14 @@ impl LoginThrottle {
 #[derive(Deserialize)]
 pub struct LogoutForm {
     csrf: String,
-    /// this device's push subscription (the browser's PushManager knows it): it ends with the login, so a
-    /// shared device stops showing the user's reminders. Absent: the subscriptions stay.
-    #[serde(default)]
-    push_endpoint: Option<String>,
 }
 
 /// Local logout, then hand the browser to the IdP so its session ends as well
 /// (plan D7; Authelia has no end_session_endpoint, so this is its portal logout URL).
 pub async fn post_logout(State(state): State<SharedState>, session: Session, Form(f): Form<LogoutForm>) -> Result<Response, AppError> {
     csrf::check(&session, &f.csrf).await?;
-    if let Some(endpoint) = f.push_endpoint.filter(|e| !e.is_empty())
-        && let Some(user) = session.get::<String>(SESSION_USER).await?
-    {
-        sqlx::query("DELETE FROM practical_push_subscriptions WHERE principal = ? AND endpoint = ?").bind(&user).bind(&endpoint).execute(&state.db).await?;
-    }
+    // the push subscriptions this session made end with it (shared devices): w3/push's
+    // `domain::push::forget_on_logout(&state, &session)` is called here, before the flush, at its merge
     session.flush().await?;
     let cfg = &state.config;
     if cfg.oidc.is_some() && !cfg.logout_url.is_empty() {

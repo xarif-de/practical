@@ -266,21 +266,6 @@ async fn an_oidc_login_gets_a_new_session_id() {
     assert_eq!(tower_sessions::SessionStore::load(&store, &old).await.unwrap(), None, "the planted id is gone");
 }
 
-/// Logout with this device's push endpoint removes that subscription (and only that one).
-#[tokio::test]
-async fn logout_ends_this_devices_push_subscription() {
-    let s = seed().await;
-    let mut c = s.app.login("alice").await;
-    for (who, ep) in [("alice", "https://push.example.org/this"), ("alice", "https://push.example.org/other"), ("bob", "https://push.example.org/bob")] {
-        sqlx::query("INSERT INTO practical_push_subscriptions (id, principal, endpoint, p256dh, auth) VALUES (?, ?, ?, 'k', 'a')").bind(ep).bind(who).bind(ep).execute(&s.app.state.db).await.unwrap();
-    }
-    let csrf = c.csrf.clone();
-    let r = c.post_form_raw("/logout", &[("csrf", &csrf), ("push_endpoint", "https://push.example.org/this")]).await;
-    assert_eq!(r.status, StatusCode::SEE_OTHER);
-    let left: Vec<String> = sqlx::query_scalar("SELECT endpoint FROM practical_push_subscriptions ORDER BY endpoint").fetch_all(&s.app.state.db).await.unwrap();
-    assert_eq!(left, ["https://push.example.org/bob", "https://push.example.org/other"]);
-}
-
 /// Fails on the code before (TESTED there with HTTP: 39 of 40 rounds lost a write): two settings saves of
 /// different fields at the same time both land.
 #[tokio::test]
