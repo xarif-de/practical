@@ -573,6 +573,8 @@
   document.addEventListener('click', e => { if (!e.target.closest('.hx-filter')) $$('.hx-filter.open', root).forEach(f => f.classList.remove('open')); });
   document.addEventListener('keydown', e => V().key(e));
   const main = $('.main'); if (main) main.addEventListener('scroll', () => V().onScroll());
+  // a sideways swipe: map | list (practical.swipeViews); not while a stop's details are open on the map
+  if (main) practical.swipeViews(main, () => $$('.toolbar [data-view]', root), bs => bs.findIndex(b => b.dataset.view === view), () => !!$('.hxg-pop:not([hidden])', root));
   // a change anywhere (another tab, a device): reload the document, keep what is open
   let rt;
   document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { if (await reload()) { chrome(); V().render(); } }, 400); });

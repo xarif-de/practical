@@ -93,18 +93,74 @@
         return fresh;
       };
     },
-    /* a view that turns its pages by the wheel: wheelPages(turn, pass) → a wheel listener that calls turn(±1) once per
-       touch (wheelTouch), after 60 px. One listener per view for the page's life: attached again to each swapped-in
-       fragment, the events that arrive after a swap still count as the same touch. pass(e) true: the event is left to
-       the page (it scrolls). Used by the month grid and the year planner (calendar.js). */
-    wheelPages: (turn, pass) => {
-      const touch = window.practical.wheelTouch(); let acc = 0, done = false;
+    /* the axis of each touch in a wheel stream: wheelAxis() → (e) → { n, fresh, axis, lean, dx, dy } (dx/dy in px, n counts
+       the touches). One wheelTouch per axis; a decided touch ends where its own axis says (the other one only carries
+       noise, and a run of zeros reads as a coast that breaks), an undecided one only where both say so (a rest). The
+       axis is decided after 12 px of travel: 'x' only where the sideways travel is more than twice the vertical one
+       (< 26.6° off horizontal), so a diagonal or wobbly scroll stays 'y'. lean: the axis, before that the event's
+       larger delta (Chromium dispatches the rest of a scroll sequence uncancelable once its first event was not
+       cancelled, so the first one must already go to the right side). */
+    wheelAxis: () => {
+      const P = window.practical, tx = P.wheelTouch(), ty = P.wheelTouch(); let n = 0, axis = null, sx = 0, sy = 0;
       return e => {
-        if (pass && pass(e)) return;
-        e.preventDefault(); const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
-        if (touch(e.timeStamp, dy)) { acc = 0; done = false; }
-        if (done) return; acc += dy; if (Math.abs(acc) >= 60) { done = true; turn(acc > 0 ? 1 : -1); }
+        const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1, dx = e.deltaX * k, dy = e.deltaY * k;
+        const fx = tx(e.timeStamp, dx), fy = ty(e.timeStamp, dy), fresh = axis === 'x' ? fx : axis === 'y' ? fy : fx && fy;
+        if (fresh) { n++; axis = null; sx = sy = 0; }
+        if (!axis) { sx += Math.abs(dx); sy += Math.abs(dy); if (sx + sy >= 12) axis = sx > 2 * sy ? 'x' : 'y'; }
+        return { n, fresh, axis, lean: axis || (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'), dx, dy };
       };
+    },
+    /* a view that turns its pages by the wheel: wheelPages(turn, pass, axis = 'y') → a wheel listener that calls turn(±1)
+       once per touch (wheelAxis), after 60 px along `axis`; a touch along the other axis is left alone (not cancelled:
+       the page or another listener has it). One listener per view for the page's life: attached again to each
+       swapped-in fragment, the events that arrive after a swap still count as the same touch. pass(e, g) true: the
+       event is left to the page (it scrolls). Used by the month grid and the year planner (calendar.js, 'y') and by
+       swipeViews ('x'). */
+    wheelPages: (turn, pass, axis = 'y') => {
+      const gesture = window.practical.wheelAxis(); let acc = 0, done = false;
+      return e => {
+        const g = gesture(e); if (g.fresh) { acc = 0; done = false; }
+        if (g.lean !== axis || (pass && pass(e, g))) return;
+        e.preventDefault(); if (done) return;
+        acc += axis === 'x' ? g.dx : g.dy; if (Math.abs(acc) >= 60) { done = true; turn(acc > 0 ? 1 : -1); }
+      };
+    },
+    /* a sideways swipe switches the page's views: swipeViews(area, views, at, busy) — views() = the view switch's
+       buttons in order, at(buttons) = the index on screen (default: the aria-pressed one; -1: none, no swipe), busy()
+       = the page's own reasons to leave a swipe alone. Fingers to the left bring the view to the right (as paging
+       does), none past either end; the switch is its button's click (the page's own path), and a clearly sideways
+       swipe first counts as the intent on that button (practical.intend: its prefetch). Never from inside a field, an
+       editor, a dialog or a popover (a contenteditable only while it is being edited: the tables' cells are all
+       contenteditable), nor while a modal dialog or a popover is open or the page is zoomed in. Content
+       that scrolls sideways comes first: a touch whose scroller (between the target and `area`) could still move its
+       way when it began is that scroller's, all of it, momentum included.
+       Wheel (trackpads, tilt wheels, Shift+wheel): wheelPages on 'x', one switch per touch; its events are cancelled,
+       which also keeps the browser's back/forward swipe off the page. Touch: passive listeners (vertical scrolling,
+       taps, long-press selection stay native), decided on touchend: ≥ 60 px sideways at more than twice the vertical
+       travel, one finger throughout, no drag (dragstart) and no selection change in between. */
+    swipeViews: (area, views, at, busy) => {
+      const P = window.practical;
+      at = at || (bs => bs.findIndex(b => b.getAttribute('aria-pressed') === 'true'));
+      const target = dir => { const bs = views(), i = at(bs); return i < 0 ? null : bs[i + dir] || null; };
+      const go = dir => { const b = target(dir); if (b) b.click(); };
+      const off = el => !el.closest || !!el.closest('input, textarea, select, .ed, .cardform, .pop, .ask') || (document.activeElement && document.activeElement.isContentEditable && document.activeElement.contains(el))
+        || P.$$('[aria-modal="true"]').some(d => d.getClientRects().length) || !!P.$('.filter.open, .more.open') || (window.visualViewport && visualViewport.scale > 1.01) || !!(busy && busy());
+      const scrolls = (el, dir) => { for (let p = el; p && p !== area.parentElement; p = p.parentElement) { const o = getComputedStyle(p).overflowX, max = p.scrollWidth - p.clientWidth; if ((o === 'auto' || o === 'scroll') && max > 1 && (dir > 0 ? p.scrollLeft < max - 1 : p.scrollLeft > 1)) return true; } return false; };
+      let tn = -1, took = false; // the wheel touch decided last, and whether the content (or a reason above) has it
+      area.addEventListener('wheel', P.wheelPages(go, (e, g) => {
+        if (g.n !== tn && g.dx) { tn = g.n; const dir = Math.sign(g.dx); took = off(e.target) || scrolls(e.target, dir); if (!took) P.intend(target(dir)); }
+        return g.n !== tn || took;
+      }, 'x'), { passive: false });
+      let t0 = null; const sel = () => String(getSelection());
+      area.addEventListener('touchstart', e => { t0 = null; if (e.touches.length !== 1 || off(e.target)) return; const p = e.touches[0];
+        t0 = { x: p.clientX, y: p.clientY, sel: sel(), hint: 0, r: scrolls(e.target, 1), l: scrolls(e.target, -1) }; }, { passive: true });
+      area.addEventListener('touchmove', e => { if (!t0) return; if (e.touches.length !== 1) { t0 = null; return; }
+        const dx = e.touches[0].clientX - t0.x, dy = e.touches[0].clientY - t0.y, dir = dx < 0 ? 1 : -1;
+        if (t0.hint !== dir && !(dir > 0 ? t0.r : t0.l) && Math.abs(dx) >= 24 && Math.abs(dx) > 2 * Math.abs(dy)) { t0.hint = dir; P.intend(target(dir)); } }, { passive: true });
+      area.addEventListener('touchend', e => { const s = t0; t0 = null; if (!s || e.touches.length) return;
+        const p = e.changedTouches[0], dx = p.clientX - s.x, dy = p.clientY - s.y, dir = dx < 0 ? 1 : -1;
+        if (Math.abs(dx) >= 60 && Math.abs(dx) > 2 * Math.abs(dy) && !(dir > 0 ? s.r : s.l) && sel() === s.sel) go(dir); });
+      ['touchcancel', 'dragstart'].forEach(t => area.addEventListener(t, () => { t0 = null; }, true));
     },
   };
 })();

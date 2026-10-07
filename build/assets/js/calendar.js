@@ -93,9 +93,11 @@
   function markPicked() { $$('.stream .dayblock, .planner .c[data-date]', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date)); } // hoisted: wireItems calls it
   // the month grid and the year planner own the wheel: one touch of the trackpad (or one spin of a wheel) turns
   // exactly one page, however far it goes and however long its momentum runs (practical.wheelPages). The planner
-  // leaves the wheel to the page where that scrolls (a narrow window) or the gesture is sideways (its months scroll so)
+  // leaves the wheel to the page where that scrolls (a narrow window); a sideways touch belongs to the view switch below
   const monthWheel = practical.wheelPages(shift);
-  const yearWheel = practical.wheelPages(shift, e => Math.abs(e.deltaX) > Math.abs(e.deltaY) || document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight);
+  const yearWheel = practical.wheelPages(shift, () => document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight);
+  // a sideways swipe steps through day | week | month | year (practical.swipeViews), not into or out of the "more" views
+  practical.swipeViews($('.main'), () => $$('.toolbar .seg > button[data-view]', root), bs => bs.findIndex(b => b.dataset.view === state.view));
   // page turn: the leaving grid, every month in between and the arriving grid form one column that
   // glides past, eased in and out — the same glide whatever changed the month, and a far jump passes
   // every month on the way. The months in between are fetched with the target (up to FLIP_FETCH of

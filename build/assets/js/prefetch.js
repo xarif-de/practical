@@ -1,4 +1,4 @@
-// js/prefetch.js — prefetch on intent: wraps window.fetch; practical.prefetch/prefetched/intent/stream
+// js/prefetch.js — prefetch on intent: wraps window.fetch; practical.prefetch/prefetched/intent/intend/stream
 /* prefetch on intent: what a navigation will fetch (practical.prefetch(url)) is fetched on hover (after HOVER_MS),
    focus or press of its control (practical.intent) and handed to that navigation once (practical.prefetched(url)),
    if it is younger than TTL and nothing happened since that could change it: every live change (`rustical:change`),
@@ -29,9 +29,13 @@
     const html = await e.p; return e.g === gen ? html : null;
   };
   // `urls()`: what a click on `el` would fetch, asked at the moment of intent; `hovered`: a pointer already
-  // resting on `el` counts (a control that replaced the one under it, which gets no pointerenter)
+  // resting on `el` counts (a control that replaced the one under it, which gets no pointerenter); P.intend(el): an
+  // intent shown elsewhere (a swipe towards it, practical.swipeViews) counts as one on `el`
+  const nows = new WeakMap();
+  P.intend = el => { const f = el && nows.get(el); if (f) f(); };
   P.intent = (el, urls, hovered) => {
     let t = 0; const now = () => { clearTimeout(t); t = 0; if (el.isConnected) urls().forEach(P.prefetch); }, rest = () => { if (!t) t = setTimeout(now, HOVER_MS); };
+    nows.set(el, now);
     if (hovered && el.matches(':hover')) rest();
     el.addEventListener('pointerenter', rest);
     el.addEventListener('pointerleave', () => { clearTimeout(t); t = 0; });

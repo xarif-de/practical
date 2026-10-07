@@ -42,6 +42,8 @@
     railTick();
   }
   $$('[data-ctview]').forEach(b => { b.onclick = () => setView(b); practical.intent(b, () => { const v = b.dataset.ctview; if (has[v]) return []; setTimeout(() => load(v, true)); return [partUrl(v)]; }); }); // the load takes the prefetch made right after this
+  // a sideways swipe: list | table, the one asked for last counts (its entries may still be on their way)
+  practical.swipeViews($('.main'), () => $$('[data-ctview]'), bs => bs.findIndex(b => b.dataset.ctview === (want || (wrap.classList.contains('view-table') ? 'table' : 'list'))));
   // columns
   function applyCols() { const on = $$('#colpop input[data-col]').filter(i => i.checked).map(i => i.dataset.col); $$('.sheet [data-c]').forEach(el => el.classList.toggle('off', !on.includes(el.dataset.c))); return on; }
   $$('#colpop input[data-col]').forEach(i => i.addEventListener('change', () => { const on = applyCols(); practical.send('/settings/columns', 'POST', on).then(practical.tell); }));

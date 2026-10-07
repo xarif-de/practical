@@ -557,6 +557,7 @@
     deckTo(); render(); fit();
   }
   $$('#tk-views button').forEach(b => b.onclick = () => { setView(b.dataset.tkview); showAct(); });
+  practical.swipeViews($('.main'), () => $$('#tk-views button')); // a sideways swipe steps through them in the switch's order
   async function reveal(k) {
     act = k;
     if (!find(k)) await ensureAll();
