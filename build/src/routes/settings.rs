@@ -175,7 +175,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         groups: groups::list_for_user(&state, &user).await?,
         individuals: groups::individuals(&state).await?,
         trashed: groups::trashed_for_user(&state, &user).await?,
-        calendars: collections::calendars_for(&state, &user, false).await?,
+        calendars: cals_all.clone(),
         addressbooks: collections::addressbooks_for(&state, &user, false).await?,
         deleted_calendars: collections::calendars_for(&state, &user, true).await?,
         deleted_addressbooks: collections::addressbooks_for(&state, &user, true).await?,

@@ -4,7 +4,6 @@
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::CalInfo;
-use crate::domain::prefs;
 use crate::domain::tasks::{self, Task};
 use crate::domain::events;
 use crate::error::AppResult;
@@ -164,7 +163,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     }))
     .unwrap_or_else(|_| "{}".into());
     let tasks_json = crate::render::script_json(tasks_json);
-    let p = prefs::get(&state.db, &user.id).await?;
+    let p = vc.prefs;
     Ok(TasksPage {
         ctx,
         calendars,
