@@ -394,3 +394,46 @@ async fn a_large_import_is_chunked() {
     assert!(series.get_ics().contains("RECURRENCE-ID"), "the override joined its master");
     assert!(peak < 12 * MIB, "peak {} KiB for a {} KiB file", peak / 1024, file.len() / 1024);
 }
+
+/// The history of an import is one change of all its objects; recording it holds a chunk of texts and a small
+/// record per object, not every text and diff at once (901d09e: each text twice + all diffs until the end, +198 MiB
+/// RSS for 35 000 objects — w3-data report). Both ways in: a new calendar (its objects are read whole, first sight)
+/// and an existing one (RustiCal's change log, every object an update).
+#[tokio::test]
+async fn recording_a_large_import_holds_a_chunk_not_the_import() {
+    use crate::domain::history::{self, Actor};
+    use crate::domain::history_text::Store;
+    use sqlx::Row;
+    let s = seed().await;
+    let alice = s.app.principal("alice").await;
+    let n = 2000;
+    let file = |tag: &str| {
+        let mut body = String::new();
+        for i in 0..n {
+            body.push_str(&format!("BEGIN:VEVENT\nUID:bulk-{i}\nDTSTAMP:20260101T000000Z\nDTSTART:2026{:02}{:02}T100000Z\nDTEND:2026{:02}{:02}T110000Z\nSUMMARY:{tag} {i}\nDESCRIPTION:{}\nEND:VEVENT\n", 1 + i % 12, 1 + i % 28, 1 + i % 12, 1 + i % 28, "d".repeat(3000)));
+        }
+        ics(&body)
+    };
+    let (one, two) = (file("Bulk"), file("Neu"));
+    let n_new = crate::domain::collections::NewCalendar { owner: "alice".into(), name: "Bulk".into(), color: "#000000".into(), description: String::new(), components: vec![], timezone: "Europe/Berlin".into() };
+    let mut g = history::begin(&s.app.state, Actor::import(&alice, "Bulk")).await;
+    let (cal, imported) = crate::domain::transfer::import_new_calendar(&s.app.state, &alice, n_new, one.as_bytes()).await.unwrap();
+    assert_eq!(imported, n);
+    g.coll(Store::Cal, "alice", &cal);
+    let (first, peak_new) = peak_of(g.commit()).await;
+    let mut g = history::begin(&s.app.state, Actor::import(&alice, "")).await;
+    g.coll(Store::Cal, "alice", &cal);
+    assert_eq!(crate::domain::transfer::import_calendar(&s.app.state, &alice, "alice", &cal, two.as_bytes()).await.unwrap(), n);
+    let (second, peak_log) = peak_of(g.commit()).await;
+    // what was recorded: one change each, every object in it
+    let db = &s.app.state.db;
+    let row = |id: Option<i64>| async move {
+        let r = sqlx::query("SELECT c.src, COUNT(i.idx) AS n, MIN(i.act) AS act, MIN(i.title) AS title, SUM(i.after_hash IN (SELECT hash FROM practical_history_blobs)) AS blobs FROM practical_history_changes c JOIN practical_history_items i ON i.change_id = c.id WHERE c.id = ? GROUP BY c.id").bind(id).fetch_one(db).await.unwrap();
+        (r.get::<String, _>("src"), r.get::<i64, _>("n") as usize, r.get::<String, _>("act"), r.get::<String, _>("title"), r.get::<i64, _>("blobs") as usize)
+    };
+    assert_eq!(row(first).await, ("import".into(), n, "create".into(), "Bulk 0".into(), n));
+    assert_eq!(row(second).await, ("import".into(), n, "update".into(), "Neu 0".into(), n));
+    let text = one.len();
+    // a record per object stays (keys, hashes, title: < 1 KiB), the texts do not: 901d09e: 21 MiB = 3.5 × the texts, here 1.4 MiB (T, debug)
+    assert!(peak_new < text / 3 && peak_log < text / 3, "peak {} / {} KiB for {} KiB of texts", peak_new / 1024, peak_log / 1024, text / 1024);
+}

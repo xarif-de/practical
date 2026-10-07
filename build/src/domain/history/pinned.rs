@@ -24,6 +24,16 @@ async fn moves_contacts_tech_and_retention() {
     poll(&app.state).await;
     app.put_ics("alice", &a, "t", &with_alarm("ACKNOWLEDGED:20261001T095800Z\n")).await;
     poll(&app.state).await;
+    // two reminders dismissed in one UI write: one change of two items, technical as a whole
+    let other = |ack: &str| vevent("u", "Tech 2", &format!("DTSTART:20261001T100000Z\nBEGIN:VALARM\nACTION:DISPLAY\nTRIGGER:-PT5M\n{ack}END:VALARM"));
+    app.put_ics("alice", &b, "u", &other("")).await;
+    poll(&app.state).await;
+    let mut g = begin(&app.state, Actor::ui(&alice)).await;
+    app.put_ics("alice", &a, "t", &with_alarm("ACKNOWLEDGED:20261001T095900Z\n")).await;
+    app.put_ics("alice", &b, "u", &other("ACKNOWLEDGED:20261001T095900Z\n")).await;
+    g.object(Store::Cal, "alice", &a, "t");
+    g.object(Store::Cal, "alice", &b, "u");
+    assert!(g.commit().await.is_some());
     // a contact written by the UI
     let mut g = begin(&app.state, Actor::ui(&alice)).await;
     let id = crate::domain::contacts::create_contact(&app.state, &alice, crate::domain::contacts::ContactInput { principal: "alice".into(), ab_id: ab.clone(), given: "Kim".into(), ..Default::default() }).await.unwrap();
@@ -39,6 +49,8 @@ async fn moves_contacts_tech_and_retention() {
         ("dav".into(), "move".into(), "event".into(), "Umzug".into(), false),
         ("dav".into(), "create".into(), "event".into(), "Tech".into(), false),
         ("dav".into(), "update".into(), "event".into(), "Tech".into(), true),
+        ("dav".into(), "create".into(), "event".into(), "Tech 2".into(), false),
+        ("ui".into(), "update".into(), "event".into(), "Tech".into(), true),
         ("ui".into(), "create".into(), "contact".into(), "Kim".into(), false),
     ]);
     let mv = &all[1].items[0];
@@ -53,5 +65,6 @@ async fn moves_contacts_tech_and_retention() {
     assert_eq!(purge(&app.state).await.unwrap(), 0);
     sqlx::query("UPDATE practical_history_changes SET at = '2000-01-01 00:00:00' WHERE id = ?").bind(all[0].id).execute(&app.state.db).await.unwrap();
     assert_eq!(purge(&app.state).await.unwrap(), 1);
-    assert_eq!(visible(&app.state, &alice).await.unwrap().len(), 4);
+    assert_eq!(all[5].items.len(), 2);
+    assert_eq!(visible(&app.state, &alice).await.unwrap().len(), 6);
 }
