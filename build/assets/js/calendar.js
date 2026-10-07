@@ -91,18 +91,11 @@
     else { state.date = date; markPicked(); }
     history.replaceState(state, '', url(false).pathname + url(false).search); }
   function markPicked() { $$('.stream .dayblock, .planner .c[data-date]', root).forEach(b => b.classList.toggle('sel', b.dataset.date === state.date)); } // hoisted: wireItems calls it
-  // the month grid owns the wheel: one touch of the trackpad (or one spin of a wheel) turns exactly one page,
-  // however far it goes and however long its momentum runs; the next touch turns the next (practical.wheelTouch).
-  // State lives outside the fragment so the events that arrive after the swap still count as the same touch.
-  const MONTH_FLIP = 60; // px that turn the page
-  const mwTouch = practical.wheelTouch(); let mwAcc = 0, mwDone = false;
-  function monthWheel(e) {
-    e.preventDefault(); const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
-    if (mwTouch(e.timeStamp, dy)) { mwAcc = 0; mwDone = false; }
-    if (mwDone) return;
-    mwAcc += dy;
-    if (Math.abs(mwAcc) >= MONTH_FLIP) { mwDone = true; shift(mwAcc > 0 ? 1 : -1); }
-  }
+  // the month grid and the year planner own the wheel: one touch of the trackpad (or one spin of a wheel) turns
+  // exactly one page, however far it goes and however long its momentum runs (practical.wheelPages). The planner
+  // leaves the wheel to the page where that scrolls (a narrow window) or the gesture is sideways (its months scroll so)
+  const monthWheel = practical.wheelPages(shift);
+  const yearWheel = practical.wheelPages(shift, e => Math.abs(e.deltaX) > Math.abs(e.deltaY) || document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight);
   // page turn: the leaving grid, every month in between and the arriving grid form one column that
   // glides past, eased in and out — the same glide whatever changed the month, and a far jump passes
   // every month on the way. The months in between are fetched with the target (up to FLIP_FETCH of
@@ -403,9 +396,10 @@
     $$('.toolbar [data-view]', root).forEach(b => { b.onclick = e => { e.preventDefault(); go(b.dataset.view, null); }; practical.intent(b, () => fetches(gone(b.dataset.view, null))); });
     const more = $('.more', root); if (more) { $('[data-more]', more).onclick = e => { e.stopPropagation(); more.classList.toggle('open'); }; }
     mountTimeline($('.tl', root));
-    if (state.view === 'month') { const m = $('.month', root); if (m) { m.addEventListener('wheel', monthWheel, { passive: false });
-      // the wheel turns to a neighbour month: the pointer over the grid is the intent (also right after a turn, unmoved)
-      practical.intent(m, () => [...fetches(shifted(1)), ...fetches(shifted(-1))], true); } }
+    const pager = state.view === 'month' ? $('.month', root) : state.view === 'planner' ? $('.planner', root) : null;
+    if (pager) { pager.addEventListener('wheel', state.view === 'month' ? monthWheel : yearWheel, { passive: false });
+      // the wheel turns to a neighbour page: the pointer over the grid is the intent (also right after a turn, unmoved)
+      practical.intent(pager, () => [...fetches(shifted(1)), ...fetches(shifted(-1))], true); }
     wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root));
     const title = $('#title', root); if (title) { title.onclick = openPicker; practical.keyClick(title); title.setAttribute('aria-haspopup', 'dialog'); } // Enter/Space open the picker too
   }

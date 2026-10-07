@@ -93,5 +93,18 @@
         return fresh;
       };
     },
+    /* a view that turns its pages by the wheel: wheelPages(turn, pass) → a wheel listener that calls turn(±1) once per
+       touch (wheelTouch), after 60 px. One listener per view for the page's life: attached again to each swapped-in
+       fragment, the events that arrive after a swap still count as the same touch. pass(e) true: the event is left to
+       the page (it scrolls). Used by the month grid and the year planner (calendar.js). */
+    wheelPages: (turn, pass) => {
+      const touch = window.practical.wheelTouch(); let acc = 0, done = false;
+      return e => {
+        if (pass && pass(e)) return;
+        e.preventDefault(); const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? e.currentTarget.clientHeight : 1);
+        if (touch(e.timeStamp, dy)) { acc = 0; done = false; }
+        if (done) return; acc += dy; if (Math.abs(acc) >= 60) { done = true; turn(acc > 0 ? 1 : -1); }
+      };
+    },
   };
 })();

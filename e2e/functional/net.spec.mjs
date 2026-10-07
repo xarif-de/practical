@@ -131,7 +131,7 @@ test('a session that ended on save (401): to the login and back to the same view
 test('a real session loss (login server): navigation and save go to the login page, never into the view; the work comes back', async ({ page, context }) => {
   await page.addInitScript(trackStreams);
   const login = async () => { await page.locator('form.pwform input[name=username]').fill('alice'); await page.locator('form.pwform input[name=password]').fill('devpass'); await page.locator('form.pwform button[type=submit]').click(); };
-  const url = LOGIN_BASE + '/calendar?view=planner&date=2026-11-16'; // the year view turns with ‹ ›
+  const url = LOGIN_BASE + '/calendar?view=planner&date=2026-11-16'; // the year view turns by the wheel
   await page.goto(url); await login();
   await expect(page).toHaveURL(url);
   // the server restarted (every session gone): the next page turn. The live stream is open first: one that connects
@@ -140,7 +140,7 @@ test('a real session loss (login server): navigation and save go to the login pa
   await page.route(u => u.href.startsWith(LOGIN_BASE), r => r.request().headers().purpose === 'prefetch' ? r.abort() : r.fallback());
   await streamOpen(page);
   await context.clearCookies();
-  await page.locator('[data-nav=next]').click();
+  const bb = await page.locator('.planner').boundingBox(); await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.mouse.wheel(0, 120);
   await page.waitForURL(/\/login\?redirect_uri=%2Fcalendar%3Fview%3Dplanner%26date%3D2026-11-16$/);
   await expect(page.locator('#viewroot')).toHaveCount(0);
   await login();
@@ -166,7 +166,7 @@ test('a real session loss (login server): navigation and save go to the login pa
 
 test('navigation: a 500 and offline are told, the view stays; a slow fragment shows the progress line', async ({ page, context }) => {
   const errs = errors(page), frag = u => u.searchParams.get('fragment') === '1'; // the page turn's fetch and its prefetch alike
-  await page.goto('/calendar?view=planner&date=2026-10-14'); // the year view turns with ‹ ›
+  await page.goto('/calendar?view=weekends&date=2026-10-14'); // the weekends view turns by a year with ‹ ›
   await page.route(frag, r => r.fulfill({ status: 500, contentType: 'text/plain', body: 'boom' }));
   await page.locator('[data-nav=next]').click();
   await expect(page.locator('.toast.error')).toContainText(await tr(page, 'js-req-server'));

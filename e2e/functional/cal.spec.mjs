@@ -75,15 +75,16 @@ test('URL picks the view; an unknown view falls back to month', async ({ page })
   await expect(page.locator('#title')).toHaveText(/Dezember 2026/);
 });
 
-test('prev/next/today in the year planner and the extra views', async ({ page }) => {
+test('the year planner turns by the wheel, the extra views by prev/next; today in all', async ({ page }) => {
   await open(page, cal('planner'));
   await expect(page.locator('#title')).toHaveText(/2026/);
-  await page.locator('.toolbar [data-nav="next"]').click();
+  await expect(page.locator('.toolbar [data-nav="next"]')).toHaveCount(0); // the wheel turns the year (calendar.js yearWheel)
+  const bb = await page.locator('.planner').boundingBox();
+  await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await page.mouse.wheel(0, 120);
   await expect(page.locator('#title')).toHaveText(/2027/);
   expect(qp(page, 'date')).toBe('2027-10-14');
-  await page.locator('.toolbar [data-nav="prev"]').click();
-  await page.locator('.toolbar [data-nav="prev"]').click();
-  await expect(page.locator('#title')).toHaveText(/2025/);
+  for (const y of [2026, 2025]) { await page.waitForTimeout(400); await page.mouse.wheel(0, -120); await expect(page.locator('#title')).toHaveText(new RegExp(y)); } // a rest between: two touches
   await page.locator('.toolbar [data-nav="today"]').click();
   await expect(page.locator('#title')).toHaveText(/2026/);
   expect(qp(page, 'date')).toBe(D);
