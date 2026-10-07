@@ -1,0 +1,99 @@
+/* "Farben optimieren" (settings "Farben"): a block head with the button, and the flow-chart dialog —
+   elements today → action → colour after, lines drawn in an SVG under the boxes */
+.cfo-block { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 4px 2px; }
+.cfo-block h3 { margin: 0; font: 600 16px/1.3 var(--font-display); }
+.cfo-opt { all: unset; cursor: pointer; white-space: nowrap; font: 600 13px/1 var(--font); color: var(--accent); padding: 6px 8px; border-radius: 7px; }
+.cfo-opt:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.cfo-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* no backdrop blur here: under a dialog this tall the blur is repainted on every scroll step
+   (measured: p95 frame 26–42 ms with it, 9 ms without); a denser tint hides the page instead */
+.ask.cfo-wrap { backdrop-filter: none; -webkit-backdrop-filter: none; background: color-mix(in srgb, var(--bg) 82%, transparent); }
+.ask-box.cfo-dlg { width: min(1180px, 100%); padding: 0; max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.cfo-dh { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+.cfo-dh b { font: 600 16px/1.2 var(--font-display); }
+.cfo-spark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cfo-body { overflow-y: auto; min-height: 0; padding: 12px 16px; }
+.cfo-level { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px; margin-bottom: 10px; }
+.cfo-lh { display: flex; gap: 8px; align-items: baseline; }
+.cfo-lh span { font: 600 11px/1.2 var(--font); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
+.cfo-lh b { font: 600 18px/1.2 var(--font-display); }
+.cfo-lh em { font-style: normal; font-size: 11px; font-weight: 600; color: #1f8a50; background: color-mix(in srgb, var(--ok) 16%, transparent); padding: 2px 8px; border-radius: 999px; }
+html[data-scheme=dark] .cfo-lh em { color: #5fd592; }
+.cfo-level input { width: 100%; margin: 8px 0 2px; accent-color: var(--accent); }
+.cfo-ticks { display: grid; grid-template-columns: repeat(6, 1fr); font-size: 11.5px; }
+.cfo-ticks button { all: unset; cursor: pointer; color: var(--fg-3); text-align: center; padding: 2px 0; }
+.cfo-ticks button:first-child { text-align: left; } .cfo-ticks button:last-child { text-align: right; }
+.cfo-ticks button[aria-pressed=true] { color: var(--fg); font-weight: 600; }
+.cfo-ltext { margin: 8px 0 0; font-size: 13px; color: var(--fg-2); line-height: 1.45; }
+.cfo-sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.cfo-m { font-size: 12px; background: var(--bg-3); border-radius: 999px; padding: 3px 9px; color: var(--fg-2); }
+.cfo-m.good { background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.cfo-manbar { margin-left: auto; font-size: 12.5px; color: var(--fg-2); display: inline-flex; gap: 6px; align-items: center; background: color-mix(in srgb, var(--warn) 14%, transparent); border-radius: 999px; padding: 3px 10px; }
+.cfo-manbar .link { font-weight: 600; }
+.cfo-notes { display: grid; gap: 4px; margin-bottom: 10px; }
+.cfo-notes p { margin: 0; font-size: 13px; padding: 6px 10px; border-radius: 8px; line-height: 1.4; }
+.cfo-notes .warn { background: color-mix(in srgb, var(--today) 11%, transparent); }
+.cfo-notes .info { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.cfo-head, .cfo-lane { display: grid; grid-template-columns: minmax(0, 1fr) 220px 230px; gap: 56px; }
+.cfo-head { font: 600 11px/1.2 var(--font); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); margin: 4px 0 6px; }
+.cfo-fd { position: relative; display: grid; }
+.cfo-svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.cfo-svg path { fill: none; stroke: var(--x); stroke-width: 2; opacity: .7; }
+.cfo-svg path.off { stroke: var(--fg-3); stroke-dasharray: 5 4; opacity: .45; }
+.cfo-svg path.stay { stroke-dasharray: 1 4; stroke-linecap: round; stroke-width: 2.5; }
+.cfo-lane { align-items: center; padding: 10px 6px; margin: 0 -6px; border-top: 1px dashed var(--line); position: relative; border-radius: 10px; }
+.cfo-lane:first-of-type { border-top-color: transparent; }
+.cfo-lane.manual { box-shadow: inset 3px 0 0 var(--warn); }
+.cfo-lane.drop { background: color-mix(in srgb, var(--accent) 8%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; }
+.cfo-lane.drop::after { content: attr(data-hint); position: absolute; right: 10px; top: 4px; font-size: 11.5px; font-weight: 600; color: var(--accent); }
+.cfo-lc { display: grid; gap: 5px; align-content: center; min-width: 0; }
+.cfo-sep { position: absolute; left: 0; right: 0; height: 4px; background: var(--accent); border-radius: 2px; z-index: 3; }
+.cfo-sep span { position: absolute; left: 50%; top: -11px; transform: translateX(-50%); background: var(--accent); color: var(--accent-fg); font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.cfo-sw { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: var(--x); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); flex: none; }
+.cfo-t { min-width: 0; } .cfo-t b { font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfo-t small { display: block; color: var(--fg-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfo-src { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 7px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--x); border-radius: 9px; padding: 4px 6px 4px 4px; font-size: 12.5px; touch-action: none; user-select: none; }
+.cfo-grip { cursor: grab; color: var(--fg-3); font-size: 14px; padding: 0 2px; }
+.cfo-src.stay { opacity: .7; }
+.cfo-src.excl { opacity: .45; border-left-color: var(--line); background: repeating-linear-gradient(135deg, var(--bg) 0 6px, var(--bg-2) 6px 12px); }
+.cfo-src.excl .cfo-grip, .cfo-src.ro .cfo-grip { visibility: hidden; }
+.cfo-src.moved { border-color: var(--warn); border-left-color: var(--x); }
+.cfo-src.dragging { opacity: .25; }
+.cfo-ghost { position: fixed; z-index: 90; opacity: 1 !important; background: var(--bg); pointer-events: none; box-shadow: 0 10px 28px rgba(0,0,0,.25); transform: rotate(-1deg); }
+.cfo-man { display: inline-block; margin-top: 2px; font-size: 10.5px; font-weight: 600; color: #b36b00; background: color-mix(in srgb, var(--warn) 16%, transparent); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+html[data-scheme=dark] .cfo-man { color: #ffc266; }
+.cfo-mini { all: unset; cursor: pointer; font-size: 12px; color: var(--fg-3); padding: 3px 7px; border-radius: 6px; line-height: 1; }
+.cfo-mini:hover, .cfo-mini:focus-visible { background: var(--bg-3); color: var(--fg); }
+.cfo-mini.on { color: var(--accent); font-weight: 600; }
+.cfo-mid { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 4px; justify-items: start; border: 1.5px solid var(--accent); border-radius: 12px; padding: 7px 10px; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); font-size: 12px; }
+.cfo-mid small { font-size: 11.5px; color: var(--fg-2); line-height: 1.3; }
+.cfo-mid.off { border-style: dashed; border-color: var(--fg-3); background: var(--bg); opacity: .75; }
+.cfo-mid.manual { border-color: var(--warn); }
+.cfo-mid:focus-visible, .cfo-res:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cfo-ck { font-size: 11px; font-weight: 600; color: var(--accent); } .cfo-mid.off .cfo-ck { color: var(--fg-3); }
+.cfo-b { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+.cfo-b.unify { background: color-mix(in srgb, var(--ok) 18%, transparent); color: #1f8a50; }
+.cfo-b.separate { background: color-mix(in srgb, var(--warn) 20%, transparent); color: #b36b00; }
+.cfo-b.repaint { background: color-mix(in srgb, #af52de 18%, transparent); color: #8a3db3; }
+html[data-scheme=dark] .cfo-b.unify { color: #5fd592; } html[data-scheme=dark] .cfo-b.separate { color: #ffc266; } html[data-scheme=dark] .cfo-b.repaint { color: #d49cf2; }
+.cfo-res { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px 7px 9px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.cfo-res:hover { border-color: var(--accent); }
+.cfo-res > .cfo-sw { width: 28px; height: 28px; }
+.cfo-res.off { opacity: .45; } .cfo-res.pinned { border: 1.5px solid var(--warn); }
+.cfo-res.warn { box-shadow: 0 0 0 3px color-mix(in srgb, var(--today) 30%, transparent); }
+.cfo-edit { font-size: 11px; color: var(--accent); font-weight: 600; opacity: 0; } .cfo-res:hover .cfo-edit, .cfo-res:focus-visible .cfo-edit { opacity: 1; }
+.cfo-help { font-size: 12px; color: var(--fg-3); margin: 10px 2px 0; line-height: 1.45; }
+.cfo-empty { display: grid; gap: 4px; justify-items: center; text-align: center; padding: 34px 10px; color: var(--fg-2); font-size: 13px; }
+.cfo-empty b { font-size: 15px; color: var(--fg); }
+@media (max-width: 900px) { .cfo-head, .cfo-lane { grid-template-columns: minmax(0, 1fr) 180px 170px; gap: 36px; } }
+/* phones: elements left, action above its colour on the right */
+@media (max-width: 700px) {
+  .cfo-head { display: none; }
+  .cfo-lane { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px 22px; }
+  .cfo-lane > :first-child { grid-row: 1 / span 2; }
+  .cfo-lane > :nth-child(2), .cfo-lane > :nth-child(3) { grid-column: 2; }
+  .cfo-lane > :nth-child(2) { align-self: end; } .cfo-lane > :nth-child(3) { align-self: start; }
+  .cfo-ticks button:not([aria-pressed=true]) { visibility: hidden; }
+  .cfo-edit { display: none; } .cfo-res { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .cfo-body { padding: 10px; }
+}

@@ -1,0 +1,128 @@
+/* ===== settings: grouped lists (round 12, prototype C) — a home page and drill-in pages (one per hash,
+   app.js), rows ("cells") with a coloured symbol, the label and the value or control on the right ===== */
+.set { max-width: 680px; width: 100%; margin: 0 auto; padding: 8px var(--pad) 90px; box-sizing: border-box; min-width: 0; }
+.set.paged .page { display: none; } .set.paged .page.on { display: block; }
+.set .back { color: var(--accent); font-size: 15px; display: inline-block; margin: 4px 0 6px; }
+.set h2 { font: 700 28px/1.2 var(--font-display); letter-spacing: -.02em; margin: 4px 0 14px; overflow-wrap: anywhere; }
+.set .group { display: block; background: var(--tile); border-radius: 12px; overflow: hidden; margin: 0; }
+.set .group.sp { margin-top: 22px; }
+.set .label, .cpk-cap { font: 600 11px/1.3 var(--font); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); } .set .label { margin: 22px 16px 6px; } /* .cpk-cap: the colour picker's */
+.set .foot { font-size: 12.5px; color: var(--fg-3); margin: 6px 16px 0; line-height: 1.45; }
+.set .scope { margin: 0 0 10px; }
+.set .cell { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 6px 14px; position: relative; font-size: 15px; color: var(--fg); box-sizing: border-box; width: 100%; }
+.set :is(button, summary, label).cell { font: inherit; font-size: 15px; background: none; border: 0; border-radius: 0; text-align: left; cursor: pointer; list-style: none; margin: 0; }
+.set summary.cell::-webkit-details-marker { display: none; }
+.set .cell.noic { grid-template-columns: minmax(0, 1fr) auto; }
+/* hairline between rows, indented past the symbol like iOS; forms/details wrapping a cell count as rows too */
+.set .group > * + * { position: relative; }
+.set .group > * + *::before { content: ""; position: absolute; top: 0; right: 0; left: 54px; border-top: 1px solid var(--line); z-index: 1; }
+.set .group > .noic + *::before, .set .group > * + .noic::before, .set .group > * + form::before, .set .group > * + details::before, .set .group > * + .btnrow::before { left: 14px; }
+.set .cell .swatch, .cpk .sq, .cpk-pvp .sq { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: #fff; flex: none; }
+.set .cell .swatch .ico, .cpk .sq .ico, .cpk-pvp .sq .ico { width: 16px; height: 16px; }
+.set .cell .sub { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set .cell .val { color: var(--fg-3); display: inline-flex; gap: 8px; align-items: center; justify-self: end; text-align: right; min-width: 0; }
+.set .cell .val :is(input[type=text], input[type=number], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
+.set .cell .val select { text-align-last: right; cursor: pointer; }
+.set .cell .val input:focus, .set .cell .val select:focus { outline: none; color: var(--fg); }
+.set .cell .val code { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.set .cell .val .btn.icon-btn { padding: 4px 6px; min-width: 0; background: none; border: 0; color: var(--fg-3); } .set .cell .val .btn.icon-btn:hover { color: var(--accent); }
+.set .cell .val .ico { width: 16px; height: 16px; }
+.set .cell .val form.inline { display: inline; }
+.set .cell .val .link { font-size: 14px; padding: 2px 4px; cursor: pointer; list-style: none; } .set .cell .val summary.link::-webkit-details-marker { display: none; }
+.set .cell .val .danger-zone { display: inline; }
+.set .cell.link { cursor: pointer; } .set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.set .cell .chev { color: var(--fg-3); font-size: 20px; line-height: 1; margin-left: 2px; }
+.set .cell.btnrow { grid-template-columns: 1fr; color: var(--accent); cursor: pointer; }
+.set .cell.btnrow.danger { color: var(--today); }
+.set form.cell { grid-template-columns: minmax(0, 1fr) auto; }
+.set .cell > input[type=text], .set .cell > select { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 4px 0; min-width: 0; width: 100%; }
+.set .cell > input[type=text]:focus { outline: none; }
+.set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+/* import calendar: a file without objects says so in the foot */
+.set .foot .danger { color: var(--today); }
+/* vacation › rule: one row per kind; the title row carries building
+   blocks and a live test over the event titles */
+.set #vac-re { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 360px; }
+.set #vac-re.bad { color: var(--today); }
+.vac-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 10px; }
+.vac-tools .chip { cursor: pointer; font-size: 12px; padding: 3px 9px; }
+.vac-tools .chip:hover { border-color: var(--accent); color: var(--fg); }
+.vac-tools code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+.vac-test { border-top: 1px solid var(--line); padding: 8px 14px 10px; font-size: 13px; }
+.vac-th { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; color: var(--fg-2); margin-bottom: 6px; }
+.vac-th .seg button { font-size: 12px; padding: 3px 9px; min-height: 0; }
+.vac-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 260px; overflow: auto; }
+.vac-list li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.vac-list li span, .day .nline .fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vac-list li.miss span { color: var(--fg-3); }
+.vac-list small { color: var(--fg-3); flex: none; font-variant-numeric: tabular-nums; }
+.vac-list mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.vac-note { margin: 4px 0 0; color: var(--fg-3); }
+.vac-err { margin: 0; color: var(--today); }
+/* reminders › snap points: the lists drawn as the event editor's strip (ordinal, one zone per point); labels
+   alternate above and below the axis, a "+" per gap shows on hover or focus (always on touch); a point opens
+   .snp-edit below. Narrow screens scroll the strip sideways (31 px per zone: two zones hold one label) */
+.snp-scroll { overflow-x: auto; padding: 0 8px; scrollbar-width: thin; }
+.snp-es { position: relative; height: 118px; user-select: none; }
+.snp-ax { position: absolute; left: 0; right: 0; top: 58px; border-top: 2px solid var(--line); }
+.snp-ev { position: absolute; top: 50px; height: 18px; border-radius: 4px; box-sizing: border-box; background: color-mix(in srgb, var(--accent) 18%, transparent); border-left: 3px solid var(--accent); }
+.snp-pt { position: absolute; transform: translateX(-50%); font: inherit; font-size: 11.5px; line-height: 1.3; padding: 2px 5px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--fg); white-space: nowrap; cursor: pointer; z-index: 2; }
+.snp-pt:hover, .snp-pt.on { border-color: var(--accent); color: var(--accent); }
+.snp-pt.on { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.snp-pt.up { top: 16px; } .snp-pt.dn { top: 82px; }
+.snp-pt::after { content: ""; position: absolute; left: 50%; border-left: 1px solid var(--line); }
+.snp-pt.up::after { top: 100%; height: 22px; } .snp-pt.dn::after { bottom: 100%; height: 16px; }
+.snp-pt.fix { cursor: default; background: none; border-color: transparent; color: var(--fg-3); font-weight: 600; }
+.snp-plus { position: absolute; top: 50px; width: 20px; height: 20px; margin-left: -10px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 14px; line-height: 1; color: var(--accent); background: var(--bg); border: 1px dashed var(--accent); opacity: 0; z-index: 3; }
+.snp-es:hover .snp-plus, .snp-plus:focus-visible { opacity: .6; }
+.snp-es .snp-plus:hover, .snp-plus:focus-visible { opacity: 1; background: var(--accent); color: var(--accent-fg); border-style: solid; }
+@media (hover: none) { .snp-plus { opacity: .6; } }
+.set .snp-edit { border-top: 1px solid var(--line); }
+.set .snp-edit .val { flex-wrap: wrap; justify-content: flex-end; }
+.set .snp-edit .val input[type=number] { width: 64px; min-width: 0; text-align: left; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.set .snp-edit .snp-err { color: var(--today); white-space: normal; }
+.set .snp-edit .snp-err:empty { display: none; }
+@media (max-width: 700px) { .set .cell.snp-edit { grid-template-columns: 1fr; } .set .snp-edit .val { justify-self: start; justify-content: flex-start; } }
+.set .mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+.set .flash { margin: 0 0 14px; }
+.set ul.plain { margin-top: 4px; }
+/* the switch (as in the event editor, `.ed .toggle`): a real checkbox inside, so the form posts it */
+.set .toggle { position: relative; display: inline-block; width: 44px; height: 26px; flex: none; }
+.set .toggle input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.set .toggle i { position: absolute; inset: 0; border-radius: 13px; background: var(--bg-3); transition: background .15s; pointer-events: none; }
+.set .toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+.set .toggle input:checked + i { background: var(--accent); } .set .toggle input:checked + i::after { left: 20px; }
+.set .toggle input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 520px) { .set .cell .val :is(input[type=text], select) { max-width: 160px; } .set .cell .val .seg button { padding: 5px 7px; font-size: 13px; } }
+/* pickers (country, region, time zone): a filter field over a list, the current value ticked */
+.set .pick-q { margin-bottom: 12px; }
+.set .pick-q input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--fg); background: transparent; border: 0; padding: 11px 14px; }
+.set .pick-q input:focus { outline: none; }
+.set .cell.head { min-height: 0; padding: 14px 14px 4px; background: var(--bg); }
+.set .cell.head .label { margin: 0; }
+.set .cell.on { color: var(--accent); }
+.set .cell.on .val .ico { color: var(--accent); }
+.set .cell .sub:empty { display: none; }
+/* a setting without effect here (school holidays of a country no source covers): shown, kept, not editable —
+   not `disabled`, which would drop the value from the autosaved form */
+.set .cell.na { pointer-events: none; } .set .cell.na .val { opacity: .4; }
+/* named holidays in day, week and month views (render.rs `hol_labels`): `.hday` labels, public
+   ones tinted --hol, school holidays --fer; the day itself gets `.hol` (number coloured) or `.fer`.
+   --hol/--fer default to the theme's red and amber; a user's own colours are set on the calendar page */
+:root { --hol: var(--c3); --fer: var(--c4); }
+.hday { display: inline-block; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.5; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--hol) 14%, transparent); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.hday.school { background: color-mix(in srgb, var(--fer) 22%, transparent); }
+.day > .hday { display: block; margin: 0 0 2px; }
+
+/* tints mix into the page background, not the grey tile: lighter and warmer; a public holiday wins */
+.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
+.day.hol { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
+.lrow.fer:not(.today) { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
+.lrow.hol:not(.today) { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
+.fname { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--fer) 70%, var(--fg)); letter-spacing: 0; text-transform: none; }
+.fname.pub { color: color-mix(in srgb, var(--hol) 80%, var(--fg)); }
+.day .nline { display: flex; align-items: center; gap: 4px; min-width: 0; padding-right: 22px; } /* room for the + in the corner */
+.agenda > .hday { margin: 0 0 6px 4px; }
+.dayblock li.hols span { display: flex; flex-wrap: wrap; gap: 4px; }
+.doc .hols { display: flex; flex-wrap: wrap; gap: 6px; margin: -14px 0 18px; }
+.doc .hols .hday { font-size: 13px; padding: 2px 8px; }

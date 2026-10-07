@@ -111,8 +111,9 @@ pub fn spawn_trash_purger(state: SharedState) {
     });
 }
 
-/// Development only (`PRACTICAL__DEV_ASSETS_DIR`): polls the assets directory's mtimes every 300 ms
-/// and broadcasts on `dev_reload` when anything changed — the browser then reloads (`/dev/reload`).
+/// Development only (`PRACTICAL__DEV_ASSETS_DIR`): polls the mtimes of the asset tree (sub-directories
+/// included: the parts of app.js and style.css, src/bundle.rs) every 300 ms and broadcasts on `dev_reload`
+/// when anything changed — the browser then reloads (`/dev/reload`).
 pub fn spawn_dev_asset_watcher(state: SharedState) {
     let Some(dir) = state.config.dev_assets_dir.clone() else { return };
     tracing::warn!("development mode: serving assets from {dir} and mounting /dev/reload");
@@ -123,17 +124,7 @@ pub fn spawn_dev_asset_watcher(state: SharedState) {
         loop {
             tick.tick().await;
             guarded("asset watcher", async {
-                let mut now = Vec::new();
-                if let Ok(mut rd) = tokio::fs::read_dir(&dir).await {
-                    while let Ok(Some(e)) = rd.next_entry().await {
-                        if let Ok(m) = e.metadata().await
-                            && let Ok(t) = m.modified()
-                        {
-                            now.push((e.file_name().to_string_lossy().into_owned(), t));
-                        }
-                    }
-                }
-                now.sort();
+                let now = asset_stamps(&dir).await;
                 if last.as_ref().is_some_and(|l| *l != now) {
                     tracing::info!("assets changed — browsers reload");
                     let _ = state.dev_reload.send(());
@@ -143,6 +134,25 @@ pub fn spawn_dev_asset_watcher(state: SharedState) {
             .await;
         }
     });
+}
+
+/// Path and mtime of every file under `dir`, sorted.
+pub(crate) async fn asset_stamps(dir: &str) -> Vec<(String, std::time::SystemTime)> {
+    let (mut now, mut dirs) = (Vec::new(), vec![std::path::PathBuf::from(dir)]);
+    while let Some(d) = dirs.pop() {
+        if let Ok(mut rd) = tokio::fs::read_dir(&d).await {
+            while let Ok(Some(e)) = rd.next_entry().await {
+                let Ok(m) = e.metadata().await else { continue };
+                if m.is_dir() {
+                    dirs.push(e.path());
+                } else if let Ok(t) = m.modified() {
+                    now.push((e.path().to_string_lossy().into_owned(), t));
+                }
+            }
+        }
+    }
+    now.sort();
+    now
 }
 
 /// Region data upkeep (domain::holidays::maintain): at start and then daily; the first round

@@ -1,0 +1,137 @@
+/* ---- Tag (Ledger + Dokument), from the prototype's css05 ---- */
+.cal.v-day { grid-template-columns: minmax(280px,420px) 1fr; gap: 0; padding: 0; }
+.ledger { border-right: 1px solid var(--line); overflow: auto; overflow-anchor: none; max-height: calc(100dvh - var(--sticky-top) - 30px); } /* app.js `mountLedger` restores the position itself when it prepends */
+.lhd { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--fg-2); } /* the month of the topmost row */
+/* day ledger row: number | weekday | text, the entry count as a thin bar under the text */
+.lrow b { grid-area: d; font-size: 15px; font-weight: 600; } .lrow span { grid-area: w; font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
+.lrow i { grid-area: bar; height: 3px; border-radius: 2px; background: var(--accent); width: calc(var(--n) * 10px); max-width: 100%; opacity: .7; }
+.lrow em { grid-area: t; font-style: normal; color: var(--fg-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
+.lrow.we { background: var(--tile-weekend); } .lrow.today { background: color-mix(in srgb, var(--today) 8%, transparent); } .lrow.today b { color: var(--today); }
+.lrow.sel { box-shadow: inset 3px 0 0 var(--accent); }
+.doc { padding: 28px 40px; max-width: 720px; } .doc .sub { color: var(--fg-3); margin-bottom: 24px; }
+.doc article { display: grid; grid-template-columns: 90px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.doc time { font-size: 15px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.doc h3 { margin: 0 0 4px; font-size: 17px; font-weight: 600; } .doc p { margin: 0; color: var(--fg-2); font-size: 14px; }
+.doc .meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--fg-3); flex-wrap: wrap; }
+.doc .meta span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; display: inline-flex; align-items: center; gap: 4px; }
+/* the entry's details: one row per kind, icon in a column of its own (render.rs `day_facts`) */
+.doc .facts { display: grid; grid-template-columns: 18px 1fr; gap: 6px 9px; margin-top: 10px; align-items: start; }
+.doc .facts > .ico { color: var(--fg-3); margin-top: 2px; }
+.doc .fv { font-size: 13px; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.doc .fv.loc { display: grid; gap: 3px; justify-items: start; }
+.doc .cp { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--fg-2); text-align: left; cursor: pointer; }
+.doc .cp .ico, .doc .st .ico, .doc .lk .ico { width: 15px; height: 15px; color: var(--fg-3); }
+.doc .cp:hover, .doc .cp.ok { color: var(--accent); } .doc .cp:hover .ico, .doc .cp.ok .ico { color: var(--accent); }
+.doc .maps { display: flex; gap: 6px; margin-top: 2px; }
+.doc .mb { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--accent); cursor: pointer; }
+.doc .mb .ico { width: 13px; height: 13px; }
+.doc .st { display: inline-flex; gap: 5px; align-items: center; }
+.doc .lk { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); }
+.doc .lk .ico { color: var(--accent); }
+@media (max-width: 899px) { .cal.v-day { grid-template-columns: 1fr !important; } .ledger { border: 0; } .doc { padding: 16px; } }
+
+/* ---- Kontakte: Sheet (css10) + panels ---- */
+.sheetwrap { grid-area: list; display: none; overflow: auto; max-height: calc(100dvh - var(--sticky-top) - 40px); scrollbar-width: none; }
+.view-table .sheetwrap { display: block; } .view-table .panels { display: none; }
+.view-table.contacts { grid-template-columns: 1fr; grid-template-areas: "cols" "list"; }
+.view-table .detail { display: none; }
+.sheet { border-collapse: separate; border-spacing: 0; min-width: 900px; width: 100%; font-size: 14px; }
+.sheet th, .sheet td { padding: 8px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; background: var(--bg); }
+.sheet th { position: sticky; top: 0; z-index: 2; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); background: var(--bg-2); text-align: left; }
+.sheet .pin { position: sticky; left: 0; z-index: 1; background: var(--tile); font-weight: 600; display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.sheet th.pin { z-index: 3; background: var(--bg-2); }
+.sheet [contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.sheet td[contenteditable]:empty::after { content: "–"; color: var(--fg-3); }
+.chip.bk, .list .abchip { background: color-mix(in srgb, var(--c, var(--c2)) 18%, transparent); color: var(--fg); } .chip.bk { border-color: transparent; } /* the address book tint, also of its chip in the list */
+.sheet tr:hover td { background: var(--tile); }
+.sheet [data-c].off { display: none; }
+.contacts .detail { display: none; grid-area: detail; position: sticky; align-self: start; container-type: inline-size; max-height: calc(100dvh - var(--sticky-top) - 30px); overflow-y: auto; overscroll-behavior: contain; }
+.contacts .detail.on { display: block; }
+.list li { cursor: pointer; } .list li.on { box-shadow: inset 0 0 0 1.5px var(--accent); } .list li:not(.on):hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 28%, transparent); }
+/* the picked contact (app.js activeKey): hover faint, picked blue, as in the calendar — with the tasks table's rules (`.tkmain .sheet`) */
+.list li.hide, .lpanel.hide, .sheet tr.hide { display: none; }
+@media (max-width: 1099px) { .contacts .detail.on { display: block; position: fixed; inset: 0; z-index: 45; overflow: auto; border-radius: 0; align-self: stretch; max-height: none; } } /* both undo desktop-pane rules on the full-screen editor (measured on a 844px-high phone, Chrome 154): `align-self: start` (`.contacts .detail`) now also applies to fixed boxes and shrank it to its content (576px, the list showing below), and the pane's max-height alone would still cap it at 657px */
+
+
+/* ---- Mehr-Ansichten (views_more.py) ---- */
+.cal.v-planner, .cal.v-weekends, .cal.v-vacation, .cal.v-countdown, .cal.v-numbers { grid-template-columns: 1fr 88px; }
+.mv > * { max-width: 100%; }
+.ybox { background: var(--tile); border-radius: 14px; padding: 16px; } h2.yh { margin: 0 0 10px; font-size: 18px; letter-spacing: -.02em; }
+.sub { color: var(--fg-3); font-size: 13px; font-weight: 400; } .mvh { margin: 0 0 12px; font-size: 20px; letter-spacing: -.02em; }
+.planner { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; background: var(--tile); border-radius: 14px; padding: 10px; font-size: 10.5px; }
+.mcol h3 { margin: 0 0 4px; font-size: 12px; text-align: center; } .c { display: grid; grid-template-columns: 16px 10px 1fr; gap: 2px; align-items: center; height: 20px; border-bottom: 1px solid var(--line); padding: 0 3px; overflow: hidden; white-space: nowrap; position: relative; cursor: pointer; }
+.c b { font-weight: 600; } .c s { text-decoration: none; color: var(--fg-3); } .c i { position: absolute; right: 2px; top: 2px; font-size: 8px; color: var(--fg-3); font-style: normal; } .c span { overflow: hidden; text-overflow: ellipsis; }
+.c.we { background: var(--tile-weekend); } .c.fer { background: color-mix(in srgb, var(--fer) 18%, transparent); } .c.hol { background: color-mix(in srgb, var(--hol) 22%, transparent); } .c.t { outline: 2px solid var(--today); outline-offset: -2px; }
+.planner .c.sel { box-shadow: inset 0 0 0 40px color-mix(in srgb, var(--accent) 24%, transparent); } .planner .c[data-date]:not(.sel):hover { box-shadow: inset 0 0 0 40px color-mix(in srgb, var(--accent) 9%, transparent); } /* the picked day (app.js markPicked) tints over the weekend/holiday shade */
+.c span.u { background: color-mix(in srgb, var(--c6) 35%, transparent); border-radius: 3px; padding: 0 3px; } .c.x { background: transparent; border: 0; }
+.leg { display: flex; gap: 14px; font-size: 12px; color: var(--fg-2); margin: 8px 4px; flex-wrap: wrap; } .leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+@media print { .topbar, .tabbar, .tl, .toolbar, .fab { display: none !important; } .planner { font-size: 8px; } }
+.wes { display: grid; grid-template-columns: repeat(13, 1fr); gap: 6px; }
+.wes .we { border-radius: 10px; padding: 8px; min-height: 64px; background: var(--tile); display: grid; align-content: start; gap: 2px; font-size: 12px; } .wes .we b { font-size: 13px; } .wes .we span { color: var(--fg-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wes .we.free { background: color-mix(in srgb, var(--c2) 18%, var(--bg)); } .wes .we.busy { background: color-mix(in srgb, var(--c3) 14%, var(--bg)); } .wes .we.long { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c4) 70%, transparent); }
+.wes .we.past { opacity: .45; } .wes .we.next { outline: 2px solid var(--accent); outline-offset: 2px; } .wes .we.next span::before { content: "➜ "; }
+.kpi { display: flex; gap: 16px; margin: 0 0 12px; flex-wrap: wrap; } .kpi div { background: var(--tile); border-radius: 12px; padding: 10px 14px; } .kpi b { font-size: 22px; display: block; letter-spacing: -.02em; } .kpi span { font-size: 12px; color: var(--fg-3); }
+@media (max-width: 899px) { .wes { grid-template-columns: repeat(4, 1fr); } .planner { grid-template-columns: repeat(3, 1fr); } }
+.gantt { overflow-x: auto; background: var(--tile); border-radius: 14px; padding: 12px; } .g { display: grid; grid-template-columns: repeat(366, minmax(3px, 1fr)); gap: 0; position: relative; }
+.mh { font-size: 11px; color: var(--fg-3); border-left: 1px solid var(--line); padding-left: 4px; height: 18px; } .lane { display: grid; grid-template-columns: repeat(366, minmax(3px, 1fr)); height: 26px; align-items: center; margin-top: 6px; position: relative; }
+.lane::before { content: attr(data-l); position: absolute; left: 0; top: -14px; font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.bar { height: 20px; border-radius: 5px; font-size: 11px; padding: 0 6px; line-height: 20px; white-space: nowrap; overflow: hidden; background: color-mix(in srgb, var(--c4) 30%, var(--bg)); } .bar.u { background: color-mix(in srgb, var(--c6) 40%, var(--bg)); } .bar.hol { background: var(--c3); opacity: .7; padding: 0; }
+.wd { background: var(--tile-weekend); height: 100%; } .todaymark { background: var(--today); width: 2px; height: 100%; }
+.grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 12px; } .brg li { margin: 4px 0; font-size: 13px; } .brg small { color: var(--fg-3); }
+@media (max-width: 899px) { .grid2 { grid-template-columns: 1fr; } }
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; } .cd { background: var(--tile); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 86px 1fr; gap: 14px; align-items: center; }
+.ring { width: 86px; height: 86px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--line) 0); display: grid; place-items: center; position: relative; } .ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--tile); }
+.ring b, .ring small { position: relative; z-index: 1; } .ring b { font-size: 22px; letter-spacing: -.03em; line-height: 1; } .ring small { font-size: 10px; color: var(--fg-3); text-transform: uppercase; }
+.cd.over .ring { background: conic-gradient(var(--today) calc(var(--p) * 1%), color-mix(in srgb, var(--today) 25%, var(--line)) 0); } .cd.over .ring b { color: var(--today); } .cd.over { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--today) 50%, transparent); }
+.cd h3 { margin: 0; font-size: 15px; } .cd span { font-size: 12px; color: var(--fg-3); } .cd .ic { font-size: 18px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; } .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; } .kpis div { background: var(--tile); border-radius: 12px; padding: 12px 14px; } .kpis b { font-size: 26px; display: block; letter-spacing: -.03em; } .kpis span { font-size: 12px; color: var(--fg-3); }
+@media (max-width: 720px) { .kpis { grid-template-columns: 1fr 1fr; } }
+.row.stat, .stats .row { display: grid; grid-template-columns: 100px 1fr 40px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; } .stats .row .b { height: 14px; border-radius: 7px; background: color-mix(in srgb, var(--c) 45%, var(--bg)); width: var(--w); } .stats .row b { text-align: right; font-variant-numeric: tabular-nums; }
+.spark { display: grid; grid-auto-flow: column; gap: 2px; height: 80px; align-items: end; } .spark i { background: var(--accent); opacity: .7; height: var(--h); border-radius: 2px 2px 0 0; min-height: 1px; }
+.topw li { font-size: 13px; margin: 3px 0; } .topw b { font-variant-numeric: tabular-nums; }
+
+/* immediate custom tooltip for the timelines */
+.tip { position: fixed; z-index: 60; pointer-events: none; background: var(--fg); color: var(--bg); font: 500 12px/1.2 var(--font); padding: 5px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-100%, -50%); margin-left: -10px; box-shadow: 0 4px 14px rgba(0,0,0,.2); max-width: 60vw; }
+/* real titles are long: never let a nowrap label widen the grid */ .ev { max-width: 100%; }
+.tkpage, .contacts, .placeholder { align-content: start; }
+
+/* ---- fixed page header: topbar and toolbar stay put, only the content below scrolls.
+   The app frame is the viewport and .main is the scroll container (it already had overflow-x
+   hidden, which made it the sticky scrollport without ever scrolling). Topbar and tabbar are
+   grid rows outside the scroller; the toolbar sticks at 0 inside it; sidebars stick below the
+   toolbar. app.js measures both bars into --topbar-h/--toolbar-h (they wrap on narrow screens
+   and the calendar toolbar is swapped with every fragment); these are desktop fallbacks. ---- */
+:root { --topbar-h: 61px; --toolbar-h: 53px; --sticky-top: calc(var(--topbar-h) + var(--toolbar-h)); }
+.tl, .cal.v-week .heat, .contacts .detail { top: calc(var(--toolbar-h) + 4px); }
+
+/* ---- contacts layout: list (1/3) | editor (2/3, always shown) | quick-jump rail; the table view
+   has no editor and no columns row — columns are picked from the toolbar popover. The rail
+   (only letters that exist, click = jump, nothing stays highlighted) is hidden below 900px. ---- */
+.ct-rail { display: none; }
+.view-table.contacts .detail { display: none !important; } .sheetwrap::-webkit-scrollbar { display: none; }
+.main:has(#contacts) { scrollbar-width: none; } .main:has(#contacts)::-webkit-scrollbar { display: none; } /* the rail is the position indicator instead */
+@media (min-width: 900px) {
+  .contacts, .view-table.contacts { grid-template-columns: 1fr 32px; grid-template-areas: "list rail"; }
+  .ct-rail { grid-area: rail; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0; position: sticky; top: calc(var(--toolbar-h) + 4px); align-self: start; height: calc(100dvh - var(--sticky-top) - 30px); overflow: hidden; }
+  .ct-rail button { all: unset; cursor: pointer; font: 600 11px/1 var(--font); color: var(--fg-3); min-width: 20px; height: 20px; padding: 0 3px; box-sizing: border-box; display: grid; place-items: center; border-radius: 10px; } /* a month (birthday sort) is three letters wide */
+  /* same language as the calendar rail: current position = accent ring, hover = lighter ring; the letter itself never changes */
+  .ct-rail button.cur { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .ct-rail button:not(.cur):hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .ct-rail button.hide { display: none; }
+}
+@media (min-width: 1100px) {
+  .contacts:not(.view-table) { grid-template-columns: 1fr 2fr 32px; grid-template-areas: "list detail rail"; }
+  .contacts:not(.view-table) .detail { display: block; } /* always shown; empty = new contact */
+}
+
+/* ---- contacts list entries: variable height, lines toggled from the ▥ picker (data-lf), the
+   two lines minimum (the avatar height). ---- */
+.list li { grid-template-columns: 40px 1fr; align-items: start; }
+.list .ci { min-height: 36px; display: grid; gap: 2px; align-content: center; min-width: 0; }
+.list .name > span:first-child, .ed .cardform .pchip > span:not(.pav), .ed .cardform .lk-kv span, .ed .cardform .locsub .chip .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* one line, cut with … */
+.list .bday { flex: none; font-weight: 400; font-size: 12px; color: var(--fg-2); }
+.list .line { font-size: 13px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .list .sub span:not(.off) ~ span:not(.off)::before { content: "· "; }
+.list .abchip { display: inline-block; font-size: 12px; line-height: 1.4; border-radius: 999px; padding: 1px 8px; } /* tint: .chip.bk */
+.list .cats { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+.list .note { color: var(--fg-3); font-style: italic; }
+.list .off { display: none; }

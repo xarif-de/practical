@@ -1,0 +1,21 @@
+/* App frame */
+.app { display: grid; min-height: 100dvh; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr; height: 100dvh; }
+.topbar { display: flex; align-items: center; padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); gap: 10px; }
+html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [aria-busy="true"] { cursor: progress; } /* a navigation or a write that takes longer than 300 ms (practical.progress) */
+.brand { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
+.nav { display: none; gap: 4px; margin-left: 8px; }
+.nav a { border-radius: var(--radius-s); color: var(--fg-2); }
+.nav a[aria-current] { background: var(--bg-2); color: var(--fg); }
+.spacer { flex: 1; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; padding: 0; font-size: 13px; font-weight: 600; } /* padding: the base button padding (12px a side) left 6px for the initials */
+.main { display: grid; grid-template-rows: auto 1fr; align-content: start; min-width: 0; overflow-x: hidden; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.tabbar { display: flex; justify-content: space-around; border-top: 1px solid var(--line); background: var(--bg); position: sticky; bottom: 0; padding: 6px 0 max(6px, env(safe-area-inset-bottom)); }
+.tabbar a { display: grid; justify-items: center; gap: 2px; font-size: 11px; color: var(--fg-2); padding: 4px 10px; }
+.tabbar a[aria-current] { color: var(--accent); }
+.tabbar svg { width: 22px; height: 22px; }
+
+/* Toolbar */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px var(--pad); position: sticky; top: 0; z-index: 4; background: var(--bg); }
+.toolbar h1 { font: 700 22px/1.2 var(--font-display); margin: 0 4px 0 0; letter-spacing: -.02em; }
+.seg { display: inline-flex; overflow: hidden; border: 0; background: var(--bg-3); border-radius: 8px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; }

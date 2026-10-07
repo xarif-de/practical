@@ -1,0 +1,79 @@
+/* ===== colour picker (app.js colorPicker, round 13): a colour field is a button (.cpk-btn); it opens a popover
+   (.cpk) with the colours in use, and ＋ there the dialog for a new one (.cpk-dlg: fan deck | field + sliders).
+   The preview panels are fixed light and dark pages, independent of the scheme shown. ===== */
+.cpk-btn { display: inline-flex; align-items: center; gap: 8px; padding: 2px; border: 0; background: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--fg-2); border-radius: 999px; }
+.cpk-btn i { width: 26px; height: 26px; border-radius: 50%; background: var(--c, var(--bg-3)); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); flex: none; transition: box-shadow .12s; }
+.cpk-btn span:empty { display: none; }
+.cpk-btn:hover:not(:disabled) i { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--c) 50%, transparent); }
+.cpk-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cpk-btn:disabled { cursor: default; opacity: .6; }
+.cpk-rainbow { background: conic-gradient(#ff3b30, #ff9f0a, #ffcc00, #30b46c, #32ade6, #0a84ff, #af52de, #ff2d55, #ff3b30); }
+.cpk { position: fixed; z-index: 65; width: min(430px, calc(100vw - 16px)); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.25); overflow: hidden; }
+.cpk-h { display: flex; gap: 10px; align-items: center; padding: 12px 14px 0; font-size: 14px; min-width: 0; }
+.cpk-h b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.cpk-sws { display: grid; grid-template-columns: repeat(auto-fill, 30px); gap: 10px; justify-content: center; padding: 14px 16px 6px; max-height: 200px; overflow-y: auto; }
+.cpk-sw { box-sizing: border-box; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; background: var(--c); cursor: pointer; display: grid; place-items: center; color: var(--ink, #fff); transition: transform .1s; }
+.cpk-sw:hover { transform: scale(1.1); }
+.cpk-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cpk-sw[aria-checked=true] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
+.cpk-sw[aria-checked=true]::after { content: ""; width: 11px; height: 6px; border: solid var(--ink, #fff); border-width: 0 0 2.5px 2.5px; transform: translateY(-2px) rotate(-45deg); }
+/* "like the calendar" / "standard": half the fallback colour, half empty */
+.cpk-sw.inh { background: conic-gradient(from 45deg, var(--c) 0 50%, transparent 0); box-shadow: inset 0 0 0 2px var(--c); }
+.cpk-sw.inh[aria-checked=true] { box-shadow: inset 0 0 0 2px var(--c), 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
+.cpk-sw.inh::after { border-color: var(--fg); }
+/* ＋ a new colour: a dashed empty circle (not `.add`, which is the calendar's day button) */
+.cpk-sw.cpk-add { background: var(--bg); border: 1.5px dashed var(--fg-3); color: var(--fg-2); }
+.cpk-sw.cpk-add:hover { border-color: var(--accent); color: var(--accent); }
+.cpk-sw.cpk-add .ico { width: 15px; height: 15px; }
+.cpk-name { text-align: center; font-size: 13px; color: var(--fg-2); min-height: 18px; padding: 4px 16px 12px; overflow-wrap: anywhere; }
+.cpk-pv { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.cpk-pvp { --pfg2: #6e6e73; background: #fff; color: #1d1d1f; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12px; }
+.cpk-pvp.dark { --pfg2: #a4abb7; background: #0f1115; color: #f2f2f4; }
+.cpk-pvp .sq { background: var(--x); }
+.cpk-pvp .evs { display: grid; gap: 3px; min-width: 0; }
+.cpk-pvp .t { border-left: 3px solid var(--x); padding: 1px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpk-pvp .t b { font-weight: 500; color: var(--pfg2); }
+.cpk-pvp .ad { background: color-mix(in srgb, var(--x) 22%, transparent); border-radius: 4px; padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpk-pvp .hd { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; background: color-mix(in srgb, var(--x) 20%, transparent); color: var(--x); }
+.cpk-pv .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 7px 14px; font-size: 12px; color: var(--fg-3); border-top: 1px solid var(--line); }
+.cpk-pv .meta code { color: var(--fg); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cpk-pv .meta .warn { color: var(--today); }
+.ask.cpk-ask { z-index: 66; } /* above the popover it came from */
+.ask-box.cpk-dlg { width: min(620px, 100%); padding: 0; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.cpk-dh { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 14px 16px 6px; }
+.cpk-dh b { display: block; font-size: 15px; } .cpk-dh small { overflow-wrap: anywhere; }
+.cpk-dh .icon-btn { padding: 4px; }
+.cpk-body { min-height: 300px; display: grid; place-items: center; padding: 6px 16px; }
+.cpk-cap { margin: 4px 0 6px; } /* the eyebrow of .set .label */
+.cpk-near { padding: 4px 16px 12px; }
+.cpk-near .vrd { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--fg-2); }
+.cpk-near i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.cpk-near .bad { color: var(--today); font-weight: 600; }
+.cpk-near .meh { color: color-mix(in srgb, var(--c4) 75%, var(--fg)); }
+.cpk-near .same { display: flex; gap: 8px; align-items: center; font-size: 13px; background: color-mix(in srgb, var(--today) 10%, transparent); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.cpk-near .same .link { margin-left: auto; font-weight: 600; }
+.cpk-dlg .ask-acts, .cfo-dlg .ask-acts { padding: 12px 16px 14px; border-top: 1px solid var(--line); }
+.cpk-fanbox { width: 100%; display: grid; gap: 8px; justify-items: center; }
+.cpk-fan { position: relative; width: 100%; height: 250px; overflow: hidden; touch-action: none; }
+.cpk-card { position: absolute; left: 50%; bottom: -40px; width: 64px; height: 230px; margin-left: -32px; border-radius: 10px; transform-origin: 50% 88%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.22); display: grid; grid-template-rows: repeat(5, 1fr) 30px; overflow: hidden; transition: transform .25s ease, opacity .25s; }
+.cpk-card button { border: 0; padding: 0; border-radius: 0; cursor: pointer; }
+.cpk-card button[aria-checked=true] { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 4px rgba(0,0,0,.4); }
+.cpk-card .nm { font-size: 10px; color: #333; display: grid; place-items: center; font-weight: 600; background: #fff; overflow: hidden; }
+.cpk-nav { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--fg-3); }
+.cpk-field { display: grid; gap: 12px; justify-items: start; width: min(400px, 100%); }
+.cpk-in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; }
+.cpk-in.bad { border-color: var(--today); }
+.cpk-chip { width: 38px; align-self: stretch; }
+.cpk-in input { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); background: none; border: 0; padding: 9px 10px; width: 170px; }
+.cpk-in input:focus { outline: none; }
+.cpk-in .btn { border: 0; border-left: 1px solid var(--line); border-radius: 0; align-self: stretch; padding: 0 10px; }
+.cpk-err { font-size: 12px; color: var(--today); }
+.cpk-sl { display: grid; gap: 12px; width: 100%; }
+.cpk-sl .row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 42px; gap: 10px; align-items: center; font-size: 13px; }
+.cpk-sl output { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.cpk-sl .track { position: relative; height: 14px; border-radius: 7px; cursor: pointer; touch-action: none; }
+.cpk-sl .knob { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; box-sizing: border-box; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.3); transform: translate(-50%, -50%); pointer-events: none; }
+.cpk-sugg { display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 3px; width: 100%; }
+.cpk-sugg button { width: 22px; height: 22px; border-radius: 6px; border: 0; padding: 0; cursor: pointer; }
+.cpk-sugg button[aria-checked=true] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--fg); }
+@media (max-width: 520px) { .cpk-pv { grid-template-columns: 1fr; } .cpk-body { min-height: 0; } }

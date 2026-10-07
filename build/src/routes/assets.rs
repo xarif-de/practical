@@ -4,8 +4,9 @@
 //! bytes, any other client the gzip form decoded once. `?v=<asset_version()>` URLs (the <link>/<script>
 //! tags of the pages) and `url()`s (`?v=` of the file's own hash: the icon sprite, the i18n scripts) are
 //! cached as immutable.
-//! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached
-//! (a generated file the directory lacks: the embedded one).
+//! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached; app.js and
+//! style.css, when the directory has no such file, joined from their parts as build.rs joins them
+//! (src/bundle.rs); a generated file the directory lacks: the embedded one.
 
 use crate::state::SharedState;
 use axum::Router;
@@ -145,7 +146,13 @@ async fn serve(State(state): State<SharedState>, Path(name): Path<String>, RawQu
         return StatusCode::NOT_FOUND.into_response();
     };
     if let Some(dir) = &state.config.dev_assets_dir {
-        return match tokio::fs::read(std::path::Path::new(dir).join(a.name)).await {
+        let (path, name) = (std::path::PathBuf::from(dir), a.name);
+        // the file as it is (e2e serves build.rs' output: app.js joined and minified), else a bundle's parts (the source tree)
+        let read = move || match std::fs::read(path.join(name)) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => crate::bundle::read(&path, name),
+            r => r,
+        };
+        return match tokio::task::spawn_blocking(read).await.expect("asset read") {
             Ok(body) => finish(body.into_response(), a, "no-store"),
             // build.rs made it from locales/ (`mise run dev` rebuilds on a locale edit): no file to read
             Err(e) if a.generated && e.kind() == std::io::ErrorKind::NotFound => finish(identity(i).into_response(), a, "no-store"),

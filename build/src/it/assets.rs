@@ -27,6 +27,11 @@ fn built(name: &str, ext: &str) -> Vec<u8> {
     std::fs::read(format!("{}/{name}{ext}", env!("OUT_DIR"))).unwrap()
 }
 
+/// build/assets, the sources
+fn assets_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets")
+}
+
 fn gunzip(b: &[u8]) -> Vec<u8> {
     use std::io::Read;
     let mut v = Vec::new();
@@ -46,7 +51,7 @@ async fn embedded_assets_with_etag_and_304() {
         assert_eq!(r.header("content-encoding"), None, "{name}: no Accept-Encoding → identity");
         assert_eq!(r.header("vary").as_deref(), Some("accept-encoding"), "{name}");
         assert_eq!(r.bytes, built(name, ""), "{name}: the identity form is build.rs' minified file");
-        let on_disk = if name.starts_with("i18n-") { r.bytes.clone() } else { std::fs::read(format!("{}/assets/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap() };
+        let on_disk = if name.starts_with("i18n-") { r.bytes.clone() } else { crate::bundle::read(&assets_dir(), name).unwrap() };
         if name.starts_with("leaflet") || name.ends_with(".svg") || name.starts_with("i18n-") {
             assert_eq!(r.bytes, on_disk, "{name}: vendored/tiny files ship as they are");
         } else {
@@ -111,10 +116,12 @@ fn every_named_icon_is_in_the_sprite() {
     assert!(have.len() > 100, "{}", have.len());
     let re = regex::Regex::new(r##"['"#]i-([a-z0-9-]+)['"]|ico(?:_c)?\(["']([a-z0-9-]+)["']"##).unwrap();
     let mut missing = vec![];
-    for dir in ["templates", "assets", "src"] {
-        for e in std::fs::read_dir(format!("{}/{dir}", env!("CARGO_MANIFEST_DIR"))).unwrap() {
+    let mut dirs: Vec<_> = ["templates", "assets", "src"].map(|d| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(d)).into();
+    while let Some(dir) = dirs.pop() {
+        for e in std::fs::read_dir(dir).unwrap() {
             let p = e.unwrap().path();
-            if !p.is_file() || p.extension().is_some_and(|x| x == "svg") { continue; }
+            if p.is_dir() { dirs.push(p); continue; }
+            if p.extension().is_some_and(|x| x == "svg") { continue; }
             let text = std::fs::read_to_string(&p).unwrap_or_default();
             for c in re.captures_iter(&text) {
                 let n = c.get(1).or(c.get(2)).unwrap().as_str();
@@ -243,5 +250,65 @@ async fn development_mode_reads_assets_from_disk_uncached() {
     // … unless build.rs made it (no source file): the embedded one, uncached
     let r = a.send(Method::GET, "/assets/i18n-fr.js", &[], Body::empty()).await;
     assert_eq!((r.status, r.header("cache-control").as_deref(), r.bytes), (StatusCode::OK, Some("no-store"), built("i18n-fr.js", "")));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// Every file under assets/js and assets/css is a part of exactly one bundle (src/bundle.rs) and every listed part
+/// exists: a part missing from the table would never ship.
+#[test]
+fn bundles_list_every_part_file_once() {
+    let mut listed = crate::bundle::files();
+    listed.sort();
+    let n = listed.len();
+    listed.dedup();
+    assert_eq!(listed.len(), n, "a part listed twice");
+    let (mut on_disk, mut dirs) = (vec![], vec![assets_dir().join("js"), assets_dir().join("css")]);
+    while let Some(d) = dirs.pop() {
+        for e in std::fs::read_dir(d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() { dirs.push(p) } else { on_disk.push(p.strip_prefix(assets_dir()).unwrap().to_string_lossy().into_owned()) }
+        }
+    }
+    on_disk.sort();
+    assert_eq!(listed, on_disk);
+    for (name, _) in crate::bundle::BUNDLES {
+        assert!(!assets_dir().join(name).exists(), "assets/{name} would shadow its parts in development mode");
+    }
+}
+
+/// Development mode on the source tree serves app.js and style.css as the joins build.rs minifies: the parts in
+/// table order, the editor's fragments inside ONE function.
+#[tokio::test]
+async fn development_mode_joins_bundles_from_their_parts() {
+    let app = TestApp::with(|c| c.dev_assets_dir = Some(assets_dir().to_string_lossy().into_owned())).await;
+    let mut a = app.anonymous();
+    for name in ["app.js", "style.css"] {
+        let r = a.send(Method::GET, &format!("/assets/{name}"), &[], Body::empty()).await;
+        assert_eq!((r.status, r.header("cache-control").as_deref()), (StatusCode::OK, Some("no-store")), "{name}");
+        assert_eq!(r.bytes, crate::bundle::read(&assets_dir(), name).unwrap(), "{name}");
+    }
+    let part = |p: &str| std::fs::read_to_string(assets_dir().join(p)).unwrap();
+    let js = String::from_utf8(crate::bundle::read(&assets_dir(), "app.js").unwrap()).unwrap();
+    assert!(js.starts_with(&part("js/core.js")) && js.ends_with(&part("js/settings.js")));
+    assert!(js.contains(&format!("{}(function () {{\n{}", part("js/calendar.js"), part("js/editor/setup.js"))));
+    assert!(js.contains(&format!("{}}})();\n{}", part("js/editor/wiring.js"), part("js/search.js"))));
+    let css = String::from_utf8(crate::bundle::read(&assets_dir(), "style.css").unwrap()).unwrap();
+    assert!(css.starts_with(&part("css/base.css")) && css.ends_with(&part("css/color-optimiser.css")));
+}
+
+/// The development asset watcher sees a part in a sub-directory change (tasks::asset_stamps).
+#[tokio::test]
+async fn development_watcher_sees_parts_in_sub_directories() {
+    let dir = std::env::temp_dir().join(format!("practical-watch-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    std::fs::create_dir_all(dir.join("js/editor")).unwrap();
+    std::fs::write(dir.join("style.css"), "a{}").unwrap();
+    std::fs::write(dir.join("js/editor/x.js"), "x;").unwrap();
+    let d = dir.to_string_lossy().into_owned();
+    let before = crate::tasks::asset_stamps(&d).await;
+    assert_eq!(before.len(), 2, "{before:?}");
+    assert!(before.iter().any(|(p, _)| p.ends_with("js/editor/x.js")), "{before:?}");
+    let f = std::fs::File::options().write(true).open(dir.join("js/editor/x.js")).unwrap();
+    f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1000)).unwrap();
+    assert_ne!(crate::tasks::asset_stamps(&d).await, before);
     std::fs::remove_dir_all(&dir).unwrap();
 }

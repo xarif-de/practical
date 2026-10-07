@@ -10,6 +10,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::io::Write as _;
 
+#[path = "src/bundle.rs"]
+mod bundle;
 #[path = "src/css_min.rs"]
 mod css_min;
 #[path = "src/i18n.rs"]
@@ -19,7 +21,8 @@ mod i18n;
 #[allow(dead_code)] // the reader half is for the binary
 mod names;
 
-/// name, MIME type, how it is minified. The sources in assets/ stay readable; the binary embeds
+/// name, MIME type, how it is minified. The sources in assets/ stay readable (app.js and style.css: joined from
+/// their parts, src/bundle.rs); the binary embeds
 /// only the gzip and brotli forms (assets.rs decodes the gzip form once for the rare client that
 /// accepts neither).
 const ASSETS: &[(&str, &str, Minify)] = &[
@@ -100,7 +103,7 @@ fn assets() {
 fn build_asset(name: &str, how: Minify) -> usize {
     let out = std::env::var("OUT_DIR").expect("OUT_DIR");
     let lang = name.strip_prefix("i18n-").and_then(|n| n.strip_suffix(".js"));
-    let src = if how == Minify::I18n { i18n_js(lang.expect("i18n-<lang>.js")).into_bytes() } else { fs::read(format!("assets/{name}")).unwrap_or_else(|e| panic!("assets/{name}: {e}")) };
+    let src = if how == Minify::I18n { i18n_js(lang.expect("i18n-<lang>.js")).into_bytes() } else { bundle::read(std::path::Path::new("assets"), name).unwrap_or_else(|e| panic!("assets/{name}: {e}")) };
     let body = match how {
         Minify::No | Minify::I18n => src,
         Minify::Js => minify_js(name, std::str::from_utf8(&src).expect("UTF-8")).into_bytes(),
