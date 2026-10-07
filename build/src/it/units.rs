@@ -64,8 +64,9 @@ async fn error_statuses_and_texts() {
         (AppError::bad1("err-snap-point", "token", "soon"), StatusCode::BAD_REQUEST, "bad request: snap point: soon"),
         (AppError::conflict("err-undo-nothing"), StatusCode::CONFLICT, "conflict: the undo changed nothing"),
         (AppError::Store(rustical_store::Error::AlreadyExists), StatusCode::CONFLICT, "store error: Resource already exists and overwrite=false"),
-        (AppError::Internal("z".into()), StatusCode::INTERNAL_SERVER_ERROR, "z"),
-        (AppError::Db(sqlx::Error::RowNotFound), StatusCode::INTERNAL_SERVER_ERROR, "database error: no rows returned by a query that expected to return at least one row"),
+        // a server error's own text stays in the log (w3/http)
+        (AppError::Internal("z".into()), StatusCode::INTERNAL_SERVER_ERROR, "That did not work – the details are in the server log."),
+        (AppError::Db(sqlx::Error::RowNotFound), StatusCode::INTERNAL_SERVER_ERROR, "That did not work – the details are in the server log."),
     ] {
         let r = e.into_response();
         assert_eq!(r.status(), status);

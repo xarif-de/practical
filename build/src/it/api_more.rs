@@ -35,7 +35,7 @@ async fn task_create_tick_update_delete() {
     c.json(Method::PUT, &path, upd.clone()).await.ok();
     assert_eq!(c.json(Method::PUT, &path, upd.clone()).await.status, StatusCode::CONFLICT);
     upd["cal_id"] = json!(s.arbeit);
-    upd["etag"] = json!(null);
+    upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
     let r = c.json(Method::PUT, &path, upd).await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Eine Aufgabe kann den Kalender nicht wechseln."));
     c.delete(&path).await.ok();
@@ -83,6 +83,7 @@ async fn contact_create_read_vcf_update_move_delete() {
     s.app.put_vcf("alice", &s.freunde, &id, &with_photo).await;
     let mut upd = input.clone();
     upd["nickname"] = json!("Jo");
+    upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
     c.json(Method::PUT, &path, upd.clone()).await.ok();
     c.get_json(&format!("{path}/vcf")).await.has("NICKNAME:Jo").has("PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ");
     upd["etag"] = json!("stale");
@@ -90,7 +91,7 @@ async fn contact_create_read_vcf_update_move_delete() {
     // move to a second address book keeps the UID
     let other = s.app.addressbook("alice", "Arbeit", "#000000").await;
     upd["ab_id"] = json!(other);
-    upd["etag"] = json!(null);
+    upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
     let new_id = c.json(Method::PUT, &path, upd).await.ok().json()["id"].as_str().unwrap().to_string();
     assert_eq!(new_id, id);
     assert_eq!(c.get_json(&path).await.status, StatusCode::NOT_FOUND);
@@ -180,6 +181,7 @@ async fn push_with_vapid() {
         history: Default::default(),
         vapid: Some(rustical_dav_push::VapidKeypair::from_pem(&pem).unwrap()),
         started_at: app.state.started_at,
+        guards: Default::default(),
     });
     let router = crate::build_router(&state).unwrap();
     app.user("alice", "Alice").await;

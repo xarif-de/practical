@@ -151,7 +151,7 @@ pub fn config(db_path: &str) -> Config {
 pub struct TestApp {
     pub state: SharedState,
     pub router: axum::Router,
-    pub sessions: crate::sessions::MemoryStore,
+    pub sessions: crate::sessions::DbStore,
     dir: PathBuf,
 }
 
@@ -207,6 +207,7 @@ impl TestApp {
             history: Default::default(),
             vapid: None,
             started_at: chrono::DateTime::from_timestamp(1_791_964_800, 0).unwrap(),
+            guards: Default::default(),
             db,
             config,
         });
@@ -236,7 +237,7 @@ impl TestApp {
                 .await
                 .unwrap();
         }
-        let sessions = crate::sessions::MemoryStore::default();
+        let sessions = crate::sessions::DbStore::new(state.db.clone());
         let router = crate::build_router_with(&state, sessions.clone()).expect("router");
         Self { state, router, sessions, dir }
     }
@@ -425,6 +426,11 @@ impl Client {
         }
         let resp = self.router.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
         (resp.status(), resp.headers().clone())
+    }
+
+    /// The Cookie header this client sends.
+    pub fn cookie_header(&self) -> String {
+        self.cookies.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; ")
     }
 
     /// A cookie the page's script set (`document.cookie`).

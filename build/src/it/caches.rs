@@ -148,6 +148,7 @@ async fn shared_plan_memo_plans_like_a_fresh_one() {
         let mut upd = input.clone();
         upd["location"] = json!(place);
         upd["summary"] = json!(format!("Yoga {n}"));
+        upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
         c.json(Method::PUT, &path, upd).await.ok();
     }
     let other = c.json(Method::POST, "/api/events", json!({ "principal": "alice", "cal_id": s.privat, "summary": "Weg", "start": "2026-10-24T18:00:00", "end": "2026-10-24T19:00:00" })).await.ok().json()["id"].as_str().unwrap().to_string();

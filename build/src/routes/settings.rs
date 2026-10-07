@@ -15,10 +15,11 @@ use crate::error::{AppError, AppResult};
 use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
-use axum::extract::{Path, State};
+use axum::extract::State;
+use crate::extract::{Form, Path};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Form, Router};
+use axum::Router;
 use rustical_store::auth::{AppToken, Principal};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -218,7 +219,7 @@ struct CountryQuery {
 }
 
 /// GET /api/holidays/subdivisions?country=CH — its subdivisions, all levels, parents first.
-async fn api_subdivisions(State(state): State<SharedState>, _user: Principal, ctx: PageCtx, axum::extract::Query(q): axum::extract::Query<CountryQuery>) -> AppResult<axum::Json<Vec<Region>>> {
+async fn api_subdivisions(State(state): State<SharedState>, _user: Principal, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<CountryQuery>) -> AppResult<axum::Json<Vec<Region>>> {
     Ok(axum::Json(holidays::subdivisions(&state, &q.country.to_uppercase(), &ctx.lang).await?))
 }
 
@@ -259,6 +260,7 @@ struct Csrf {
 #[derive(Deserialize)]
 struct NameForm {
     csrf: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
 }
 
@@ -360,8 +362,9 @@ async fn group_purge(State(state): State<SharedState>, user: Principal, session:
 struct CalendarForm {
     csrf: String,
     owner: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::color")]
     color: String,
     #[serde(default)]
     description: String,
@@ -371,7 +374,7 @@ struct CalendarForm {
     comp_todo: Option<String>,
     #[serde(default)]
     comp_journal: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::tz")]
     timezone: String,
 }
 
@@ -404,8 +407,9 @@ async fn calendar_create(State(state): State<SharedState>, user: Principal, sess
 #[derive(Deserialize)]
 struct CalendarUpdateForm {
     csrf: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::color")]
     color: String,
     #[serde(default)]
     description: String,
@@ -455,6 +459,7 @@ async fn calendar_purge(State(state): State<SharedState>, user: Principal, sessi
 struct AddressbookForm {
     csrf: String,
     owner: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
     color: String,
     #[serde(default)]
@@ -474,6 +479,7 @@ async fn addressbook_create(State(state): State<SharedState>, user: Principal, s
 #[derive(Deserialize)]
 struct AddressbookUpdateForm {
     csrf: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
     color: String,
     #[serde(default)]
@@ -578,6 +584,7 @@ struct PrefsForm {
 async fn prefs_save(State(state): State<SharedState>, user: Principal, session: Session, mut ctx: PageCtx, headers: axum::http::HeaderMap, Form(f): Form<PrefsForm>) -> Response {
     let r = async {
         csrf::check(&session, &f.csrf).await?;
+        let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
         let mut p = prefs::get(&state.db, &user.id).await?;
         p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::LANGS.contains(&l.as_str()));
         p.scheme = Some(f.scheme.clone()).filter(|s| s == "light" || s == "dark");
@@ -638,8 +645,9 @@ struct HolidayDisplay {
 }
 
 /// Show public holidays / school holidays in the calendar (its filter popover, app.js).
-async fn holiday_display_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
+async fn holiday_display_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(d): crate::extract::Json<HolidayDisplay>) -> AppResult<axum::http::StatusCode> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     if let Some(v) = d.public {
         p.holidays_enabled = v;
@@ -657,8 +665,9 @@ struct SchemeChoice {
 }
 
 /// The colour scheme from the button in the bar (app.js): auto | light | dark.
-async fn scheme_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(d): axum::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
+async fn scheme_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(d): crate::extract::Json<SchemeChoice>) -> AppResult<axum::http::StatusCode> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.scheme = Some(d.scheme).filter(|s| s == "light" || s == "dark");
     prefs::set(&state.db, &user.id, &p).await?;
@@ -666,9 +675,10 @@ async fn scheme_save(State(state): State<SharedState>, user: Principal, session:
 }
 
 /// Contact table column choice (JSON array from app.js), stored per user.
-async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+async fn columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::contacts::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.contact_columns_json = Some(serde_json::to_string(&cols).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
@@ -676,9 +686,10 @@ async fn columns_save(State(state): State<SharedState>, user: Principal, session
 }
 
 /// Task table column choice (JSON array from app.js), stored per user.
-async fn task_columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(cols): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+async fn task_columns_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(cols): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let cols: Vec<String> = cols.into_iter().filter(|c| crate::routes::tasks::ALL_COLUMNS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.task_columns_json = Some(serde_json::to_string(&cols).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
@@ -686,9 +697,10 @@ async fn task_columns_save(State(state): State<SharedState>, user: Principal, se
 }
 
 /// Contact list-view field choice (JSON array from app.js), stored per user.
-async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::Json(fields): axum::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
+async fn list_fields_save(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Json(fields): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let fields: Vec<String> = fields.into_iter().filter(|c| crate::routes::contacts::ALL_LIST_FIELDS.contains(&c.as_str())).collect();
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.contact_list_fields_json = Some(serde_json::to_string(&fields).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;
@@ -732,12 +744,13 @@ async fn import_calendar(State(state): State<SharedState>, user: Principal, sess
 #[derive(serde::Deserialize)]
 struct NewImportQ {
     owner: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::color")]
     color: String,
     #[serde(default)]
     description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::tz")]
     timezone: String,
     /// "VEVENT,VTODO" — the file's own types are added on the server
     #[serde(default)]
@@ -753,7 +766,7 @@ struct ImportedNew {
 
 /// A new calendar from an .ics file: the metadata in the query (the page prefills it from the file's
 /// X-WR-* lines), the raw file as the body.
-async fn import_new_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::extract::Query(q): axum::extract::Query<NewImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
+async fn import_new_calendar(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Query(q): crate::extract::Query<NewImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let comps: Vec<String> = q.components.split(',').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect();
     let owner = q.owner.clone();
@@ -775,6 +788,7 @@ async fn import_new_calendar(State(state): State<SharedState>, user: Principal, 
 #[derive(serde::Deserialize)]
 struct NewAbImportQ {
     owner: String,
+    #[serde(deserialize_with = "crate::extract::text")]
     name: String,
     color: String,
     #[serde(default)]
@@ -782,7 +796,7 @@ struct NewAbImportQ {
 }
 
 /// A new address book from a .vcf file: the metadata in the query, the raw file as the body.
-async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, axum::extract::Query(q): axum::extract::Query<NewAbImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
+async fn import_new_addressbook(State(state): State<SharedState>, user: Principal, session: Session, headers: axum::http::HeaderMap, crate::extract::Query(q): crate::extract::Query<NewAbImportQ>, body: axum::body::Bytes) -> AppResult<axum::Json<ImportedNew>> {
     csrf::check(&session, &csrf::header_token(&headers)).await?;
     let mut g = history::begin(&state, Actor::import(&user, q.name.trim())).await;
     let (id, imported) = crate::domain::transfer::import_new_addressbook(&state, &user, &q.owner, &q.name, q.color.trim(), &q.description, &body).await?;

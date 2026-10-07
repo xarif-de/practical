@@ -65,7 +65,7 @@ async fn event_create_read_update_move_delete() {
     // moving to another calendar: new object there (same UID), gone here
     let mut mv = upd.clone();
     mv["cal_id"] = json!(s.arbeit);
-    mv["etag"] = json!(null);
+    mv["etag"] = c.get_json(&path).await.json()["etag"].clone(); // a write names the version it is based on (w3/http)
     let new_id = c.json(Method::PUT, &path, mv).await.ok().json()["id"].as_str().unwrap().to_string();
     assert_eq!(new_id, id, "the UID is kept, so is the object id");
     assert_eq!(c.get_json(&path).await.status, StatusCode::NOT_FOUND);
@@ -94,9 +94,9 @@ async fn event_input_errors() {
         let r = c.json(Method::POST, "/api/events", body).await;
         assert_eq!((r.status, r.body.as_str()), (status, text));
     }
-    // malformed JSON is axum's rejection
+    // a body of the wrong shape: 400 naming the field (extract.rs; axum answered 422 in English)
     let r = c.json(Method::POST, "/api/events", json!({ "summary": "x" })).await;
-    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!((r.status, r.body.as_str()), (StatusCode::BAD_REQUEST, "Ungültige Angabe im Feld „principal“."));
     // another principal's object is forbidden, an unknown one not found
     assert_eq!(c.get_json(&format!("/api/events/bob/{}/x", s.privat)).await.status, StatusCode::FORBIDDEN);
     assert_eq!(c.get_json(&format!("/api/events/alice/{}/missing", s.privat)).await.status, StatusCode::NOT_FOUND);

@@ -10,7 +10,8 @@ use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::Router;
-use axum::extract::{Query, State};
+use axum::extract::State;
+use crate::extract::Query;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use chrono::{Datelike, Duration, NaiveDate};
@@ -22,7 +23,7 @@ use std::collections::HashSet;
 pub struct CalQuery {
     #[serde(default)]
     pub view: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::opt_day")]
     pub date: Option<NaiveDate>,
     #[serde(default)]
     pub cals: Option<String>,
@@ -32,7 +33,7 @@ pub struct CalQuery {
     #[serde(default)]
     pub month: Option<String>,
     /// week view: the Monday of the week on screen when it is not the one `date` lies in
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::extract::opt_day")]
     pub week: Option<NaiveDate>,
 }
 
@@ -193,7 +194,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
         Some(f) => all_cals.iter().filter(|c| f.contains(&format!("{}/{}", c.principal, c.id))).cloned().collect(),
         None => all_cals.clone(),
     };
-    let shown = if view == "week" { q.week } else { q.month.as_deref().and_then(|m| NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").ok()) };
+    let shown = if view == "week" { q.week } else { q.month.as_deref().and_then(|m| NaiveDate::parse_from_str(&format!("{m}-01"), "%Y-%m-%d").ok()).filter(|d| crate::extract::YEARS.contains(&d.year())) };
     let (title, body) = render_view(&state, &user, &ctx, &view, date, shown, &cals, &vc).await?;
     let (view_label, in_more) = view_label(&view, &vc.l);
     let cals_param = q.cals.clone().unwrap_or_default();
@@ -233,7 +234,9 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Q
 /// JSON instances for a window (editor day line, agenda refresh).
 #[derive(Deserialize)]
 pub struct WindowQuery {
+    #[serde(deserialize_with = "crate::extract::day")]
     pub start: NaiveDate,
+    #[serde(deserialize_with = "crate::extract::day")]
     pub end: NaiveDate,
     #[serde(default)]
     pub cals: Option<String>,
@@ -253,6 +256,7 @@ pub async fn api_events(State(state): State<SharedState>, user: Principal, ctx: 
 /// Ledger rows for the endless day list (app.js `mountLedger`).
 #[derive(Deserialize)]
 pub struct DaysQuery {
+    #[serde(deserialize_with = "crate::extract::day")]
     pub start: NaiveDate,
     #[serde(default)]
     pub count: Option<u32>,
@@ -276,6 +280,7 @@ pub async fn api_days(State(state): State<SharedState>, user: Principal, ctx: Pa
 /// Week blocks for the endless week stream (app.js `mountWeeks`).
 #[derive(Deserialize)]
 pub struct WeeksQuery {
+    #[serde(deserialize_with = "crate::extract::day")]
     pub start: NaiveDate,
     #[serde(default)]
     pub count: Option<usize>,
@@ -299,6 +304,7 @@ pub async fn api_weeks(State(state): State<SharedState>, user: Principal, ctx: P
 
 #[derive(Deserialize)]
 pub struct DensityQuery {
+    #[serde(deserialize_with = "crate::extract::year")]
     pub year: i32,
     #[serde(default)]
     pub cals: Option<String>,

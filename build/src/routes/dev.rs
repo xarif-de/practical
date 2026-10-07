@@ -22,7 +22,7 @@ async fn reload(State(state): State<SharedState>) -> Sse<impl Stream<Item = Resu
             Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
         }
     });
-    Sse::new(futures_util::stream::iter([Ok(boot)]).chain(reloads)).keep_alive(KeepAlive::default())
+    Sse::new(futures_util::stream::iter([Ok(boot)]).chain(reloads).take_until(state.guards.stopping())).keep_alive(KeepAlive::default())
 }
 
 /// Empty router unless development mode is on.

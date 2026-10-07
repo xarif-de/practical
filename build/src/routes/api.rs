@@ -15,11 +15,11 @@ use crate::error::{AppError, AppResult};
 use crate::routes::calendar::view_ctx;
 use crate::state::SharedState;
 use axum::Router;
-use axum::extract::{Path, Query, State};
+use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
-use axum::Json;
+use crate::extract::{Json, Path, Query};
 use futures_util::StreamExt;
 use futures_util::stream::Stream;
 use rustical_store::auth::Principal;
@@ -42,7 +42,8 @@ async fn changes(State(state): State<SharedState>, user: Principal) -> Sse<impl 
             }
         }
     });
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    // ends when the server stops: an open stream would hold the graceful shutdown until SIGKILL
+    Sse::new(stream.take_until(state.guards.stopping())).keep_alive(KeepAlive::default())
 }
 
 /// Broadcast receiver as a stream. `unfold` keeps the pending `recv()` future between polls, so its
@@ -58,12 +59,23 @@ fn tokio_stream_wrapper(rx: tokio::sync::broadcast::Receiver<crate::state::Chang
     })
 }
 
+/// The handlers taking this have a principal; with a Basic header and no session user it came from a valid
+/// app token (`csrf::token_authenticated`).
 async fn check_csrf(session: &Session, headers: &HeaderMap) -> AppResult<()> {
     let has_basic = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("Basic "));
-    if has_basic {
+    if has_basic && session.get::<String>(crate::ctx::SESSION_USER).await?.is_none() {
         return Ok(());
     }
     csrf::check(session, &csrf::header_token(headers)).await
+}
+
+/// The version a write is based on: the body's `etag` (app.js sends the one it read), else `If-Match`.
+/// None: the write would overwrite blindly — refused with 428 (a client re-reads, then writes).
+fn precondition(body: Option<&str>, headers: &HeaderMap) -> AppResult<String> {
+    body.filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .or_else(|| headers.get(axum::http::header::IF_MATCH).and_then(|v| v.to_str().ok()).map(|v| v.trim().to_string()).filter(|v| !v.is_empty() && v != "*"))
+        .ok_or_else(|| AppError::Rejected(axum::http::StatusCode::PRECONDITION_REQUIRED, crate::error::Msg { key: "err-etag-required", args: vec![] }))
 }
 
 #[derive(serde::Serialize)]
@@ -204,6 +216,11 @@ async fn colors_batch(State(state): State<SharedState>, user: Principal, session
             g.object(Store::Cal, p, cal, id);
         }
     }
+    // holiday colours are a read-modify-write of the user's settings (colors::apply)
+    let _lock = match b.changes.iter().any(|c| matches!(c.kind.as_str(), "holiday" | "school")) {
+        true => Some(state.guards.prefs(&user.id).await),
+        false => None,
+    };
     let (count, failed) = crate::domain::colors::apply(&state, &user, &b.changes).await?;
     g.commit().await;
     Ok(Json(BatchDone { count, failed }))
@@ -322,21 +339,28 @@ struct EventUpdate {
 
 async fn update_event(State(state): State<SharedState>, user: Principal, ctx: crate::ctx::PageCtx, session: Session, headers: HeaderMap, Path((p, c, id)): Path<(String, String, String)>, Json(u): Json<EventUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let etag = precondition(u.etag.as_deref(), &headers)?;
     let vc = view_ctx(&state, &user, &ctx.lang).await?;
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     if u.input.principal != p || u.input.cal_id != c {
-        // moving to another calendar = create there, delete here (one change: a move)
+        // moving to another calendar = create there, delete here (one change: a move); the source is read
+        // only after the owner check, and only in the version the editor showed
+        crate::domain::collections::ensure_owner(&user, &p)?;
         let (tp, tc) = (u.input.principal.clone(), u.input.cal_id.clone());
         let target = u.input.clone();
-        let uid = state.calendars.get_object(&p, &c, &id, false).await?.get_uid().to_string();
+        let old = state.calendars.get_object(&p, &c, &id, false).await?;
+        if old.get_etag() != etag {
+            return Err(AppError::conflict("err-changed-event"));
+        }
+        let uid = old.get_uid().to_string();
         let new_id = events::create_event_as(&state, &user, target, vc.tz, Some(&uid)).await?;
         g.object(Store::Cal, &tp, &tc, &new_id);
         events::delete_event(&state, &user, &p, &c, &id).await?;
         g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
-    events::update_event(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?;
+    events::update_event(&state, &user, &id, u.input, Some(&etag), vc.tz).await?;
     g.commit().await;
     Ok(Json(Created { id }))
 }
@@ -382,11 +406,16 @@ struct ContactUpdate {
 
 async fn update_contact(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Path((p, a, id)): Path<(String, String, String)>, Json(u): Json<ContactUpdate>) -> AppResult<Json<Created>> {
     check_csrf(&session, &headers).await?;
+    let etag = precondition(u.etag.as_deref(), &headers)?;
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Ab, &p, &a, &id);
     if u.input.principal != p || u.input.ab_id != a {
+        crate::domain::collections::ensure_owner(&user, &p)?;
         let (tp, ta) = (u.input.principal.clone(), u.input.ab_id.clone());
-        let (old, _) = contacts::stored_card(&state, &p, &a, &id).await?;
+        let (old, old_etag) = contacts::stored_card(&state, &p, &a, &id).await?;
+        if old_etag != etag {
+            return Err(AppError::conflict("err-changed-contact"));
+        }
         let uid = contacts::parse_vcf(&old)?.get_uid().unwrap_or(&id).to_string();
         let new_id = contacts::create_contact_as(&state, &user, u.input, Some(&uid)).await?;
         g.object(Store::Ab, &tp, &ta, &new_id);
@@ -394,7 +423,7 @@ async fn update_contact(State(state): State<SharedState>, user: Principal, sessi
         g.commit().await;
         return Ok(Json(Created { id: new_id }));
     }
-    contacts::update_contact(&state, &user, &id, u.input, u.etag.as_deref()).await?;
+    contacts::update_contact(&state, &user, &id, u.input, Some(&etag)).await?;
     g.commit().await;
     Ok(Json(Created { id }))
 }
@@ -445,12 +474,22 @@ async fn update_task(State(state): State<SharedState>, user: Principal, ctx: cra
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Cal, &p, &c, &id);
     match u.completed {
-        Some(done) => tasks::set_completed(&state, &user, &p, &c, &id, done, vc.tz).await?,
+        // the tick box: "done"/"open" whatever else changed meanwhile; a version, when given, must match
+        Some(done) => {
+            if let Ok(etag) = precondition(u.etag.as_deref(), &headers) {
+                crate::domain::collections::ensure_owner(&user, &p)?;
+                if state.calendars.get_object(&p, &c, &id, false).await?.get_etag() != etag {
+                    return Err(AppError::conflict("err-changed-task"));
+                }
+            }
+            tasks::set_completed(&state, &user, &p, &c, &id, done, vc.tz).await?
+        }
         None => {
+            let etag = precondition(u.etag.as_deref(), &headers)?;
             if u.input.principal != p || u.input.cal_id != c {
                 return Err(AppError::bad("err-task-calendar"));
             }
-            tasks::update_task(&state, &user, &id, u.input, u.etag.as_deref(), vc.tz).await?
+            tasks::update_task(&state, &user, &id, u.input, Some(&etag), vc.tz).await?
         }
     }
     g.commit().await;
@@ -470,6 +509,7 @@ async fn delete_task(State(state): State<SharedState>, user: Principal, session:
 
 #[derive(Deserialize)]
 struct SearchQuery {
+    #[serde(deserialize_with = "crate::extract::text")]
     q: String,
     /// "1": the "all results" dialog (200 per category) instead of the drop-down's 5
     #[serde(default)]
@@ -484,6 +524,7 @@ async fn api_search(State(state): State<SharedState>, user: Principal, ctx: crat
 
 #[derive(Deserialize)]
 struct SuggestQuery {
+    #[serde(deserialize_with = "crate::extract::text")]
     q: String,
 }
 
@@ -635,6 +676,7 @@ async fn alarm_presets_get(State(state): State<SharedState>, user: Principal) ->
 async fn alarm_presets_put(State(state): State<SharedState>, user: Principal, session: Session, headers: HeaderMap, Json(list): Json<Vec<events::AlarmPreset>>) -> AppResult<Json<Vec<events::AlarmPreset>>> {
     check_csrf(&session, &headers).await?;
     events::validate_presets(&list)?;
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
     let mut p = prefs::get(&state.db, &user.id).await?;
     p.alarm_presets_json = Some(serde_json::to_string(&list).unwrap());
     prefs::set(&state.db, &user.id, &p).await?;

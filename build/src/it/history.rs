@@ -21,6 +21,7 @@ async fn ui_writes_are_recorded_and_undone() {
     let mut upd = input.clone();
     upd["summary"] = json!("Yoga im Park");
     upd["location"] = json!("Großer Garten");
+    upd["etag"] = c.get_json(&path).await.json()["etag"].clone();
     c.json(Method::PUT, &path, upd).await.ok();
     let h = c.get_json("/api/history").await.json();
     assert_eq!(changes(&h), [("ui".to_string(), "create".to_string(), "Yoga".to_string()), ("ui".into(), "update".into(), "Yoga im Park".into())]);
@@ -73,9 +74,11 @@ async fn a_later_change_makes_the_undo_warn() {
     let path = format!("/api/events/alice/{}/{id}", s.privat);
     let mut b = base.clone();
     b["summary"] = json!("B");
+    b["etag"] = c.get_json(&path).await.json()["etag"].clone();
     c.json(Method::PUT, &path, b.clone()).await.ok();
     let mut cc = base.clone();
     cc["summary"] = json!("C");
+    cc["etag"] = c.get_json(&path).await.json()["etag"].clone();
     c.json(Method::PUT, &path, cc).await.ok();
     let h = c.get_json("/api/history").await.json();
     let first_update = h["changes"][1]["id"].as_i64().unwrap();

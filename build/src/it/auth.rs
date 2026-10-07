@@ -215,15 +215,26 @@ async fn session_csrf_token_is_required_for_session_writes() {
 
 #[tokio::test]
 async fn session_cookie_attributes() {
+    // the session starts with the login (an anonymous page view stores nothing, sessions.rs)
+    async fn session_cookie(app: &TestApp) -> String {
+        app.user("alice", "Alice").await;
+        let mut a = app.anonymous();
+        let login_cookie = a.get("/login").await.header("set-cookie").unwrap();
+        let csrf = a.get("/login").await.meta_csrf();
+        let r = a.post_form_raw("/login", &[("username", "alice"), ("password", PASSWORD), ("csrf", &csrf)]).await;
+        let all: Vec<String> = r.headers.get_all("set-cookie").iter().map(|v| v.to_str().unwrap().to_string()).collect();
+        assert!(all.iter().any(|c| c.starts_with("practical_login_csrf=;") && c.contains("Max-Age=0")), "{all:?}");
+        format!("{login_cookie}\n{}", all.into_iter().find(|c| c.starts_with("practical_session=")).unwrap())
+    }
     let app = TestApp::new().await;
-    let r = app.anonymous().get("/login").await;
-    let cookie = r.header("set-cookie").unwrap();
-    assert!(cookie.starts_with("practical_session="), "{cookie}");
-    let lower = cookie.to_ascii_lowercase();
-    assert!(lower.contains("httponly") && lower.contains("samesite=lax") && !lower.contains("secure"), "{cookie}");
+    for cookie in session_cookie(&app).await.lines() {
+        let lower = cookie.to_ascii_lowercase();
+        assert!(lower.contains("httponly") && (lower.contains("samesite=lax") || lower.contains("samesite=strict")) && !lower.contains("secure"), "{cookie}");
+    }
     let https = TestApp::with(|c| c.public_url = "https://plan.example.org".into()).await;
-    let cookie = https.anonymous().get("/login").await.header("set-cookie").unwrap();
-    assert!(cookie.to_ascii_lowercase().contains("secure"), "{cookie}");
+    for cookie in session_cookie(&https).await.lines() {
+        assert!(cookie.to_ascii_lowercase().contains("secure"), "{cookie}");
+    }
 }
 
 #[test]
