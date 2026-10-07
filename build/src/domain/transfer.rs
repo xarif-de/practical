@@ -83,43 +83,135 @@ fn readable(objects: Vec<CalendarObject>) -> Vec<CalendarObject> {
     }).collect()
 }
 
-/// Imports every VEVENT/VTODO/VJOURNAL object of an .ics file into an EXISTING
-/// calendar; objects with a known UID are overwritten (merge).
-pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<usize> {
-    collections::ensure_owner(user, principal)?;
-    state.calendars.get_calendar(principal, cal_id, false).await?;
-    let mut objects = vec![];
-    for cal in IcalParser::from_slice(complete_ics(&String::from_utf8_lossy(ics)).as_bytes()) {
-        let cal = cal.map_err(|e| AppError::bad1("err-ics", "detail", e))?;
-        for obj in cal.into_objects().map_err(|e| AppError::bad1("err-ics", "detail", e))? {
-            let id = obj.get_uid().to_string();
-            if id.is_empty() || id.contains('/') {
-                continue;
-            }
-            objects.push(CalendarObject::from(obj));
-        }
-    }
-    let batch: Vec<(String, CalendarObject)> = readable(objects).into_iter().map(|o| (o.get_uid().to_string(), o)).collect();
-    let n = batch.len();
-    if batch.is_empty() {
-        return Err(AppError::bad("err-no-calendar-objects"));
-    }
-    state.calendars.put_objects(principal, cal_id, batch, true).await?;
-    Ok(n)
+/// Import limits (the pod has 192 MiB). A file is read in chunks of `IMPORT_CHUNK` objects and written in chunks of
+/// as many, so the parse costs one chunk plus the file's object texts (25.8 MiB / 60 000 events peaked at 904 MiB
+/// parsed whole, audit3-robustness R7b). What stays proportional is the history's record of the import
+/// (`history::ingest` holds every object's text twice): 35 000 objects (15 MiB) still peaked at +198 MiB RSS in a
+/// release build, hence the object cap.
+pub const IMPORT_MAX_BYTES: usize = 8 * 1024 * 1024;
+pub const IMPORT_MAX_OBJECTS: usize = 10_000;
+/// One object (an event with its overrides and embedded files): the editor's own request limit.
+pub const IMPORT_MAX_OBJECT_BYTES: usize = 8 * 1024 * 1024;
+const IMPORT_CHUNK: usize = 500;
+
+fn too_large(size: usize, limit: usize) -> AppError {
+    AppError::BadRequest(crate::error::Msg { key: "err-import-too-large", args: vec![("size", size.to_string()), ("limit", limit.to_string())] })
 }
 
-/// The objects of an .ics file for a NEW calendar and the component types it holds. The calendar-level
-/// X-WR-* properties (name, description, colour, zone — the page reads them from the file) are dropped
-/// before the objects are split, as RustiCal's own IMPORT does, so they do not land in every object.
-fn new_calendar_objects(ics: &[u8]) -> AppResult<(Vec<CalendarObject>, Vec<CalendarObjectType>)> {
-    let bad = |e: &dyn std::fmt::Display| AppError::bad1("err-ics", "detail", e);
-    let (mut objects, mut found) = (vec![], vec![]);
-    for cal in IcalParser::from_slice(complete_ics(&String::from_utf8_lossy(ics)).as_bytes()) {
-        let mut cal = cal.map_err(|e| bad(&e))?.mutable();
-        for p in ["X-WR-CALNAME", "X-WR-CALDESC", "X-WR-CALCOLOR", "X-WR-TIMEZONE", "X-APPLE-CALENDAR-COLOR"] {
-            cal.remove_property(p);
+/// One VCALENDAR of a file as slices of its text: its own lines (BEGIN line, properties with their
+/// continuation lines), its VTIMEZONE blocks, and every other component block grouped by UID — a master and
+/// its RECURRENCE-ID overrides are one object (caldata `into_objects`) wherever they stand in the file.
+#[derive(Default)]
+struct CalText<'a> {
+    head: Vec<&'a str>,
+    zones: Vec<&'a str>,
+    /// (UID, blocks) in the order of first appearance; a component without UID is a group of its own
+    groups: Vec<(Option<String>, Vec<&'a str>)>,
+}
+
+/// The VCALENDARs of an .ics text, without parsing it (names compared case-insensitively, as `unfold` canonicalises them).
+fn split_calendars(text: &str) -> Vec<CalText<'_>> {
+    let mut out = vec![];
+    let mut cur: Option<CalText> = None;
+    let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let (mut depth, mut comp_start, mut comp_zone, mut uid, mut in_uid) = (0usize, 0usize, false, None::<String>, false);
+    let mut pos = 0;
+    while pos < text.len() {
+        let end = text[pos..].find('\n').map_or(text.len(), |i| pos + i + 1);
+        let raw = &text[pos..end];
+        let line = raw.trim_end_matches(['\r', '\n']);
+        let start = pos;
+        pos = end;
+        let word = |w: &str| line.get(..w.len()).is_some_and(|h| h.eq_ignore_ascii_case(w));
+        if line.starts_with([' ', '\t']) {
+            if depth == 1 && let Some(c) = cur.as_mut() {
+                c.head.push(raw);
+            } else if in_uid && let Some(u) = uid.as_mut() {
+                u.push_str(&line[1..]);
+            }
+            continue;
         }
-        let cal = cal.build(&ParserOptions::default(), None).map_err(|e| bad(&e))?;
+        in_uid = false;
+        match depth {
+            0 if word("BEGIN:VCALENDAR") => {
+                depth = 1;
+                index.clear();
+                cur = Some(CalText { head: vec![raw], ..Default::default() });
+            }
+            0 => {}
+            1 if word("END:VCALENDAR") => {
+                depth = 0;
+                out.extend(cur.take());
+            }
+            1 if word("BEGIN:") => {
+                depth = 2;
+                (comp_start, comp_zone, uid) = (start, word("BEGIN:VTIMEZONE"), None);
+            }
+            1 => cur.iter_mut().for_each(|c| c.head.push(raw)),
+            _ if word("BEGIN:") => depth += 1,
+            _ if word("END:") => {
+                depth -= 1;
+                if depth == 1 && let Some(c) = cur.as_mut() {
+                    let block = &text[comp_start..end];
+                    if comp_zone {
+                        c.zones.push(block);
+                    } else if let Some(u) = uid.take().filter(|u| !u.is_empty()) {
+                        match index.get(&u) {
+                            Some(&i) => c.groups[i].1.push(block),
+                            None => {
+                                index.insert(u.clone(), c.groups.len());
+                                c.groups.push((Some(u), vec![block]));
+                            }
+                        }
+                    } else {
+                        c.groups.push((None, vec![block]));
+                    }
+                }
+            }
+            2 if word("UID:") || word("UID;") => {
+                uid = Some(line.split_once(':').map(|(_, v)| v.trim().to_string()).unwrap_or_default());
+                in_uid = true;
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// One parse unit: the calendar's own lines and zones around `groups`.
+fn chunk_text(cal: &CalText, groups: &[(Option<String>, Vec<&str>)]) -> String {
+    let mut s = String::new();
+    for part in cal.head.iter().chain(&cal.zones).chain(groups.iter().flat_map(|g| &g.1)) {
+        s.push_str(part);
+        if !part.ends_with('\n') {
+            s.push_str("\r\n");
+        }
+    }
+    s.push_str("END:VCALENDAR\r\n");
+    s
+}
+
+/// Parses one chunk into the objects RustiCal will read back. `new_calendar`: the calendar-level X-WR-* lines
+/// (name, description, colour, zone — the page reads them from the file) are dropped before the objects are split,
+/// as RustiCal's own IMPORT does, so they do not land in every object; `found` collects the component types.
+/// A panic in caldata's parser (`DURATION:P99999999999W` unwraps an overflow, caldata 0.17.3 src/types/duration.rs:56)
+/// fails the import like any unreadable file instead of dropping the connection.
+fn parse_chunk(text: &str, new_calendar: bool, found: &mut Vec<CalendarObjectType>) -> AppResult<Vec<CalendarObject>> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_chunk_inner(text, new_calendar, found))).unwrap_or_else(|_| Err(AppError::bad1("err-ics", "detail", "a value is out of range")))
+}
+
+fn parse_chunk_inner(text: &str, new_calendar: bool, found: &mut Vec<CalendarObjectType>) -> AppResult<Vec<CalendarObject>> {
+    let bad = |e: &dyn std::fmt::Display| AppError::bad1("err-ics", "detail", e);
+    let mut objects = vec![];
+    for cal in IcalParser::from_slice(complete_ics(text).as_bytes()) {
+        let mut cal = cal.map_err(|e| bad(&e))?;
+        if new_calendar {
+            let mut m = cal.mutable();
+            for p in ["X-WR-CALNAME", "X-WR-CALDESC", "X-WR-CALCOLOR", "X-WR-TIMEZONE", "X-APPLE-CALENDAR-COLOR"] {
+                m.remove_property(p);
+            }
+            cal = m.build(&ParserOptions::default(), None).map_err(|e| bad(&e))?;
+        }
         for (has, t) in [(!cal.events.is_empty(), CalendarObjectType::Event), (!cal.todos.is_empty(), CalendarObjectType::Todo), (!cal.journals.is_empty(), CalendarObjectType::Journal)] {
             if has && !found.contains(&t) {
                 found.push(t);
@@ -132,17 +224,82 @@ fn new_calendar_objects(ics: &[u8]) -> AppResult<(Vec<CalendarObject>, Vec<Calen
             }
         }
     }
-    Ok((readable(objects), found))
+    Ok(readable(objects))
 }
 
-/// Creates a calendar from an .ics file in one transaction (RustiCal's `import_calendar`): the
-/// metadata as given, the component types given plus those the file holds. Returns (id, objects).
+/// Every object of an .ics file as (UID, text RustiCal reads back), in file order, a later object with the same
+/// UID replacing an earlier one; and the component types found. The whole file is checked before anything is
+/// written (a broken last object fails the import, nothing is stored); the parsed form lives one chunk long.
+async fn file_objects(ics: &[u8], new_calendar: bool) -> AppResult<(Vec<(String, String)>, Vec<CalendarObjectType>)> {
+    if ics.len() > IMPORT_MAX_BYTES {
+        return Err(too_large(ics.len(), IMPORT_MAX_BYTES));
+    }
+    let text = String::from_utf8_lossy(ics);
+    let cals = split_calendars(&text);
+    if cals.is_empty() {
+        // no complete VCALENDAR: caldata names what is wrong with the text (or finds nothing in it)
+        parse_chunk(&text, new_calendar, &mut vec![])?;
+    }
+    let n: usize = cals.iter().map(|c| c.groups.len()).sum();
+    if n > IMPORT_MAX_OBJECTS {
+        return Err(AppError::BadRequest(crate::error::Msg { key: "err-import-too-many", args: vec![("count", n.to_string()), ("limit", IMPORT_MAX_OBJECTS.to_string())] }));
+    }
+    if let Some(big) = cals.iter().flat_map(|c| &c.groups).map(|g| g.1.iter().map(|b| b.len()).sum::<usize>()).find(|b| *b > IMPORT_MAX_OBJECT_BYTES) {
+        return Err(too_large(big, IMPORT_MAX_OBJECT_BYTES));
+    }
+    let (mut out, mut found): (Vec<(String, String)>, Vec<CalendarObjectType>) = (vec![], vec![]);
+    let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for cal in &cals {
+        // an empty VCALENDAR still tells its component types (none) and must parse
+        let chunks: Vec<&[(Option<String>, Vec<&str>)]> = if cal.groups.is_empty() { vec![&[]] } else { cal.groups.chunks(IMPORT_CHUNK).collect() };
+        for chunk in chunks {
+            for o in parse_chunk(&chunk_text(cal, chunk), new_calendar, &mut found)? {
+                let (uid, ics) = (o.get_uid().to_string(), o.get_ics().to_string());
+                match at.get(&uid) {
+                    Some(&i) => out[i].1 = ics,
+                    None => {
+                        at.insert(uid.clone(), out.len());
+                        out.push((uid, ics));
+                    }
+                }
+            }
+            // the parse is CPU-bound: let the runtime's other requests through between chunks
+            tokio::task::yield_now().await;
+        }
+    }
+    Ok((out, found))
+}
+
+/// The checked texts again as objects for the store, one chunk at a time.
+fn store_chunk(chunk: &[(String, String)]) -> AppResult<Vec<(String, CalendarObject)>> {
+    chunk.iter().map(|(uid, ics)| Ok((uid.clone(), CalendarObject::from_ics(ics.clone())?))).collect()
+}
+
+/// Imports every VEVENT/VTODO/VJOURNAL object of an .ics file into an EXISTING
+/// calendar; objects with a known UID are overwritten (merge). Written in chunks of `IMPORT_CHUNK` objects (one
+/// transaction each, so other users' saves get the write lock in between) after the whole file was checked.
+pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<usize> {
+    collections::ensure_owner(user, principal)?;
+    state.calendars.get_calendar(principal, cal_id, false).await?;
+    let (objects, _) = file_objects(ics, false).await?;
+    if objects.is_empty() {
+        return Err(AppError::bad("err-no-calendar-objects"));
+    }
+    for chunk in objects.chunks(IMPORT_CHUNK) {
+        state.calendars.put_objects(principal, cal_id, store_chunk(chunk)?, true).await?;
+    }
+    Ok(objects.len())
+}
+
+/// Creates a calendar from an .ics file (RustiCal's `import_calendar` with the first chunk, `put_objects` for the
+/// rest — the whole file is checked first): the metadata as given, the component types given plus those the
+/// file holds. Returns (id, objects).
 pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collections::NewCalendar, ics: &[u8]) -> AppResult<(String, usize)> {
     collections::ensure_owner(user, &n.owner)?;
     if n.name.trim().is_empty() {
         return Err(AppError::bad("err-name-required"));
     }
-    let (objects, found) = new_calendar_objects(ics)?;
+    let (objects, found) = file_objects(ics, true).await?;
     if objects.is_empty() {
         return Err(AppError::bad("err-no-calendar-objects"));
     }
@@ -161,7 +318,7 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
             description: Some(n.description.trim().to_string()).filter(|d| !d.is_empty()),
             color: Some(n.color.trim().to_string()).filter(|c| !c.is_empty()),
         },
-        principal: n.owner,
+        principal: n.owner.clone(),
         id: id.clone(),
         // an unknown zone is left out: RustiCal's own IMPORT asserts on it
         timezone_id: Some(n.timezone.trim().to_string()).filter(|t| t.parse::<chrono_tz::Tz>().is_ok()),
@@ -171,20 +328,24 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
         push_topic: uuid::Uuid::new_v4().to_string(),
         components,
     };
-    state.calendars.import_calendar(cal, objects, false).await?;
+    let mut chunks = objects.chunks(IMPORT_CHUNK);
+    let first = chunks.next().map(store_chunk).transpose()?.unwrap_or_default();
+    state.calendars.import_calendar(cal, first.into_iter().map(|(_, o)| o).collect(), false).await?;
+    for chunk in chunks {
+        state.calendars.put_objects(&n.owner, &id, store_chunk(chunk)?, false).await?;
+    }
     Ok((id, count))
 }
 
 /// Creates an address book from a .vcf file in one transaction (RustiCal's `import_addressbook`); a card
 /// without UID gets one, as RustiCal's own IMPORT does. The colour (ours, not RustiCal's) is written
 /// after the import succeeded. Returns (id, cards).
-pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str, vcf: &[u8]) -> AppResult<(String, usize)> {
-    collections::ensure_owner(user, owner)?;
-    if name.trim().is_empty() {
-        return Err(AppError::bad("err-name-required"));
-    }
-    if !collections::valid_color(color) {
-        return Err(AppError::bad("err-color"));
+/// Every card of a .vcf file as (id, object), all parsed before the caller writes any (a broken third card
+/// used to answer 400 with the first two already stored, audit3-robustness R15). A card without UID gets one, as
+/// RustiCal's own IMPORT does; a UID with a slash is skipped. Same size limits as an .ics import.
+fn file_cards(vcf: &[u8]) -> AppResult<Vec<(String, AddressObject)>> {
+    if vcf.len() > IMPORT_MAX_BYTES {
+        return Err(too_large(vcf.len(), IMPORT_MAX_BYTES));
     }
     let mut objects = vec![];
     for card in VcardParser::from_slice(crate::domain::contacts::bare_params_as_type(&String::from_utf8_lossy(vcf)).as_bytes()) {
@@ -198,7 +359,22 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
         if !id.is_empty() && !id.contains('/') {
             objects.push((id, AddressObject::from(card)));
         }
+        if objects.len() > IMPORT_MAX_OBJECTS {
+            return Err(AppError::BadRequest(crate::error::Msg { key: "err-import-too-many", args: vec![("count", format!("> {IMPORT_MAX_OBJECTS}")), ("limit", IMPORT_MAX_OBJECTS.to_string())] }));
+        }
     }
+    Ok(objects)
+}
+
+pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str, vcf: &[u8]) -> AppResult<(String, usize)> {
+    collections::ensure_owner(user, owner)?;
+    if name.trim().is_empty() {
+        return Err(AppError::bad("err-name-required"));
+    }
+    if !collections::valid_color(color) {
+        return Err(AppError::bad("err-color"));
+    }
+    let objects = file_cards(vcf)?;
     if objects.is_empty() {
         return Err(AppError::bad("err-no-vcards"));
     }
@@ -218,22 +394,18 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
     Ok((id, count))
 }
 
+/// Merges a .vcf file into an existing address book (a known UID is overwritten). Every card is parsed first;
+/// the store has no batch write for cards, so they are then written one by one.
 pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str, vcf: &[u8]) -> AppResult<usize> {
     collections::ensure_owner(user, principal)?;
     state.addressbooks.get_addressbook(principal, ab_id, false).await?;
-    let mut n = 0;
-    for card in VcardParser::from_slice(crate::domain::contacts::bare_params_as_type(&String::from_utf8_lossy(vcf)).as_bytes()) {
-        let card = card.map_err(|e| AppError::bad1("err-vcf", "detail", e))?;
-        let id = card.get_uid().map(str::to_string).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        if id.contains('/') {
-            continue;
-        }
-        let obj = AddressObject::from(card);
-        AddressbookWriteStore::put_object(&*state.addressbooks, principal, ab_id, &id, obj, true).await?;
-        n += 1;
-    }
-    if n == 0 {
+    let cards = file_cards(vcf)?;
+    if cards.is_empty() {
         return Err(AppError::bad("err-no-vcards"));
+    }
+    let n = cards.len();
+    for (id, obj) in cards {
+        AddressbookWriteStore::put_object(&*state.addressbooks, principal, ab_id, &id, obj, true).await?;
     }
     Ok(n)
 }
