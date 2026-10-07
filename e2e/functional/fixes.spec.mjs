@@ -1,5 +1,5 @@
-// Round-2 fixes of the "bugs" package: one test per user-visible fix (docs/performance-2026-10.md "Known
-// bugs" B1..B11). Shared DB with the other functional specs: own objects carry "F9", prefs go back to the seed.
+// Round-2 fixes of the "bugs" package: one test per user-visible fix (B1..B11 of the bug list in
+// `git show 901d09e:docs/performance-2026-10.md`, "Known bugs"). Shared DB with the other functional specs: own objects carry "F9", prefs go back to the seed.
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect, api } from '../lib/test.mjs';

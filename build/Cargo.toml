@@ -79,12 +79,9 @@ flate2 = "1.1"
 # to it); the same crate and version build.rs compresses the assets with. tower-http's compression-br streams
 # with brotli's default 4 MiB window: +80-100 MB RSS after the bench burst (2026-10-07, 2 runs).
 brotli = "9"
-# Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06
-# (arm64 musl image build, 1 CPU / 192 MiB container like prod, synthetic 3,920-object DB, 20 requests
-# per path, 2 rounds, vs the musl build of e74c076): CPU per request −23…30 % (/calendar month 109.5 →
-# 78 ms, /settings 84 → 60, /api/mentions 185 → 129); RSS after the run 41.0 → 37.7 MB only with the
-# Dockerfile's MIMALLOC_PURGE_DELAY=0 + MIMALLOC_ARENA_EAGER_COMMIT=0 — mimalloc's defaults held 66-103 MB.
-# Adds libmimalloc-sys (C, built with cc — already a build dependency of the bundled SQLite).
+# Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06 (arm64 musl,
+# 1 CPU / 192 MiB like prod, 3,920-object DB): CPU per request −23…30 % (/calendar 109.5 → 78 ms); RSS 41.0 → 37.7 MB
+# only with the Dockerfile's MIMALLOC_* (defaults held 66-103 MB). libmimalloc-sys builds with cc (bundled SQLite needs it too).
 mimalloc = { version = "0.1", default-features = false }
 
 # Tests only (testkit.rs, it/http.rs: `ServiceExt::oneshot` drives the router without a socket); in axum's graph.
@@ -112,59 +109,35 @@ fluent-syntax = "0.12"
 unic-langid = "0.9"
 tracing = "0.1"
 
-# Every build (branches, main — what runs on plan.xarif.de): no cross-crate LTO, one codegen unit.
-# `lto = false` is rustc's thin-LOCAL LTO inside each crate. Measured 2026-10-02 (arm64 container
-# capped at 8 CPUs like the CI dind, rust 1.99, one run each), rebuild after a CSS change / cold:
-#   lto = "thin"  249 s / 371 s, 26.7 MB    lto = false  115 s / 290 s, 25.8 MB
-#   lto = "off"    93 s / 220 s, 26.3 MB
-# Cross-crate thin LTO cost ~60 % of every rebuild and made the binary no smaller. `false` over `off`:
-# the smallest of the three for 22 s. (Also measured, not taken: mold −6 %, incremental −28 % with
-# thin LTO, codegen-units=256 slower.)
-# Re-measured 2026-10-06 (same container setup, every file touched as the Dockerfile does; with the
-# build.rs asset minifier and mimalloc): codegen-units 16 → 1 = binary 26.6 → 21.2 MB (−20 %),
-# rebuild 115 → 120 s (3 runs each, ±1 s), cold 293 → 252 s (one run each). CPU per request
-# unchanged within noise (±5 %, 1-CPU container), as for thin LTO (26.7 MB, rebuild 343 s) and fat
-# LTO + 1 unit (= dist: 20.7 MB, rebuild 291 s) — those two stay off the per-push build.
+# Every build (branches, main): `lto = false` (rustc's thin-LOCAL LTO per crate), one codegen unit. Measured in an
+# 8-CPU arm64 container like the CI dind, rebuild after a CSS change: cross-crate thin LTO 249 vs 115 s, binary not
+# smaller; `false` over `off`: 25.8 vs 26.3 MB for +22 s (2026-10-02); codegen-units 16 → 1: binary 26.6 → 21.2 MB,
+# rebuild 115 → 120 s, CPU per request ±5 % (2026-10-06).
 [profile.release]
 strip = true
 lto = false
 codegen-units = 1
 opt-level = 3
 
-# Release tags only (dagger-ci.yaml release-build-args: CARGO_PROFILE=dist on `v*` tags) — what ships
-# officially: the whole program optimised as one unit. Measured 2026-10-06 (arm64 musl, the Dockerfile's
-# builder image, each a cold build in an 8-CPU container; each binary in an alpine container with 1 CPU /
-# 192 MiB and the image's MIMALLOC_* env, synthetic 3,920-object DB, 10 paths (pages + APIs): CPU of the
-# first request and of 20 warm ones, summed over the paths, median of 3 interleaved rounds):
-#                        first requests   warm     binary    cold build
-#   release (lto false)  646 ms           121 ms   21.1 MB   355 s
-#   dist: fat, O3        620 (−4 %)       116      20.8 MB   666 s (other jobs on the host) / ~380 s
-#   fat, opt-level 2     631              119      19.5 MB   411 s
-#   thin LTO, O3         625              116      21.8 MB   587 s
-#   fat, opt-level "s"   717 (+11 %)      131      16.1 MB   295 s
-#   fat, mimalloc v2     628              120      20.7 MB   377 s    RSS −2.4 MB in 2 rounds, +0.4 in 1
-# dist was lowest in every round (first requests 6.1-6.3 s vs release 6.4-6.6 s in total); RSS after the
-# run 64-66 MB for all. Kept: fat LTO, opt-level 3, mimalloc's default (v3). `panic` stays `unwind`:
-# tasks::guarded keeps the background loops alive through a panic (catch_unwind). No target-cpu: the
-# image ships from CI's amd64 build to a Hetzner CX53 (Intel; infra group_vars); x86-64-v2/v3 could not
-# be measured on this arm64 host, and v3 (AVX2) would not start on AVX-less CPUs a self-hoster may own.
+# Release tags only (dagger-ci.yaml: CARGO_PROFILE=dist on `v*`): fat LTO. Measured 2026-10-06 (arm64 musl, 1 CPU /
+# 192 MiB, 10 paths, median of 3 interleaved rounds) vs release: CPU of first requests 646 → 620 ms (−4 %, lowest in
+# every round), warm 121 → 116 ms, 21.1 → 20.8 MB; opt-level 2, thin LTO, mimalloc v2 not better, "s" +11 % CPU.
+# `panic` stays `unwind` (tasks::guarded catches a loop's panic). No target-cpu: prod is amd64 Intel (Hetzner CX53),
+# and x86-64-v3 (AVX2) would not start on AVX-less CPUs.
 [profile.dist]
 inherits = "release"
 lto = true
 codegen-units = 1
 
-# e2e/build-server.sh's default (E2E_PROFILE=release builds the shipped profile instead): release, split into 256
-# codegen units and compiled incrementally. Measured 2026-10-06 (host, warm target dir, one real edit each; cold =
-# empty target dir): a Rust literal 5.6 s, a template attribute 11.0 s, a CSS colour 12.3 s vs 98-100 s for release
-# (codegen-units 1 rebuilds the whole crate); cold 129 s vs 185 s. opt-level 1 saved only 1-2 s per edit. The visual
-# suite of an e2e build equals the release build's baseline (0 differences, 1134 states).
+# e2e/build-server.sh's default (E2E_PROFILE=release: the shipped one): an edit rebuilds in 5.6-12.3 s vs 98-100 s
+# for release, cold 129 vs 185 s (host, 2026-10-06); its visual baseline = release's (0 of 1134 states differ). Its
+# binary size follows the module layout (256 units are partitioned per module): the bench judges size on release only.
 [profile.e2e]
 inherits = "release"
 codegen-units = 256
 incremental = true
 
-# build.rs only: brotli 11 of the assets took 4.2 s per build-script run at the build-dependency default
-# opt-level 0, 2.4 s at 3 (host, 3 runs each; 1.3 s with one thread per file). Not in the binary.
+# build.rs only: brotli 11 of the assets 4.2 → 2.4 s per build-script run at opt-level 3 (host, 3 runs). Not in the binary.
 [profile.release.package.brotli]
 opt-level = 3
 [profile.dev.package.brotli]
