@@ -1,3 +1,5 @@
+//! `AppState`: the process-wide state every handler gets (config, DB pool, RustiCal stores, caches, guards).
+
 use crate::config::Config;
 use crate::i18n::I18n;
 use rustical_dav_push::VapidKeypair;

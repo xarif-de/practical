@@ -1,3 +1,6 @@
+//! `AppError`: every failure a handler returns, its HTTP status, and the user message key (`Msg`) that
+//! ctx::localize_errors renders in the page language.
+
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 

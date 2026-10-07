@@ -1,3 +1,5 @@
+//! Domain logic on RustiCal's store and the practical_* tables; routes/ calls in (no extractors or responses here).
+
 pub mod catrules;
 pub mod collections;
 pub mod colors;
