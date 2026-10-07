@@ -48,11 +48,10 @@ fn local_times_and_component_reads() {
     let obj = rustical_ical::CalendarObject::from_ics(crate::testkit::vevent("u", "S\\, x", "DTSTART;TZID=America/New_York:20261014T090000\nDTEND:20261014T150000Z\nCATEGORIES:A\nCATEGORIES:B\\,C,D\nLOCATION:")).unwrap();
     let caldata::component::CalendarInnerData::Event(ev, _) = obj.get_inner().get_inner() else { panic!() };
     assert_eq!(local(&ev.dtstart.0, tz), (chrono::NaiveDate::from_ymd_opt(2026, 10, 14).unwrap().and_hms_opt(15, 0, 0).unwrap(), false));
-    assert_eq!(local_date(&ev.dtend.as_ref().unwrap().0, tz), chrono::NaiveDate::from_ymd_opt(2026, 10, 14).unwrap());
+    assert_eq!(local(&ev.dtend.as_ref().unwrap().0, tz).0.date(), chrono::NaiveDate::from_ymd_opt(2026, 10, 14).unwrap());
     assert_eq!(text(ev, "SUMMARY").as_deref(), Some("S, x"));
     assert_eq!(text(ev, "LOCATION"), None, "an empty value is none");
     assert_eq!(list(ev, "CATEGORIES"), ["A", "B,C", "D"]);
-    assert_eq!(text_line(ev.get_property("SUMMARY").unwrap()), "S, x");
     if let caldata::types::CalDateOrDateTime::DateTime(d) = &ev.dtstart.0 {
         assert_eq!(tz_of(&d.timezone()).map(|t| t.name().to_string()).as_deref(), Some("America/New_York"));
     }

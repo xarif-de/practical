@@ -120,7 +120,7 @@ impl Table {
         (from..to).map(|i| self.row(i))
     }
     /// heap bytes held (text + line index)
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn heap_bytes(&self) -> usize {
         self.text.capacity() + self.starts.capacity() * 4
     }

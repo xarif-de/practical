@@ -1,4 +1,4 @@
-//! Groups = RustiCal `group` principals owned by their members (plan D2/D3/D6).
+//! Groups = RustiCal `group` principals owned by their members.
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -22,9 +22,6 @@ pub struct GroupInfo {
 pub struct TrashedGroup {
     pub id: String,
     pub displayname: String,
-    pub members: Vec<String>,
-    pub n_calendars: usize,
-    pub n_addressbooks: usize,
     pub deleted_by: String,
     pub deleted_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -177,7 +174,7 @@ pub async fn remove_member(state: &AppState, user: &Principal, gid: &str, member
 }
 
 /// Soft-delete: memberships are detached, collections go to RustiCal's trash,
-/// the principal stays until purge (plan D6). `typed_name` = confirmation input.
+/// the principal stays until purge. `typed_name` = confirmation input.
 pub async fn trash(state: &AppState, user: &Principal, gid: &str, typed_name: Option<&str>) -> AppResult<()> {
     let group = ensure_member(state, user, gid).await?;
     let displayname = group.displayname.clone().unwrap_or_else(|| gid.to_string());
@@ -253,9 +250,6 @@ fn to_public(r: TrashRow, retention_days: u32) -> TrashedGroup {
         expires_at: r.deleted_at + chrono::Duration::days(i64::from(retention_days)),
         id: r.id,
         displayname: r.displayname,
-        n_calendars: r.calendars.len(),
-        n_addressbooks: r.addressbooks.len(),
-        members: r.members,
         deleted_by: r.deleted_by,
         deleted_at: r.deleted_at,
     }

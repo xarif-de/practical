@@ -29,7 +29,7 @@ fn reading_an_apple_card() {
     assert_eq!((c.dates[0].label.as_str(), c.dates[0].date.as_str()), ("Hochzeit", "2010-06-12"));
     assert_eq!((c.birthday.as_str(), c.anniversary.as_str()), ("1984-03-12", "--06-12"));
     assert_eq!((c.ab_name.as_str(), c.ab_color.as_str(), c.is_group, c.uid.as_str(), c.etag.as_str()), ("Freunde", "#ff2d55", true, "erika", "etag"));
-    assert_eq!((c.initials(), c.letter(), c.given_letter(), c.given_key(), c.sort_key()), ("DE".to_string(), "M".to_string(), "E".to_string(), "erika muster".to_string(), "muster erika".to_string()));
+    assert_eq!((c.initials(), c.given_letter(), c.given_key(), c.sort_key()), ("DE".to_string(), "E".to_string(), "erika muster".to_string(), "muster erika".to_string()));
     assert_eq!(c.category(), "Familie");
     // PRODID is written anew (managed); Apple's label of item1 stays although its EMAIL is rewritten
     assert_eq!(preserved_lines(APPLE), ["item1.X-ABLabel:_$!<Other>!$_", "X-ABRELATEDNAMES;type=pref:Max", "PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRg==", "X-CUSTOM:bleibt"]);
@@ -43,7 +43,7 @@ fn other_dialects() {
     assert_eq!((c.full_name.as_str(), c.given.as_str(), c.emails[0].pref, c.emails[1].pref), ("Kim", "", true, false));
     assert_eq!((c.related[0].kind.as_str(), c.related[0].value.as_str()), ("friend", "Lee"));
     assert_eq!((c.birthday.as_str(), c.birthday_label().as_str()), ("--12-24", "24.12."));
-    assert_eq!((c.letter(), c.given_letter(), c.initials()), ("K".to_string(), "K".to_string(), "K".to_string()));
+    assert_eq!((c.given_letter(), c.initials()), ("K".to_string(), "K".to_string()));
     // vCard 2.1-style bare parameters (TEL;CELL, TEL;HOME;VOICE, EMAIL;INTERNET) read as TYPE — caldata alone
     // rejects such a card — also in a folded line, next to a quoted value with ";" and a value with "="
     let v21 = "BEGIN:VCARD\r\nVERSION:2.1\r\nN:Muster;Olga;;;\r\nFN:Olga Muster\r\nTEL;CELL:0151\r\nTEL;HOME;VOICE:030 1\r\nEMAIL;INTERNET;PREF:olga@example.org\r\nURL;WORK:https://example.org/?a=b\r\nADR;X-A=\"x;y\";HO\r\n ME:;;Weg 1;Ort;;;\r\nBDAY:1990-02-28\r\nEND:VCARD\r\n";
@@ -57,9 +57,9 @@ fn other_dialects() {
     assert!(matches!(bare_params_as_type(v4), std::borrow::Cow::Borrowed(_)));
     // an empty FN: the name comes from N
     let c = read("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Öztürk;Ayşe;;;\r\nFN:\r\nTEL;TYPE=cell:0151\r\nEND:VCARD\r\n");
-    assert_eq!((c.full_name.as_str(), c.phones[0].kind.as_str(), c.uid.as_str(), c.letter().as_str()), ("Ayşe Öztürk", "cell", "obj", "Ö"));
+    assert_eq!((c.full_name.as_str(), c.phones[0].kind.as_str(), c.uid.as_str(), c.initials().as_str()), ("Ayşe Öztürk", "cell", "obj", "AÖ"));
     let nobody = read("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:\r\nEND:VCARD\r\n");
-    assert_eq!((nobody.initials(), nobody.letter(), nobody.given_letter()), ("?".to_string(), "#".to_string(), "#".to_string()));
+    assert_eq!((nobody.initials(), nobody.given_letter()), ("?".to_string(), "#".to_string()));
     assert!(parse_vcf("not a card").is_err());
     // the raw line reader: groups, quoted parameters, repeated types
     let r = raw_lines("item9.TEL;TYPE=\"cell,pref\";X-A=\"a:b\";CELL:+1:2\r\n");

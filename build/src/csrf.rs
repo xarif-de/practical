@@ -7,7 +7,8 @@
 use crate::ctx::SESSION_CSRF;
 use crate::error::AppError;
 use crate::state::SharedState;
-use axum::extract::{Request, State};
+use axum::extract::{FromRequestParts, Request, State};
+use axum::http::request::Parts;
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -75,4 +76,37 @@ pub fn header_token(headers: &axum::http::HeaderMap) -> String {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string()
+}
+
+/// Extractor: the session's token in `X-CSRF-Token`, else 403. Place it after the path/query extractors and
+/// before the body: a request with a bad token is refused before its body is read.
+pub struct Token;
+
+impl<S: Send + Sync> FromRequestParts<S> for Token {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Response> {
+        let session = Session::from_request_parts(parts, state).await.map_err(IntoResponse::into_response)?;
+        check(&session, &header_token(&parts.headers)).await.map_err(IntoResponse::into_response)?;
+        Ok(Token)
+    }
+}
+
+/// Extractor for the JSON API: `Token`, except for a request an app token alone authenticates — the
+/// principal extractor already accepted it; a Basic header without a session user can only be that
+/// (`token_authenticated`).
+pub struct TokenOrBasic;
+
+impl<S: Send + Sync> FromRequestParts<S> for TokenOrBasic {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Response> {
+        let session = Session::from_request_parts(parts, state).await.map_err(IntoResponse::into_response)?;
+        let has_basic = parts.headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("Basic "));
+        if has_basic && session.get::<String>(crate::ctx::SESSION_USER).await.map_err(|e| AppError::from(e).into_response())?.is_none() {
+            return Ok(TokenOrBasic);
+        }
+        check(&session, &header_token(&parts.headers)).await.map_err(IntoResponse::into_response)?;
+        Ok(TokenOrBasic)
+    }
 }

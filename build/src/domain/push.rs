@@ -1,4 +1,4 @@
-//! Browser push reminders (plan D12): every minute, look one hour ahead for
+//! Browser push reminders: every minute, look one hour ahead for
 //! VALARM triggers of the subscribers' events, send once, remember in
 //! `practical_alarms_sent` so a restart never repeats a reminder.
 
@@ -60,7 +60,7 @@ async fn send(state: &AppState, sub: &Sub, payload: &str) -> Result<(), Failure>
     web_push::WebPushClient::send(&client, msg).await.map_err(|e| Failure { gone: matches!(e, web_push::WebPushError::EndpointNotValid(_) | web_push::WebPushError::EndpointNotFound(_)), msg: e.to_string() })
 }
 
-// ---- what the server may POST to (audit3-security #2/#3) ----
+// ---- what the server may POST to ----
 // The endpoint is user input and the server POSTs to it: without limits it reaches loopback (RustiCal on
 // :4000 in the same pod, which no NetworkPolicy filters) and every *.xarif.de route from inside, past
 // CrowdSec. So: only the browsers' push services, https on the default port, no IP literals, no

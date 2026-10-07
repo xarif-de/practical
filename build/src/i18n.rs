@@ -1,4 +1,4 @@
-//! Fluent translations embedded at compile time (D9). One bundle per language in LANGS,
+//! Fluent translations embedded at compile time. One bundle per language in LANGS,
 //! shared read-only across requests (`concurrent::FluentBundle`). A key a language lacks
 //! falls back to English, then German, so a new language can grow file by file; the
 //! test below keeps every shipped file complete.
@@ -197,12 +197,12 @@ pub fn negotiate(accept_language: Option<&str>, default: &str) -> String {
         for part in al.split(',') {
             let tag = part.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
             let primary = tag.split('-').next().unwrap_or("");
-            if LANGS.contains(&primary) {
+            if supported(primary) {
                 return primary.to_string();
             }
         }
     }
-    if LANGS.contains(&default) { default.to_string() } else { "de".to_string() }
+    if supported(default) { default.to_string() } else { "de".to_string() }
 }
 
 #[cfg(test)]

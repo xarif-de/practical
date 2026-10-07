@@ -1,4 +1,4 @@
-//! App tokens (plan D8): same semantics as RustiCal's frontend — random 64-char
+//! App tokens: same semantics as RustiCal's frontend — random 64-char
 //! secret, pbkdf2-hashed by the store, shown once as `<id-prefix>_<secret>`.
 
 use crate::error::{AppError, AppResult};

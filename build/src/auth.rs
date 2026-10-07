@@ -277,7 +277,7 @@ pub struct LogoutForm {
 }
 
 /// Local logout, then hand the browser to the IdP so its session ends as well
-/// (plan D7; Authelia has no end_session_endpoint, so this is its portal logout URL).
+/// (Authelia has no end_session_endpoint, so this is its portal logout URL).
 pub async fn post_logout(State(state): State<SharedState>, session: Session, Form(f): Form<LogoutForm>) -> Result<Response, AppError> {
     csrf::check(&session, &f.csrf).await?;
     // the push subscriptions this session made end with it (shared devices); before the flush, which drops the list

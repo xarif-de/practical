@@ -96,7 +96,7 @@ fn vtodo_lines() {
     assert!(matches!(build_vtodo("t", 0, &bad, tz(), None), Err(AppError::BadRequest(m)) if m == "due before start"));
     bad.summary = " ".into();
     assert!(matches!(build_vtodo("t", 0, &bad, tz(), None), Err(AppError::BadRequest(m)) if m == "summary required"));
-    let ics = assemble(None, vec!["UID:x".into()], &["BEGIN:VTODO\r\nRECURRENCE-ID:1\r\nEND:VTODO".into()]);
+    let ics = ical::assemble(None, "VTODO", vec!["UID:x".into()], &["BEGIN:VTODO\r\nRECURRENCE-ID:1\r\nEND:VTODO".into()]);
     assert_eq!(ics, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//xarif.de//PractiCal//DE\r\nCALSCALE:GREGORIAN\r\nBEGIN:VTODO\r\nUID:x\r\nEND:VTODO\r\nBEGIN:VTODO\r\nRECURRENCE-ID:1\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
     assert!(is_managed("RRULE:FREQ=DAILY") == false && is_managed("PERCENT-COMPLETE:1") && !is_managed("ATTACH;VALUE=BINARY;ENCODING=BASE64:aGk="));
     assert_eq!(stamp_line("DUE", dt("2026-10-15T08:00"), true, tz()), "DUE;VALUE=DATE:20261015");
@@ -113,9 +113,9 @@ fn reminder_anchors() {
     assert_eq!(reminder_at(&a(10, false), None, None), None);
     assert_eq!(reminder_at(&Alarm { at: Some(dt("2026-01-01T00:00")), ..Default::default() }, None, None), Some(dt("2026-01-01T00:00")));
     let t = Task { principal: "p".into(), cal_id: "c".into(), cal_name: String::new(), color: String::new(), object_id: "o".into(), uid: "u".into(), summary: String::new(), description: String::new(), location: String::new(), start: None, start_all_day: false, due: Some(dt("2026-10-13T08:00")), due_all_day: false, status: String::new(), percent: None, completed_at: None, priority: 0, class: String::new(), categories: vec![], alarms: 0, links: 0, created: None, extra: TaskExtra::default() };
-    assert_eq!((t.completed(), t.open(), t.overdue(date("2026-10-14")), t.due_label(), t.key()), (false, true, true, "13.10.2026 08:00".to_string(), "p/c/o".to_string()));
+    assert_eq!((t.completed(), t.open(), t.key()), (false, true, "p/c/o".to_string()));
     let done = Task { completed_at: Some(dt("2026-10-13T09:00")), due_all_day: true, ..t.clone() };
-    assert_eq!((done.completed(), done.open(), done.overdue(date("2026-10-14")), done.due_label()), (true, false, false, "13.10.2026".to_string()));
+    assert_eq!((done.completed(), done.open()), (true, false));
     let explicit = Task { status: "NEEDS-ACTION".into(), ..done.clone() };
     assert!(!explicit.completed(), "a stamp counts only without a STATUS");
     let cancelled = Task { status: "CANCELLED".into(), ..t };
@@ -136,7 +136,7 @@ async fn cache_follows_the_store() {
     assert_eq!(list.iter().map(|t| (t.summary.as_str(), t.color.as_str(), t.cal_name.as_str())).collect::<Vec<_>>(), [("A", "#ff9f0a", "T"), ("B", "#ff9f0a", "T")], "open first; an invalid COLOR falls back");
     // an edit moves the token: only the change is read again
     app.put_ics("alice", &cal, "a", &vtodo("a", "A2", "DUE;VALUE=DATE:20261019")).await;
-    crate::domain::events::delete_event(&app.state, &user, "alice", &cal, "b").await.unwrap();
+    crate::domain::collections::delete_object(&app.state, &user, crate::domain::history_text::Store::Cal, "alice", &cal, "b").await.unwrap();
     let list = tasks_for(&app.state, &cals().await, tz()).await.unwrap();
     assert_eq!(list.iter().map(|t| t.summary.as_str()).collect::<Vec<_>>(), ["A2"]);
     // another zone is a cache entry of its own

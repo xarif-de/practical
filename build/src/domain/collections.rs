@@ -1,5 +1,6 @@
-//! Calendars and address books for the user and their groups (plan D4/D5/D16).
+//! Calendars and address books for the user and their groups.
 
+use crate::domain::history_text::Store;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use chrono::NaiveDateTime;
@@ -279,6 +280,16 @@ pub async fn delete_addressbook(state: &AppState, user: &Principal, owner: &str,
 pub async fn restore_addressbook(state: &AppState, user: &Principal, owner: &str, id: &str) -> AppResult<()> {
     ensure_owner(user, owner)?;
     state.addressbooks.restore_addressbook(owner, id).await?;
+    Ok(())
+}
+
+/// Deletes one event, task (`Store::Cal`) or contact (`Store::Ab`) of a collection the user owns.
+pub async fn delete_object(state: &AppState, user: &Principal, store: Store, principal: &str, coll: &str, object_id: &str) -> AppResult<()> {
+    ensure_owner(user, principal)?;
+    match store {
+        Store::Cal => state.calendars.delete_object(principal, coll, object_id, true).await?,
+        Store::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, principal, coll, object_id, true).await?,
+    }
     Ok(())
 }
 

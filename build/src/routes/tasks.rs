@@ -4,11 +4,10 @@
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::CalInfo;
-use crate::domain::prefs;
 use crate::domain::tasks::{self, Task};
 use crate::domain::events;
 use crate::error::AppResult;
-use crate::routes::calendar::view_ctx;
+use crate::routes::calendar::PageView;
 use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
@@ -135,8 +134,7 @@ fn back_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
     headers.get_all(axum::http::header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).find_map(|c| c.trim().strip_prefix("tk_back=").map(str::to_string))
 }
 
-async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, headers: axum::http::HeaderMap, Query(q): Query<TaskQuery>) -> AppResult<TasksPage> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, headers: axum::http::HeaderMap, Query(q): Query<TaskQuery>) -> AppResult<TasksPage> {
     let view = one_of(q.view.as_ref(), VIEWS, "groups");
     let back = one_of(q.back.as_ref().or(back_cookie(&headers).as_ref()), LOOKBACKS, "month");
     let all_cals = events::visible_calendars(&state, &user, None).await?;
@@ -165,7 +163,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
     }))
     .unwrap_or_else(|_| "{}".into());
     let tasks_json = crate::render::script_json(tasks_json);
-    let p = prefs::get(&state.db, &user.id).await?;
+    let p = vc.prefs;
     Ok(TasksPage {
         ctx,
         calendars,
@@ -187,8 +185,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
 
 /// One page of the finished tasks, in the same order the page's first chunk uses.
 /// The views ask for the next one as it scrolls into reach.
-async fn done_page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<PageQuery>) -> AppResult<axum::Json<DonePage>> {
-    let vc = view_ctx(&state, &user, &ctx.lang).await?;
+async fn done_page(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Query(q): Query<PageQuery>) -> AppResult<axum::Json<DonePage>> {
     let back = one_of(q.back.as_ref(), LOOKBACKS, "month");
     let all_cals = events::visible_calendars(&state, &user, None).await?;
     let picked = pick_calendars(&all_cals, q.cals.as_deref());

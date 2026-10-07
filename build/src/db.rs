@@ -1,6 +1,6 @@
 //! Pool on RustiCal's SQLite file plus the UI's OWN schema (`practical_*` tables).
 //!
-//! Rules (plan D6): RustiCal's migrations are never run from here
+//! Rules: RustiCal's migrations are never run from here
 //! (`create_db_pool(.., migrate=false)`); our migrations live in `practical_migrations`
 //! (never `_sqlx_migrations`, or rustical's own migrator aborts on "unknown
 //! migration"); RustiCal's tables are touched only through its store crates.

@@ -1,6 +1,5 @@
-//! The "Mehr ▾" views (plan D13/D14, design round 8): Jahresplaner, Freie
-//! Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen — ported from
-//! views_more.py, fed with real instances, holidays and birthdays.
+//! The "Mehr ▾" views: Jahresplaner, Freie Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen —
+//! fed with real instances, holidays and birthdays.
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::{self, CalInfo};
@@ -54,7 +53,7 @@ type YearKey = (String, String, i64, chrono_tz::Tz, i32);
 
 /// The year views' expansions per (calendar, synctoken, zone, year): a year is outside `InstanceCache`'s
 /// windows, so every planner/weekends/vacation/countdown/numbers request and every live-change refetch read
-/// and parsed the whole year again (~94 % of a planner request's samples on the bench DB, audit3-perf3 #7).
+/// and parsed the whole year again (~94 % of a planner request's samples on the bench DB).
 /// RustiCal moves the synctoken on every object write, so a write is never answered from before it.
 /// Least recently used entries go first above `YEAR_CACHE_BYTES` (estimated heap).
 #[derive(Default)]
@@ -351,7 +350,7 @@ pub fn vacation(y: &YearData, l: &L) -> String {
     };
     let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.label(), h.start, h.end)).collect();
     let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.to_string(), i.start_date(), i.last_date())).collect();
-    // workdays used by vacation instances (weekends + public holidays excluded, plan D14)
+    // workdays used by vacation instances (weekends + public holidays excluded)
     let mut used_days: std::collections::BTreeSet<NaiveDate> = Default::default();
     for (_, a, b) in &vacs {
         let mut d = *a;
@@ -411,7 +410,6 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         label: String,
         icon: &'static str,
         over: bool,
-        color: usize,
     }
     let mut items = vec![];
     for c in &y.birthdays {
@@ -421,26 +419,26 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         let age = |yr: i32| by.map(|b| format!(" · {}", yr - b)).unwrap_or_default();
         let ago = (y.today - this).num_days();
         if ago > 0 && ago <= 30 {
-            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true, color: c.color_index() });
+            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true });
         }
-        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false, color: c.color_index() });
+        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false });
     }
     for v in &y.vacations {
         if v.start_date() >= y.today {
-            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false, color: 6 });
+            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false });
         } else {
             let ago = (y.today - v.last_date()).num_days();
             if ago > 0 && ago <= 30 {
-                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true, color: 6 });
+                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true });
             }
         }
     }
     for h in &y.public {
         if h.start >= y.today {
-            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false, color: 3 });
+            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false });
         }
     }
-    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false, color: 5 });
+    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false });
     items.sort_by_key(|i| i.date);
     let tile = |i: &Item| {
         if i.over {

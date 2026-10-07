@@ -1,3 +1,5 @@
+//! `AppState`: the process-wide state every handler gets (config, DB pool, RustiCal stores, caches, guards).
+
 use crate::config::Config;
 use crate::i18n::I18n;
 use rustical_dav_push::VapidKeypair;
@@ -6,7 +8,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// A change in a collection, fanned out to SSE clients (plan NFR "Live-Updates").
+/// A change in a collection, fanned out to SSE clients.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ChangeEvent {
     pub kind: &'static str, // "calendar" | "addressbook"

@@ -115,13 +115,6 @@ pub struct Rule {
     pub links: LinksRule,
 }
 
-impl Rule {
-    /// true when the rule sets anything at all
-    pub fn is_empty(&self) -> bool {
-        self.title.is_none() && self.when.all_day.is_none() && self.when.calendar.is_none() && self.when.color.is_none() && self.where_.mode == "off" && self.alarm.alarms.is_empty() && self.repeat.mode == "off" && self.status.status.is_none() && self.status.transp.is_none() && self.status.class.is_none() && self.status.priority.is_none() && self.links.links.is_empty()
-    }
-}
-
 pub fn validate(r: &Rule) -> AppResult<()> {
     let bad = |m: &str| AppError::bad1("err-rule-mode", "mode", m);
     for m in [&r.where_.mode, &r.repeat.mode] {
@@ -203,7 +196,6 @@ mod tests {
         let r: Rule = serde_json::from_str(r##"{"when":{"all_day":{"mode":"lock","value":true},"color":{"mode":"default","value":"#3478f6"}},"status":{"transp":{"mode":"default","value":"TRANSPARENT"}},"repeat":{"mode":"off","rrule":""},"alarm":{"alarms":[{"mode":"lock","minutes":30,"action":"DISPLAY"}]},"links":{"links":[{"mode":"default","kind":"url","uri":"https://a.example.org/"}]}}"##).unwrap();
         assert_eq!((r.when.all_day.as_ref().map(|s| (s.mode.as_str(), s.value)), r.status.transp.as_ref().map(|s| s.value.as_str()), r.where_.mode.as_str(), r.alarm.alarms[0].alarm.minutes, r.links.links[0].link.uri.as_str()), (Some(("lock", true)), Some("TRANSPARENT"), "off", 30, "https://a.example.org/"));
         validate(&r).unwrap();
-        assert!(!r.is_empty() && Rule::default().is_empty());
         let out = serde_json::to_value(&r).unwrap();
         assert_eq!(out["alarm"]["alarms"][0]["mode"], "lock");
         assert_eq!(out["alarm"]["alarms"][0]["minutes"], 30);

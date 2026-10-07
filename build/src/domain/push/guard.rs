@@ -1,5 +1,4 @@
-//! What the server may POST to (audit3-security #2/#3) and a round that keeps going when one
-//! subscription or one calendar fails (#2, audit3-robustness R1/R2).
+//! What the server may POST to and a round that keeps going when one subscription or one calendar fails.
 
 use super::*;
 use crate::testkit::{TestApp, vevent};
@@ -9,7 +8,7 @@ use std::sync::{Arc, Mutex};
 pub const P256DH: &str = "BLMbF9ffKBiWQLCKvTHb6LO8Nb6dcUh6TItC455vu2kElga6PQvUmaFyCdykxY2nOSSL3yKgfbmFLRTUaGv4yV8";
 pub const AUTH: &str = "xS03Fi5ErfTNH_l9WHE9Ig";
 
-/// audit3-security #2's endpoint: the 40-byte log cut lands inside the `ä`.
+/// An endpoint whose 40-byte log cut lands inside the `ä`.
 const CUT_MID_CHAR: &str = "https://127.0.0.1:4598/xxxxxxxxxxxxxxxxä";
 
 #[test]
@@ -171,7 +170,7 @@ async fn shared_reminder() -> TestApp {
     app
 }
 
-/// audit3-security #2: alice's stored endpoint used to panic the round in its log line, every minute,
+/// Alice's stored endpoint used to panic the round in its log line, every minute,
 /// and bob (sorted after her) never got his reminder. Uses only what the loop had before the fix.
 #[tokio::test]
 async fn a_malformed_stored_endpoint_does_not_stop_the_round() {
@@ -223,7 +222,7 @@ async fn one_failing_subscription_does_not_stop_the_others() {
     assert_eq!(endpoints(&app).await, [CUT_MID_CHAR, "https://fcm.googleapis.com/fcm/send/fails", "https://fcm.googleapis.com/fcm/send/panics", "https://updates.push.services.mozilla.com/wpush/v2/alice", "https://web.push.apple.com/bob"]);
 }
 
-/// audit3-robustness R1: an alarm offset past chrono's range panicked the build of the whole round,
+/// An alarm offset past chrono's range panicked the build of the whole round,
 /// every minute (each time a full build). Now only that calendar's reminders are missing, the others go
 /// out, and the failing build is retried with a growing pause (and after every write), not every minute.
 #[tokio::test]

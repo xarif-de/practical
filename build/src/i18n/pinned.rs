@@ -286,7 +286,7 @@ fn every_plural_form_renders_and_is_reachable() {
             }
         }
     }
-    assert!(count >= 4 * 46, "the scan found {count} plural messages only");
+    assert!(count >= 4 * 45, "the scan found {count} plural messages only");
     assert_eq!(unreachable, Vec::<String>::new());
     crate::testkit::assert_snapshot("i18n/plurals.txt", &golden);
 }

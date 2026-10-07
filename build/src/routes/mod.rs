@@ -1,3 +1,5 @@
+//! HTTP handlers per page or API area; each module's `router()` is merged in main.rs.
+
 pub mod api;
 pub mod assets;
 pub mod calendar;
