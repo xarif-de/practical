@@ -12,6 +12,7 @@ const FILES: &[(&str, &str)] = &[
     ("history.css", "text/css; charset=utf-8"),
     ("sw.js", "text/javascript; charset=utf-8"),
     ("icon.svg", "image/svg+xml"),
+    ("logo.svg", "image/svg+xml"),
     ("icons.svg", "image/svg+xml"),
     ("theme.js", "text/javascript; charset=utf-8"),
     ("i18n-de.js", "text/javascript; charset=utf-8"),

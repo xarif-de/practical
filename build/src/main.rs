@@ -149,6 +149,8 @@
 //! `practical serve` (default), `check-rustical-image <ref>` ([`check_rustical_image`]), `gen-vapid`,
 //! `--version`. The global allocator is mimalloc (tests: a counting wrapper, `testkit::Counting`).
 #![warn(clippy::all)]
+// the API doc's logo + favicon: the Pages site's copy of build/assets/icon.svg (the doc is published under /api/)
+#![doc(html_logo_url = "https://xarif.gitlab.io/docker/practical/icon.svg", html_favicon_url = "https://xarif.gitlab.io/docker/practical/icon.svg")]
 mod auth;
 mod bundle;
 mod clock;

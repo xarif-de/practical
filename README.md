@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="build/assets/icon.svg" width="72" alt="">
-
-# PractiCal
+<h1><img src="build/assets/logo.svg" alt="PractiCal" width="344"></h1>
 
 **Calendar, contacts and tasks for your own server — a fast, modern web app on top of RustiCal.**
 

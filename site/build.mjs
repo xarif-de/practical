@@ -246,7 +246,7 @@ for (const [repoPath, file] of pages) {
 for (const [from, file, frag] of anchorChecks) if (!idSets.get(file)?.has(decodeURIComponent(frag))) errors.push(`${from}: anchor #${frag} not found in ${file}`);
 
 // every relative href/src the pages really carry (template included) must hit a page + id, a copied file or api/
-const statics = new Set(['style.css', 'gallery.js', 'icon.svg', ...[...assets].map(p => p.slice('docs/'.length))]);
+const statics = new Set(['style.css', 'gallery.js', 'icon.svg', 'logo.svg', ...[...assets].map(p => p.slice('docs/'.length))]);
 for (const [file, html] of built) {
   for (const [, u] of html.matchAll(/\s(?:href|src)="([^"]*)"/g)) {
     const t = unesc(u);
@@ -280,5 +280,5 @@ fs.mkdirSync(path.join(OUT, 'images'), { recursive: true });
 for (const [file, html] of built) fs.writeFileSync(path.join(OUT, file), html);
 for (const p of assets) fs.copyFileSync(path.join(REPO, p), path.join(OUT, p.slice('docs/'.length)));
 for (const f of ['style.css', 'gallery.js']) fs.copyFileSync(path.join(SITE_DIR, f), path.join(OUT, f));
-fs.copyFileSync(path.join(REPO, 'build/assets/icon.svg'), path.join(OUT, 'icon.svg'));
+for (const f of ['icon.svg', 'logo.svg']) fs.copyFileSync(path.join(REPO, 'build/assets', f), path.join(OUT, f));
 console.log(`site: ${pages.size} pages, ${assets.size} images, links checked → ${OUT}`);

@@ -42,7 +42,7 @@ img { max-width: 100%; height: auto; }
 /* ---- header */
 .site-header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px); border-bottom: 1px solid var(--line); }
 .bar { display: flex; align-items: center; gap: 16px; height: 60px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 700; font-size: 19px; letter-spacing: -.01em; text-decoration: none; }
+.brand { display: inline-flex; flex: none; } .brand img { display: block; height: 32px; width: auto; }
 .top-nav { margin-left: auto; display: flex; gap: 2px; }
 .top-nav a { color: var(--fg); text-decoration: none; padding: 6px 12px; border-radius: 999px; font-size: 15px; }
 .top-nav a:hover { background: var(--bg-3); }
@@ -184,7 +184,7 @@ td code { white-space: nowrap; }
   body { font-size: 15.5px; }
   .wrap { padding: 0 14px; }
   .bar { height: 54px; gap: 8px; }
-  .brand span { font-size: 17px; }
+  .brand img { height: 28px; }
   .top-nav a { padding: 6px 8px; font-size: 14px; }
   html { scroll-padding-top: 66px; }
   main { padding: 18px 0 40px; }

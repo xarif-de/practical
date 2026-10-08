@@ -3,7 +3,7 @@
 .app { display: grid; min-height: 100dvh; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr; height: 100dvh; }
 .topbar { display: flex; align-items: center; padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); gap: 10px; }
 html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [aria-busy="true"] { cursor: progress; } /* a navigation or a write that takes longer than 300 ms (practical.progress) */
-.brand { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
+.brand { display: flex; flex: none; } .brand img { display: block; height: 28px; width: auto; }
 .nav { display: none; gap: 4px; margin-left: 8px; }
 .nav a { border-radius: var(--radius-s); color: var(--fg-2); }
 .nav a[aria-current] { background: var(--bg-2); color: var(--fg); }
