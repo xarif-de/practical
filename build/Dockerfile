@@ -61,7 +61,7 @@ COPY --from=builder /practical /practical
 # source: https://github.com/lennart-k/rustical at the same tag). The tag MUST equal the
 # rustical_* crates' tag in Cargo.toml — build.rs and the image test check it, and one
 # Renovate group (renovate.json) moves both. Run as `/usr/local/bin/rustical serve`.
-COPY --from=ghcr.io/lennart-k/rustical:0.16.4@sha256:9b857e823612516b3371a4f5453e8e392426c4323fad6d38f3be2ad93f2fc07a /usr/local/bin/rustical /usr/local/bin/rustical
+COPY --from=ghcr.io/lennart-k/rustical:0.16.6@sha256:438c17ffdbcc4568cc6295f97e0b7eb4083815fb1852fc79780b050ffc93189a /usr/local/bin/rustical /usr/local/bin/rustical
 # the SQLite path RustiCal's image sets (its Dockerfile); PractiCal reads PRACTICAL__* only
 ENV RUSTICAL_DATA_STORE__SQLITE__DB_URL=/var/lib/rustical/db.sqlite3
 # PractiCal's allocator (mimalloc, Cargo.toml): return freed memory at once and commit arena memory
