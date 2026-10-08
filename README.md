@@ -92,9 +92,9 @@ Change history with undo for every change (also from phones), shared group calen
 Screenshots of every view, the full feature tour and the guides for deployment, configuration and development —
 on the project site.
 
-<a href="https://xarif.gitlab.io/docker/practical/#shot-week"><img src="docs/images/02-week.webp" width="260" alt="Gallery: week view"></a>
-<a href="https://xarif.gitlab.io/docker/practical/#shot-tasks-board"><img src="docs/images/11-tasks-board.webp" width="260" alt="Gallery: task board"></a>
-<a href="https://xarif.gitlab.io/docker/practical/#shot-contact-view"><img src="docs/images/21-contact-view.webp" width="260" alt="Gallery: contact"></a>
+<a href="https://xarif.gitlab.io/docker/practical/#shot-week"><img src="docs/images/02-week.webp" width="32%" alt="Gallery: week view"></a>
+<a href="https://xarif.gitlab.io/docker/practical/#shot-tasks-board"><img src="docs/images/11-tasks-board.webp" width="32%" alt="Gallery: task board"></a>
+<a href="https://xarif.gitlab.io/docker/practical/#shot-contact-view"><img src="docs/images/21-contact-view.webp" width="32%" alt="Gallery: contact"></a>
 
 **[Open the site →](https://xarif.gitlab.io/docker/practical/)**
 
