@@ -51,7 +51,7 @@ FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cab
 # step through `sh -c`, and a shell also makes `kubectl exec` diagnostics possible.
 # HTTPS trust (OIDC, holidays, Web Push): the base image's ca-certificates-bundle is all rustls-native-certs reads;
 # `apk add ca-certificates` (dropped 2026-10-06) added 242 files + 0.25 MB, start CPU and RSS the same without it.
-LABEL org.opencontainers.image.source="https://git.xarif.de/docker/practical"
+LABEL org.opencontainers.image.source="https://gitlab.com/xarif/docker/practical"
 LABEL org.opencontainers.image.description="RustiCal (unmodified, /usr/local/bin/rustical) plus its web UI PractiCal: groups, collections, app tokens, calendar, contacts, tasks and change history on RustiCal's own SQLite store"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 COPY --from=builder /practical /practical

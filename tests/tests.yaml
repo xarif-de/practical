@@ -21,7 +21,7 @@ tests:
       # new measurement.
       max_size: 80MiB
       labels:
-        org.opencontainers.image.source: "https://git.xarif.de/docker/practical"
+        org.opencontainers.image.source: "https://gitlab.com/xarif/docker/practical"
 
   - name: binary-reports-versions
     timeout: 90s
