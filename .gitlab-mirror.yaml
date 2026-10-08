@@ -1,11 +1,23 @@
-# gitlab.com mirror overrides for this repository (read by kubernetes/forgejo resources/mirror-lib.sh).
-# CI/CD + shared runners + Pages: .gitlab-ci.yml publishes the Rust API doc. Issues + merge requests: public bug reports and contributions (README "Why PractiCal?").
+# gitlab.com mirror declarations, read by kubernetes/forgejo resources/mirror-lib.sh
+# from this repo's default branch. The mirror baseline switches EVERY gitlab.com
+# project feature off, so everything this repo needs on its mirror is declared here.
 features:
+  # The cluster pulls this repo's image from the mirror; with the registry disabled
+  # an anonymous pull is refused with "DENIED: access forbidden".
+  container_registry: enabled
+  # .gitlab-ci.yml publishes the Rust API doc with GitLab Pages, which needs CI/CD
+  # and a runner. Declaring builds no longer drags the nine CI-cascade features
+  # (analytics, environments, monitor, ...) along: the baseline sends them as
+  # `disabled` in the same PUT and explicit beats cascade.
   builds: enabled
   pages: enabled
-  issues: enabled
-  # contributions; merged on gitlab.com they are not synced back yet: carry them over to Forgejo by hand
-  merge_requests: enabled
   shared_runners: true
-  # the site at https://xarif.gitlab.io/docker/practical/ instead of a generated practical-<n>.gitlab.io
+  # the site at https://xarif.gitlab.io/docker/practical/ instead of a generated
+  # practical-<n>.gitlab.io
   pages_unique_domain: false
+  # Public bug reports and contributions (README "Why PractiCal?"). Forking is what
+  # lets an outside contributor open one; merged on gitlab.com they are not synced
+  # back, so carry them over to Forgejo by hand.
+  issues: enabled
+  merge_requests: enabled
+  forking: enabled
