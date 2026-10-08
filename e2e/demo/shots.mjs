@@ -1,5 +1,7 @@
 // README/gallery screenshots on the showcase DB (e2e/demo): one dev server of this checkout's build (DEV_LOGIN emma,
 // DEV_NOW = the frozen Wednesday, egress blocked), chromium 1440×900 @2x, en-GB, Europe/Berlin, light (one dark).
+// Docs-only shots (docs/features.md) follow the README ones: `readme: false` in shots.json (gallery.mjs skips them),
+// some on DEVICES `settings` (1100 px, cut below the content) or `phone` (several screens composed side by side).
 // Every state waits for real readiness (lib/test.mjs settle: no request in flight, the page's due timers ran, fonts
 // ready, no running animation, two frames). Output: docs/images/<NN>-<slug>.webp, shots.json;
 // the 2x PNGs stay in e2e/.work/demo/png.
@@ -67,9 +69,16 @@ async function stopServer({ child }) {
 }
 
 // ---------------------------------------------------------------- browser page (lib/test.mjs `page` fixture)
-async function newPage(browser, scheme) {
+// desktop = the README shots; phone = e2e/playwright.config.mjs `phone`; a narrower desktop for the settings pages
+// (one centred column: ≥ 1100 px keeps every desktop layout, views.css)
+const DEVICES = {
+  desktop: { viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false },
+  settings: { viewport: { width: 1100, height: 760 }, isMobile: false, hasTouch: false },
+  phone: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+};
+async function newPage(browser, scheme, device = 'desktop') {
   const ctx = await browser.newContext({
-    baseURL: BASE, viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, locale: 'en-GB', timezoneId: TZ,
+    baseURL: BASE, ...DEVICES[device], deviceScaleFactor: 2, locale: 'en-GB', timezoneId: TZ,
     colorScheme: scheme, reducedMotion: 'reduce', serviceWorkers: 'block', extraHTTPHeaders: { 'Accept-Language': 'en' },
   });
   const page = await ctx.newPage();
@@ -156,6 +165,13 @@ async function typeQ(page, v) {
   await page.waitForFunction(x => { const b = document.getElementById('sres'); return !b.hidden && (b.querySelector('.r.more') || b.querySelector('.none')) && document.getElementById('q').value === x; }, v);
 }
 
+// a synthetic calendar file for the import dialog (read in the browser; the shot imports nothing)
+const IMPORT_ICS = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Example School//Calendar//EN', 'X-WR-CALNAME:School year 2026/27',
+  'X-WR-CALDESC:Term dates and school events', 'X-APPLE-CALENDAR-COLOR:#ff9500', 'X-WR-TIMEZONE:Europe/Berlin',
+  ...[['20261105', 'Parents\' evening'], ['20261127', 'School concert'], ['20261218', 'Last day before the Christmas holidays']].flatMap(([d, t], k) =>
+    ['BEGIN:VEVENT', `UID:school-${k}@example.org`, 'DTSTAMP:20260901T080000Z', `DTSTART;VALUE=DATE:${d}`, `SUMMARY:${t}`, 'END:VEVENT']),
+  'END:VCALENDAR', ''].join('\r\n');
+
 const SHOTS = [
   ['day', 'Day view', 'The day view: today\'s agenda with overlapping meetings, a timeline of the day and the month at a glance.', async p => {
     await calView(p, 'day'); await p.locator(`.doc[data-date="${D}"]`).waitFor(); }],
@@ -215,7 +231,51 @@ const SHOTS = [
     await p.goto(cal('month')); await typeQ(p, 'lily'); }],
   ['month-dark', 'Month view (dark)', 'The month view in dark mode.', async p => {
     await calView(p, 'month'); }, 'dark'],
+  // docs-only pictures (docs/features.md), left out of the README gallery: `readme: false` in shots.json
+  ['settings', 'Settings', 'The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups.', async p => {
+    await p.goto('/settings'); await p.locator('#home').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+  ['category-rule', 'Category rule', 'The rule of the category "Work": every event with this category gets a 15-minute reminder and the office as its location.', async p => {
+    await p.goto('/calendar?rule=Work&back=%2Fsettings%23categories'); await p.locator('#ed:not([hidden])').waitFor(); }, 'light', { readme: false }],
+  ['recurrence', 'Repeating event', 'A weekly event in edit mode: the repeat card with its preview calendar, and the colour that the category rule "Sports" sets.', async p => {
+    await openEvent(p, 'Yoga', '2026-10-15');
+    await p.locator('#ed-lock').click(); await p.locator('#edform.mode-edit').waitFor(); await p.locator('#edh').blur(); }, 'light', { readme: false }],
+  ['history', 'Change history', 'The change history as a list: an undone change with its before and after values, and the history of that event.', async p => {
+    await p.goto('/history?view=list'); // the newest change is picked: the undo (02-demo.py)
+    await p.locator('.hxc-card .hxc-pv b').first().waitFor({ state: 'attached' }); }, 'light', { readme: false }],
+  ['app-tokens', 'Account and app tokens', 'The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device.', async p => {
+    await p.goto('/settings#account'); await p.locator('#account').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+  ['groups', 'Groups', 'A group and its members: every member may add or remove members and manage the group\'s calendars.', async p => {
+    await p.goto('/settings#groups'); await p.locator('#groups').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+  ['import', 'Import a calendar', 'An .ics file picked for import: name, colour and time zone come from the file and can be changed before the import.', async p => {
+    await p.goto('/settings#import-calendar');
+    await p.locator('#import-calendar .imp-file').setInputFiles({ name: 'school-year.ics', mimeType: 'text/calendar', buffer: Buffer.from(IMPORT_ICS) });
+    await p.locator('#import-calendar .imp-fields:not([hidden])').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+  ['phone', 'Phone layout', 'The same app on a phone: the address book, the task list and an event.', null, 'light', { readme: false, phones: [
+    // calendar views on a phone show a + on every day (chrome.css `hover: none`): the contacts stand in for them
+    async p => { await ctList(p); },
+    async p => { await tkView(p, 'groups', 'month'); },
+    async p => { await openEvent(p, 'Q4 roadmap workshop', D); },
+  ] }],
 ];
+
+// phone screens (2x PNG, base64) side by side with a frame and a shadow on a light backdrop: an own context without
+// the server (only data: URLs), the same 2x scale; the result is a 2x PNG like every other shot
+async function composePhones(browser, screens, out) {
+  const w = DEVICES.phone.viewport.width, h = DEVICES.phone.viewport.height, gap = 48, pad = 56;
+  const W = pad * 2 + screens.length * w + (screens.length - 1) * gap, H = pad * 2 + h;
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
+  try {
+    const page = await ctx.newPage();
+    await page.setContent(`<!doctype html><style>html,body{margin:0;background:#e9e9ef}
+      .row{display:flex;gap:${gap}px;padding:${pad}px}
+      img{width:${w}px;height:${h}px;display:block;border-radius:28px;outline:8px solid #1c1c1e;box-shadow:0 18px 40px rgba(0,0,0,.25)}</style>
+      <div class="row">${screens.map(b => `<img src="data:image/png;base64,${b}" alt="">`).join('')}</div>`);
+    await page.evaluate(() => Promise.all([...document.images].map(i => i.decode())));
+    await page.screenshot({ path: out, animations: 'disabled', scale: 'device' });
+  } finally {
+    await ctx.close();
+  }
+}
 
 // ---------------------------------------------------------------- main
 const only = process.env.SHOTS ? new Set(process.env.SHOTS.split(',')) : null;
@@ -230,11 +290,9 @@ try {
   const pages = {};
   const meta = [];
   let n = 0;
-  for (const [slug, title, caption, go, scheme = 'light'] of SHOTS) {
-    const file = `${String(++n).padStart(2, '0')}-${slug}.webp`;
-    meta.push({ file, title, caption });
-    if (only && !only.has(slug)) continue;
-    const page = pages[scheme] ||= await newPage(browser, scheme);
+  const pageFor = (scheme, device) => (pages[`${scheme}/${device}`] ||= newPage(browser, scheme, device));
+  // one state, ready for the picture: hover parked, settled, no focus ring, no toast, no page error
+  async function ready(page, slug, go) {
     page.__errors.length = 0;
     await go(page);
     await park(page);
@@ -245,8 +303,36 @@ try {
     const bad = await page.evaluate(() => [...document.querySelectorAll('.toast')].filter(t => t.offsetParent).map(t => t.textContent.trim()));
     if (bad.length) page.__errors.push(`toast: ${bad.join(' | ')}`);
     if (page.__errors.length) throw new Error(`${slug}: ${page.__errors.join('; ')}`);
+  }
+  for (const [slug, title, caption, go, scheme = 'light', opt = {}] of SHOTS) {
+    const file = `${String(++n).padStart(2, '0')}-${slug}.webp`;
+    meta.push({ file, title, caption, ...(opt.readme === false ? { readme: false } : {}) });
+    if (only && !only.has(slug)) continue;
     const png = path.join(PNG, file.replace(/\.webp$/, '.png'));
-    await page.screenshot({ path: png, animations: 'disabled', caret: 'hide', scale: 'device' });
+    if (opt.phones) {
+      // several phone screens side by side: each one taken on its own, then laid out on one plain page
+      const page = await pageFor(scheme, 'phone'), screens = [];
+      for (const g of opt.phones) {
+        await ready(page, slug, g);
+        screens.push((await page.screenshot({ animations: 'disabled', caret: 'hide', scale: 'device' })).toString('base64'));
+      }
+      await composePhones(browser, screens, png);
+    } else {
+      const page = await pageFor(scheme, opt.device || 'desktop');
+      await ready(page, slug, go);
+      if (opt.fit) {
+        // one settings column: the picture ends 40 px below its last visible leaf element (no empty half page)
+        const bottom = await page.evaluate(() => Math.max(...[...document.querySelectorAll('body *')]
+          .filter(e => !e.children.length && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
+          .map(e => e.getBoundingClientRect().bottom + (e.closest('main')?.scrollTop || 0))));
+        const height = Math.min(1600, Math.max(400, Math.ceil(bottom) + 40));
+        await page.setViewportSize({ width: DEVICES[opt.device].viewport.width, height });
+        await page.mouse.move(720, height - 1); // the pointer stays where it was, now over the page: back to the empty bottom edge
+        await settle(page);
+      }
+      await page.screenshot({ path: png, animations: 'disabled', caret: 'hide', scale: 'device' });
+      if (opt.fit) await page.setViewportSize(DEVICES[opt.device].viewport);
+    }
     // 1920 px wide (≈ 2× the README column, 2026-10-08: no visible difference to the full 2880 px at that size, −42 %),
     // q 82; a picture dense enough to exceed 250 KB (the year planner) is encoded to that size instead
     const webp = path.join(IMG, file);

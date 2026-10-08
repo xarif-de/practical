@@ -128,5 +128,53 @@
     "file": "26-month-dark.webp",
     "title": "Month view (dark)",
     "caption": "The month view in dark mode."
+  },
+  {
+    "file": "27-settings.webp",
+    "title": "Settings",
+    "caption": "The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups.",
+    "readme": false
+  },
+  {
+    "file": "28-category-rule.webp",
+    "title": "Category rule",
+    "caption": "The rule of the category \"Work\": every event with this category gets a 15-minute reminder and the office as its location.",
+    "readme": false
+  },
+  {
+    "file": "29-recurrence.webp",
+    "title": "Repeating event",
+    "caption": "A weekly event in edit mode: the repeat card with its preview calendar, and the colour that the category rule \"Sports\" sets.",
+    "readme": false
+  },
+  {
+    "file": "30-history.webp",
+    "title": "Change history",
+    "caption": "The change history as a list: an undone change with its before and after values, and the history of that event.",
+    "readme": false
+  },
+  {
+    "file": "31-app-tokens.webp",
+    "title": "Account and app tokens",
+    "caption": "The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device.",
+    "readme": false
+  },
+  {
+    "file": "32-groups.webp",
+    "title": "Groups",
+    "caption": "A group and its members: every member may add or remove members and manage the group's calendars.",
+    "readme": false
+  },
+  {
+    "file": "33-import.webp",
+    "title": "Import a calendar",
+    "caption": "An .ics file picked for import: name, colour and time zone come from the file and can be changed before the import.",
+    "readme": false
+  },
+  {
+    "file": "34-phone.webp",
+    "title": "Phone layout",
+    "caption": "The same app on a phone: the address book, the task list and an event.",
+    "readme": false
   }
 ]

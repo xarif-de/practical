@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Stage 2 of the README showcase DB: one plausible year (2026) of Emma Clark — work, personal, sports and a shared
-family calendar, tasks, contacts, category rules, colour clutter for the colour manager — written through
-PractiCal's own HTTP endpoints, like e2e/seed/02-practical.py, whose helpers (server start/stop with frozen clock
-and blocked egress, req/ok, ics/vevent/vtodo/vcard, import_new/import_ab) this script loads via importlib.
+family calendar, tasks, contacts, category rules, colour clutter for the colour manager, app tokens and a few undone
+changes for the change history — written through PractiCal's own HTTP endpoints, like e2e/seed/02-practical.py, whose
+helpers (server start/stop with frozen clock and blocked egress, req/ok, ics/vevent/vtodo/vcard, import_new/import_ab)
+this script loads via importlib.
 
 Usage: 02-demo.py <practical-binary> <workdir> <out.sqlite3>   (needs <workdir>/db.sqlite3 from 01-rustical.sh)
 Synthetic data only: example.org/example.com mails, fake +49 numbers. No request leaves the host.
@@ -326,6 +327,21 @@ def seed():
     ok(req("PUT", "/api/alarm-presets", [{"action": "DISPLAY", "minutes": 0}, {"action": "DISPLAY", "minutes": 15}, {"action": "DISPLAY", "minutes": 60}, {"action": "DISPLAY", "minutes": 1440}]), "presets")
     for q in ("roadmap", "priya", "tax"):
         ok(req("POST", "/api/search/history", {"q": q}), f"history {q}")
+    # app tokens for the account page (docs picture): ids and dates pinned by fx.pin
+    for name in ("Pixel 9 (DAVx⁵)", "MacBook (Thunderbird)", "iPhone (Calendar)"):
+        ok(req("POST", "/settings/tokens", accept="application/json", form={"name": name}), f"token {name}")
+
+    # UI changes for the change history (docs picture), none of them visible in another shot: an edit undone, an
+    # event created and deleted; the undo is the newest change (the one the history list opens with)
+    cal = f"/api/events/emma/{ids['personal']}"
+    concert = json.loads(ok(req("GET", f"{cal}/concert@demo"), "get concert"))
+    edit = {**concert, "location": "Kulturpalast, Schloßstraße 2", "alarms": [{"action": "DISPLAY", "minutes": 120}]}
+    ok(req("PUT", f"{cal}/concert@demo", edit), "edit concert")
+    edited = max(c["id"] for c in json.loads(ok(req("GET", "/api/history", accept="application/json"), "history"))["changes"])
+    made = json.loads(ok(req("POST", "/api/events", {"principal": "emma", "cal_id": ids["personal"], "summary": "Haircut", "location": "Salon Schnittpunkt",
+        "description": "", "start": "2026-10-27T17:00:00", "end": "2026-10-27T17:45:00", "all_day": False, "timezone": "Europe/Berlin"}), "create haircut"))
+    ok(req("DELETE", f"{cal}/{made['id']}"), "delete haircut")
+    ok(req("POST", f"/api/history/{edited}/undo", {"confirm": True}), "undo concert edit")
     return ids
 
 
