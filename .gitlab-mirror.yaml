@@ -1,9 +1,11 @@
 # gitlab.com mirror overrides for this repository (read by kubernetes/forgejo resources/mirror-lib.sh).
-# CI/CD + shared runners + Pages: .gitlab-ci.yml publishes the Rust API doc. Issues: public bug reports.
+# CI/CD + shared runners + Pages: .gitlab-ci.yml publishes the Rust API doc. Issues + merge requests: public bug reports and contributions (README "Why PractiCal?").
 features:
   builds: enabled
   pages: enabled
   issues: enabled
+  # contributions; merged on gitlab.com they are not synced back yet: carry them over to Forgejo by hand
+  merge_requests: enabled
   shared_runners: true
   # the site at https://xarif.gitlab.io/docker/practical/ instead of a generated practical-<n>.gitlab.io
   pages_unique_domain: false

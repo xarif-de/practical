@@ -19,7 +19,7 @@ PractiCal is a self-hosted web app for calendars, contacts and tasks with [Rusti
 as its backend. Phones and desktop apps keep syncing over CalDAV/CardDAV, and the browser gets a complete, fast UI on
 the very same data.
 
-## Why PractiCal
+## What makes PractiCal special
 
 <table>
 <tr>
@@ -139,6 +139,30 @@ Open `https://plan.your.domain` and sign in. Calendar apps (DAVx⁵, Thunderbird
 > The manifest expects TLS at the ingress and a default IngressClass (see the comments in
 > [`deploy/kubernetes.yaml`](deploy/kubernetes.yaml)). Single sign-on, push reminders, backups and hardening:
 > [deployment](https://xarif.gitlab.io/docker/practical/deployment.html) and [configuration](https://xarif.gitlab.io/docker/practical/configuration.html).
+
+## Why PractiCal?
+
+Simple: I could not find a calendar app for the browser that was as good as I wanted.
+
+For many years I have run [Nextcloud](https://nextcloud.com/) on my private server. I wanted to replace it with
+several smaller tools, because a few things about it kept bothering me. The only reason it stayed was its excellent
+calendar app.
+
+So I looked at the alternatives: InfCloud, AgenDAV, dayGLANCE, MMDL, SOGo and Radicale. Each of them was either too
+ugly, too heavy, or built on technology that felt outdated to me. [RustiCal](https://github.com/lennart-k/rustical)
+convinced me as the backend, but it comes without a browser UI.
+
+So I sat down and built a UI prototype together with Claude Opus. Even the first result was so much better than
+Nextcloud's calendar that I decided to invest my time, and my money (two months of Claude Max 20x), into a finished
+product. Thanks to my perfectionism, my love of detail, my joy in experimenting and the sheer fun of AI-assisted
+development in Rust, the result became far more than I had first imagined.
+
+I hope you enjoy it as much as I do. PractiCal is my way of saying thank you to all the great open-source projects I
+use every day. Feedback, ideas for improvements, bug reports and contributions are very welcome: please
+[open an issue](https://gitlab.com/xarif/docker/practical/-/issues) or a
+[merge request](https://gitlab.com/xarif/docker/practical/-/merge_requests).
+
+— Thomas Steinbach
 
 ## License
 
