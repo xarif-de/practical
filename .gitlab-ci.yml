@@ -1,11 +1,14 @@
 # gitlab.com mirror only: builds the Rust API doc and publishes it with GitLab Pages. Not the project's pipeline —
 # build, tests and image publishing run on Forgejo Actions (dagger-ci.yaml); this job adds the public API doc, nothing
 # else. Enabled for this repository alone by .gitlab-mirror.yaml (CI/CD, Pages, shared runners; read by
-# kubernetes/forgejo resources/mirror-lib.sh). Runs for release tags and on a manual "Run pipeline".
+# kubernetes/forgejo resources/mirror-lib.sh). Runs when main changes the Rust sources (so the doc matches the docs
+# that link it), for release tags and on a manual "Run pipeline".
 pages:
   # same Rust as build/Dockerfile and build/rust-toolchain.toml (one Renovate group, renovate.json "rust toolchain")
   image: rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627
   rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: [build/src/**/*, build/Cargo.toml, build/Cargo.lock, build/rust-toolchain.toml, .gitlab-ci.yml]
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
     - if: $CI_PIPELINE_SOURCE == "web"
   variables:
