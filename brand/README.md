@@ -4,10 +4,11 @@
 
 | file | use |
 |---|---|
-| [build/assets/logo.svg](../build/assets/logo.svg) | the logo: icon + lettering. App top bar (a phone, up to 720 px, shows the icon alone), README, GitLab Pages site header |
-| [build/assets/icon.svg](../build/assets/icon.svg) | the icon alone: favicon (app and site), push notifications, rustdoc |
+| [build/assets/logo.svg](../build/assets/logo.svg) | the logo: icon + lettering. README, GitLab Pages site header |
+| [build/assets/lettering.svg](../build/assets/lettering.svg) | the lettering alone, cut to the letters: the app's top bar (14 px high, as wide as the old text) |
+| [build/assets/icon.svg](../build/assets/icon.svg) | the icon alone: favicon = the browser tab (app and site), push notifications, rustdoc |
 
-Both files are generated: `mise run logo` (brand/build.py). Edit the script, not the SVGs.
+All three files are generated: `mise run logo` (brand/build.py). Edit the script, not the SVGs.
 
 ## Design
 

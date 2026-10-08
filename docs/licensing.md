@@ -20,7 +20,7 @@ tag the UI shows (and `rustical --version` prints).
   copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT), Iconoir (MIT), Bootstrap Icons
   (MIT), Material Design Icons (Apache-2.0) and Material Symbols (Apache-2.0); `i-al-*` are drawn from Lucide
   `log-in`/`log-out`.
-- **Logo lettering** (`build/assets/logo.svg`): outlines of Inter Display ExtraBold from
+- **Logo lettering** (`build/assets/logo.svg`, `lettering.svg`): outlines of Inter Display ExtraBold from
   [Inter](https://github.com/rsms/inter) 4.1 (SIL Open Font License 1.1); no font file is shipped. The design:
   [brand/README.md](../brand/README.md).
 - Rust dependencies: `build/Cargo.lock` (CI runs `cargo-deny` for advisories, bans and sources; licenses are not

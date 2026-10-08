@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["fonttools==4.60.1", "uharfbuzz==0.51.1"]
 # ///
-"""brand/build.py — writes the PractiCal icon and logo (build/assets/icon.svg, build/assets/logo.svg).
+"""brand/build.py — writes the PractiCal icon, logo and lettering (build/assets/icon.svg, logo.svg, lettering.svg).
 
 `mise run logo`. The lettering is outlined (paths, no font needed to display it) from Inter Display ExtraBold,
 Inter 4.1 (SIL OFL 1.1), downloaded once into e2e/.work/brand and checked against its SHA-256.
@@ -57,7 +57,7 @@ def num(v: float) -> str:
     return ("%.2f" % v).rstrip("0").rstrip(".")
 
 
-def lettering(ttf: bytes) -> tuple[float, str, str]:
+def lettering(ttf: bytes, x0: float = X0) -> tuple[float, str, str]:
     """(right edge, grey path, blue path) of WORD, shaped by HarfBuzz (kerning) and outlined by fontTools"""
     font = hb.Font(hb.Face(ttf))
     buf = hb.Buffer()
@@ -66,7 +66,7 @@ def lettering(ttf: bytes) -> tuple[float, str, str]:
     hb.shape(font, buf, {"kern": True, "liga": True})
     tt = TTFont(io.BytesIO(ttf))
     glyphs, order, k = tt.getGlyphSet(), tt.getGlyphOrder(), SIZE / tt["head"].unitsPerEm
-    x, parts = X0, ([], [])
+    x, parts = x0, ([], [])
     for info, pos in zip(buf.glyph_infos, buf.glyph_positions):
         pen = SVGPathPen(glyphs, ntos=num)
         glyphs[order[info.codepoint]].draw(TransformPen(pen, (k, 0, 0, -k, x + pos.x_offset * k, BASELINE - pos.y_offset * k)))
@@ -84,7 +84,14 @@ def main() -> None:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} 64" role="img" aria-label="PractiCal">'
         f'<title>PractiCal</title>{ICON}<path fill="{GREY}" d="{grey}"/><path fill="{BLUE}" d="{blue}"/></svg>\n'
     )
-    print(f"build/assets/icon.svg, build/assets/logo.svg ({width}×64)")
+    # the lettering alone (the app's top bar): no icon, cut to the caps (no letter of WORD descends)
+    right, grey, blue = lettering(font_bytes(), 0.0)
+    top, height = int(BASELINE - 0.727 * SIZE - 1), 28  # Inter's cap height is 0.727 em; a 1-unit margin above
+    (assets / "lettering.svg").write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {top} {int(right + 1.99)} {height}" role="img" aria-label="PractiCal">'
+        f'<title>PractiCal</title><path fill="{GREY}" d="{grey}"/><path fill="{BLUE}" d="{blue}"/></svg>\n'
+    )
+    print(f"build/assets/icon.svg, logo.svg ({width}×64), lettering.svg ({int(right + 1.99)}×{height})")
 
 
 if __name__ == "__main__":

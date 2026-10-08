@@ -18,7 +18,7 @@
 <body data-lang="{{ ctx.lang }}" data-locale="{{ ctx.locale() }}" data-user="{{ ctx.user_id() }}"{% if ctx.dev %} data-dev="1"{% endif %}>
 <div class="app">
 <header class="topbar">
-  <a class="brand" href="/calendar"><picture><source media="(max-width: 720px)" srcset="{{ ctx.asset("icon.svg") }}" width="28" height="28"><img src="{{ ctx.asset("logo.svg") }}" alt="{{ ctx.t("app-name") }}" width="100" height="28"></picture></a>{# brand/README.md: one file for light and dark; a phone shows the icon alone, the search field keeps its width #}
+  <a class="brand" href="/calendar"><img src="{{ ctx.asset("lettering.svg") }}" alt="{{ ctx.t("app-name") }}" width="75" height="14"></a>{# the lettering alone, as wide as the old text (brand/README.md); one file for light and dark #}
   {% if ctx.user.is_some() %}
   <nav class="nav">{% for (href, icon, label) in nav %}
     <a href="{{ href }}"{% if ctx.is_active(href) %} aria-current="page"{% endif %} title="{{ label }}" aria-label="{{ label }}">{{ m::ico(icon) }}</a>{% endfor %}

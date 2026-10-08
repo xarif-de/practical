@@ -34,7 +34,7 @@ description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust ve
 run = "e2e/cargo.sh test"
 
 [tasks.logo]
-description = "Brand: build/assets/icon.svg + logo.svg from brand/build.py (Inter Display ExtraBold outlined; the font zip is cached in e2e/.work/brand, SHA-256 checked); design: brand/README.md"
+description = "Brand: build/assets/icon.svg + logo.svg + lettering.svg from brand/build.py (Inter Display ExtraBold outlined; the font zip is cached in e2e/.work/brand, SHA-256 checked); design: brand/README.md"
 run = "uv run -q brand/build.py"
 
 [tasks.doc]
