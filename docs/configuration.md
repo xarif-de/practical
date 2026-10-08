@@ -1,67 +1,165 @@
 # Configuration
 
-PractiCal reads environment variables `PRACTICAL__<KEY>` (set on the `practical` container only; an empty value
-counts as unset). RustiCal keeps its own configuration (`RUSTICAL_<SECTION>__<KEY>`, see
-[RustiCal's docs](https://github.com/lennart-k/rustical/tree/main/docs)).
+This page lists every setting of PractiCal and explains the ones that need more than one line: login, push
+reminders and holidays. It is for the person who deploys PractiCal. Use the tables as a reference, and the sections
+below them as step-by-step guides.
 
-## PractiCal
+## How configuration works
 
-| Key | Default | Meaning |
+PractiCal reads its settings from environment variables named `PRACTICAL__<KEY>`, with two underscores. Nested keys
+use two underscores as well, for example `PRACTICAL__OIDC__ISSUER`.
+
+- Set these variables on the `practical` container only.
+- An empty value counts as unset. The one exception is `RUSTICAL_URL`, where an empty value has its own meaning
+  (see the table).
+- PractiCal refuses to start without a login method. Set `OIDC__ISSUER`, or `ALLOW_PASSWORD_LOGIN=true`, or both.
+
+RustiCal has its own configuration, with variables named `RUSTICAL_<SECTION>__<KEY>`. It is described in
+[RustiCal's docs](https://github.com/lennart-k/rustical/tree/main/docs). The RustiCal settings that matter next to
+PractiCal are listed [at the end of this page](#rustical-settings-that-matter-next-to-practical).
+
+## PractiCal settings
+
+All keys below are written without the `PRACTICAL__` prefix. For example, `BIND` means the variable
+`PRACTICAL__BIND`.
+
+### Server and database
+
+| Key | Default | What it does |
 | --- | --- | --- |
-| `BIND` | `[::]:4001` | listen address |
-| `DB_PATH` | `/var/lib/rustical/db.sqlite3` | RustiCal's SQLite file (read-write) |
-| `RUSTICAL_URL` | `http://127.0.0.1:4000` | RustiCal's HTTP endpoint; PractiCal waits for its `/ping` before it starts. Empty = do not wait (development only) |
-| `PUBLIC_URL` | `http://localhost:4001` | public base URL (cookie `Secure` if https, OIDC callback host, logout return) |
-| `PUBLIC_DAV_URL` | – | RustiCal's public URL, shown to users for client setup |
-| `OIDC__ISSUER`, `OIDC__CLIENT_ID`, `OIDC__CLIENT_SECRET`, `OIDC__NAME`, `OIDC__SCOPES` | – | OIDC relying-party settings (below). Without `OIDC__ISSUER` there is no SSO |
-| `ALLOW_PASSWORD_LOGIN` | `false` | offer RustiCal password login |
-| `LOGOUT_URL` | – | IdP logout URL; `{url}` = URL-encoded `PUBLIC_URL` |
-| `TRASH_RETENTION_DAYS` | `90` | grace period for deleted groups; RustiCal's `maintenance.trash_retention_days` must be ≥ this |
-| `HISTORY_RETENTION_DAYS` | `90` | how long the change history keeps changes (and can undo them) |
-| `SESSION_HOURS` | `12` | session inactivity limit |
-| `VAPID_PRIVATE_KEY_PEM`, `VAPID_SUBJECT` | – | Web Push reminders (below); unset = push off |
-| `HOLIDAYS_COUNTRY`, `HOLIDAYS_SUBDIVISION`, `HOLIDAYS_ENABLED` | `DE`, –, `true` | holiday region until a user picks one; `false` = no holiday requests |
-| `DEFAULT_TIMEZONE`, `DEFAULT_LANG` | `Europe/Berlin`, `de` | fallbacks (`de`, `en`, `fr`, `es`) |
+| `BIND` | `[::]:4001` | The address and port that PractiCal listens on. |
+| `DB_PATH` | `/var/lib/rustical/db.sqlite3` | RustiCal's SQLite file. PractiCal reads and writes it. |
+| `RUSTICAL_URL` | `http://127.0.0.1:4000` | RustiCal's HTTP address. At start, PractiCal waits until RustiCal answers on `/ping`. An empty value means "do not wait" (for development only). |
+| `PUBLIC_URL` | `http://localhost:4001` | The public address of the web UI. With `https://`, the session cookie is `Secure`. It is also the host for the OIDC callback and the page that users return to after logout. |
+| `PUBLIC_DAV_URL` | `https://dav.example.org` | RustiCal's public address. PractiCal shows it to users so that they can set up their calendar apps. |
 
-Development-only knobs (`DEV_ASSETS_DIR`, `DEV_LOGIN`, `DEV_NOW`, `DEV_POLL_MS`) stay unset in production:
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+### Login and sessions
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `ALLOW_PASSWORD_LOGIN` | `false` | Offers login with a RustiCal password. |
+| `OIDC__ISSUER` | – | The OIDC issuer URL. Without it, there is no single sign-on. |
+| `OIDC__CLIENT_ID` | – | The client ID at the identity provider. Required when `OIDC__ISSUER` is set. |
+| `OIDC__CLIENT_SECRET` | – | The client secret. |
+| `OIDC__NAME` | `SSO` | The label of the login button. |
+| `OIDC__SCOPES` | `openid profile groups` | The scopes that PractiCal asks for, separated by spaces. |
+| `LOGOUT_URL` | – | The identity provider's logout URL. `{url}` in it is replaced by the URL-encoded `PUBLIC_URL`. |
+| `SESSION_HOURS` | `12` | A session ends after this many hours without activity. |
+
+### Data retention
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `TRASH_RETENTION_DAYS` | `90` | How long deleted groups stay restorable. RustiCal's `maintenance.trash_retention_days` must be at least this long. |
+| `HISTORY_RETENTION_DAYS` | `90` | How long the change history keeps changes, and so how long they can be undone. |
+
+### Push reminders
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `VAPID_PRIVATE_KEY_PEM` | – | The private key for Web Push reminders. Without it, push is off. See [Web Push reminders](#web-push-reminders). |
+| `VAPID_SUBJECT` | `mailto:admin@example.org` | A contact for the push services: a `mailto:` or `https://` URL. |
+
+### Holidays and defaults
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `HOLIDAYS_COUNTRY` | `DE` | The holiday country (ISO code) until a user picks their own regions. |
+| `HOLIDAYS_SUBDIVISION` | – | The holiday region (ISO code, for example `DE-SN`) until a user picks their own. |
+| `HOLIDAYS_ENABLED` | `true` | `false` turns off all holiday requests. See [Holidays](#holidays). |
+| `DEFAULT_TIMEZONE` | `Europe/Berlin` | The time zone for users who have not picked one. |
+| `DEFAULT_LANG` | `de` | The language for users who have not picked one: `de`, `en`, `fr` or `es`. |
+
+### Development only
+
+Four more keys exist for development: `DEV_ASSETS_DIR`, `DEV_LOGIN`, `DEV_NOW` and `DEV_POLL_MS`. Leave them unset
+in production. [CONTRIBUTING.md](../CONTRIBUTING.md) explains them.
 
 ## Login
 
-- **Password:** `ALLOW_PASSWORD_LOGIN=true`; users are RustiCal principals with a password
-  (`rustical principals create <id> --password`). Calendar apps never use it: they get per-device app tokens in
-  PractiCal's settings.
-- **OIDC (SSO):** register a confidential client at the IdP with the redirect URI `<PUBLIC_URL>/login/oidc/callback`
-  (PKCE S256, `client_secret_basic`), then set `OIDC__ISSUER`, `OIDC__CLIENT_ID`, `OIDC__CLIENT_SECRET` and a button
-  label `OIDC__NAME`. PractiCal maps the `preferred_username` claim to the principal id and never creates
-  principals: a user exists once RustiCal has one — by `rustical principals create`, or by a first SSO login at
-  RustiCal's own frontend with `RUSTICAL_OIDC__ALLOW_SIGN_UP=true` and `RUSTICAL_OIDC__CLAIM_USERID=preferred_username`
-  (the same IdP, a client of its own). `LOGOUT_URL` ends the IdP
-  session too, e.g. `https://auth.example.com/logout?rd={url}`.
+Users sign in to PractiCal in one of two ways: with a password, or with single sign-on (SSO) through OIDC. You can
+offer both.
+
+In both cases, a user is a RustiCal **principal**. A principal is RustiCal's word for a user or a group. Calendar
+apps never use the login password: each device gets its own app token in PractiCal's settings.
+
+### Password login
+
+1. Set `ALLOW_PASSWORD_LOGIN=true`.
+2. Create each user with a password in RustiCal:
+
+   ```bash
+   rustical principals create <id> --password
+   ```
+
+[commands.md](commands.md#user-and-group-administration-with-rusticals-cli) shows how to run this command in the
+pod.
+
+### Single sign-on with OIDC
+
+OIDC (OpenID Connect) lets users sign in with an existing account at your identity provider (IdP).
+
+1. At the IdP, register a confidential client with these settings:
+   - Redirect URI: `<PUBLIC_URL>/login/oidc/callback`
+   - PKCE: `S256`
+   - Client authentication: `client_secret_basic`
+2. Set `OIDC__ISSUER`, `OIDC__CLIENT_ID` and `OIDC__CLIENT_SECRET`.
+3. Optional: set `OIDC__NAME` as the label of the login button.
+4. Optional: set `LOGOUT_URL` so that logging out of PractiCal also ends the IdP session, for example
+   `https://auth.example.com/logout?rd={url}`.
+
+PractiCal maps the `preferred_username` claim to the principal ID.
+
+> [!important]
+> PractiCal never creates principals. A user can only sign in once RustiCal has a principal for them.
+
+There are two ways to create the principal:
+
+- Create it by hand with `rustical principals create`.
+- Let RustiCal create it at the user's first SSO login on RustiCal's own frontend. For this, give RustiCal a client
+  of its own at the same IdP, and set `RUSTICAL_OIDC__ALLOW_SIGN_UP=true` and
+  `RUSTICAL_OIDC__CLAIM_USERID=preferred_username`.
 
 ## Web Push reminders
 
-`practical gen-vapid` prints a fresh key pair. Put the private key (PEM; `\n` escapes allowed) into
-`VAPID_PRIVATE_KEY_PEM` (a Secret), and a contact (`mailto:` or https URL) into `VAPID_SUBJECT`. Users then switch on
-reminders per browser in the settings.
+Web Push sends reminders as browser notifications, even when no PractiCal tab is open. It needs a VAPID key pair: a
+key that identifies your server to the browsers' push services.
+
+1. Generate a key pair. This command prints a fresh private key (PEM) and its public key:
+
+   ```bash
+   practical gen-vapid
+   ```
+
+2. Put the private key into `VAPID_PRIVATE_KEY_PEM`. Store it in a Secret. You can write line breaks as `\n`.
+3. Put a contact into `VAPID_SUBJECT`: a `mailto:` or `https://` URL.
+
+Users then switch reminders on per browser in the settings.
 
 ## Holidays
 
-Public and school holidays come from [OpenHolidays](https://www.openholidaysapi.org), with
-[Nager.Date](https://date.nager.at) as fallback, cached in the database (egress: [deployment.md](deployment.md#network)). `HOLIDAYS_COUNTRY`/`HOLIDAYS_SUBDIVISION` (ISO codes, e.g. `DE` /
-`DE-SN`) only preset the region; every user picks their own regions in the settings. Without egress set
-`HOLIDAYS_ENABLED=false`.
+PractiCal gets public and school holidays from [OpenHolidays](https://www.openholidaysapi.org). For public holidays,
+[Nager.Date](https://date.nager.at) is the fallback. The holidays are cached in the database. The hosts that
+PractiCal contacts are listed in [deployment.md](deployment.md#network).
+
+`HOLIDAYS_COUNTRY` and `HOLIDAYS_SUBDIVISION` only preset the region, using ISO codes such as `DE` and `DE-SN`.
+Every user picks their own regions in the settings.
+
+If the server has no internet access, set `HOLIDAYS_ENABLED=false`.
 
 ## RustiCal settings that matter next to PractiCal
 
-| RustiCal variable | Why |
-| --- | --- |
-| `RUSTICAL_MAINTENANCE__TRASH_RETENTION_DAYS` | default: never purge. Set it ≥ PractiCal's `TRASH_RETENTION_DAYS`, or a restorable group could come back empty |
-| `RUSTICAL_HTTP__PAYLOAD_LIMIT_MB` | default 4 MB; vCards with photos or `.ics` files with attachments can exceed it |
-| `RUSTICAL_FRONTEND__ALLOW_PASSWORD_LOGIN` | RustiCal's own frontend login; `false` when OIDC is the only login |
-| `RUSTICAL_OIDC__*` | RustiCal's own SSO (its frontend; sign-up of new principals) |
-| `NO_COLOR=1` | plain log lines (both programs log through tracing) |
+These RustiCal variables go on the `rustical` container:
 
-Never let Kubernetes inject service-link variables into the `rustical` container (`enableServiceLinks: false`):
-RustiCal reads every `RUSTICAL_*` variable as configuration and refuses unknown keys, so a Service named `rustical`
-would stop it from starting.
+| RustiCal variable | Why it matters |
+| --- | --- |
+| `RUSTICAL_MAINTENANCE__TRASH_RETENTION_DAYS` | By default, RustiCal never purges its trash. If you set it, make it at least PractiCal's `TRASH_RETENTION_DAYS`. Otherwise a restored group could come back empty. |
+| `RUSTICAL_HTTP__PAYLOAD_LIMIT_MB` | The default is 4 MB. vCards with photos and `.ics` files with attachments can be larger. |
+| `RUSTICAL_FRONTEND__ALLOW_PASSWORD_LOGIN` | Password login on RustiCal's own frontend. Set it to `false` when OIDC is the only login. |
+| `RUSTICAL_OIDC__*` | SSO for RustiCal's own frontend, and sign-up of new principals. |
+| `NO_COLOR=1` | Plain log lines without colour codes. Both programs log through the `tracing` library. |
+
+> [!warning]
+> Do not let Kubernetes inject service-link variables into the `rustical` container: set
+> `enableServiceLinks: false`. RustiCal reads every `RUSTICAL_*` variable as configuration and refuses unknown keys.
+> A Service named `rustical` would stop it from starting.

@@ -1,22 +1,45 @@
 # Commands
 
-The image's entrypoint is `/practical`; RustiCal's binary sits at `/usr/local/bin/rustical`.
+This page is a reference for the command-line tools in the PractiCal image. It is for admins who set up the first
+user, manage users and groups, or check the image. Day-to-day work, such as new groups, members, calendars and app
+tokens, happens in PractiCal's settings instead.
 
-## PractiCal
+The image contains two programs:
 
-```text
-practical serve                            # default: the web UI
-practical check-rustical-image <ref>       # exit 0 iff the image tag == the compiled rustical crate tag
-practical gen-vapid                        # print a fresh VAPID private key (PEM) + public key (Web Push)
-practical --version                        # "practical X.Y.Z (rustical crates vA.B.C)"
-```
+| Program | Path in the image |
+| --- | --- |
+| PractiCal (the image's entrypoint) | `/practical` |
+| RustiCal | `/usr/local/bin/rustical` |
 
-`GET /healthz` answers `200 ok` once the database is reachable (readiness/liveness probe). It needs no session.
+## PractiCal subcommands
 
-## RustiCal (user and group administration)
+`practical` has four subcommands:
 
-Users, groups and memberships are RustiCal principals, managed with RustiCal's CLI inside the `rustical` container
-(same image, same database), for example on Kubernetes:
+| Command | What it does |
+| --- | --- |
+| `practical serve` | Starts the web UI. This is the default when you give no subcommand. |
+| `practical check-rustical-image <ref>` | Compares a RustiCal image reference with the RustiCal version that PractiCal was built against. Exits with 0 if the tags match. |
+| `practical gen-vapid` | Prints a fresh VAPID private key (PEM) and its public key, for [Web Push reminders](configuration.md#web-push-reminders). |
+| `practical --version` | Prints the version, for example `practical X.Y.Z (rustical crates vA.B.C)`. |
+
+`check-rustical-image` is useful when you run RustiCal from its own image instead of the one in this image.
+[architecture.md](architecture.md#the-rustical-version-contract) explains why the versions must match.
+
+### Health check
+
+`GET /healthz` answers `200 ok` once the database is reachable. If it is not, the answer is `503`. Use it as the
+readiness and liveness probe of the `practical` container. It needs no login.
+
+## User and group administration with RustiCal's CLI
+
+Users, groups and memberships are RustiCal **principals**. A principal is RustiCal's word for a user or a group.
+RustiCal has no admin API, so you manage principals with RustiCal's command-line tool (CLI). Run it inside the
+`rustical` container: it uses the same image and the same database.
+
+> [!tip]
+> You need the CLI for the first user. After that, most group work can be done in PractiCal's settings.
+
+The examples below run on Kubernetes. The first line saves the long `kubectl exec` prefix in a variable:
 
 ```bash
 R="kubectl exec -it deploy/practical -c rustical -- rustical"
@@ -26,9 +49,18 @@ $R principals membership assign alice --to group.family     # alice may use the 
 $R principals --help                                         # everything else
 ```
 
-`--password` asks once (`Type in a password:`). An interrupted prompt can leave the principal created with an unknown
-password: set it again with `--overwrite`. Calendar apps never use this password — DAV accepts only app tokens
-(PractiCal settings → app tokens, or `rustical principals app-token create --name <device> <id>`).
+### Passwords
 
-Day-to-day group work (new groups, members, calendars, address books, app tokens, the trash) is done in
-PractiCal's settings; the CLI is needed for the first user.
+`--password` asks for the password once, with the prompt `Type in a password:`.
+
+> [!warning]
+> If you interrupt the prompt, the principal may already exist with an unknown password. Set the password again
+> with `--overwrite`.
+
+### App tokens for calendar apps
+
+Calendar apps never use this password. The DAV server accepts only app tokens. You create an app token in one of two
+ways:
+
+- In PractiCal: **Settings → Account & apps → App tokens**.
+- With the CLI: `rustical principals app-token create --name <device> <id>`.

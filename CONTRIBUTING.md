@@ -1,61 +1,216 @@
 # Contributing to PractiCal
 
-Rules for every change (what never to do, gates, code style, commits): [AGENTS.md](AGENTS.md). Where code lives,
-invariants, caches, loops: [docs/MAP.md](docs/MAP.md). Known limits and performance history:
-[docs/performance-2026-10.md](docs/performance-2026-10.md). How the parts fit: [docs/architecture.md](docs/architecture.md).
+This guide gets you from a fresh clone to your first change. It covers the tools you need, the first run, the daily
+loop, the tests, CI and releases, and the commit style. It is written for new contributors who know Rust and the web,
+but not this project.
 
-The source repository is `git.xarif.de/docker/practical`; <https://gitlab.com/xarif/docker/practical> is its public
-mirror and the image registry. Tools: [mise](https://mise.jdx.dev) (tasks below), Rust via `build/rust-toolchain.toml`,
-Node for the Playwright suites (`cd e2e && npm ci`), docker (colima on macOS) for the RustiCal CLI and image builds.
+> [!important]
+> [AGENTS.md](AGENTS.md) holds the strict rules for every change: what never to do, which tests a change needs, the
+> code style and the commit format. It is written for AI coding agents, but the rules apply to everyone. Read it
+> before your first commit.
 
-## Local development
+## Find your way around
 
-```bash
-mise run dev-db                         # COPY of the production DB → ~/.cache/practical-dev (VACUUM INTO, cluster read-only), password devpass
-mise run dev                            # http://localhost:4001 as DEV_USER: watchexec rebuild + restart, assets from disk, the tab reloads and re-logs in
-mise run test                           # cargo test (e2e/cargo.sh: rust-toolchain.toml, per-checkout target dir)
-mise run deny                           # cargo-deny: advisories, bans, sources
-mise run pipeline                       # the CI pipeline locally (cargo-deny + image build with cargo test + image tests), never publishes
-mise run image                          # the image, loaded into docker as xarif-practical
-```
+These pages explain the project from different angles:
 
-Never point `DB` at a live RustiCal file. The dev knobs (`PRACTICAL__DEV_ASSETS_DIR`, `DEV_LOGIN`, `DEV_NOW`,
-`DEV_POLL_MS`) are unset in production; `DEV_NOW` freezes the server clock, `DEV_LOGIN` skips the login.
+- [docs/repo-overview.md](docs/repo-overview.md) shows how the repository is organised.
+- The API documentation describes every module, its invariants, the caches and the background loops. Build it with
+  `mise run doc`.
+- [docs/architecture.md](docs/architecture.md) explains how PractiCal and RustiCal fit together.
+- [docs/performance-2026-10.md](docs/performance-2026-10.md) has the known limits and the performance history.
 
-## Tests and gates
+The source repository is `git.xarif.de/docker/practical`. <https://gitlab.com/xarif/docker/practical> is its public
+mirror and hosts the image registry.
 
-```bash
-mise run e2e-seed                       # synthetic fixture DB → e2e/.work/fixture.sqlite3 (docker: RustiCal CLI)
-mise run e2e                            # functional Playwright suite (E2E_WORKERS, default 4)
-mise run e2e-baseline -- <dir>          # visual baseline of every UI state (PNG + DOM + computed style)
-mise run e2e-compare -- <dirA> <dirB>   # pixel/DOM/style diff; exit 1 on any difference
-mise run chaos                          # seeded UI monkey + network chaos
-mise run a11y                           # axe-core over fixed states + keyboard flows (e2e/a11y, ~30 s)
-mise run gate-quick                     # cargo test → server build → functional suite
-mise run gate -- <ref-dir>              # gate-quick → chaos → a11y → visual baseline → compare → dark-theme coverage
-mise run bench                          # performance bench → ~/.cache/practical-e2e/bench-<sha>
-mise run bench-compare -- <bench-dir>   # A/B against a former bench dir; exit 1 on a regression
-mise run readme-shots                   # demo DB + the README/gallery screenshots → docs/images/
-```
+## What you need
 
-Which gate a change needs, parallel worktrees, ports and the heavy-run lock: [AGENTS.md](AGENTS.md). Harness,
-fixtures and bench in detail: [docs/MAP.md](docs/MAP.md) "e2e/". All test data is synthetic.
+| Tool | What it is for |
+| --- | --- |
+| [mise](https://mise.jdx.dev) | Runs every task on this page (`mise run <task>`). |
+| Rust | Builds PractiCal. The version is pinned in `build/rust-toolchain.toml`. |
+| Node.js | Runs the Playwright browser tests. Install the packages once with `cd e2e && npm ci`. |
+| Docker | Runs RustiCal's CLI for the test data, and builds the image. On macOS, colima works. |
+| watchexec (optional) | Rebuilds and restarts the server when you edit a file. Without it, `mise run dev` runs once. |
 
-## CI, releases, images
+## First run
 
-- CI (`dagger-ci.yaml`: one `dagger call … ci`, base/dagger-modules docs/ci.md; `.forgejo/workflows/ci.yml` only
-  triggers it) runs cargo-deny and builds + tests the image on every push (the build step runs `cargo test`, then
-  `tests/tests.yaml`). e2e, visual, a11y and bench stay local gates.
-- `main` publishes build versions with the `release` profile (`registry.gitlab.com/xarif/docker/practical:main`,
-  `main-<sha8>`; skipped when the build inputs are unchanged) — never deployed.
-- A `vX.Y.Z` tag publishes the release image (`dist` profile, `:vX.Y.Z`, `:vX.Y`, `:vX`, `:latest`). In the
-  reference deployment Renovate pins it in kubernetes/rustical (PR, CI, auto-merge for minor/patch), ArgoCD syncs it
-  and the pod restarts with both containers on the new image.
-- The Dockerfile keeps cargo's registry and `target/` in BuildKit cache mounts (base/dagger-modules
-  docs/rust-functions.md). The RustiCal tag is one release across crates, Dockerfile and image test:
-  [docs/architecture.md](docs/architecture.md#the-rustical-version-contract).
+1. Install the browser-test packages:
+
+   ```bash
+   cd e2e && npm ci
+   ```
+
+2. Get a database to work on. You have two options:
+   - **Synthetic test data.** This builds a fixture database (a small database with made-up users and events) at
+     `e2e/.work/fixture.sqlite3`. Copy it before you use it, because the dev server writes to it:
+
+     ```bash
+     mise run e2e-seed
+     cp e2e/.work/fixture.sqlite3 ~/practical-dev.sqlite3
+     ```
+
+   - **A copy of the production database** (maintainers only, needs read access to the cluster). `mise run dev-db`
+     takes a consistent copy with `VACUUM INTO` and saves it in `~/.cache/practical-dev`. The cluster stays
+     read-only. On the copy, the password of `DEV_USER` is `devpass`.
+
+3. Start the dev server. With the fixture copy, sign in as the fixture user `alice`:
+
+   ```bash
+   DB=~/practical-dev.sqlite3 DEV_USER=alice mise run dev
+   ```
+
+   Without `DB`, `mise run dev` uses the copy from `mise run dev-db`.
+
+4. Open <http://localhost:4001>.
+
+> [!warning]
+> Never point `DB` at a live RustiCal database. The dev server writes to the file. All test data must be synthetic.
+
+## Daily loop
+
+`mise run dev` is the main feedback loop:
+
+- When you edit a file in `src`, `templates` or `locales`, watchexec rebuilds and restarts the server. This takes
+  about 3–10 seconds.
+- CSS and JavaScript are served straight from disk, so a change shows up without a rebuild.
+- The browser tab reloads itself and signs you in again.
+
+Before you commit, run at least `mise run test` and `mise run gate-quick`. [Tests](#tests) explains which other
+checks a change needs.
+
+> [!warning]
+> Never run `cargo fmt`. It rewrites every file. The house style uses long lines, which are matched by hand.
+
+If you build in more than one git worktree, build through the mise tasks or `e2e/cargo.sh`. They give every
+checkout its own build directory. Plain `cargo` shares one directory between all worktrees and can then hand one
+worktree another's binary. [AGENTS.md](AGENTS.md) has the details.
+
+### Development settings
+
+`mise run dev` sets these development-only variables for you. They are never set in production.
+
+| Variable | What it does |
+| --- | --- |
+| `PRACTICAL__DEV_ASSETS_DIR` | Serves CSS and JavaScript from this directory, uncached, and reloads the tab after a change. Turns on development mode. |
+| `PRACTICAL__DEV_LOGIN` | Signs in as this user without a login page. |
+| `PRACTICAL__DEV_NOW` | Freezes the server clock at this time (RFC 3339, for example `2026-10-14T08:00:00Z`). |
+| `PRACTICAL__DEV_POLL_MS` | Sets how often the server checks the database for changes, in milliseconds (at least 50). |
+
+PractiCal refuses to start if `DEV_LOGIN`, `DEV_NOW` or `DEV_POLL_MS` is set without `DEV_ASSETS_DIR`.
+
+## Tests
+
+PractiCal has several kinds of tests. Each one answers a different question. All of them use synthetic data only.
+
+### Rust tests and supply chain
+
+| Command | What it checks |
+| --- | --- |
+| `mise run test` | The Rust unit and integration tests (`cargo test` through `e2e/cargo.sh`). |
+| `mise run deny` | The dependencies, with cargo-deny: security advisories, banned crate versions and allowed sources. |
+
+### Browser tests
+
+These suites drive a real browser with Playwright against a build of your checkout.
+
+| Command | What it checks |
+| --- | --- |
+| `mise run e2e-seed` | Builds the synthetic fixture database (`e2e/.work/fixture.sqlite3`) that the suites start from. Uses RustiCal's CLI in Docker. |
+| `mise run e2e` | The functional suite: does every feature still work? Runs on `E2E_WORKERS` workers (default 4). |
+| `mise run chaos` | A seeded "monkey" that clicks around at random while the network misbehaves. It finds crashes that no scripted test thinks of. |
+| `mise run a11y` | Accessibility: axe-core over fixed UI states, plus keyboard flows (about 30 seconds). |
+
+### Visual comparison
+
+A **baseline** is a snapshot of every UI state: a screenshot, the DOM and the computed styles. Comparing two
+baselines shows exactly which states look different.
+
+| Command | What it does |
+| --- | --- |
+| `mise run e2e-baseline -- <dir>` | Takes a baseline of this checkout. |
+| `mise run e2e-compare -- <dirA> <dirB>` | Compares two baselines pixel by pixel, and the DOM and styles. Exits with 1 on any difference. |
+
+### Gates: the checks before a commit
+
+A **gate** runs several of the checks above in a row and stops at the first failure.
+
+| Command | What it runs | When to use it |
+| --- | --- | --- |
+| `mise run gate-quick` | `cargo test`, a server build and the functional suite | Every commit (about 80 seconds when the build is warm). |
+| `mise run gate -- <ref-dir>` | `gate-quick`, then chaos, accessibility, a visual baseline, a comparison against `<ref-dir>` and the dark-theme coverage check | Every change that can alter how a page looks: CSS, templates, locales, or a value that ends up on a page. |
+
+`<ref-dir>` is a baseline of the commit that your change starts from. Every difference that the gate reports must
+be one that you intended.
+
+### Performance
+
+| Command | What it does |
+| --- | --- |
+| `mise run bench` | Measures this checkout on a large synthetic database: server latency, memory, idle CPU, bytes on the wire and UI interaction times. Saves the results in `~/.cache/practical-e2e/bench-<sha>`. |
+| `mise run bench-compare -- <bench-dir>` | Compares this checkout with an earlier `bench` result, run interleaved on this machine. Exits with 1 on a regression. |
+
+Run the benchmark when a change can cost time, memory or bytes.
+
+### Screenshots
+
+`mise run readme-shots` builds a demo database and takes the screenshots in `docs/images/`. It also updates the
+gallery in the README.
+
+[AGENTS.md](AGENTS.md) has the full rules for tests: which gate a change needs, how to run several worktrees in
+parallel, the ports, and the lock for heavy runs.
+
+## CI and releases
+
+### What CI runs
+
+CI runs on every push. The workflow in `.forgejo/workflows/ci.yml` only triggers it; the pipeline itself is
+`dagger-ci.yaml`, one `dagger call … ci` (described in base/dagger-modules `docs/ci.md`). It does two things:
+
+1. It checks the dependencies with cargo-deny.
+2. It builds and tests the image. The build step runs `cargo test`, then the image tests in `tests/tests.yaml`.
+
+The browser tests, the visual comparison, the accessibility checks and the benchmark do not run in CI. Run them
+locally.
+
+To run the CI pipeline on your machine, use `mise run pipeline`. It never publishes anything. `mise run image`
+builds the image and loads it into Docker as `xarif-practical`.
+
+### Build versions and releases
+
+| Trigger | What gets published | Build profile |
+| --- | --- | --- |
+| A push to `main` | `registry.gitlab.com/xarif/docker/practical:main` and `:main-<sha8>`. Skipped when the build inputs did not change. | `release` |
+| A `vX.Y.Z` tag | `:vX.Y.Z`, `:vX.Y`, `:vX` and `:latest` | `dist` (optimised for size) |
+
+Builds of `main` are never deployed. Only release tags are.
+
+In the reference deployment, Renovate pins the new release in kubernetes/rustical. It opens a pull request, CI
+runs, and minor and patch updates merge automatically. ArgoCD then syncs the change, and the pod restarts with both
+containers on the new image.
+
+### Build caching and the RustiCal version
+
+The Dockerfile keeps cargo's registry and the `target/` directory in BuildKit cache mounts (described in
+base/dagger-modules `docs/rust-functions.md`).
+
+The RustiCal version must be the same in the crates, the Dockerfile and the image test.
+[docs/architecture.md](docs/architecture.md#the-rustical-version-contract) explains why and how this is checked.
 
 ## Commits
 
-Conventional commits (`type(scope): subject`) with the body `## Intent` / `## Key changes` / `## Details`
-([AGENTS.md](AGENTS.md) "Code rules"). A fixed bug brings a test that fails on the old code.
+Write commits in the [Conventional Commits](https://www.conventionalcommits.org) style: `type(scope): subject`. The
+body has three sections:
+
+```text
+## Intent
+Why the change is needed.
+
+## Key changes
+What changed, in a few bullet points.
+
+## Details
+Anything a reviewer should know: trade-offs, measurements, follow-ups.
+```
+
+A fixed bug comes with a test that fails on the old code. [AGENTS.md](AGENTS.md) ("Code rules") has the remaining
+rules.
