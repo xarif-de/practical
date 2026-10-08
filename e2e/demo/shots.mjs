@@ -1,7 +1,7 @@
 // README/gallery screenshots on the showcase DB (e2e/demo): one dev server of this checkout's build (DEV_LOGIN emma,
 // DEV_NOW = the frozen Wednesday, egress blocked), chromium 1440×900 @2x, en-GB, Europe/Berlin, light (one dark).
 // Every state waits for real readiness (lib/test.mjs settle: no request in flight, the page's due timers ran, fonts
-// ready, no running animation, two frames). Output: docs/images/<NN>-<slug>.webp + thumbs/ (480 px), shots.json;
+// ready, no running animation, two frames). Output: docs/images/<NN>-<slug>.webp, shots.json;
 // the 2x PNGs stay in e2e/.work/demo/png.
 // Usage: node e2e/demo/shots.mjs <practical-binary> <demo.sqlite3>   (E2E_PORT = the server's port, default 4101;
 // SHOTS=<slug,…> retakes only those, without touching the others or shots.json's order)
@@ -19,7 +19,6 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const RUN = path.join(E2E, '.work', 'demo', 'run');
 const PNG = path.join(E2E, '.work', 'demo', 'png');
 const IMG = path.join(REPO, 'docs', 'images');
-const THUMBS = path.join(IMG, 'thumbs');
 const BLOCK = 'http://127.0.0.1:9';
 const TOOLS = '/opt/homebrew/bin';
 const tool = n => (fs.existsSync(path.join(TOOLS, n)) ? path.join(TOOLS, n) : n);
@@ -221,9 +220,8 @@ const SHOTS = [
 // ---------------------------------------------------------------- main
 const only = process.env.SHOTS ? new Set(process.env.SHOTS.split(',')) : null;
 // a full run owns docs/images/NN-*.webp: names of former runs go (a renamed or dropped shot leaves nothing behind)
-if (!only) for (const d of [IMG, THUMBS, PNG]) if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (/^\d\d-.*\.(webp|png)$/.test(f)) fs.rmSync(path.join(d, f));
+if (!only) for (const d of [IMG, PNG]) if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (/^\d\d-.*\.(webp|png)$/.test(f)) fs.rmSync(path.join(d, f));
 fs.mkdirSync(PNG, { recursive: true });
-fs.mkdirSync(THUMBS, { recursive: true });
 const server = startServer();
 let browser;
 try {
@@ -253,8 +251,7 @@ try {
     const webp = path.join(IMG, file);
     execFileSync(tool('cwebp'), ['-quiet', '-q', '82', '-m', '6', '-sharp_yuv', png, '-o', webp]);
     if (fs.statSync(webp).size > 250_000) execFileSync(tool('cwebp'), ['-quiet', '-size', '245000', '-pass', '6', '-m', '6', '-sharp_yuv', png, '-o', webp]);
-    execFileSync(tool('cwebp'), ['-quiet', '-q', '90', '-m', '6', '-sharp_yuv', '-resize', '480', '0', png, '-o', path.join(THUMBS, file)]);
-    console.log(`${file}  ${(fs.statSync(path.join(IMG, file)).size / 1024).toFixed(0)} KB  thumb ${(fs.statSync(path.join(THUMBS, file)).size / 1024).toFixed(0)} KB`);
+    console.log(`${file}  ${(fs.statSync(path.join(IMG, file)).size / 1024).toFixed(0)} KB`);
   }
   fs.writeFileSync(path.join(E2E, 'demo', 'shots.json'), JSON.stringify(meta, null, 2) + '\n');
 } finally {
