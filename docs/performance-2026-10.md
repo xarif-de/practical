@@ -24,7 +24,7 @@ Routine runs were paying for work nobody read. Measured on the dev host, same co
 | --- | --- | --- |
 | `mise run pipeline` after a one-line source change | 2m41s (`release`) | 33.9 s (`e2e`) |
 | `mise run gate` for an ordinary change | ~400-560 s incl. the reference baseline it required | 109 s |
-| GitLab `api-doc` job | 352-443 s per run, no cache | cache on `build/Cargo.lock` |
+| GitLab `api-doc` job | 352-443 s per run, no cache at all | 89 s on a cache hit |
 
 What changed: a build that is not a release uses `[profile.e2e]` (`release` plus incremental compilation), and
 `incremental` is the lever — a `codegen-units = 256` profile without it measured 3m22s. A release tag still builds
@@ -32,10 +32,13 @@ What changed: a build that is not a release uses `[profile.e2e]` (`release` plus
 `gate-visual` (opt-in): they answer "this rewrite moves no pixel", which only a deliberate refactoring asks, and
 they cost a second baseline of the base commit (161-262 s) on top of the run.
 
-Costs and open points: the first image build on the new profile is cold once (4m39s locally, 806 s in CI). The
-GitLab cache has not shown a hit yet — the first run with it populated the cache, and the next changed
-`Cargo.lock` and so started a new key. The CI effect of the profile is deduced from the local measurement for the
-same reason.
+The GitLab cache holds `.cargo-home` + `build/target`, keyed on `build/Cargo.lock`: a dependency bump starts a
+fresh key (434 s, measured) instead of growing a stale cache, every other run hits it (89 s, pipeline 2928544442).
+
+Costs and open points: the first build on a new cargo profile is cold once (4m39s locally, 806 s in CI). The CI
+effect of the profile itself is still deduced from the local measurement — the two CI runs after the switch both
+invalidated the cache for their own reasons (the profile change itself, then a `Cargo.lock` bump), so neither is
+the warm case.
 
 ## Release policy (2026-10-06)
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → `[profile.dist]` build; kubernetes/rustical Renovate
