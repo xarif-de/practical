@@ -247,10 +247,11 @@ try {
     if (page.__errors.length) throw new Error(`${slug}: ${page.__errors.join('; ')}`);
     const png = path.join(PNG, file.replace(/\.webp$/, '.png'));
     await page.screenshot({ path: png, animations: 'disabled', caret: 'hide', scale: 'device' });
+    // 1920 px wide (≈ 2× the README column, 2026-10-08: no visible difference to the full 2880 px at that size, −42 %),
     // q 82; a picture dense enough to exceed 250 KB (the year planner) is encoded to that size instead
     const webp = path.join(IMG, file);
-    execFileSync(tool('cwebp'), ['-quiet', '-q', '82', '-m', '6', '-sharp_yuv', png, '-o', webp]);
-    if (fs.statSync(webp).size > 250_000) execFileSync(tool('cwebp'), ['-quiet', '-size', '245000', '-pass', '6', '-m', '6', '-sharp_yuv', png, '-o', webp]);
+    execFileSync(tool('cwebp'), ['-quiet', '-q', '82', '-resize', '1920', '0', '-m', '6', '-sharp_yuv', png, '-o', webp]);
+    if (fs.statSync(webp).size > 250_000) execFileSync(tool('cwebp'), ['-quiet', '-size', '245000', '-pass', '6', '-resize', '1920', '0', '-m', '6', '-sharp_yuv', png, '-o', webp]);
     console.log(`${file}  ${(fs.statSync(path.join(IMG, file)).size / 1024).toFixed(0)} KB`);
   }
   fs.writeFileSync(path.join(E2E, 'demo', 'shots.json'), JSON.stringify(meta, null, 2) + '\n');
