@@ -1,6 +1,14 @@
 //! Import/export — export serialises RustiCal's objects with caldata's
 //! generator, import parses with caldata and stores via the store crate
 //! (`put_objects`), so nothing but RustiCal's own code touches the data.
+//!
+//! - [`complete_ics`] adds what caldata needs and many files lack: PRODID, VERSION, UID, DTSTAMP.
+//! - Limits: [`IMPORT_MAX_BYTES`] (8 MiB), [`IMPORT_MAX_OBJECTS`] (10 000), [`IMPORT_MAX_OBJECT_BYTES`]; the
+//!   routes that import into a new collection accept a 32 MiB body ([`crate::routes::settings`]).
+//! - `.ics` imports merge by UID (a known UID is overwritten).
+//! - A new collection is prefilled from X-WR-CALNAME, X-WR-CALDESC, X-WR-CALCOLOR, X-WR-TIMEZONE (and
+//!   X-APPLE-CALENDAR-COLOR); the X-WR-* lines are dropped from the stored objects.
+//! - A `.vcf` contact without UID gets one.
 
 use crate::domain::collections;
 use crate::error::{AppError, AppResult};

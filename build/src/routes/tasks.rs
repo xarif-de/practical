@@ -1,6 +1,10 @@
 //! /tasks — the task views. The views themselves are drawn in the browser from one JSON island
 //! (app.js, the `#taskroot` module); this route decides which tasks are in it. The editor comes
 //! from `templates/editor.html`, the same dialog the calendar uses.
+//!
+//! - The island is `<script id="tasks-data">`; js/tasks.js draws the six views from it.
+//! - The lookback (how far back completed tasks reach) is the URL's `back=`, else the `tk_back` cookie the
+//!   client sets on a change, else a month.
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::CalInfo;

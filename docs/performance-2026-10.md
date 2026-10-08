@@ -11,7 +11,7 @@ wire 159 KB gzip → 90 KB brotli (build-time oxc/css_min + precompression, `imm
 (codegen-units 1), task toggle 138 → 33 ms. Later waves: SQLite session store, input/CSRF/push-target hardening,
 sources split per module (largest Rust file 27.9k → 7.1k tok; app.js 104k tok → 32 parts ≤ 10.7k) at bench parity.
 Test net: Rust unit + router tests, Playwright functional and chaos suites, a visual baseline of every UI state
-(pixels, DOM, computed style), the perf bench (docs/MAP.md "e2e/"). Per-item evidence: the commit bodies (`git log`).
+(pixels, DOM, computed style), the perf bench (docs/repo-overview.md "e2e/"). Per-item evidence: the commit bodies (`git log`).
 
 ## Release policy (2026-10-06)
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → `[profile.dist]` build; kubernetes/rustical Renovate

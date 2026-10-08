@@ -1,7 +1,7 @@
 # AGENTS.md — operating rules for agents in docker/practical
 
 PractiCal = Rust (axum + askama, server-rendered) web UI on RustiCal's own SQLite store; one image runs both.
-Where code lives: `docs/MAP.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; config/commands/deploy: `docs/`. These rules beat habits and generic defaults.
+Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs`) and, for everything else, `docs/repo-overview.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; config/commands/deploy: `docs/`. These rules beat habits and generic defaults.
 
 ## Never
 - `cargo fmt` — it rewrites every file. House style (long lines) is matched by hand.
@@ -26,7 +26,7 @@ Where code lives: `docs/MAP.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; 
 
 | command | runs | when |
 |---|---|---|
-| `mise run gate-quick` | cargo test → server build (`e2e` profile) → functional suite | every commit (~80 s warm) |
+| `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → server build (`e2e` profile) → functional suite | every commit (~80 s warm; the doc step ~10 s) |
 | `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~30 s) | part of `gate`; alone after UI/ARIA/focus edits |
 | `mise run gate -- <ref-dir>` | quick → chaos → a11y → visual baseline → compare vs `<ref-dir>` → theme-cover | anything that can change a page's look (CSS, template, locale, Rust value) — i.e. before most commits |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
@@ -60,7 +60,7 @@ Where code lives: `docs/MAP.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; 
 ## Code rules
 - Behaviour and look stay unchanged unless the task says otherwise. Desktop UI must never break; phone must not regress.
 - UI building blocks are shared: `.seg`, `.field`, `.btn.icon-btn`, `.chip`, `.card`, `.pop`, `.ico`, askama macros
-  (`templates/macros.html`), JS helpers (`window.practical`, MAP "Assets"). `rg` for an existing class/helper before
+  (`templates/macros.html`), JS helpers (`window.practical`, docs/repo-overview.md "build/assets"). `rg` for an existing class/helper before
   adding one; a variant sits next to its base rule with a comment.
 - New JS/CSS part file → list it in `build/src/bundle.rs` `BUNDLES` (order = run order / cascade; a test fails otherwise).
 - Locales: every new string in all four `build/locales/{de,en,fr,es}.ftl`; counts are Fluent plurals
@@ -70,4 +70,6 @@ Where code lives: `docs/MAP.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; 
 - Comments are assertions with evidence (a measurement with date and method, a test name, an upstream file:line); no
   references to documents outside the repo (round N, plan X). English for code, comments, commits, docs.
 - Commits: conventional (`type(scope): subject`), body `## Intent` / `## Key changes` / `## Details`.
-- Docs are for LLM retrieval: dense, no narrative; update MAP.md when a file's purpose moves.
+- Docs are for LLM retrieval: dense, no narrative. Rust facts live in rustdoc (`//!` module docs, `///` items,
+  intra-doc links; `mise run doc` must stay green); a file outside the crate docs that moves or changes purpose →
+  update docs/repo-overview.md.

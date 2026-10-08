@@ -1,5 +1,8 @@
 //! Configuration from environment variables `PRACTICAL__<KEY>`.
 //! Plain std::env on purpose (no figment/clap): ~15 keys, all strings.
+//!
+//! [`Config::from_env`] reads and checks them at start. The development switches (`DEV_*`) are listed in the
+//! crate docs, section "Development mode"; the user-facing reference is `docs/configuration.md`.
 
 use std::env;
 

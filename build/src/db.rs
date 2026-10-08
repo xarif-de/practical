@@ -1,13 +1,20 @@
 //! Pool on RustiCal's SQLite file plus the UI's OWN schema (`practical_*` tables).
 //!
-//! Rules: RustiCal's migrations are never run from here
-//! (`create_db_pool(.., migrate=false)`); our migrations live in `practical_migrations`
-//! (never `_sqlx_migrations`, or rustical's own migrator aborts on "unknown
-//! migration"); RustiCal's tables are touched only through its store crates.
+//! Rules (the whole picture: crate docs, "The shared database"):
+//!
+//! - RustiCal's migrations are never run from here ([`open`]: `create_db_pool(.., migrate=false)`).
+//! - Our migrations live in `practical_migrations`, never `_sqlx_migrations`: RustiCal's own migrator aborts
+//!   on an "unknown migration".
+//! - [`MIGRATIONS`] is append-only; [`migrate`] applies the new entries. [`check_schema`] compares the live
+//!   schema with a replay: a missing, unexpected or retyped column (or a newer migration) refuses the start,
+//!   other drift is logged and the service runs.
+//! - RustiCal's tables are touched only through its store crates (read-only queries excepted).
+//! - [`Watch`] tells the background loops whether anything was committed since they last looked.
 
 use sqlx::{Row, SqlitePool};
 use tracing::info;
 
+/// The pool on RustiCal's database file; never runs RustiCal's migrations (`migrate=false`).
 pub async fn open(db_path: &str) -> Result<SqlitePool, sqlx::Error> {
     rustical_store_sqlite::create_db_pool(&format!("sqlite://{db_path}"), false).await
 }
@@ -226,6 +233,7 @@ async fn needed(version: i64, tx: &mut sqlx::SqliteConnection) -> Result<bool, s
     })
 }
 
+/// Applies every entry of [`MIGRATIONS`] not yet in `practical_migrations`, each in its own transaction.
 pub async fn migrate(db: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS practical_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",

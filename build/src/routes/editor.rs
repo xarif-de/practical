@@ -2,6 +2,9 @@
 //! it: the settings' categories load it on first use and open a rule over the settings page
 //! (js/shell/settings-pages.js, `practical.editorInit`). `Islands` and `calendars` are what every page with the
 //! editor feeds it (calendar.rs, tasks.rs): one builder, so the dialog reads the same data wherever it opens.
+//!
+//! The answer is templates/editor_fragment.html, placed into `#ed-host`. A flash the page context took off
+//! the session goes back to it: a fragment shows none, the next page view does.
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::CalInfo;

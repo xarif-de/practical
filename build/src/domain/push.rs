@@ -1,6 +1,15 @@
 //! Browser push reminders: every minute, look one hour ahead for
 //! VALARM triggers of the subscribers' events, send once, remember in
 //! `practical_alarms_sent` so a restart never repeats a reminder.
+//!
+//! - [`spawn_reminder_loop`] ticks every 60 s (first tick at once; only with a VAPID key).
+//! - [`Plan`] holds the reminders to fire. It is rebuilt only when the [`crate::db::Watch`] stamp moved, a
+//!   user's day changed or a retry is due (backoff 1…16 min). The fire window is [now−2 min, now+1 min].
+//! - A push service answering 404 or 410 drops the subscription.
+//! - guard.rs: the push hosts the server may POST to, and per-subscription isolation (one failing
+//!   subscription or calendar does not stop the round).
+//! - Logout ends this browser's subscription (the logout hook here; app.js also unsubscribes first).
+//! - The sent-log is purged after 30 days ([`purge_sent`], hourly).
 
 use crate::domain::collections;
 use crate::domain::events;

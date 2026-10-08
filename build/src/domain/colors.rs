@@ -1,5 +1,12 @@
 //! Every colour the user's data carries. The colour picker offers exactly these (a circle per colour,
 //! named by its sources); the settings page "Farben" lists them per element and changes them in place.
+//!
+//! - `/api/colors` is one scan of the user's data. A colour the user picks becomes a source of its own.
+//! - A category's colour is its rule's `when.color.value` ([`crate::domain::catrules`]).
+//! - [`with_color`] sets COLOR on the master component only; [`category_objects`] finds what a category
+//!   colours; [`apply`] writes a batch (the colour optimiser's).
+//! - The optimiser itself runs in the client (js/colors/optimise.js); it never moves calendars, holidays or
+//!   colours the user picked.
 
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::{catrules, events, prefs};

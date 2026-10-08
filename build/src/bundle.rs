@@ -1,7 +1,13 @@
 //! The shipped app.js and style.css are joined from part files in assets/js/ and assets/css/, in the order
-//! of `BUNDLES` (classic scripts joined as text: no module system; the order is the cascade and the run
+//! of [`BUNDLES`] (classic scripts joined as text: no module system; the order is the cascade and the run
 //! order). One table for both readers: build.rs (`#[path]`-included, minifies the join) and development
-//! mode (routes/assets.rs serves the join uncached).
+//! mode ([`crate::routes::assets`] serves the join uncached).
+//!
+//! - A new JS or CSS part file must be listed in [`BUNDLES`]; a test fails otherwise.
+//! - A [`Part::Wrap`] part is a fragment of one function scope: it is no script on its own.
+//! - The editor's parts are wrapped in `practical.editorInit = function () { … }`, which runs at load and
+//!   again after `GET /editor` loads the dialog later ([`crate::routes::editor`]).
+//! - [`read`] joins a bundle from disk (development mode).
 
 use std::path::Path;
 

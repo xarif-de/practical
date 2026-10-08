@@ -1,4 +1,18 @@
 //! /calendar — the calendar page and its fragments.
+//!
+//! Routes: `/calendar` (the page; `?fragment=1` = only the view part), and the JSON/HTML pieces the client
+//! fetches: `/api/events` (instances of a window; POST creates an event), `/api/days`, `/api/weeks`,
+//! `/api/density`.
+//!
+//! - The views are rendered on the server ([`crate::render`]). The client swaps in `?fragment=1` answers and
+//!   refetches them on a live change (SSE).
+//! - `date` (the picked day) is shared by all views. `?week=<Monday>` and `?month=YYYY-MM` name the week or
+//!   month on screen when it is not the one `date` lies in (the client scrolls there).
+//! - Only VEVENTs are drawn: tasks never show in the calendar.
+//! - Deep links `?rule=<name>&back=<url>` open a category rule; the client reads them (js/editor/wiring.js).
+//! - [`PageView`] is the extractor of every calendar-like page: [`PageCtx`] plus [`ViewCtx`] (zone, today,
+//!   labels, the user's settings). [`render_view`] renders title and body of one view.
+//! - The five year views behind "Mehr ▾" are [`crate::routes::more`].
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::CalInfo;

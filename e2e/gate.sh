@@ -1,6 +1,7 @@
 #!/bin/sh
 # The checks a change passes, cheapest first; stops at the first failure.
-#   gate.sh quick            cargo test → server build (E2E_PROFILE, default e2e) → functional suite
+#   gate.sh quick            cargo test → API doc (rustdoc, -D warnings: a broken intra-doc link fails; = mise run doc) →
+#                            server build (E2E_PROFILE, default e2e) → functional suite
 #   gate.sh full <ref-dir>   quick → chaos (the seeded UI monkey, e2e/chaos, ~60 s) → a11y (axe over fixed states against
 #                            a11y-allow.txt + keyboard flows, e2e/a11y, ~30 s; a11y-check.mjs) → visual baseline of this checkout →
 #                            compare against <ref-dir> (or E2E_REF): a
@@ -25,6 +26,9 @@ step() { NOW=$(date +%s); SUMMARY="$SUMMARY  $1 $((NOW - LAST)) s\n"; LAST=$NOW;
 echo "== cargo test"
 "$E2E/cargo.sh" test
 step "cargo test"
+echo "== API doc (rustdoc -D warnings)"
+RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" "$E2E/cargo.sh" doc --no-deps --document-private-items
+step "doc"
 cd "$E2E"
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null

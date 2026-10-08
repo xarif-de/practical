@@ -1,6 +1,9 @@
 //! Small iCalendar/vCard helpers on top of caldata's ContentLine model:
 //! text (un)escaping, typed reads of untyped properties, time-zone folding
 //! into the user's zone, and line folding for generated objects.
+//!
+//! Key helpers: [`assemble`] (a VCALENDAR from parts), [`split_line`] (name, parameters, value),
+//! [`rrule_canon`] (an RRULE in any case → its canonical upper-case form), fold and unfold.
 
 use caldata::component::Component;
 use caldata::types::{CalDateOrDateTime, Tz};

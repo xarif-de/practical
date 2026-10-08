@@ -3,6 +3,10 @@
 //! Origin), unless the request authenticates with HTTP Basic (a valid app token, no
 //! cookie session involved: `token_authenticated`); (2) a per-session token in every HTML form and in the
 //! `X-CSRF-Token` header of fetch() calls, checked by the handlers.
+//!
+//! Layer 1 is [`origin_guard`]. Layer 2: the extractors [`Token`] (session token required) and
+//! [`TokenOrBasic`] (token, or an HTTP Basic app token), and [`check`] for a form field. Handlers extract
+//! them after the path and before the body: a bad token with a bad body answers 403, not 400.
 
 use crate::ctx::SESSION_CSRF;
 use crate::error::AppError;

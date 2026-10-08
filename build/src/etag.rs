@@ -31,6 +31,9 @@ pub fn tag(content_type: &[u8], body: &[u8]) -> String {
     format!("W/\"{}\"", base64ct::Base64UrlUnpadded::encode_string(&h.finalize()[..12]))
 }
 
+/// Middleware for GET answers (HTML or JSON, status 200, exact size up to `MAX`, not yet encoded or tagged): a
+/// weak ETag over the body, 304 when `If-None-Match` names it, else the body brotli-encoded in one shot when
+/// the client accepts `br` and the body has at least `MIN_BR` bytes. Anything else passes unchanged.
 pub async fn revalidate(req: Request, next: Next) -> Response {
     if req.method() != Method::GET {
         return next.run(req).await;

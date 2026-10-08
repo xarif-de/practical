@@ -7,8 +7,23 @@
 //! content and no author, so this module keeps its own copy: `practical_history_heads` holds the last
 //! version it saw of every object (`practical_history_blobs`, content-addressed), `practical_history_cursors`
 //! how far it has read each collection's log. `ingest` reads what moved since and records it; UI
-//! writes run between `begin` and `Guard::commit`, which hold one lock with the poller, so what
+//! writes run between [`begin`] and [`Guard::commit`], which hold one lock with the poller, so what
 //! they wrote is attributed to them and nothing else is.
+//!
+//! - [`Hist`] is that lock (in [`AppState`]); [`poll`] is the change poller's ingest.
+//! - Undo ([`plan`], [`undo()`], undo.rs): [`plan`] says what an undo would do now; [`PlanMemo`] shares reads
+//!   across the plans of one request.
+//! - Text layer: [`crate::domain::history_text`] (attributes, diff, revert, readable values via `Show`).
+//!
+//! Rules:
+//!
+//! - A DAV change is one change per object; its device is the PRODID of the new version.
+//! - A delete and a create of one UID in one read are a move.
+//! - Undo is a change of its own (`reverts`); the undone change gets `undone_by`.
+//! - Undoing a create deletes the object and marks later changes of it `inactive_by`.
+//! - The plan warns (three-way) when a value moved since the change.
+//! - Undoing a delete restores the stored version, also after RustiCal purged the object.
+//! - Retention: [`purge`] drops changes past `HISTORY_RETENTION_DAYS` (hourly).
 
 use crate::domain::history_text::{self as ht, Store};
 use crate::error::{AppError, AppResult};
@@ -65,7 +80,10 @@ impl Actor {
 type ObjKey = (Store, String, String, String);
 type CollKey = (Store, String, String);
 
-/// A UI write in progress: what it touched is recorded as its change on `commit`.
+/// A UI write in progress: what it touched is recorded as its change on [`Guard::commit`].
+///
+/// Made by [`begin`]; it holds the history lock until `commit`, so the change poller cannot attribute this
+/// write to a device. Name what the write touches with [`Guard::object`] or [`Guard::coll`].
 pub struct Guard<'a> {
     state: &'a AppState,
     _lock: tokio::sync::MutexGuard<'a, ()>,
@@ -92,7 +110,8 @@ impl Guard<'_> {
     pub fn coll(&mut self, store: Store, principal: &str, coll: &str) {
         self.colls.insert((store, principal.into(), coll.into()));
     }
-    /// Records the write; the id of its change, if anything changed.
+    /// Records the write as one change attributed to the [`Actor`], then releases the lock; the id of its
+    /// change, if anything changed. A failing history is logged and never fails the write.
     pub async fn commit(self) -> Option<i64> {
         match ingest(self.state, Some((&self.actor, &self.objects, &self.colls))).await {
             Ok(id) => id,

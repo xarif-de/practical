@@ -4,6 +4,9 @@
 //! one) and at most one request per second, and because the users' IPs and typed text should
 //! not leave the house. Each provider is throttled to one request per second and answers are
 //! cached, so typing pauses and button clicks are all the providers ever see.
+//!
+//! Nominatim serves reverse lookups only: its policy forbids autocomplete. Answers are cached for 7 days
+//! ([`Geo`]). The browser asks after a 2 s typing pause or on a button (js/editor/location.js).
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;

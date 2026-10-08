@@ -7,6 +7,8 @@
 //! `RECURRENCE-ID:<value>` for an override of one occurrence, and for vCards the property name
 //! without its group prefix (`item1.TEL` → `TEL`). `ACKNOWLEDGED` (an alarm's dismissal) is split off
 //! the alarm so that a device dismissing a reminder is a technical change, not an edited reminder.
+//!
+//! Readable values for the history page: [`Show`] (show.rs).
 
 use crate::domain::{events, ical};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, TimeZone};

@@ -21,6 +21,9 @@
 //! code (DE) stands for the whole country. A user picks a list of regions per kind
 //! (`for_regions`): what several regions share is shown once; what only some of them have
 //! carries their short codes ("Buß- und Bettag (SN)").
+//!
+//! The first public region of the list is the user's own: vacation and bridge days count by it. In memory,
+//! [`MemCache`] fronts `practical_holidays`; names.rs holds the packed CLDR name tables.
 
 use crate::error::AppResult;
 use crate::state::AppState;

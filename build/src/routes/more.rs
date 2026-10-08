@@ -1,5 +1,8 @@
 //! The "Mehr ▾" views: Jahresplaner, Freie Wochenenden, Urlaubsplaner, Countdown-Wand, Jahr in Zahlen —
 //! fed with real instances, holidays and birthdays.
+//!
+//! A year of instances per calendar is kept in [`YearCache`]. Vacation and bridge days count by the user's own
+//! region: the first region of the public-holiday list ([`crate::domain::prefs`]).
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::{self, CalInfo};

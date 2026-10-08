@@ -1,6 +1,10 @@
 //! /contacts — letter panels or sheet table, detail editor on wide screens. The page renders the view it opens in
 //! (`?view=`, else the `ctview` cookie app.js sets on a switch, else the list); the other one comes from
 //! /contacts/part on its first switch (perf3 #8: the table was 417 KB of the 764 KB page with both).
+//!
+//! - Sorting is done in the client (`localStorage.ctSort`/`ctDesc`).
+//! - Address-book colours live in `practical_addressbook_colors` ([`crate::domain::collections`]); the list's
+//!   fields are the user's `contact_list_fields_json` ([`crate::domain::prefs`]).
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::{self, AbInfo};

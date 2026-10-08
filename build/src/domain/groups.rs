@@ -1,4 +1,11 @@
 //! Groups = RustiCal `group` principals owned by their members.
+//!
+//! - A group is the RustiCal principal `group.<slug>`. Any member adds or removes members, creates the
+//!   group's collections and deletes the group.
+//! - Deleting moves it to the trash: a row in `practical_trashed_groups` plus RustiCal's soft delete of its
+//!   collections. When the last member leaves, the group goes to the trash too.
+//! - [`purge_expired`] (hourly, [`crate::tasks::spawn_trash_purger`]) deletes trashed groups past
+//!   `TRASH_RETENTION_DAYS`.
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;

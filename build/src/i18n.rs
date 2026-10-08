@@ -1,7 +1,14 @@
-//! Fluent translations embedded at compile time. One bundle per language in LANGS,
+//! Fluent translations embedded at compile time. One bundle per language in [`LANGS`],
 //! shared read-only across requests (`concurrent::FluentBundle`). A key a language lacks
 //! falls back to English, then German, so a new language can grow file by file; the
 //! test below keeps every shipped file complete.
+//!
+//! - [`I18n`] translates; [`negotiate`] picks a language from `Accept-Language`.
+//! - [`I18n::plural_forms`] and [`I18n::plural_json`] give the browser the plural forms of the `js-*` keys
+//!   (golden file `plurals.txt`, i18n/pinned.rs).
+//! - A new language: its `.ftl` file, [`LANGS`], [`NATIVE`], [`LOCALE`], `SOURCES`, and `LANGS` in
+//!   `tools/gen_regions.py` (region names).
+//! - Counts are Fluent plurals (`{ $n -> [one] … *[other] … }`); keys used by JS start with `js-` or `hxj-`.
 
 use fluent_bundle::concurrent::FluentBundle;
 use fluent_bundle::{FluentArgs, FluentResource, FluentValue};
@@ -117,7 +124,7 @@ impl I18n {
     }
 
     /// Every message whose id starts with `prefix`, formatted in `lang` — the strings app.js
-    /// needs (`js-*`; build.rs `i18n_js` ships them as /assets/i18n-<lang>.js). Placeholders there are `%name`.
+    /// needs (`js-*`; build.rs `i18n_js` ships them as `/assets/i18n-<lang>.js`). Placeholders there are `%name`.
     pub fn with_prefix(&self, lang: &str, prefix: &str) -> Vec<(String, String)> {
         keys_of(SOURCES[0].1)
             .into_iter()
@@ -172,7 +179,7 @@ impl I18n {
     }
 
     /// The js-* strings of `lang` as one JSON object: what build.rs (`#[path]`, this very code) writes
-    /// into /assets/i18n-<lang>.js (test `i18n_assets_are_the_runtime_strings`).
+    /// into `/assets/i18n-<lang>.js` (test `i18n_assets_are_the_runtime_strings`).
     #[allow(dead_code)] // called by build.rs and the tests, not by the binary
     pub fn js_json(&self, lang: &str) -> serde_json::Value {
         serde_json::Value::Object(self.with_prefix_json(lang, "js-").into_iter().collect())

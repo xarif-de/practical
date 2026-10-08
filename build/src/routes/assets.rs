@@ -1,9 +1,9 @@
 //! Static assets compiled into the binary (the files of assets/ and the per-language i18n scripts
 //! build.rs generates; no rust-embed needed). build.rs minifies them and stores a gzip and a brotli
 //! form, so no request compresses anything: a br client gets the brotli bytes, a gzip client the gzip
-//! bytes, any other client the gzip form decoded once. `?v=<asset_version()>` URLs (the <link>/<script>
+//! bytes, any other client the gzip form decoded once. `?v=<asset_version()>` URLs (the `<link>`/`<script>`
 //! tags of the pages) and `url()`s (`?v=` of the file's own hash: the icon sprite, the i18n scripts) are
-//! cached as immutable.
+//! cached as immutable (one year); any other asset URL is revalidated daily (ETag).
 //! Development (`PRACTICAL__DEV_ASSETS_DIR`): read from that directory on every request, uncached; app.js and
 //! style.css, when the directory has no such file, joined from their parts as build.rs joins them
 //! (src/bundle.rs); a generated file the directory lacks: the embedded one.
@@ -21,7 +21,7 @@ struct Asset {
     mime: &'static str,
     /// size of the minified file (the identity form)
     len: usize,
-    /// made by build.rs (i18n-<lang>.js), no file in assets/
+    /// made by build.rs (`i18n-<lang>.js`), no file in assets/
     generated: bool,
     gzip: &'static [u8],
     br: &'static [u8],

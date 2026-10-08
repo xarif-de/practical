@@ -19,6 +19,15 @@
 //! contacts; all tasks — pre-folded) is built once and kept in `IndexCache`, keyed by a fingerprint
 //! of the user's collections' synctokens (one cheap query): any change, also over CalDAV, rebuilds
 //! it; nothing else does. A search then only scores in memory.
+//!
+//! - [`IndexCache`] is per user and dropped after 30 min idle; a change rebuilds only the parts it touched.
+//! - Kind prefixes (query.rs): `termin:`/`event:`, `kontakt:`/`contact:`, `aufgabe:`/`task:`, plus French and
+//!   Spanish.
+//! - Answer sizes: the drop-down asks for 5 per kind, the "all results" dialog for 200 per kind
+//!   (`/api/search`, [`crate::routes::api`]).
+//! - Title templates ([`suggest`]): past events offered while a new event's title is typed; at least 2
+//!   letters, at most 3 offers (`/api/events/suggest`). What the new event takes over is the client's
+//!   (js/editor/templates.js, docs/repo-overview.md).
 
 use crate::domain::collections;
 use crate::domain::contacts;
