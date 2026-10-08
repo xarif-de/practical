@@ -1,0 +1,98 @@
+# PractiCal + RustiCal on Kubernetes: one pod, one image, one SQLite file.
+# Replace the hostnames (plan.example.com = web UI, dav.example.com = CalDAV/CardDAV), then:
+#   kubectl create namespace practical && kubectl -n practical apply -f kubernetes.yaml
+# Details, OIDC, hardening, backups: docs/deployment.md, docs/configuration.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: practical-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: practical
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one RWO volume: the old pod lets go before the new one mounts it
+  selector:
+    matchLabels:
+      app: practical
+  template:
+    metadata:
+      labels:
+        app: practical
+    spec:
+      enableServiceLinks: false # RustiCal reads every RUSTICAL_* variable as configuration
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: rustical # the CalDAV/CardDAV server (RustiCal's own binary, unmodified)
+          image: registry.gitlab.com/xarif/docker/practical:v0
+          command: ["/usr/local/bin/rustical", "serve"]
+          ports:
+            - name: dav
+              containerPort: 4000
+          readinessProbe:
+            httpGet: { path: /ping, port: dav }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/rustical }
+        - name: practical # the web UI, on the same database file
+          image: registry.gitlab.com/xarif/docker/practical:v0
+          env:
+            - { name: PRACTICAL__PUBLIC_URL, value: "https://plan.example.com" }
+            - { name: PRACTICAL__PUBLIC_DAV_URL, value: "https://dav.example.com" }
+            - { name: PRACTICAL__ALLOW_PASSWORD_LOGIN, value: "true" }
+          ports:
+            - name: ui
+              containerPort: 4001
+          readinessProbe:
+            httpGet: { path: /healthz, port: ui }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/rustical }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: practical-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: practical
+spec:
+  selector:
+    app: practical
+  ports:
+    - { name: dav, port: 4000, targetPort: dav }
+    - { name: ui, port: 4001, targetPort: ui }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: practical
+  # TLS: your issuer here, e.g. cert-manager.io/cluster-issuer: letsencrypt (the URLs above are https)
+spec:
+  # ingressClassName: traefik # needed unless the cluster has a default IngressClass
+  tls:
+    - hosts: [plan.example.com, dav.example.com]
+      secretName: practical-tls
+  rules:
+    - host: plan.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: practical, port: { name: ui } } }
+    - host: dav.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: practical, port: { name: dav } } }

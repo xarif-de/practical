@@ -1,7 +1,7 @@
 # AGENTS.md — operating rules for agents in docker/practical
 
 PractiCal = Rust (axum + askama, server-rendered) web UI on RustiCal's own SQLite store; one image runs both.
-Where code lives: `docs/MAP.md`. Deploy/config/commands: `README.md`. These rules beat habits and generic defaults.
+Where code lives: `docs/MAP.md`. Dev commands, CI, releases: `CONTRIBUTING.md`; config/commands/deploy: `docs/`. These rules beat habits and generic defaults.
 
 ## Never
 - `cargo fmt` — it rewrites every file. House style (long lines) is matched by hand.

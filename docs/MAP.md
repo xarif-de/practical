@@ -164,12 +164,13 @@ No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs immutable.
 | i18n | i18n.rs, locales/ | missing key → en → de; month/weekday names + date formats from `Intl` |
 | dev mode | mise `dev`, routes/{assets,dev}.rs, clock.rs | `PRACTICAL__DEV_ASSETS_DIR` (assets from disk, /dev/reload), `DEV_LOGIN`, `DEV_NOW` (only with DEV_ASSETS_DIR), `DEV_POLL_MS`; all unset in production |
 
-## e2e/ (Playwright + harness; README "Local development" has the commands)
+## e2e/ (Playwright + harness; CONTRIBUTING.md "Tests and gates" has the commands)
 | path | purpose |
 |---|---|
 | cargo.sh, build-server.sh | per-checkout cargo (see AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
 | gate.sh | quick / full gate |
 | seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…` |
+| demo/ | README showcase (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (26 states → docs/images/NN-*.webp + thumbs/, `SHOTS=<slug,…>` retakes), shots.json (order, titles, captions), gallery.mjs (docs/gallery/ pages, ◀ ▶ wrapping) |
 | lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
 | functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs` = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
 | a11y-check.mjs (+ a11y-allow.txt: key = contrast colour pair or target without positions/values; only shrinks) | after the a11y suite: NEW / STALE allow-list lines → exit 1 |
