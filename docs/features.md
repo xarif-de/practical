@@ -1,3 +1,7 @@
+<!-- docs-nav:top -->
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->
+
 # Features
 
 This page is a guided tour of PractiCal. It shows what each part of the app does, most of it with a screenshot.
@@ -318,3 +322,23 @@ On a phone, PractiCal has a tab bar at the bottom and opens editors full screen.
 The colour scheme follows your system by default. In the settings, you can also fix it to light or dark.
 
 <img src="images/26-month-dark.webp" alt="The month view in dark mode." width="100%">
+
+<!-- docs-nav:bottom -->
+---
+
+### Documentation
+
+| Guide | What's inside |
+| --- | --- |
+| [Features](features.md) | everything PractiCal does, view by view |
+| [Deployment](deployment.md) | production setup: image tags, pod hardening, network, backups |
+| [Configuration](configuration.md) | all `PRACTICAL__*` variables, login and SSO, push, holidays, RustiCal settings |
+| [Commands](commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
+| [How it works](architecture.md) | two programs on one database, the image, the RustiCal version contract |
+| [Contributing](../CONTRIBUTING.md) | local development, tests and gates, CI and releases |
+| [Repo overview](repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [Performance](performance-2026-10.md) | measurements, release policy, known limits |
+| [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
+
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->

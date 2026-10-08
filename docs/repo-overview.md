@@ -1,3 +1,7 @@
+<!-- docs-nav:top -->
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->
+
 # Repo overview — the files outside the Rust API doc (rules: /AGENTS.md)
 
 The repo is one product, PractiCal: `build/` is the Docker context (the Rust crate `practical`, its assets,
@@ -73,7 +77,7 @@ Client-side rules (the server side of each feature is in the module docs):
 | cargo.sh, build-server.sh | per-checkout cargo (AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
 | gate.sh | quick / full gate |
 | seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…` |
-| demo/ | README showcase (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (26 states → docs/images/NN-*.webp, `SHOTS=<slug,…>` retakes), shots.json (order, titles, captions), gallery.mjs (README section between `gallery:start`/`end` markers = `<details>` per shot, GitLab strips style/input/id; docs/gallery/ pages, ◀ ▶ wrapping) |
+| demo/ | README showcase (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (34 states → docs/images/NN-*.webp, 1920 px; `SHOTS=<slug,…>` retakes), shots.json (order, titles, captions; `readme: false` = docs-only), gallery.mjs (README section between `gallery:start`/`end` markers = collapsed `<details>` per shot: GitLab strips style/input/id), docs-nav.mjs (`mise run docs-nav`: back links + the README's documentation table on every listed page; `--check` in gate-quick) |
 | lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
 | functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs` = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
 | a11y-check.mjs + a11y-allow.txt | after the a11y suite: NEW / STALE allow-list lines → exit 1 (key = contrast colour pair or target without positions/values; only shrinks) |
@@ -83,3 +87,23 @@ Client-side rules (the server side of each feature is in the module docs):
 Visual projects: desktop 1440×900 + phone 390×844 × light/dark (de) + `@main` states in en (desktop/phone light).
 Browser frozen at NOW, Europe/Berlin, reduced motion, `Math.random` seeded, service workers blocked, no request
 leaves 127.0.0.1. Pixel baselines depend on host fonts + Chromium build: compare only baselines of one machine and fixture.
+
+<!-- docs-nav:bottom -->
+---
+
+### Documentation
+
+| Guide | What's inside |
+| --- | --- |
+| [Features](features.md) | everything PractiCal does, view by view |
+| [Deployment](deployment.md) | production setup: image tags, pod hardening, network, backups |
+| [Configuration](configuration.md) | all `PRACTICAL__*` variables, login and SSO, push, holidays, RustiCal settings |
+| [Commands](commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
+| [How it works](architecture.md) | two programs on one database, the image, the RustiCal version contract |
+| [Contributing](../CONTRIBUTING.md) | local development, tests and gates, CI and releases |
+| [Repo overview](repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [Performance](performance-2026-10.md) | measurements, release policy, known limits |
+| [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
+
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->

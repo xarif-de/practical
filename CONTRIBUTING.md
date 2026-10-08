@@ -1,3 +1,7 @@
+<!-- docs-nav:top -->
+<p><a href="README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->
+
 # Contributing to PractiCal
 
 This guide gets you from a fresh clone to your first change. It covers the tools you need, the first run, the daily
@@ -214,3 +218,23 @@ Anything a reviewer should know: trade-offs, measurements, follow-ups.
 
 A fixed bug comes with a test that fails on the old code. [AGENTS.md](AGENTS.md) ("Code rules") has the remaining
 rules.
+
+<!-- docs-nav:bottom -->
+---
+
+### Documentation
+
+| Guide | What's inside |
+| --- | --- |
+| [Features](docs/features.md) | everything PractiCal does, view by view |
+| [Deployment](docs/deployment.md) | production setup: image tags, pod hardening, network, backups |
+| [Configuration](docs/configuration.md) | all `PRACTICAL__*` variables, login and SSO, push, holidays, RustiCal settings |
+| [Commands](docs/commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
+| [How it works](docs/architecture.md) | two programs on one database, the image, the RustiCal version contract |
+| [Contributing](CONTRIBUTING.md) | local development, tests and gates, CI and releases |
+| [Repo overview](docs/repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [Performance](docs/performance-2026-10.md) | measurements, release policy, known limits |
+| [Licensing](docs/licensing.md) | AGPL-3.0, RustiCal, third-party assets |
+
+<p><a href="README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->

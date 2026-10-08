@@ -70,6 +70,8 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 - Comments are assertions with evidence (a measurement with date and method, a test name, an upstream file:line); no
   references to documents outside the repo (round N, plan X). English for code, comments, commits, docs.
 - Commits: conventional (`type(scope): subject`), body `## Intent` / `## Key changes` / `## Details`.
-- Docs are for LLM retrieval: dense, no narrative. Rust facts live in rustdoc (`//!` module docs, `///` items,
+- Agent docs (AGENTS.md, docs/repo-overview.md, code comments) are for LLM retrieval: dense, no narrative. Public docs
+  (README.md, CONTRIBUTING.md, docs/*.md else) are for humans: short clear sentences, task-oriented headings, tables
+  for reference data (Google developer style guide, Diátaxis); their nav blocks come from `mise run docs-nav`. Rust facts live in rustdoc (`//!` module docs, `///` items,
   intra-doc links; `mise run doc` must stay green); a file outside the crate docs that moves or changes purpose →
   update docs/repo-overview.md.

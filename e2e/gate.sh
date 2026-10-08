@@ -29,6 +29,9 @@ step "cargo test"
 echo "== API doc (rustdoc -D warnings)"
 RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" "$E2E/cargo.sh" doc --no-deps --document-private-items
 step "doc"
+echo "== docs navigation (mise run docs-nav)"
+node "$E2E/demo/docs-nav.mjs" --check
+step "docs-nav"
 cd "$E2E"
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null

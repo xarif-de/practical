@@ -1,3 +1,7 @@
+<!-- docs-nav:top -->
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->
+
 # Licensing
 
 PractiCal is AGPL-3.0-or-later (`LICENSE`; a copy in `build/LICENSE` goes into the image at
@@ -18,3 +22,23 @@ tag the UI shows (and `rustical --version` prints).
   `log-in`/`log-out`.
 - Rust dependencies: `build/Cargo.lock` (CI runs `cargo-deny` for advisories, bans and sources; licenses are not
   checked automatically).
+
+<!-- docs-nav:bottom -->
+---
+
+### Documentation
+
+| Guide | What's inside |
+| --- | --- |
+| [Features](features.md) | everything PractiCal does, view by view |
+| [Deployment](deployment.md) | production setup: image tags, pod hardening, network, backups |
+| [Configuration](configuration.md) | all `PRACTICAL__*` variables, login and SSO, push, holidays, RustiCal settings |
+| [Commands](commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
+| [How it works](architecture.md) | two programs on one database, the image, the RustiCal version contract |
+| [Contributing](../CONTRIBUTING.md) | local development, tests and gates, CI and releases |
+| [Repo overview](repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [Performance](performance-2026-10.md) | measurements, release policy, known limits |
+| [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
+
+<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<!-- /docs-nav -->
