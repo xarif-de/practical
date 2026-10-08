@@ -365,7 +365,8 @@ Open `https://plan.your.domain` and sign in. Calendar apps (DAVx⁵, Thunderbird
 | [Commands](docs/commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
 | [How it works](docs/architecture.md) | two programs on one database, the image, the RustiCal version contract |
 | [Contributing](CONTRIBUTING.md) | local development, tests and gates, CI and releases |
-| [Repo overview](docs/repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [API documentation](https://practical-758168.gitlab.io/practical/) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
+| [Repo overview](docs/repo-overview.md) | how the repo is organised: everything outside the Rust API doc |
 | [Performance](docs/performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](docs/licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 <!-- docs-index:end -->

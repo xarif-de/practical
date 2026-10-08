@@ -6,7 +6,7 @@
 
 The repo is one product, PractiCal: `build/` is the Docker context (the Rust crate `practical`, its assets,
 templates and locales), `e2e/` the local test harness and gates, `tests/` the image test CI runs, `deploy/` an
-example deployment, `docs/` the user and developer docs. **Rust code: see the API doc** (`mise run doc`; the module
+example deployment, `docs/` the user and developer docs. **Rust code: see the [API doc](https://practical-758168.gitlab.io/practical/)** (local: `mise run doc`; the module
 docs start at `build/src/main.rs`): request flow, module map, shared-DB rules, background loops, caches and the asset
 pipeline live there. This file covers only what rustdoc does not. Line 1 of every source file states its purpose
 (JS/CSS `// js/x.js —`, templates `{#- … -#}`); `rg`/`fd` skip generated, vendored and golden data (`.ignore`; `-u`).
@@ -101,7 +101,8 @@ leaves 127.0.0.1. Pixel baselines depend on host fonts + Chromium build: compare
 | [Commands](commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
 | [How it works](architecture.md) | two programs on one database, the image, the RustiCal version contract |
 | [Contributing](../CONTRIBUTING.md) | local development, tests and gates, CI and releases |
-| [Repo overview](repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [API documentation](https://practical-758168.gitlab.io/practical/) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
+| [Repo overview](repo-overview.md) | how the repo is organised: everything outside the Rust API doc |
 | [Performance](performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 

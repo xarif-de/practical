@@ -18,8 +18,8 @@ but not this project.
 These pages explain the project from different angles:
 
 - [docs/repo-overview.md](docs/repo-overview.md) shows how the repository is organised.
-- The API documentation describes every module, its invariants, the caches and the background loops. Build it with
-  `mise run doc`.
+- The [API documentation](https://practical-758168.gitlab.io/practical/) describes every module, its invariants, the caches and the background loops.
+  To build it locally, run `mise run doc`.
 - [docs/architecture.md](docs/architecture.md) explains how PractiCal and RustiCal fit together.
 - [docs/performance-2026-10.md](docs/performance-2026-10.md) has the known limits and the performance history.
 
@@ -232,7 +232,8 @@ rules.
 | [Commands](docs/commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
 | [How it works](docs/architecture.md) | two programs on one database, the image, the RustiCal version contract |
 | [Contributing](CONTRIBUTING.md) | local development, tests and gates, CI and releases |
-| [Repo overview](docs/repo-overview.md) | how the repo is organised and the files outside the Rust API doc (`mise run doc`) |
+| [API documentation](https://practical-758168.gitlab.io/practical/) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
+| [Repo overview](docs/repo-overview.md) | how the repo is organised: everything outside the Rust API doc |
 | [Performance](docs/performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](docs/licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
