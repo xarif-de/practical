@@ -4,7 +4,7 @@
 
 # Licensing
 
-PractiCal is AGPL-3.0-or-later (`LICENSE`; a copy in `build/LICENSE` goes into the image at
+© 2026 Thomas Steinbach. PractiCal is AGPL-3.0-or-later (`LICENSE`; a copy in `build/LICENSE` goes into the image at
 `/usr/share/licenses/practical/LICENSE`, a test keeps both equal). PractiCal links RustiCal's crates, which are
 AGPL-3.0-or-later themselves, and runs as a network service: §13 is met by the "Source code" link in the user menu and
 on the login page, next to both versions.

@@ -142,5 +142,5 @@ Open `https://plan.your.domain` and sign in. Calendar apps (DAVx⁵, Thunderbird
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). PractiCal builds on [RustiCal](https://github.com/lennart-k/rustical) (AGPL-3.0-or-later), whose binary ships
+PractiCal is written by Thomas Steinbach and licensed under [AGPL-3.0-or-later](LICENSE). It builds on [RustiCal](https://github.com/lennart-k/rustical) (AGPL-3.0-or-later), whose binary ships
 unmodified in the image. Details: [licensing](https://xarif.gitlab.io/docker/practical/licensing.html).
