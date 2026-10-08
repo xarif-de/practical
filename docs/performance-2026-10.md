@@ -17,6 +17,26 @@ sources split per module (largest Rust file 27.9k → 7.1k tok; app.js 104k tok 
 Test net: Rust unit + router tests, Playwright functional and chaos suites, a visual baseline of every UI state
 (pixels, DOM, computed style), the perf bench (docs/repo-overview.md "e2e/"). Per-item evidence: the commit bodies (`git log`).
 
+## Build and test times (2026-10-09)
+Routine runs were paying for work nobody read. Measured on the dev host, same command and same change each time:
+
+| Run | Before | After |
+| --- | --- | --- |
+| `mise run pipeline` after a one-line source change | 2m41s (`release`) | 33.9 s (`e2e`) |
+| `mise run gate` for an ordinary change | ~400-560 s incl. the reference baseline it required | 109 s |
+| GitLab `api-doc` job | 352-443 s per run, no cache | cache on `build/Cargo.lock` |
+
+What changed: a build that is not a release uses `[profile.e2e]` (`release` plus incremental compilation), and
+`incremental` is the lever — a `codegen-units = 256` profile without it measured 3m22s. A release tag still builds
+`dist` (dagger-ci.yaml). The image comparison and the dark-theme coverage check moved out of `gate` into
+`gate-visual` (opt-in): they answer "this rewrite moves no pixel", which only a deliberate refactoring asks, and
+they cost a second baseline of the base commit (161-262 s) on top of the run.
+
+Costs and open points: the first image build on the new profile is cold once (4m39s locally, 806 s in CI). The
+GitLab cache has not shown a hit yet — the first run with it populated the cache, and the next changed
+`Cargo.lock` and so started a new key. The CI effect of the profile is deduced from the local measurement for the
+same reason.
+
 ## Release policy (2026-10-06)
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → `[profile.dist]` build; kubernetes/rustical Renovate
   follows exact `vX.Y.Z` tags only, every other reference (`main`, `main-<sha8>`, `latest`, `vX.Y`) frozen.
