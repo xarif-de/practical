@@ -495,7 +495,7 @@ mod tests {
     fn content_security_policy_allows_the_identity_provider() {
         let mut c = crate::testkit::config("/nonexistent.sqlite3");
         assert!(super::content_security_policy(&c).contains("; form-action 'self'; frame-ancestors 'none'"));
-        c.oidc = Some(crate::config::OidcSettings { name: "A".into(), issuer: "https://auth.example.org/realm/x".into(), client_id: "c".into(), client_secret: None, scopes: vec![] });
+        c.oidc = Some(crate::config::OidcSettings { name: "A".into(), issuer: "https://auth.example.org/realm/x".into(), client_id: "c".into(), scopes: vec![], ..crate::testkit::oidc_settings() });
         c.logout_url = "https://auth.example.org/logout?rd={url}".into();
         assert!(super::content_security_policy(&c).contains("; form-action 'self' https://auth.example.org; "));
         c.logout_url = "https://sso.example.net:8443/bye".into();

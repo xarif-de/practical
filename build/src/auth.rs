@@ -1,10 +1,10 @@
 //! Login (OIDC via rustical_oidc, optional password), logout (local + IdP portal),
 //! and the guard that sends anonymous browsers to /login.
 //!
-//! The accounts are RustiCal's principals; PractiCal keeps no users of its own.
+//! The accounts are RustiCal's principals; PractiCal has no user table of its own.
 //!
-//! - OIDC: PractiCal is its own client at RustiCal's identity provider. The callback only looks a
-//!   principal up and never creates one ([`LookupOnlyUserStore`]).
+//! - OIDC: PractiCal is its own client at RustiCal's identity provider. The callback looks the principal up
+//!   and, with `OIDC__ALLOW_SIGN_UP`, creates it at a first sign-in ([`SignInStore`]).
 //! - Password login is optional (`PRACTICAL__ALLOW_PASSWORD_LOGIN`). An unknown name is checked against a
 //!   dummy argon2 hash ([`dummy_hash`]), so it takes as long as a known one; [`LoginThrottle`] slows down
 //!   repeated failures.
@@ -29,7 +29,7 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::{Router, routing::get};
 use openidconnect::{ClientId, ClientSecret, IssuerUrl, Scope};
 use rustical_oidc::{OidcConfig, OidcServiceConfig, UserStore, oidc_router};
-use rustical_store::auth::AuthenticationProvider;
+use rustical_store::auth::{AuthenticationProvider, Principal, PrincipalType};
 use rustical_store_sqlite::SqlitePrincipalStore;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -41,60 +41,162 @@ pub const OIDC_CALLBACK_PATH: &str = "/login/oidc/callback";
 /// on the server (sessions.rs). Host-only, /login only, Strict: no other site's form brings it along.
 pub const LOGIN_CSRF: &str = "practical_login_csrf";
 
-/// The OIDC callback only ever LOOKS UP principals: a user who has never logged
-/// in at RustiCal has no principal, and creating one here would make this UI a
-/// second identity source (plan, "Authentifizierung" §1).
+/// Sign-in through the identity provider: looks the RustiCal principal up and, with
+/// `OIDC__ALLOW_SIGN_UP`, creates it at a first sign-in that finds none — the same write RustiCal's
+/// own frontend does (`rustical_frontend`'s `OidcUserStore::ensure_user`,
+/// crates/frontend/src/oidc_user_store.rs:26, v0.16.4), on the same file through the same store crate.
+///
+/// Only a `PrincipalType::Individual` is an account to sign in to: users and groups share one table in
+/// RustiCal, and its authentication middleware loads whatever the session names without looking at the
+/// type (crates/store/src/auth/middleware.rs:77). An existing principal is therefore never written to
+/// either, which also keeps a sign-in from wiping an account's name or password.
 #[derive(Clone)]
-pub struct LookupOnlyUserStore(pub Arc<SqlitePrincipalStore>);
+pub struct SignInStore {
+    pub principals: Arc<SqlitePrincipalStore>,
+    /// `OIDC__ALLOW_SIGN_UP`: create a principal that does not exist yet.
+    pub allow_sign_up: bool,
+}
 
-#[async_trait]
-impl UserStore for LookupOnlyUserStore {
-    type Error = AppError;
+/// Why a sign-in found no account. Rendered as the login page's own message, not as a bare 401:
+/// `rustical_oidc` hands our response straight back to the browser (routes.rs:233-234, v0.16.4), and
+/// the page does not submit itself again while `error` is set (`auto_oidc` in [`get_login`]).
+#[derive(Debug)]
+pub enum SignInError {
+    /// no principal, and sign-up is off
+    NoAccount,
+    /// the id from the identity provider cannot be a principal
+    IdRejected,
+    Store(AppError),
+}
 
-    async fn user_exists(&self, id: &str) -> Result<bool, AppError> {
-        Ok(self.0.get_principal(id).await?.is_some())
+impl From<rustical_store::Error> for SignInError {
+    fn from(e: rustical_store::Error) -> Self {
+        Self::Store(e.into())
     }
+}
 
-    async fn ensure_user(&self, id: &str, _memberships: &[&str]) -> Result<(), AppError> {
-        match self.0.get_principal(id).await? {
-            Some(_) => Ok(()),
-            None => Err(AppError::Unauthorized),
+impl IntoResponse for SignInError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::NoAccount => Redirect::to("/login?error=3").into_response(),
+            Self::IdRejected => Redirect::to("/login?error=4").into_response(),
+            Self::Store(e) => e.into_response(),
         }
     }
 }
 
-pub fn oidc_config(state: &SharedState) -> Result<Option<OidcConfig>, String> {
-    let Some(o) = &state.config.oidc else { return Ok(None) };
-    Ok(Some(OidcConfig {
+/// An id PractiCal is willing to CREATE; an existing principal is looked up, never checked by this.
+/// RustiCal itself only forbids `:` and `$` (crates/store_sqlite/src/principal_store.rs:107), the rest
+/// is ours: the id is a path segment of every CalDAV URL of that account, and `group.` is where
+/// PractiCal's own groups live (`crate::domain::groups::GROUP_PREFIX`).
+fn usable_principal_id(id: &str) -> bool {
+    !id.is_empty()
+        && id != "."
+        && id != ".."
+        && !id.starts_with(crate::domain::groups::GROUP_PREFIX)
+        && !id.contains([':', '$', '/', '\\', '?', '#', '%'])
+        && !id.chars().any(|c| c.is_whitespace() || c.is_control())
+}
+
+#[async_trait]
+impl UserStore for SignInStore {
+    type Error = SignInError;
+
+    async fn user_exists(&self, id: &str) -> Result<bool, SignInError> {
+        Ok(self.individual(id).await?.is_some())
+    }
+
+    async fn ensure_user(&self, id: &str, _memberships: &[&str]) -> Result<(), SignInError> {
+        if self.individual(id).await?.is_some() {
+            return Ok(());
+        }
+        if !self.allow_sign_up {
+            tracing::info!("sign-in as {id:?}: no RustiCal principal, and sign-up is off");
+            return Err(SignInError::NoAccount);
+        }
+        if !usable_principal_id(id) {
+            tracing::warn!("sign-up as {id:?} refused: not a usable principal id");
+            return Err(SignInError::IdRejected);
+        }
+        // as RustiCal's frontend does it: no display name (no claim carries one through
+        // `rustical_oidc`), no password, no membership
+        let fresh = Principal { id: id.to_owned(), displayname: None, principal_type: PrincipalType::Individual, password: None, memberships: vec![] };
+        match self.principals.insert_principal(fresh, false).await {
+            Ok(()) => {}
+            // `AlreadyExists` means some principal holds the id although the lookup above let none
+            // through: either the other half of a race between two first sign-ins of this id, or one
+            // `individual` refused (a group without the `group.` prefix, a resource, a room —
+            // `insert_principal` looks at no type, crates/store_sqlite/src/principal_store.rs:112,
+            // v0.16.4). Reading it back is what tells the two apart; without this, signing up would
+            // be a way INTO such a principal.
+            Err(rustical_store::Error::AlreadyExists) => {
+                return if self.individual(id).await?.is_some() { Ok(()) } else { Err(SignInError::IdRejected) };
+            }
+            Err(e) => return Err(e.into()),
+        }
+        tracing::info!("sign-up: created RustiCal principal {id:?}");
+        Ok(())
+    }
+}
+
+impl SignInStore {
+    /// The principal under `id`, if it is a user. A group or a resource is no account to sign in to.
+    async fn individual(&self, id: &str) -> Result<Option<Principal>, SignInError> {
+        let found = self.principals.get_principal(id).await?;
+        if let Some(p) = &found
+            && p.principal_type != PrincipalType::Individual
+        {
+            tracing::warn!("sign-in as {id:?} refused: that principal is a {:?}, not a user", p.principal_type);
+            return Ok(None);
+        }
+        Ok(found)
+    }
+}
+
+/// RustiCal's OIDC client configuration from ours. Separate from [`router`] so a test can read what
+/// the library is handed.
+pub fn oidc_config(o: &crate::config::OidcSettings) -> Result<OidcConfig, String> {
+    let mut cfg = OidcConfig {
         name: o.name.clone(),
         issuer: IssuerUrl::new(o.issuer.clone()).map_err(|e| format!("OIDC issuer: {e}"))?,
         client_id: ClientId::new(o.client_id.clone()),
         client_secret: o.client_secret.clone().map(ClientSecret::new),
         scopes: o.scopes.iter().cloned().map(Scope::new).collect(),
-        // sign-up happens at RustiCal (dav host), never here
-        allow_sign_up: false,
+        // Always true, whatever `OIDC__ALLOW_SIGN_UP` says: the flag's only use upstream is the early
+        // return that answers an unknown user with a bare 401 (`rustical_oidc` routes.rs:228, v0.16.4).
+        // [`SignInStore`] makes the decision instead and renders it as the login page's own message.
+        allow_sign_up: true,
+        // No group gate of our own: who may sign in is the identity provider's decision, and upstream
+        // answers a failed one with a bare 401 that this login page cannot replace (routes.rs:207-210,
+        // crates/oidc/src/error.rs, v0.16.4).
         require_group: None,
         claim_userid: Default::default(),
         additional_audiences: vec![],
+        // Empty on purpose: a PractiCal group belongs to its members, who add and remove each other
+        // (`crate::domain::groups`), so no mapping from identity-provider groups reassigns them.
         assign_memberships: Default::default(),
-    }))
+    };
+    // Through its own `Deserialize` (which also reads RustiCal's configuration file, so the spellings
+    // cannot drift apart): the type of that field is not nameable outside `rustical_oidc`.
+    cfg.claim_userid = serde_json::from_value(serde_json::Value::String(o.claim_userid.clone())).map_err(|e| format!("OIDC claim_userid: {e}"))?;
+    Ok(cfg)
 }
 
 pub fn router(state: &SharedState) -> Result<Router<SharedState>, String> {
     let mut r = Router::new()
         .route("/login", get(get_login).post(post_login))
         .route("/logout", axum::routing::post(post_logout));
-    if let Some(cfg) = oidc_config(state)? {
+    if let Some(o) = &state.config.oidc {
         r = r.nest_service(
             "/login/oidc",
             oidc_router(
-                cfg,
+                oidc_config(o)?,
                 OidcServiceConfig {
                     default_redirect_path: "/calendar",
                     session_key_user_id: SESSION_USER,
                     callback_path: OIDC_CALLBACK_PATH,
                 },
-                LookupOnlyUserStore(state.principals.clone()),
+                SignInStore { principals: state.principals.clone(), allow_sign_up: o.allow_sign_up },
             )
             .layer(axum::middleware::from_fn(cycle_on_login)),
         );
@@ -125,13 +227,23 @@ pub struct LoginPage {
     pub oidc_name: Option<String>,
     pub allow_password_login: bool,
     pub auto_oidc: bool,
+    /// `OIDC__ALLOW_SIGN_UP`: the closing hint says where a new account comes from.
+    pub sign_up: bool,
+    /// `error=3`: the sign-in found no account and sign-up is off — the page offers the way to RustiCal.
+    pub no_account: bool,
     /// the message above the form (`login_error`)
     pub error: Option<&'static str>,
 }
 
-/// `/login?error=…`: 2 = too many failed attempts (`LoginThrottle`), anything else = the login failed.
+/// `/login?error=…`: 2 = too many failed attempts (`LoginThrottle`), 3 = no principal and sign-up is off,
+/// 4 = the identity provider's name cannot be a principal ([`SignInError`]), anything else = the login failed.
 fn login_error(e: Option<&str>) -> Option<&'static str> {
-    e.map(|e| if e == "2" { "login-too-many" } else { "login-failed" })
+    e.map(|e| match e {
+        "2" => "login-too-many",
+        "3" => "login-no-account",
+        "4" => "login-id-rejected",
+        _ => "login-failed",
+    })
 }
 
 #[derive(Deserialize)]
@@ -166,10 +278,13 @@ pub async fn get_login(State(state): State<SharedState>, session: Session, ctx: 
     }
     let page = LoginPage {
         auto_oidc: oidc_name.is_some() && !allow_password_login && q.error.is_none() && q.manual.is_none(),
+        // only where an OIDC callback can send it: without SSO there is no sign-in that finds no account
+        no_account: q.error.as_deref() == Some("3") && oidc_name.is_some(),
         ctx,
         redirect_uri: q.redirect_uri.filter(|r| r.starts_with('/') && !r.starts_with("//")),
         oidc_name,
         allow_password_login,
+        sign_up: state.config.oidc.as_ref().is_some_and(|o| o.allow_sign_up),
         error: login_error(q.error.as_deref()),
     };
     match cookie {

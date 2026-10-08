@@ -175,6 +175,20 @@ fn temp_dir() -> PathBuf {
 
 pub const PUBLIC_URL: &str = "http://localhost:4001";
 
+/// An OIDC client as production has one, with the production defaults: no sign-up, principal id from
+/// `preferred_username`. A test that wants it otherwise changes the field.
+pub fn oidc_settings() -> crate::config::OidcSettings {
+    crate::config::OidcSettings {
+        name: "SSO".into(),
+        issuer: "https://auth.example.org".into(),
+        client_id: "practical".into(),
+        client_secret: None,
+        scopes: vec!["openid".into()],
+        allow_sign_up: false,
+        claim_userid: "preferred_username".into(),
+    }
+}
+
 pub fn config(db_path: &str) -> Config {
     Config {
         bind: "127.0.0.1:0".into(),

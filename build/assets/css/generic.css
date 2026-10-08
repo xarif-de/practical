@@ -11,6 +11,7 @@
 .muted { color: var(--fg-3); } .small { font-size: 13px; }
 .grow { flex: 1; }
 .btn.wide { width: 100%; padding: 10px; }
+a.btn.wide { display: inline-block; text-align: center; } /* width needs a box; login's way to RustiCal */
 .btn.danger, .link.danger { color: var(--today); }
 .btn.danger { border-color: color-mix(in srgb, var(--today) 40%, transparent); }
 button.link { background: none; border: 0; padding: 2px 6px; color: var(--accent); cursor: pointer; font-size: 13px; }

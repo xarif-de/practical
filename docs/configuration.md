@@ -47,6 +47,8 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | `OIDC__CLIENT_SECRET` | – | The client secret. |
 | `OIDC__NAME` | `SSO` | The label of the login button. |
 | `OIDC__SCOPES` | `openid profile groups` | The scopes that PractiCal asks for, separated by spaces. |
+| `OIDC__ALLOW_SIGN_UP` | `false` | Creates the RustiCal account at a user's first sign-in. Without it, only people who already have an account can sign in. |
+| `OIDC__CLAIM_USERID` | `preferred_username` | The claim that carries the account name: `sub`, `preferred_username` or `email`. Must be the same as RustiCal's `RUSTICAL_OIDC__CLAIM_USERID`. |
 | `LOGOUT_URL` | – | The identity provider's logout URL. `{url}` in it is replaced by the URL-encoded `PUBLIC_URL`. |
 | `SESSION_HOURS` | `12` | A session ends after this many hours without activity. |
 
@@ -112,17 +114,33 @@ OIDC (OpenID Connect) lets users sign in with an existing account at your identi
 4. Optional: set `LOGOUT_URL` so that logging out of PractiCal also ends the IdP session, for example
    `https://auth.example.com/logout?rd={url}`.
 
-PractiCal maps the `preferred_username` claim to the principal ID.
+PractiCal maps the `preferred_username` claim to the principal ID. `OIDC__CLAIM_USERID` changes which claim
+that is; it must match RustiCal's `RUSTICAL_OIDC__CLAIM_USERID`, or the same person ends up with two accounts.
 
-> [!important]
-> PractiCal never creates principals. A user can only sign in once RustiCal has a principal for them.
+#### Where the account comes from
 
-There are two ways to create the principal:
+By default, PractiCal only lets people in who already have a RustiCal principal. There are three ways to get one:
 
-- Create it by hand with `rustical principals create`.
-- Let RustiCal create it at the user's first SSO login on RustiCal's own frontend. For this, give RustiCal a client
+- **Let PractiCal create it** at the user's first sign-in: set `OIDC__ALLOW_SIGN_UP=true`. PractiCal writes the
+  same account RustiCal would, in RustiCal's own database. Nothing else is needed, and the user never sees
+  RustiCal.
+- Let RustiCal create it at the user's first sign-in on RustiCal's own frontend. For this, give RustiCal a client
   of its own at the same IdP, and set `RUSTICAL_OIDC__ALLOW_SIGN_UP=true` and
   `RUSTICAL_OIDC__CLAIM_USERID=preferred_username`.
+- Create it by hand with `rustical principals create`.
+
+With sign-up off, a user without an account lands back on the login page with a message and a button to
+RustiCal's frontend, where their first sign-in creates the account. `PUBLIC_DAV_URL` is the address behind that
+button.
+
+> [!important]
+> With `OIDC__ALLOW_SIGN_UP=true`, everybody your identity provider lets through to PractiCal's client gets a
+> calendar account. Who may sign in is decided at the identity provider, and that is the only gate — so give
+> PractiCal a client of its own there and restrict it to the people who should have a calendar.
+
+Three things PractiCal refuses to create, whatever the IdP sends: an account whose name starts with `group.`
+(that is where PractiCal's groups live), one whose name cannot be part of a CalDAV address (`: $ / \ ? # %`,
+spaces), and one that would take over an existing group — a group is never an account to sign in to.
 
 ## Web Push reminders
 

@@ -58,7 +58,6 @@ async fn error_statuses_and_texts() {
         (AppError::NotFound, StatusCode::NOT_FOUND, "not found"),
         (AppError::Store(rustical_store::Error::NotFound), StatusCode::NOT_FOUND, "store error: Not found"),
         (AppError::Forbidden, StatusCode::FORBIDDEN, "forbidden"),
-        (AppError::Unauthorized, StatusCode::UNAUTHORIZED, "unauthorized"),
         // PractiCal's own messages: the English text of their key (what an app-token client reads)
         (AppError::bad("err-name-required"), StatusCode::BAD_REQUEST, "bad request: name required"),
         (AppError::bad1("err-snap-point", "token", "soon"), StatusCode::BAD_REQUEST, "bad request: snap point: soon"),

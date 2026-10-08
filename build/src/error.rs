@@ -13,8 +13,6 @@ pub enum AppError {
     NotFound,
     #[error("forbidden")]
     Forbidden,
-    #[error("unauthorized")]
-    Unauthorized,
     #[error("bad request: {0}")]
     BadRequest(Msg),
     #[error("conflict: {0}")]
@@ -83,7 +81,7 @@ impl AppError {
         Self::Conflict(Msg { key, args: vec![] })
     }
 
-    /// The message for a user; None where no user reads it (Unauthorized: a client without a login).
+    /// The message for a user.
     pub fn user_text(&self) -> Option<Msg> {
         let key = match self {
             Self::BadRequest(m) | Self::Conflict(m) | Self::Rejected(_, m) => return Some(m.clone()),
@@ -91,7 +89,6 @@ impl AppError {
             Self::Forbidden | Self::Store(rustical_store::Error::ReadOnly) => "flash-forbidden",
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
             Self::Ical(e) => return Some(Msg { key: "flash-bad-data", args: vec![("detail", e.to_string())] }),
-            Self::Unauthorized => return None,
             _ if self.is_busy() => "flash-busy",
             Self::Store(_) | Self::Db(_) | Self::Session(_) | Self::Internal(_) => "flash-failed",
         };
@@ -128,7 +125,6 @@ impl IntoResponse for AppError {
         let status = match &self {
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => StatusCode::NOT_FOUND,
             Self::Forbidden => StatusCode::FORBIDDEN,
-            Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Rejected(s, _) => *s,
             Self::BadRequest(_) | Self::Ical(_) => StatusCode::BAD_REQUEST,
             Self::Conflict(_) | Self::Store(rustical_store::Error::AlreadyExists) => StatusCode::CONFLICT,

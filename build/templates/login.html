@@ -5,7 +5,7 @@
 {% block content %}
 <div class="login">
   <h1>{{ ctx.t("login-title") }}</h1>
-  {% if let Some(e) = error %}<div class="flash error" role="alert">{{ ctx.t(e) }}</div>{% endif %}
+  {% if let Some(e) = error %}<div class="flash error" role="alert">{{ ctx.t(e) }}</div>{% endif %}{# sign-up off and no account: the way to RustiCal, where a first sign-in creates one. One line: an off block must leave the markup byte for byte as it was (the visual gate compares the DOM) #}{% if no_account %}<p><a class="btn wide" href="{{ ctx.public_dav_url }}/frontend">{{ ctx.t("login-create-account") }}</a></p>{% endif %}
   {% if let Some(name) = oidc_name %}
   <form method="post" action="/login/oidc" id="oidc-form"{% if auto_oidc %} data-auto{% endif %}>
     {% if let Some(r) = redirect_uri %}<input type="hidden" name="redirect_uri" value="{{ r }}">{% endif %}
@@ -23,7 +23,7 @@
     <button type="submit" class="btn btn-primary wide">{{ ctx.t("login-submit") }}</button>
   </form>
   {% endif %}
-  <p class="muted small">{{ ctx.t1("login-hint", "dav", ctx.public_dav_url) }}</p>
+  <p class="muted small">{% if sign_up %}{{ ctx.t("login-hint-signup") }}{% else %}{{ ctx.t1("login-hint", "dav", ctx.public_dav_url) }}{% endif %}</p>
   <p class="muted small"><a href="{{ ctx.source_url() }}" target="_blank" rel="noopener">{{ ctx.t("source-code") }}</a> · PractiCal {{ ctx.version() }} · <a href="{{ ctx.rustical_source_url() }}" target="_blank" rel="noopener">RustiCal {{ ctx.rustical_version() }}</a> · AGPL-3.0</p>
 </div>
 {% endblock %}

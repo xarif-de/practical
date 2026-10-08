@@ -1,5 +1,5 @@
 //! Configuration from environment variables `PRACTICAL__<KEY>`.
-//! Plain std::env on purpose (no figment/clap): ~15 keys, all strings.
+//! Plain std::env on purpose (no figment/clap): ~20 keys, all strings.
 //!
 //! [`Config::from_env`] reads and checks them at start. The development switches (`DEV_*`) are listed in the
 //! crate docs, section "Development mode"; the user-facing reference is `docs/configuration.md`.
@@ -62,7 +62,18 @@ pub struct OidcSettings {
     pub client_id: String,
     pub client_secret: Option<String>,
     pub scopes: Vec<String>,
+    /// Create the RustiCal principal at a first sign-in that finds none ([`crate::auth::SignInStore`]).
+    /// Off by default: a deployment whose accounts are made elsewhere keeps that gate.
+    pub allow_sign_up: bool,
+    /// One of [`CLAIM_USERIDS`]. MUST match RustiCal's `RUSTICAL_OIDC__CLAIM_USERID`: the two look the
+    /// same account up, and with sign-up on a mismatch creates a second one for the same person.
+    pub claim_userid: String,
 }
+
+/// The claims RustiCal can take the principal id from (`rustical_oidc` config.rs `UserIdClaim`, v0.16.4).
+/// Kept as the string RustiCal spells it, because its enum is not nameable outside its crate (private
+/// `config` module, lib.rs:13) — [`crate::auth::oidc_config`] feeds the value through its `Deserialize`.
+const CLAIM_USERIDS: [&str; 3] = ["sub", "preferred_username", "email"];
 
 fn var(key: &str) -> Option<String> {
     env::var(format!("PRACTICAL__{key}")).ok().filter(|v| !v.is_empty())
@@ -95,16 +106,21 @@ impl Config {
         let public_url = var_or("PUBLIC_URL", "http://localhost:4001");
         let public_url = public_url.trim_end_matches('/').to_string();
         let oidc = match var("OIDC__ISSUER") {
-            Some(issuer) => Some(OidcSettings {
-                name: var_or("OIDC__NAME", "SSO"),
-                issuer,
-                client_id: var("OIDC__CLIENT_ID").ok_or("PRACTICAL__OIDC__CLIENT_ID missing")?,
-                client_secret: var("OIDC__CLIENT_SECRET"),
-                scopes: var_or("OIDC__SCOPES", "openid profile groups")
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .collect(),
-            }),
+            Some(issuer) => {
+                let claim_userid = var_or("OIDC__CLAIM_USERID", "preferred_username");
+                if !CLAIM_USERIDS.contains(&claim_userid.as_str()) {
+                    return Err(format!("PRACTICAL__OIDC__CLAIM_USERID: expected one of {}, got {claim_userid:?}", CLAIM_USERIDS.join("/")));
+                }
+                Some(OidcSettings {
+                    name: var_or("OIDC__NAME", "SSO"),
+                    issuer,
+                    client_id: var("OIDC__CLIENT_ID").ok_or("PRACTICAL__OIDC__CLIENT_ID missing")?,
+                    client_secret: var("OIDC__CLIENT_SECRET"),
+                    scopes: var_or("OIDC__SCOPES", "openid profile groups").split_whitespace().map(str::to_string).collect(),
+                    allow_sign_up: var_bool("OIDC__ALLOW_SIGN_UP", false)?,
+                    claim_userid,
+                })
+            }
             None => None,
         };
         let allow_password_login = var_bool("ALLOW_PASSWORD_LOGIN", false)?;
@@ -177,5 +193,28 @@ mod tests {
         assert_eq!(parse_dev_poll_ms(Some("250"), true), Ok(Some(250)));
         assert_eq!(crate::tasks::change_poll(Some(250)), std::time::Duration::from_millis(250));
         assert!(parse_dev_poll_ms(Some("10"), true).is_err() && parse_dev_poll_ms(Some("x"), true).is_err());
+    }
+
+    /// The sign-up keys. Their defaults are the behaviour of every release before them: no account is
+    /// created, and the principal id comes from `preferred_username` — RustiCal's default too
+    /// (`rustical_oidc` config.rs:15, v0.16.4), so both halves agree without anybody setting it.
+    #[test]
+    fn the_sign_up_keys_default_to_the_behaviour_before_them() {
+        assert_eq!(var_bool("OIDC__ALLOW_SIGN_UP", false), Ok(false));
+        assert_eq!(crate::testkit::oidc_settings().claim_userid, "preferred_username");
+        // Every spelling survives the way into rustical_oidc's own enum, whose type we cannot name
+        // (auth.rs `oidc_config` sets it through its Deserialize); Serialize reads it back. A fourth
+        // one is refused there, which is why `from_env` checks the value against CLAIM_USERIDS.
+        for c in CLAIM_USERIDS {
+            let cfg = crate::auth::oidc_config(&OidcSettings { claim_userid: c.into(), ..crate::testkit::oidc_settings() }).unwrap();
+            assert_eq!(serde_json::to_value(&cfg.claim_userid).unwrap(), serde_json::json!(c), "{c}");
+            // the library never refuses the sign-in itself: SignInStore decides and renders it
+            assert!(cfg.allow_sign_up);
+            // nothing maps identity-provider groups to PractiCal groups
+            assert!(cfg.assign_memberships.is_empty());
+        }
+        let bad = OidcSettings { claim_userid: "username".into(), ..crate::testkit::oidc_settings() };
+        let Err(e) = crate::auth::oidc_config(&bad) else { panic!("a claim rustical_oidc does not know must be refused") };
+        assert!(e.contains("claim_userid"), "{e}");
     }
 }

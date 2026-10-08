@@ -55,7 +55,7 @@ async fn a_locked_database_answers_503_with_retry_after_in_the_users_language() 
 #[tokio::test]
 async fn a_panicking_handler_answers_500_without_internals() {
     let app = TestApp::with(|c| {
-        c.oidc = Some(crate::config::OidcSettings { name: "SSO".into(), issuer: "https://auth.example.org".into(), client_id: "practical".into(), client_secret: None, scopes: vec!["openid".into()] });
+        c.oidc = Some(crate::testkit::oidc_settings());
     })
     .await;
     let r = app.anonymous().send(Method::GET, "/login/oidc/callback?code=x&state=y&iss=https://evil.example.org", &[("host", "localhost:4001")], Body::empty()).await;

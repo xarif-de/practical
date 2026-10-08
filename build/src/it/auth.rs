@@ -69,7 +69,7 @@ async fn logout_ends_the_session() {
 #[tokio::test]
 async fn logout_hands_over_to_the_identity_provider_portal() {
     let app = TestApp::with(|c| {
-        c.oidc = Some(crate::config::OidcSettings { name: "SSO".into(), issuer: "https://auth.example.org".into(), client_id: "practical".into(), client_secret: None, scopes: vec!["openid".into()] });
+        c.oidc = Some(crate::testkit::oidc_settings());
         c.logout_url = "https://auth.example.org/logout?rd={url}".into();
     })
     .await;
@@ -87,7 +87,7 @@ async fn logout_hands_over_to_the_identity_provider_portal() {
 #[tokio::test]
 async fn oidc_only_login_page_submits_itself_unless_asked_not_to() {
     let app = TestApp::with(|c| {
-        c.oidc = Some(crate::config::OidcSettings { name: "Authelia".into(), issuer: "https://auth.example.org".into(), client_id: "practical".into(), client_secret: None, scopes: vec!["openid".into()] });
+        c.oidc = Some(crate::config::OidcSettings { name: "Authelia".into(), ..crate::testkit::oidc_settings() });
         c.allow_password_login = false;
     })
     .await;
@@ -100,6 +100,104 @@ async fn oidc_only_login_page_submits_itself_unless_asked_not_to() {
     let csrf = manual.meta_csrf();
     let r = a.post_form_raw("/login", &[("username", "x"), ("password", "y"), ("csrf", &csrf)]).await;
     assert_eq!((r.status, r.body.as_str()), (StatusCode::FORBIDDEN, "forbidden"), "password login is off");
+}
+
+/// RustiCal's own frontend creates the principal at a first OIDC sign-in; with `OIDC__ALLOW_SIGN_UP`
+/// PractiCal does the same write (`SignInStore`), and refuses it in the three cases that would make a
+/// broken or foreign account. Drives the store directly: the way in is an identity provider's callback.
+#[tokio::test]
+async fn sign_up_creates_the_principal_only_when_it_is_switched_on() {
+    use crate::auth::{SignInError, SignInStore};
+    use rustical_oidc::UserStore;
+    use rustical_store::auth::{AuthenticationProvider, PrincipalType};
+
+    let app = TestApp::new().await;
+    app.user("alice", "Alice Beispiel").await;
+    app.group("group.familie", "Familie", &["alice"]).await;
+    let off = SignInStore { principals: app.state.principals.clone(), allow_sign_up: false };
+    let on = SignInStore { principals: app.state.principals.clone(), allow_sign_up: true };
+
+    // an existing user is found by both, and neither writes to it
+    assert!(off.user_exists("alice").await.unwrap() && on.user_exists("alice").await.unwrap());
+    on.ensure_user("alice", &[]).await.unwrap();
+    let alice = app.principal("alice").await;
+    assert_eq!((alice.displayname.as_deref(), alice.password.is_some()), (Some("Alice Beispiel"), true), "an existing account is never overwritten");
+
+    // sign-up off: an unknown name stays unknown and the browser is told so on the login page
+    assert!(!off.user_exists("mallory").await.unwrap());
+    let e = off.ensure_user("mallory", &[]).await.unwrap_err();
+    assert!(matches!(&e, SignInError::NoAccount));
+    assert_eq!(location(e), "/login?error=3");
+    assert!(app.state.principals.get_principal("mallory").await.unwrap().is_none());
+
+    // sign-up on: the principal appears, as an individual without a password, and the second sign-in
+    // of the same person creates nothing more
+    on.ensure_user("mallory", &[]).await.unwrap();
+    let fresh = app.principal("mallory").await;
+    assert_eq!((fresh.principal_type, fresh.displayname.clone(), fresh.password.is_some(), fresh.memberships.clone()), (PrincipalType::Individual, None, false, vec![]));
+    on.ensure_user("mallory", &[]).await.unwrap();
+    assert_eq!(app.state.principals.get_principals().await.unwrap().iter().filter(|p| p.id == "mallory").count(), 1);
+
+    // A group is no account to sign in to: users and groups share one table, and RustiCal's
+    // authentication middleware signs in whatever the session names (middleware.rs:77). `rustical
+    // principals create --principal-type group` takes any id, so the one WITHOUT PractiCal's
+    // `group.` prefix is the case the prefix check cannot catch: it is caught by reading the row
+    // back after `insert_principal` answers AlreadyExists.
+    app.group("verein", "Verein", &[]).await;
+    for g in ["group.familie", "verein"] {
+        assert!(!on.user_exists(g).await.unwrap(), "{g}");
+        assert_eq!(location(on.ensure_user(g, &[]).await.unwrap_err()), "/login?error=4", "{g}");
+        assert_eq!(app.principal(g).await.principal_type, PrincipalType::Group, "{g} is untouched");
+    }
+
+    // an id that cannot be a principal, or a path segment, is refused instead of written
+    for bad in ["", "group.neu", "a:b", "a$b", "a/b", "a b", "a?b", "a#b", "a%b", "a\\b", "a\nb"] {
+        let e = on.ensure_user(bad, &[]).await.unwrap_err();
+        assert!(matches!(&e, SignInError::IdRejected), "{bad:?}");
+        assert!(app.state.principals.get_principal(bad).await.unwrap().is_none(), "{bad:?}");
+    }
+}
+
+/// The login page tells a visitor without an account what to do, and does NOT submit itself to the
+/// identity provider again (`auto_oidc` is off while `error` is set) — that would be a redirect loop.
+#[tokio::test]
+async fn the_login_page_offers_the_way_to_rustical_when_sign_up_is_off() {
+    let app = TestApp::with(|c| {
+        c.oidc = Some(crate::testkit::oidc_settings());
+        c.allow_password_login = false;
+        c.public_dav_url = "https://dav.example.org".into();
+    })
+    .await;
+    let page = app.anonymous().get("/login?error=3").await;
+    page.ok()
+        .has("class=\"flash error\"")
+        .has("Zu dieser Anmeldung gibt es noch kein Konto.")
+        .has("href=\"https://dav.example.org/frontend\"")
+        .has("Ein neues Konto entsteht bei der ersten Anmeldung unter https://dav.example.org.");
+    assert!(!page.body.contains("data-auto"), "a page that reports an error must not submit itself");
+    // the other new code: an id the identity provider cannot have as an account
+    app.anonymous().get("/login?error=4").await.ok().has("als Kontoname nicht erlaubt");
+}
+
+/// With sign-up on, the closing hint names this site, not RustiCal's, and no link to RustiCal is offered.
+#[tokio::test]
+async fn with_sign_up_the_login_page_says_the_account_is_created_here() {
+    let app = TestApp::with(|c| {
+        c.oidc = Some(crate::config::OidcSettings { allow_sign_up: true, ..crate::testkit::oidc_settings() });
+        c.allow_password_login = false;
+    })
+    .await;
+    let page = app.anonymous().get("/login?manual=1").await;
+    page.ok().has("Ein neues Konto entsteht hier bei der ersten Anmeldung.");
+    assert!(!page.body.contains("/frontend"), "nothing to do at RustiCal");
+}
+
+/// Where a `SignInError` sends the browser (`rustical_oidc` hands our response back unchanged).
+fn location(e: crate::auth::SignInError) -> String {
+    use axum::response::IntoResponse;
+    let r = e.into_response();
+    assert_eq!(r.status(), StatusCode::SEE_OTHER);
+    r.headers().get("location").unwrap().to_str().unwrap().to_owned()
 }
 
 #[tokio::test]
