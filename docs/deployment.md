@@ -1,5 +1,5 @@
 <!-- docs-nav:top -->
-<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
 
 # Deployment
@@ -186,10 +186,10 @@ Run it from a sidecar container that has `sqlite3`. The example deployment does 
 | [Commands](commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
 | [How it works](architecture.md) | two programs on one database, the image, the RustiCal version contract |
 | [Contributing](../CONTRIBUTING.md) | local development, tests and gates, CI and releases |
-| [API documentation](https://practical-758168.gitlab.io/practical/) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
+| [API documentation](https://xarif.gitlab.io/docker/practical/api/practical/index.html) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
 | [Repo overview](repo-overview.md) | how the repo is organised: everything outside the Rust API doc |
 | [Performance](performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
-<p><a href="../README.md"><b>← Back to the README</b></a></p>
+<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->

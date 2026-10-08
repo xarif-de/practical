@@ -81,7 +81,7 @@ description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): R
 run = "e2e/seed/seed.sh"
 
 [tasks.readme-shots]
-description = "README/gallery screenshots: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json → README gallery section (E2E_PORT, SEED_PORT)"
+description = "Screenshots for the README, the site gallery and docs/features.md: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json → gallery thumbnails docs/images/thumbs/ (e2e/demo/thumbs.mjs) (E2E_PORT, SEED_PORT)"
 run = '''
 set -e
 W="$PWD/e2e/.work/demo"
@@ -89,12 +89,27 @@ W="$PWD/e2e/.work/demo"
 e2e/build-server.sh "$W/practical"
 e2e/demo/seed.sh "$W/practical" "$W/demo.sqlite3"
 node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
-exec node e2e/demo/gallery.mjs
+exec node e2e/demo/thumbs.mjs
 '''
 
 [tasks.docs-nav]
-description = "Docs navigation: back-to-README links + the README's documentation table at the end of every page it lists (e2e/demo/docs-nav.mjs; `-- --check` = exit 1 if out of date)"
+description = "Docs navigation: back links to the start page (docs/index.md) + its documentation table at the end of every page it lists (e2e/demo/docs-nav.mjs; `-- --check` = exit 1 if out of date)"
 run = "node e2e/demo/docs-nav.mjs"
+
+[tasks.site]
+description = "The GitLab Pages site, locally: site/build.mjs (docs/index.md + gallery, docs/*.md, CONTRIBUTING.md; every link checked) + a fresh API doc (rustdoc -D warnings, e2e/cargo.sh) in api/ → e2e/.work/site; preview: python3 -m http.server -d e2e/.work/site 4501"
+run = '''
+set -e
+OUT="$PWD/e2e/.work/site"
+# npm ci again whenever the lockfile is newer than the installed tree (npm ci writes node_modules/.package-lock.json)
+[ site/node_modules/.package-lock.json -nt site/package-lock.json ] || (cd site && npm ci --no-fund --no-audit)
+node site/build.mjs --out "$OUT"
+RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
+T="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(cd build && pwd -P | shasum | cut -c1-12)}"
+cp -R "$T/doc" "$OUT/api"
+echo "site: $OUT/index.html (API doc: $OUT/api/practical/index.html)"
+echo "preview: python3 -m http.server -d $OUT 4501  →  http://localhost:4501/"
+'''
 
 [tasks.e2e]
 description = "Functional e2e suite (Playwright, e2e/functional) against an e2e-profile build of this checkout (E2E_PROFILE=release: the shipped profile); spec files on E2E_WORKERS (4) workers, each file on fresh servers + fixture copies"

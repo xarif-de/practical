@@ -1,5 +1,5 @@
 <!-- docs-nav:top -->
-<p><a href="README.md"><b>← Back to the README</b></a></p>
+<p><a href="docs/index.md"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
 
 # Contributing to PractiCal
@@ -18,7 +18,7 @@ but not this project.
 These pages explain the project from different angles:
 
 - [docs/repo-overview.md](docs/repo-overview.md) shows how the repository is organised.
-- The [API documentation](https://practical-758168.gitlab.io/practical/) describes every module, its invariants, the caches and the background loops.
+- The [API documentation](https://xarif.gitlab.io/docker/practical/api/practical/index.html) describes every module, its invariants, the caches and the background loops.
   To build it locally, run `mise run doc`.
 - [docs/architecture.md](docs/architecture.md) explains how PractiCal and RustiCal fit together.
 - [docs/performance-2026-10.md](docs/performance-2026-10.md) has the known limits and the performance history.
@@ -140,7 +140,7 @@ A **gate** runs several of the checks above in a row and stops at the first fail
 
 | Command | What it runs | When to use it |
 | --- | --- | --- |
-| `mise run gate-quick` | `cargo test`, a server build and the functional suite | Every commit (about 80 seconds when the build is warm). |
+| `mise run gate-quick` | `cargo test`, the API documentation, the docs link check, a server build and the functional suite | Every commit (about 80 seconds when the build is warm). |
 | `mise run gate -- <ref-dir>` | `gate-quick`, then chaos, accessibility, a visual baseline, a comparison against `<ref-dir>` and the dark-theme coverage check | Every change that can alter how a page looks: CSS, templates, locales, or a value that ends up on a page. |
 
 `<ref-dir>` is a baseline of the commit that your change starts from. Every difference that the gate reports must
@@ -157,8 +157,9 @@ Run the benchmark when a change can cost time, memory or bytes.
 
 ### Screenshots
 
-`mise run readme-shots` builds a demo database and takes the screenshots in `docs/images/`. It also updates the
-gallery in the README.
+`mise run readme-shots` builds a demo database and takes the screenshots in `docs/images/`. It also writes their
+titles, captions and gallery groups to `e2e/demo/shots.json` and makes the gallery thumbnails in
+`docs/images/thumbs/`.
 
 [AGENTS.md](AGENTS.md) has the full rules for tests: which gate a change needs, how to run several worktrees in
 parallel, the ports, and the lock for heavy runs.
@@ -200,6 +201,27 @@ base/dagger-modules `docs/rust-functions.md`).
 The RustiCal version must be the same in the crates, the Dockerfile and the image test.
 [docs/architecture.md](docs/architecture.md#the-rustical-version-contract) explains why and how this is checked.
 
+## The project site
+
+The documentation is published as a static site with GitLab Pages: the start page (`docs/index.md`) shows the
+screenshot gallery and the documentation index, and every page in `docs/` plus this guide becomes an HTML page. The
+API documentation sits under `api/`. `site/build.mjs` builds it; the job `pages` in `.gitlab-ci.yml` publishes it
+from `main` and from release tags.
+
+To build and preview the site locally:
+
+```bash
+mise run site
+python3 -m http.server -d e2e/.work/site 4501
+```
+
+Then open <http://localhost:4501/>. `mise run site` also builds a fresh API documentation into the site.
+
+Links between the pages are ordinary relative Markdown links (`configuration.md#holidays`), so they work on
+gitlab.com too. The build turns them into links between the HTML pages and links to other repository files into
+gitlab.com links. It fails on a link or an anchor that does not exist. `mise run gate-quick` runs this check
+(`node site/build.mjs --check`) for the docs and the README.
+
 ## Commits
 
 Write commits in the [Conventional Commits](https://www.conventionalcommits.org) style: `type(scope): subject`. The
@@ -232,10 +254,10 @@ rules.
 | [Commands](docs/commands.md) | `practical` subcommands, user and group administration with RustiCal's CLI |
 | [How it works](docs/architecture.md) | two programs on one database, the image, the RustiCal version contract |
 | [Contributing](CONTRIBUTING.md) | local development, tests and gates, CI and releases |
-| [API documentation](https://practical-758168.gitlab.io/practical/) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
+| [API documentation](https://xarif.gitlab.io/docker/practical/api/practical/index.html) | the Rust code: request flow, every module, invariants, caches (built from `main`) |
 | [Repo overview](docs/repo-overview.md) | how the repo is organised: everything outside the Rust API doc |
 | [Performance](docs/performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](docs/licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
-<p><a href="README.md"><b>← Back to the README</b></a></p>
+<p><a href="docs/index.md"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->

@@ -1,16 +1,37 @@
-# gitlab.com mirror only: builds the Rust API doc and publishes it with GitLab Pages. Not the project's pipeline —
-# build, tests and image publishing run on Forgejo Actions (dagger-ci.yaml); this job adds the public API doc, nothing
-# else. Enabled for this repository alone by .gitlab-mirror.yaml (CI/CD, Pages, shared runners; read by
-# kubernetes/forgejo resources/mirror-lib.sh). Runs when main changes the Rust sources (so the doc matches the docs
-# that link it), for release tags and on a manual "Run pipeline".
-pages:
-  # same Rust as build/Dockerfile and build/rust-toolchain.toml (one Renovate group, renovate.json "rust toolchain")
-  image: rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627
+# gitlab.com mirror only: builds the project site and publishes it with GitLab Pages. Not the project's pipeline —
+# build, tests and image publishing run on Forgejo Actions (dagger-ci.yaml); these two jobs add the public site,
+# nothing else. Enabled for this repository alone by .gitlab-mirror.yaml (CI/CD, Pages, shared runners; read by
+# kubernetes/forgejo resources/mirror-lib.sh).
+#   api-doc  rustdoc of the Rust code (artifact api-doc/, kept 1 day)
+#   pages    site/build.mjs: docs/index.md (gallery from e2e/demo/shots.json + documentation index), docs/*.md,
+#            CONTRIBUTING.md → public/ (every internal link and anchor checked: a broken one fails the job), then
+#            the rustdoc into public/api/ (the site links api/practical/index.html)
+# Locally: `mise run site` (the same build into e2e/.work/site, with a fresh rustdoc).
+# Runs when main changes what the site is built from (Rust sources: the API doc; docs, site, the gallery's metadata),
+# for release tags and on a manual "Run pipeline". Both jobs share the rules: `needs:` fails when api-doc is absent.
+stages: [build, deploy]
+
+.site-rules: &site-rules
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-      changes: [build/src/**/*, build/Cargo.toml, build/Cargo.lock, build/rust-toolchain.toml, .gitlab-ci.yml]
+      changes:
+        - build/src/**/*
+        - build/Cargo.toml
+        - build/Cargo.lock
+        - build/rust-toolchain.toml
+        - .gitlab-ci.yml
+        - docs/**/*
+        - site/**/*
+        - CONTRIBUTING.md
+        - e2e/demo/shots.json
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
     - if: $CI_PIPELINE_SOURCE == "web"
+
+api-doc:
+  stage: build
+  # same Rust as build/Dockerfile and build/rust-toolchain.toml (one Renovate group, renovate.json "rust toolchain")
+  image: rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627
+  <<: *site-rules
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/.cargo-home
     # build/.cargo/config.toml points target-dir at a developer's home directory
@@ -21,8 +42,23 @@ pages:
     # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (as build/Dockerfile)
     - apk add --no-cache build-base perl make
     - cd build && cargo doc --locked --no-deps --document-private-items
-    - mv target/doc ../public
-    - printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=practical/index.html"><a href="practical/index.html">PractiCal API doc</a>\n' > ../public/index.html
+    - mv target/doc ../api-doc
+  artifacts:
+    paths: [api-doc]
+    expire_in: 1 day
+
+pages:
+  stage: deploy
+  # Node ≥ 20 (site/package.json engines); an exact version + digest, updated by Renovate's docker manager
+  image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+  <<: *site-rules
+  needs:
+    - job: api-doc
+      artifacts: true
+  script:
+    - cd site && npm ci --no-fund --no-audit
+    - node build.mjs --out ../public
+    - mv ../api-doc ../public/api
   artifacts:
     paths: [public]
   pages: true

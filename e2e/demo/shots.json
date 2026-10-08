@@ -2,179 +2,205 @@
   {
     "file": "01-day.webp",
     "title": "Day view",
-    "caption": "The day view: today's agenda with overlapping meetings, a timeline of the day and the month at a glance."
+    "caption": "The day view: today's agenda with overlapping meetings, a timeline of the day and the month at a glance.",
+    "group": "Calendar"
   },
   {
     "file": "02-week.webp",
     "title": "Week view",
-    "caption": "A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side."
+    "caption": "A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side.",
+    "group": "Calendar"
   },
   {
     "file": "03-month.webp",
     "title": "Month view",
-    "caption": "October at a glance: work, personal, sports and the shared family calendar, holidays and an all-day trip."
+    "caption": "October at a glance: work, personal, sports and the shared family calendar, holidays and an all-day trip.",
+    "group": "Calendar"
   },
   {
     "file": "04-year-planner.webp",
     "title": "Year planner",
-    "caption": "The whole year on one page: public and school holidays, vacations and the first event of every day."
+    "caption": "The whole year on one page: public and school holidays, vacations and the first event of every day.",
+    "group": "Calendar"
   },
   {
     "file": "05-free-weekends.webp",
     "title": "Free weekends",
-    "caption": "Every weekend of the year, free or planned, with long weekends extended by a public holiday."
+    "caption": "Every weekend of the year, free or planned, with long weekends extended by a public holiday.",
+    "group": "Calendar"
   },
   {
     "file": "06-vacation-planner.webp",
     "title": "Vacation planner",
-    "caption": "Vacations against school and public holidays, with planned and remaining vacation days."
+    "caption": "Vacations against school and public holidays, with planned and remaining vacation days.",
+    "group": "Calendar"
   },
   {
     "file": "07-countdown.webp",
     "title": "Countdown wall",
-    "caption": "Days until the next birthdays, vacations and holidays."
+    "caption": "Days until the next birthdays, vacations and holidays.",
+    "group": "Calendar"
   },
   {
     "file": "08-year-in-numbers.webp",
     "title": "Year in numbers",
-    "caption": "Statistics of the year: events per calendar, load per week, busy evenings and weekends."
+    "caption": "Statistics of the year: events per calendar, load per week, busy evenings and weekends.",
+    "group": "Calendar"
   },
   {
     "file": "09-tasks-list.webp",
     "title": "Task list",
-    "caption": "Tasks grouped by due date, with priorities, progress, categories and the task editor docked beside the list."
+    "caption": "Tasks grouped by due date, with priorities, progress, categories and the task editor docked beside the list.",
+    "group": "Tasks"
   },
   {
     "file": "10-tasks-table.webp",
     "title": "Task table",
-    "caption": "All tasks as a sortable table with configurable columns."
+    "caption": "All tasks as a sortable table with configurable columns.",
+    "group": "Tasks"
   },
   {
     "file": "11-tasks-board.webp",
     "title": "Task board",
-    "caption": "A kanban board: tasks in columns by status."
+    "caption": "A kanban board: tasks in columns by status.",
+    "group": "Tasks"
   },
   {
     "file": "12-tasks-timeline.webp",
     "title": "Task timeline",
-    "caption": "Tasks with a start and a due date as bars on a timeline."
+    "caption": "Tasks with a start and a due date as bars on a timeline.",
+    "group": "Tasks"
   },
   {
     "file": "13-tasks-deck.webp",
     "title": "Task deck",
-    "caption": "One task at a time as a card deck, worked through with the keyboard."
+    "caption": "One task at a time as a card deck, worked through with the keyboard.",
+    "group": "Tasks"
   },
   {
     "file": "14-tasks-done.webp",
     "title": "Completed tasks",
-    "caption": "What got done: completed tasks by day with a heat map."
+    "caption": "What got done: completed tasks by day with a heat map.",
+    "group": "Tasks"
   },
   {
     "file": "15-contacts-list.webp",
     "title": "Contacts",
-    "caption": "The address book as a list with a letter rail, the selected contact beside it."
+    "caption": "The address book as a list with a letter rail, the selected contact beside it.",
+    "group": "Contacts"
   },
   {
     "file": "16-contacts-table.webp",
     "title": "Contacts table",
-    "caption": "The address book as a table with phone, email, categories and birthdays."
+    "caption": "The address book as a table with phone, email, categories and birthdays.",
+    "group": "Contacts"
   },
   {
     "file": "17-event-view.webp",
     "title": "Event (view mode)",
-    "caption": "An event opened read-only: time, location, attendees, video call, reminders and the agenda."
+    "caption": "An event opened read-only: time, location, attendees, video call, reminders and the agenda.",
+    "group": "Editors"
   },
   {
     "file": "18-event-edit.webp",
     "title": "Event (edit mode)",
-    "caption": "The same event in edit mode: every property as an editable card."
+    "caption": "The same event in edit mode: every property as an editable card.",
+    "group": "Editors"
   },
   {
     "file": "19-task-view.webp",
     "title": "Task (view mode)",
-    "caption": "A task opened read-only: due date, progress, priority, categories, notes and its link to an event."
+    "caption": "A task opened read-only: due date, progress, priority, categories, notes and its link to an event.",
+    "group": "Editors"
   },
   {
     "file": "20-task-edit.webp",
     "title": "Task (edit mode)",
-    "caption": "The same task in edit mode."
+    "caption": "The same task in edit mode.",
+    "group": "Editors"
   },
   {
     "file": "21-contact-view.webp",
     "title": "Contact (view mode)",
-    "caption": "A contact opened read-only: phones, emails, messenger, organisation, birthday and relationships."
+    "caption": "A contact opened read-only: phones, emails, messenger, organisation, birthday and relationships.",
+    "group": "Editors"
   },
   {
     "file": "22-contact-edit.webp",
     "title": "Contact (edit mode)",
-    "caption": "The same contact in edit mode."
+    "caption": "The same contact in edit mode.",
+    "group": "Editors"
   },
   {
     "file": "23-colours.webp",
     "title": "Colour manager",
-    "caption": "Every colour in use: calendars, holidays, category rules, and events and tasks with a colour of their own."
+    "caption": "Every colour in use: calendars, holidays, category rules, and events and tasks with a colour of their own.",
+    "group": "Colours and search"
   },
   {
     "file": "24-colour-optimiser.webp",
     "title": "Colour optimiser",
-    "caption": "Suggestions to merge near-duplicate colours and pull apart colours that look alike, as a flow from element to new colour."
+    "caption": "Suggestions to merge near-duplicate colours and pull apart colours that look alike, as a flow from element to new colour.",
+    "group": "Colours and search"
   },
   {
     "file": "25-search.webp",
     "title": "Universal search",
-    "caption": "One search box for events, contacts and tasks, with results from all three."
+    "caption": "One search box for events, contacts and tasks, with results from all three.",
+    "group": "Colours and search"
   },
   {
     "file": "26-month-dark.webp",
     "title": "Month view (dark)",
-    "caption": "The month view in dark mode."
+    "caption": "The month view in dark mode.",
+    "group": "Colours and search"
   },
   {
     "file": "27-settings.webp",
     "title": "Settings",
     "caption": "The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups.",
-    "readme": false
+    "group": "Settings and more"
   },
   {
     "file": "28-category-rule.webp",
     "title": "Category rule",
     "caption": "The rule of the category \"Work\": every event with this category gets a 15-minute reminder and the office as its location.",
-    "readme": false
+    "group": "Editors"
   },
   {
     "file": "29-recurrence.webp",
     "title": "Repeating event",
     "caption": "A weekly event in edit mode: the repeat card with its preview calendar, and the colour that the category rule \"Sports\" sets.",
-    "readme": false
+    "group": "Editors"
   },
   {
     "file": "30-history.webp",
     "title": "Change history",
     "caption": "The change history as a list: an undone change with its before and after values, and the history of that event.",
-    "readme": false
+    "group": "Settings and more"
   },
   {
     "file": "31-app-tokens.webp",
     "title": "Account and app tokens",
     "caption": "The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device.",
-    "readme": false
+    "group": "Settings and more"
   },
   {
     "file": "32-groups.webp",
     "title": "Groups",
     "caption": "A group and its members: every member may add or remove members and manage the group's calendars.",
-    "readme": false
+    "group": "Settings and more"
   },
   {
     "file": "33-import.webp",
     "title": "Import a calendar",
     "caption": "An .ics file picked for import: name, colour and time zone come from the file and can be changed before the import.",
-    "readme": false
+    "group": "Settings and more"
   },
   {
     "file": "34-phone.webp",
     "title": "Phone layout",
     "caption": "The same app on a phone: the address book, the task list and an event.",
-    "readme": false
+    "group": "Settings and more"
   }
 ]

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+{{script}}
+</head>
+<body class="{{bodyClass}}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="index.html"><img src="icon.svg" alt="" width="28" height="28"><span>PractiCal</span></a>
+    <nav class="top-nav" aria-label="Site">
+      <a href="index.html#gallery">Gallery</a>
+      <a href="features.html">Features</a>
+      <a href="index.html#documentation">Docs</a>
+      <a href="{{repo}}">GitLab</a>
+    </nav>
+  </div>
+</header>
+<main id="main" tabindex="-1">
+  <div class="wrap layout">
+    {{toc}}
+    <div class="content">
+      {{backTop}}
+      <article class="prose">
+{{content}}
+      </article>
+      {{backBottom}}
+    </div>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    {{footerIndex}}
+    <p class="foot-meta"><a href="{{repo}}"><b>Source on GitLab</b></a> · <a href="{{source}}">This page in the repository</a> · PractiCal is free software under the AGPL-3.0-or-later.</p>
+  </div>
+</footer>
+</body>
+</html>

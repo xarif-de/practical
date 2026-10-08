@@ -1,0 +1,16 @@
+{
+  "name": "practical-site",
+  "private": true,
+  "type": "module",
+  "description": "PractiCal's GitLab Pages site: docs/*.md + CONTRIBUTING.md + the screenshot gallery as static HTML (build.mjs; `mise run site`)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  },
+  "dependencies": {
+    "marked": "18.1.0"
+  }
+}

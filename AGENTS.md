@@ -26,7 +26,7 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 
 | command | runs | when |
 |---|---|---|
-| `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → server build (`e2e` profile) → functional suite | every commit (~80 s warm; the doc step ~10 s) |
+| `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → docs-nav + site link check (`node site/build.mjs --check`) → server build (`e2e` profile) → functional suite | every commit (~80 s warm; the doc step ~10 s) |
 | `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~30 s) | part of `gate`; alone after UI/ARIA/focus edits |
 | `mise run gate -- <ref-dir>` | quick → chaos → a11y → visual baseline → compare vs `<ref-dir>` → theme-cover | anything that can change a page's look (CSS, template, locale, Rust value) — i.e. before most commits |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
@@ -72,6 +72,6 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 - Commits: conventional (`type(scope): subject`), body `## Intent` / `## Key changes` / `## Details`.
 - Agent docs (AGENTS.md, docs/repo-overview.md, code comments) are for LLM retrieval: dense, no narrative. Public docs
   (README.md, CONTRIBUTING.md, docs/*.md else) are for humans: short clear sentences, task-oriented headings, tables
-  for reference data (Google developer style guide, Diátaxis); their nav blocks come from `mise run docs-nav`. Rust facts live in rustdoc (`//!` module docs, `///` items,
+  for reference data (Google developer style guide, Diátaxis); their nav blocks come from `mise run docs-nav`; docs/*.md + CONTRIBUTING.md are published as the Pages site (`mise run site`, site/build.mjs): relative links between them, absolute `https://xarif.gitlab.io/docker/practical/…` from README; a link/anchor that does not resolve fails gate-quick. Rust facts live in rustdoc (`//!` module docs, `///` items,
   intra-doc links; `mise run doc` must stay green); a file outside the crate docs that moves or changes purpose →
   update docs/repo-overview.md.

@@ -1,7 +1,7 @@
 // README/gallery screenshots on the showcase DB (e2e/demo): one dev server of this checkout's build (DEV_LOGIN emma,
 // DEV_NOW = the frozen Wednesday, egress blocked), chromium 1440×900 @2x, en-GB, Europe/Berlin, light (one dark).
-// Docs-only shots (docs/features.md) follow the README ones: `readme: false` in shots.json (gallery.mjs skips them),
-// some on DEVICES `settings` (1100 px, cut below the content) or `phone` (several screens composed side by side).
+// Every shot belongs to one gallery group (GROUPS → `group` in shots.json; site/build.mjs shows the gallery by group).
+// The later shots (settings, history, phone …) are taken mainly for docs/features.md, some on DEVICES `settings` (1100 px, cut below the content) or `phone` (several screens composed side by side).
 // Every state waits for real readiness (lib/test.mjs settle: no request in flight, the page's due timers ran, fonts
 // ready, no running animation, two frames). Output: docs/images/<NN>-<slug>.webp, shots.json;
 // the 2x PNGs stay in e2e/.work/demo/png.
@@ -231,32 +231,49 @@ const SHOTS = [
     await p.goto(cal('month')); await typeQ(p, 'lily'); }],
   ['month-dark', 'Month view (dark)', 'The month view in dark mode.', async p => {
     await calView(p, 'month'); }, 'dark'],
-  // docs-only pictures (docs/features.md), left out of the README gallery: `readme: false` in shots.json
+  // taken mainly for docs/features.md; in the gallery under "Settings and more" (GROUPS)
   ['settings', 'Settings', 'The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups.', async p => {
-    await p.goto('/settings'); await p.locator('#home').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+    await p.goto('/settings'); await p.locator('#home').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['category-rule', 'Category rule', 'The rule of the category "Work": every event with this category gets a 15-minute reminder and the office as its location.', async p => {
-    await p.goto('/calendar?rule=Work&back=%2Fsettings%23categories'); await p.locator('#ed:not([hidden])').waitFor(); }, 'light', { readme: false }],
+    await p.goto('/calendar?rule=Work&back=%2Fsettings%23categories'); await p.locator('#ed:not([hidden])').waitFor(); }, 'light'],
   ['recurrence', 'Repeating event', 'A weekly event in edit mode: the repeat card with its preview calendar, and the colour that the category rule "Sports" sets.', async p => {
     await openEvent(p, 'Yoga', '2026-10-15');
-    await p.locator('#ed-lock').click(); await p.locator('#edform.mode-edit').waitFor(); await p.locator('#edh').blur(); }, 'light', { readme: false }],
+    await p.locator('#ed-lock').click(); await p.locator('#edform.mode-edit').waitFor(); await p.locator('#edh').blur(); }, 'light'],
   ['history', 'Change history', 'The change history as a list: an undone change with its before and after values, and the history of that event.', async p => {
     await p.goto('/history?view=list'); // the newest change is picked: the undo (02-demo.py)
-    await p.locator('.hxc-card .hxc-pv b').first().waitFor({ state: 'attached' }); }, 'light', { readme: false }],
+    await p.locator('.hxc-card .hxc-pv b').first().waitFor({ state: 'attached' }); }, 'light'],
   ['app-tokens', 'Account and app tokens', 'The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device.', async p => {
-    await p.goto('/settings#account'); await p.locator('#account').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+    await p.goto('/settings#account'); await p.locator('#account').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['groups', 'Groups', 'A group and its members: every member may add or remove members and manage the group\'s calendars.', async p => {
-    await p.goto('/settings#groups'); await p.locator('#groups').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
+    await p.goto('/settings#groups'); await p.locator('#groups').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['import', 'Import a calendar', 'An .ics file picked for import: name, colour and time zone come from the file and can be changed before the import.', async p => {
     await p.goto('/settings#import-calendar');
     await p.locator('#import-calendar .imp-file').setInputFiles({ name: 'school-year.ics', mimeType: 'text/calendar', buffer: Buffer.from(IMPORT_ICS) });
-    await p.locator('#import-calendar .imp-fields:not([hidden])').waitFor(); }, 'light', { readme: false, device: 'settings', fit: true }],
-  ['phone', 'Phone layout', 'The same app on a phone: the address book, the task list and an event.', null, 'light', { readme: false, phones: [
+    await p.locator('#import-calendar .imp-fields:not([hidden])').waitFor(); }, 'light', { device: 'settings', fit: true }],
+  ['phone', 'Phone layout', 'The same app on a phone: the address book, the task list and an event.', null, 'light', { phones: [
     // calendar views on a phone show a + on every day (chrome.css `hover: none`): the contacts stand in for them
     async p => { await ctList(p); },
     async p => { await tkView(p, 'groups', 'month'); },
     async p => { await openEvent(p, 'Q4 roadmap workshop', D); },
   ] }],
 ];
+
+// the gallery groups (site/build.mjs: one chip each, the gallery runs in this order): every slug in exactly one
+const GROUPS = {
+  'Calendar': ['day', 'week', 'month', 'year-planner', 'free-weekends', 'vacation-planner', 'countdown', 'year-in-numbers'],
+  'Tasks': ['tasks-list', 'tasks-table', 'tasks-board', 'tasks-timeline', 'tasks-deck', 'tasks-done'],
+  'Contacts': ['contacts-list', 'contacts-table'],
+  'Editors': ['event-view', 'event-edit', 'recurrence', 'task-view', 'task-edit', 'contact-view', 'contact-edit', 'category-rule'],
+  'Colours and search': ['colours', 'colour-optimiser', 'search', 'month-dark'],
+  'Settings and more': ['settings', 'app-tokens', 'groups', 'import', 'history', 'phone'],
+};
+function groupOf(slug) {
+  const g = Object.keys(GROUPS).filter(k => GROUPS[k].includes(slug));
+  if (g.length !== 1) throw new Error(`shots.mjs GROUPS: ${slug} is in ${g.length} groups`);
+  return g[0];
+}
+for (const [slug] of SHOTS) groupOf(slug);
+if (Object.values(GROUPS).flat().length !== SHOTS.length) throw new Error('shots.mjs GROUPS name a slug that SHOTS does not have');
 
 // phone screens (2x PNG, base64) side by side with a frame and a shadow on a light backdrop: an own context without
 // the server (only data: URLs), the same 2x scale; the result is a 2x PNG like every other shot
@@ -306,7 +323,7 @@ try {
   }
   for (const [slug, title, caption, go, scheme = 'light', opt = {}] of SHOTS) {
     const file = `${String(++n).padStart(2, '0')}-${slug}.webp`;
-    meta.push({ file, title, caption, ...(opt.readme === false ? { readme: false } : {}) });
+    meta.push({ file, title, caption, group: groupOf(slug) });
     if (only && !only.has(slug)) continue;
     const png = path.join(PNG, file.replace(/\.webp$/, '.png'));
     if (opt.phones) {

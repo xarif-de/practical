@@ -1,7 +1,7 @@
 #!/bin/sh
 # The checks a change passes, cheapest first; stops at the first failure.
 #   gate.sh quick            cargo test → API doc (rustdoc, -D warnings: a broken intra-doc link fails; = mise run doc) →
-#                            server build (E2E_PROFILE, default e2e) → functional suite
+#                            docs-nav --check → site link check (site/build.mjs --check) → server build (E2E_PROFILE, default e2e) → functional suite
 #   gate.sh full <ref-dir>   quick → chaos (the seeded UI monkey, e2e/chaos, ~60 s) → a11y (axe over fixed states against
 #                            a11y-allow.txt + keyboard flows, e2e/a11y, ~30 s; a11y-check.mjs) → visual baseline of this checkout →
 #                            compare against <ref-dir> (or E2E_REF): a
@@ -32,6 +32,10 @@ step "doc"
 echo "== docs navigation (mise run docs-nav)"
 node "$E2E/demo/docs-nav.mjs" --check
 step "docs-nav"
+echo "== site links (site/build.mjs --check: every internal link and anchor of the Pages site and the README)"
+[ "$E2E/../site/node_modules/.package-lock.json" -nt "$E2E/../site/package-lock.json" ] || (cd "$E2E/../site" && npm ci --no-fund --no-audit)
+node "$E2E/../site/build.mjs" --check
+step "site links"
 cd "$E2E"
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null
