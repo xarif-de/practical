@@ -142,7 +142,10 @@ Open `https://plan.your.domain` and sign in. Calendar apps (DAVx⁵, Thunderbird
 
 ## Why PractiCal?
 
-Simple: I could not find a calendar app for the browser that was as good as I wanted.
+**tl;dr: I could not find a calendar app for the browser that was as good as I wanted.**
+
+<details>
+<summary>For many years …</summary>
 
 For many years I have run [Nextcloud](https://nextcloud.com/) on my private server. I wanted to replace it with
 several smaller tools, because a few things about it kept bothering me. The only reason it stayed was its excellent
@@ -163,6 +166,20 @@ use every day. Feedback, ideas for improvements, bug reports and contributions a
 [merge request](https://gitlab.com/xarif/docker/practical/-/merge_requests).
 
 — Thomas Steinbach
+
+</details>
+
+## lennart-k/RustiCal
+
+PractiCal is only the web frontend. The actual CalDAV/CardDAV server is
+[RustiCal](https://github.com/lennart-k/rustical) by lennart-k, a wonderful project in its own right. It stores your
+calendars, contacts and tasks, syncs them with your phones and desktop apps, and its binary ships unmodified in the
+PractiCal image.
+
+All kudos for the backend belong to RustiCal. So do all backend issues: if something goes wrong with syncing, DAV
+clients or the server itself, please report it at
+[lennart-k/rustical/issues](https://github.com/lennart-k/rustical/issues). Anything about the web UI belongs
+[here](https://gitlab.com/xarif/docker/practical/-/issues).
 
 ## License
 
