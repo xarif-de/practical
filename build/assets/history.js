@@ -322,7 +322,13 @@
           : shape(s.act, hollow, s.act === 'create');
         const ring = s.c.src === 'undo' ? '<circle r="11" class="hxg-ring"/>' : '';
         const txt = sentence(s.c, false).replace(/<[^>]+>/g, '');
-        return `<g class="hxg-stop${s.c.id === openId ? ' open' : ''}" data-cid="${s.c.id}" data-status="${st}" transform="translate(${s.x},${LY})" tabindex="0" role="button" aria-label="#${s.c.id} ${esc(txt)}"><title>#${s.c.id} · ${esc(when(s.c.t))} · ${esc(txt)}</title><circle r="14" class="hxg-hit"/>${ring}${body}${labelOf(s) ? `<text y="22" text-anchor="middle" class="hxg-id">${labelOf(s)}</text>` : ''}</g>`;
+        // The <title> IS the name — no aria-label beside it. axe counts an SVG title as the
+        // element's visible text, so a name that said anything else was a
+        // `label-content-name-mismatch` (WCAG 2.5.3, axe-core 4.14; the shape-only stops, which
+        // show no label and no count badge, failed it). Through the subtree the name also picks
+        // up the count badge and the shared label ("#16·17"), which is what a voice-control user
+        // can actually say.
+        return `<g class="hxg-stop${s.c.id === openId ? ' open' : ''}" data-cid="${s.c.id}" data-status="${st}" transform="translate(${s.x},${LY})" tabindex="0" role="button"><title>#${s.c.id} · ${esc(when(s.c.t))} · ${esc(txt)}</title><circle r="14" class="hxg-hit"/>${ring}${body}${labelOf(s) ? `<text y="22" text-anchor="middle" class="hxg-id">${labelOf(s)}</text>` : ''}</g>`;
       }).join('');
       return `<svg width="${W}" height="${ROWH}" class="hxg-row">${segs}${arcs}${stops}</svg>`;
     }

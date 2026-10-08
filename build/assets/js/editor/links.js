@@ -77,8 +77,10 @@
     else if (a === 'jitsi') { const slug = (ruleMode || f.summary.value || 'raum') /* a rule's room is named after the category */.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'raum'; lkAddUri(`https://meet.jit.si/${slug}-${Math.random().toString(36).slice(2, 8)}`, 'Jitsi'); } });
   // colour: the colour picker; "like the calendar" means no COLOR property (color_cal ticked)
   const toHex = c => { if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase(); const el = document.createElement('i'); el.style.color = c; document.body.appendChild(el); const rgb = getComputedStyle(el).color.match(/\d+/g); el.remove(); return rgb && rgb.length >= 3 ? '#' + rgb.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('') : '#3478f6'; };
-  const colorBtn = $('#ed-color-btn');
-  function paintColor() { const b = $('#ed-color-btn'); b.style.setProperty('--c', f.color.value); b.querySelector('span').textContent = f.color_cal.checked ? b.dataset.tCal : ''; } // hoisted: syncDot calls it
+  const colorBtn = $('#ed-color-btn'), colorLabel = colorBtn.getAttribute('aria-label'); // the template's label, before paintColor appends to it
+  // hoisted: syncDot calls it. The name carries the shown text ("calendar colour") as well, because
+  // that is what a voice-control user reads (WCAG 2.5.3; axe `label-content-name-mismatch` 4.14).
+  function paintColor() { const b = colorBtn; b.style.setProperty('--c', f.color.value); const shown = f.color_cal.checked ? b.dataset.tCal : ''; b.querySelector('span').textContent = shown; b.setAttribute('aria-label', shown ? `${colorLabel} ${shown}` : colorLabel); }
   const setColor = c => { const own = !!c; f.color_cal.checked = !own; f.color.value = toHex(own ? c : (f.calendar.selectedOptions[0] || {}).dataset?.color || '#3478f6'); f.color.disabled = !own; paintColor(); };
   colorBtn.addEventListener('click', () => {
     const o = f.calendar.selectedOptions[0], kind = ruleMode ? (TASK ? 'category-task' : 'category') : TASK ? 'task' : 'event', title = ruleMode || f.summary.value.trim() || (TASK ? T.newTask || '' : T.newEv || '');
