@@ -179,7 +179,7 @@ Open `https://plan.your.domain` and sign in. Calendar apps (DAVx⁵, Thunderbird
 
 ## Documentation
 
-| | |
+| Guide | What's inside |
 | --- | --- |
 | [Features](docs/features.md) | everything PractiCal does, view by view |
 | [Deployment](docs/deployment.md) | production setup: image tags, pod hardening, network, backups |
