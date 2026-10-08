@@ -1,5 +1,5 @@
 <!-- docs-nav:top -->
-<p><a href="docs/index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
 
 # Contributing to PractiCal
@@ -259,5 +259,5 @@ rules.
 | [Performance](docs/performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](docs/licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
-<p><a href="docs/index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->

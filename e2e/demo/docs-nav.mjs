@@ -27,7 +27,7 @@ const strip = s => s.replace(/<!-- docs-nav:(top|bottom) -->\n[\s\S]*?<!-- \/doc
 const stale = [];
 for (const page of pages) {
   const file = path.join(REPO, page);
-  const back = `<p><a href="${rel(page, INDEX)}"><b>← Back to gallery and documentation</b></a></p>`;
+  const back = `<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>`; // absolute: on gitlab.com a relative .md link opens the source explorer; the site build makes it relative
   const index = table.replace(/\]\(([^)]+)\)/g, (_, t) => {
     if (/^[a-z]+:/.test(t)) return `](${t})`;
     const [p, frag] = t.split('#');

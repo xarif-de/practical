@@ -1,5 +1,5 @@
 <!-- docs-nav:top -->
-<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
 
 # Deployment
@@ -191,5 +191,5 @@ Run it from a sidecar container that has `sqlite3`. The example deployment does 
 | [Performance](performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
-<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->

@@ -5,3 +5,5 @@ features:
   pages: enabled
   issues: enabled
   shared_runners: true
+  # the site at https://xarif.gitlab.io/docker/practical/ instead of a generated practical-<n>.gitlab.io
+  pages_unique_domain: false

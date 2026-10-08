@@ -1,5 +1,5 @@
 <!-- docs-nav:top -->
-<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
 
 # Repo overview — the files outside the Rust API doc (rules: /AGENTS.md)
@@ -108,5 +108,5 @@ leaves 127.0.0.1. Pixel baselines depend on host fonts + Chromium build: compare
 | [Performance](performance-2026-10.md) | measurements, release policy, known limits |
 | [Licensing](licensing.md) | AGPL-3.0, RustiCal, third-party assets |
 
-<p><a href="index.md"><b>← Back to gallery and documentation</b></a></p>
+<p><a href="https://xarif.gitlab.io/docker/practical/"><b>← Back to gallery and documentation</b></a></p>
 <!-- /docs-nav -->
