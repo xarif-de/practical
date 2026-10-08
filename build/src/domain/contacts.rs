@@ -1,6 +1,14 @@
 //! Contacts on RustiCal's address books. Parsing through caldata's vCard
 //! component; writing generates vCard 3.0 (the dialect Apple and DAVx⁵ both
 //! round-trip) and stores it through the store crate.
+//!
+//! - [`Contact`] is the parsed card, [`ContactCache`] keeps them per address book and synctoken.
+//! - [`matches()`]: address-book entries for an ORGANIZER/ATTENDEE (same e-mail, else family name plus a given
+//!   name or its prefix; rooms and resources never).
+//! - [`yearly_in`]: a yearly date in a given year (29 February → 28 February in a common year).
+//! - Reading (vcard.rs): [`raw_lines`] (parameters from the raw text: caldata keeps only the first),
+//!   [`preserved_lines`] (copied verbatim on a save), [`bare_params_as_type`] (vCard 2.1 bare parameters).
+//! - Writing (write.rs): vCard 3.0. A `.vcf` import without UID gets one ([`crate::domain::transfer`]).
 
 use crate::domain::collections::{self, AbInfo};
 use crate::domain::ical;

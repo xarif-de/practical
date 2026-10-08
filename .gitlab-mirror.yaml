@@ -1,0 +1,7 @@
+# gitlab.com mirror overrides for this repository (read by kubernetes/forgejo resources/mirror-lib.sh).
+# CI/CD + shared runners + Pages: .gitlab-ci.yml publishes the Rust API doc. Issues: public bug reports.
+features:
+  builds: enabled
+  pages: enabled
+  issues: enabled
+  shared_runners: true

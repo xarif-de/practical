@@ -1,4 +1,10 @@
 //! Per-request page context for templates: language, user, CSRF token, flash.
+//!
+//! - [`PageCtx`] is extracted by every page handler. Its language is the user's stored preference, else the
+//!   best match of `Accept-Language` ([`crate::i18n::negotiate`]).
+//! - [`set_flash`] stores a one-shot message that the next page view shows and removes.
+//! - [`localize_errors`] renders an [`AppError`](crate::error::AppError) of a browser session in the page
+//!   language.
 
 use crate::i18n::negotiate;
 use crate::state::SharedState;
@@ -31,11 +37,11 @@ pub struct PageCtx {
     pub i18n: Arc<crate::i18n::I18n>,
     pub public_dav_url: String,
     pub push_enabled: bool,
-    /// Development mode (assets from disk + `/dev/reload`); adds `data-dev` to <body>.
+    /// Development mode (assets from disk + `/dev/reload`); adds `data-dev` to `<body>`.
     pub dev: bool,
     /// The request asked for JSON (a form saved by fetch): answer instead of redirecting with a flash.
     pub wants_json: bool,
-    /// The user's colour scheme: auto (the system's) | light | dark — rendered into <html>, so it
+    /// The user's colour scheme: auto (the system's) | light | dark — rendered into `<html>`, so it
     /// holds on every device and nothing flickers
     pub scheme: String,
 }
@@ -73,7 +79,7 @@ impl PageCtx {
     pub fn i18n_src(&self) -> &'static str {
         crate::routes::assets::url(&format!("i18n-{}.js", self.lang)).or_else(|| crate::routes::assets::url("i18n-en.js")).expect("i18n-en.js")
     }
-    /// `/assets/<name>?v=<its own version>` for the <link>/<script> tags: a change of one file leaves the
+    /// `/assets/<name>?v=<its own version>` for the `<link>`/`<script>` tags: a change of one file leaves the
     /// other files' URLs (and the browser's immutable copies of them) as they are.
     pub fn asset(&self, name: &str) -> &'static str {
         crate::routes::assets::url(name).expect("an asset")

@@ -1,4 +1,6 @@
-//! `AppState`: the process-wide state every handler gets (config, DB pool, RustiCal stores, caches, guards).
+//! [`AppState`]: the process-wide state every handler gets (config, DB pool, RustiCal stores, caches, guards).
+//!
+//! The caches and their keys are tabled in the crate docs, section "Caches".
 
 use crate::config::Config;
 use crate::i18n::I18n;

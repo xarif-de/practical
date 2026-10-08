@@ -1,4 +1,7 @@
 //! Background loops (tokio intervals, like RustiCal's own tasks.rs).
+//!
+//! `serve` (main.rs) spawns them at start; the crate docs table their periods and work ("Background loops").
+//! Every round runs inside [`guarded`]. The reminder loop lives in [`crate::domain::push`].
 
 use crate::state::{ChangeEvent, SharedState};
 use sqlx::Row;

@@ -1,6 +1,9 @@
 //! /history — the change history (`domain::history`): the line map and the list with details are
 //! drawn in the browser (history.js) from one JSON document, which /api/history serves again after
 //! an undo or a live change. Values arrive readable (the viewer's language and zone).
+//!
+//! Routes: `/history`, `/api/history`, `/api/history/{id}/plan` (what an undo would do), `/api/history/{id}/undo`.
+//! The document's expensive part is kept per user in [`HistoryCache`].
 
 use crate::csrf;
 use crate::ctx::PageCtx;

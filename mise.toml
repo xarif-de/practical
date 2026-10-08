@@ -33,6 +33,15 @@ exec cargo deny --manifest-path build/Cargo.toml check advisories bans sources
 description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust version — one Renovate group moves both); this checkout's own target dir, content-checked freshness, sccache if installed (e2e/cargo.sh)"
 run = "e2e/cargo.sh test"
 
+[tasks.doc]
+description = "API doc of the Rust code (rustdoc with private items: a [[bin]] crate) in this checkout's target dir (e2e/cargo.sh); any rustdoc warning (a broken intra-doc link too) fails; prints the index.html path. Module docs start at build/src/main.rs"
+run = '''
+set -e
+RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
+T="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(cd build && pwd -P | shasum | cut -c1-12)}"
+echo "API doc: $T/doc/practical/index.html"
+'''
+
 [tasks.dev]
 description = "Feedback loop: watchexec rebuilds+restarts on src/templates/locales edits (~3-10 s), CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db`"
 run = '''
@@ -131,7 +140,7 @@ E2E_SUITE=a11y npx playwright test && exec node a11y-check.mjs
 '''
 
 [tasks.gate-quick]
-description = "Gate of a change without the visual part: cargo test → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
+description = "Gate of a change without the visual part: cargo test → API doc (rustdoc -D warnings) → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
 run = "e2e/gate.sh quick"
 
 [tasks.gate]

@@ -1,6 +1,12 @@
 //! JSON endpoints used by app.js: SSE change stream, event/contact/task CRUD,
 //! search, push subscriptions. All mutations need the CSRF header (the origin
 //! guard already rejected cross-site requests before we get here).
+//!
+//! - `/api/changes` ([`changes`]): the SSE stream of the [`ChangeEvent`](crate::state::ChangeEvent)s the change poller broadcasts.
+//! - Create and delete go through one envelope each, [`create_object`] and [`delete_object`].
+//! - The body limit is 8 MiB: embedded files ride in the JSON body as base64.
+//! - One sub-module per area: events (+ mentions, alarm presets; [`MentionCache`]), categories, contacts,
+//!   tasks, search, push, geo.
 
 use crate::csrf;
 use crate::domain::contacts::{self, Contact, ContactInput};

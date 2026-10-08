@@ -1,4 +1,12 @@
 //! Per-user settings in `practical_user_settings`.
+//!
+//! - [`get`] and [`set`] read and write the whole row. Hold [`Guards::prefs`](crate::state::Guards::prefs)
+//!   from `get` until after `set`, or two saves at once lose one.
+//! - [`VacationRule`] (`{"v":2,kind,value}`): a category, a calendar or a title regex (Rust `regex`, at most
+//!   [`TITLE_PATTERN_MAX`] characters, no look-around; the settings page tests it live through
+//!   `/api/titles`). A legacy rule without `v` means the category OR the word in the title.
+//! - The user's own region is the first region of the public-holiday list: vacation and bridge days count
+//!   by it.
 
 use sqlx::{Row, SqlitePool};
 
@@ -165,7 +173,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     Ok(())
 }
 
-/// `#rrggbb` — the only colour form stored (it is written into a <style> block)
+/// `#rrggbb` — the only colour form stored (it is written into a `<style>` block)
 pub fn is_hex_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())
 }

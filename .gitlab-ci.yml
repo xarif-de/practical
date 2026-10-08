@@ -1,0 +1,25 @@
+# gitlab.com mirror only: builds the Rust API doc and publishes it with GitLab Pages. Not the project's pipeline —
+# build, tests and image publishing run on Forgejo Actions (dagger-ci.yaml); this job adds the public API doc, nothing
+# else. Enabled for this repository alone by .gitlab-mirror.yaml (CI/CD, Pages, shared runners; read by
+# kubernetes/forgejo resources/mirror-lib.sh). Runs for release tags and on a manual "Run pipeline".
+pages:
+  # same Rust as build/Dockerfile and build/rust-toolchain.toml (one Renovate group, renovate.json "rust toolchain")
+  image: rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_PIPELINE_SOURCE == "web"
+  variables:
+    CARGO_HOME: $CI_PROJECT_DIR/.cargo-home
+    # build/.cargo/config.toml points target-dir at a developer's home directory
+    CARGO_TARGET_DIR: $CI_PROJECT_DIR/build/target
+    # the same check as `mise run doc`: a broken intra-doc link fails the job
+    RUSTDOCFLAGS: -D warnings
+  script:
+    # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (as build/Dockerfile)
+    - apk add --no-cache build-base perl make
+    - cd build && cargo doc --locked --no-deps --document-private-items
+    - mv target/doc ../public
+    - printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=practical/index.html"><a href="practical/index.html">PractiCal API doc</a>\n' > ../public/index.html
+  artifacts:
+    paths: [public]
+  pages: true

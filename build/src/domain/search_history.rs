@@ -1,6 +1,7 @@
 //! The top-bar search's history (`practical_search_history`): queries the user finished — opened a result
 //! from, or pressed Enter on — with the result last opened (`target`, the client's JSON, so Tab can
-//! go straight there). One row per folded query; kept for the user's `Prefs::history_days`.
+//! go straight there). One row per folded query; kept for the user's `Prefs::history_days`
+//! (`search_history_days`), at most 300 per user.
 
 use crate::domain::search::fold;
 use sqlx::{Row, SqlitePool};

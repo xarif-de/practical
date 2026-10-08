@@ -1,5 +1,8 @@
-//! `AppError`: every failure a handler returns, its HTTP status, and the user message key (`Msg`) that
-//! ctx::localize_errors renders in the page language.
+//! [`AppError`]: every failure a handler returns, its HTTP status, and the user message key ([`Msg`]) that
+//! [`crate::ctx::localize_errors`] renders in the page language.
+//!
+//! Message keys start with `err-` (build/locales/*.ftl). [`catch_panic`] turns a handler panic into a 500
+//! answer, so a panic never drops the connection.
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};

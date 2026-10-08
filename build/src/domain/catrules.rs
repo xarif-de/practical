@@ -3,6 +3,10 @@
 //! repeat) carry one mode; the when and status cards carry a mode per setting, reminders and links a
 //! mode per entry. Stored as JSON in `practical_category_rules`; the editor applies them client-side in the
 //! order of the event's categories (the first wins per setting).
+//!
+//! A lock beats a default. Locks hold in this UI only: a DAV client can write anything. The client side is
+//! js/editor/categories.js and js/editor/rule-editor.js; the settings page opens the editor dialog through
+//! [`crate::routes::editor`].
 
 use crate::domain::events::{self, Alarm, Link};
 use crate::error::{AppError, AppResult};

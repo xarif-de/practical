@@ -1,4 +1,13 @@
 //! HTML generation for the calendar views; markup and class names are the ones style.css is written for.
+//!
+//! One file per view: month (also agenda, timeline and date picker), week, day, and text (icons, recurrence
+//! and reminder sentences). Shared helpers:
+//!
+//! - [`L`]: the words and dates of a view in the page language.
+//! - [`script_json`]: JSON safe inside a `<script>` block.
+//! - [`safe_href`]: no `javascript:`, `vbscript:` or `data:` link from stored data.
+//!
+//! Golden files of every generator: `tests/snapshots/render/` (render/pinned.rs).
 
 use crate::domain::events::{EventDetail, Instance};
 use chrono::{Datelike, Duration, NaiveDate};

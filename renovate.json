@@ -17,7 +17,7 @@
       "groupName": "rustical"
     },
     {
-      "description": "One Rust version for the image build AND local dev/tests: the builder image (build/Dockerfile, `rust:<x.y>-alpine`) and build/rust-toolchain.toml move in ONE PR. Until 2026-10-02 they were separate: the image (docker tags, no timestamps) updated at once, the toolchain file (Renovate's rust-toolchain manager, rust-version datasource WITH timestamps) waited the preset's 3-day minimumReleaseAge — so every Rust release left CI and `mise run test` on different compilers for days. build/Cargo.toml's rust-version is the MSRV floor and is not bumped.",
+      "description": "One Rust version for the image build AND local dev/tests: the builder image (build/Dockerfile and the API-doc job in .gitlab-ci.yml, `rust:<x.y>-alpine`) and build/rust-toolchain.toml move in ONE PR. Until 2026-10-02 they were separate: the image (docker tags, no timestamps) updated at once, the toolchain file (Renovate's rust-toolchain manager, rust-version datasource WITH timestamps) waited the preset's 3-day minimumReleaseAge — so every Rust release left CI and `mise run test` on different compilers for days. build/Cargo.toml's rust-version is the MSRV floor and is not bumped.",
       "matchDepNames": [
         "rust"
       ],

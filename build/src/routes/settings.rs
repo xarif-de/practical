@@ -1,5 +1,10 @@
 //! /settings — groups, collections, app tokens, trash, preferences, import/export. All mutations are POST
 //! forms with CSRF (the form field, or X-CSRF-Token for the JSON saves).
+//!
+//! Every form handler answers through one envelope, [`form`] → [`finish`]: a redirect back to the page
+//! section with a flash (or JSON for a fetch). The forms live in the sub-modules (groups, collections,
+//! tokens, preferences, transfer = export and import). The two routes that import into a new collection
+//! accept a 32 MiB body.
 
 use crate::csrf;
 use crate::ctx::{PageCtx, set_flash};

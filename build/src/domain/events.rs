@@ -1,6 +1,24 @@
 //! Calendar events: window expansion for the views (caldata's rrule engine — checked against python-dateutil
 //! on 60 real series, tests.rs `recurrence_matches_dateutil_oracle`), plus create/update/delete
-//! through RustiCal's store. Every view works on `Instance`s in the user's zone.
+//! through RustiCal's store. Every view works on [`Instance`]s in the user's zone.
+//!
+//! - [`instances`] expands a window; [`InstanceCache`] keeps exact windows, [`DensityCache`] the per-month
+//!   counts of a year, [`ObjMetaCache`] (detail.rs) per-object metadata for the pickers.
+//! - caldata builds generated instances without VALARMs, so a series' instances get the master's.
+//! - Saving keeps what the editor does not model (ics.rs): only the properties in `MANAGED` are rewritten;
+//!   every other line and component is copied verbatim, a VALARM keeps its position, RECURRENCE-ID overrides
+//!   stay untouched (test `unchanged_save_keeps_every_property`). A changed DESCRIPTION drops Outlook's
+//!   `X-ALT-DESC` and `STYLED-DESCRIPTION`, which would be stale.
+//! - Links and attachments (props.rs): URL, ATTACH and CONFERENCE as one list; FMTTYPE, FILENAME, SIZE and
+//!   FEATURE are modelled, other parameters ride along. Embedded files: [`EMBED_FILE_MAX`] (2 MiB) per file,
+//!   [`EMBED_TOTAL_MAX`] per save. RELATED-TO is resolved to the other event's or task's title and date
+//!   (detail.rs).
+//! - ORGANIZER and ATTENDEE are display only: RustiCal does no scheduling (RFC 6638), and every parameter is
+//!   saved back unchanged.
+//! - Reminders (alarms.rs): presets per user (`alarm_presets_json`, `/api/alarm-presets`; the built-in list
+//!   until the user changes it); PROXIMITY and ACKNOWLEDGED are kept as written.
+//! - Recurrence: caldata is authoritative; the editor's preview is the client's. A rule the editor's strip
+//!   cannot paint (BYSETPOS, several ordinals, BYHOUR …) is saved as typed.
 
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::ical;

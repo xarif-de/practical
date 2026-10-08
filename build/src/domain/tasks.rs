@@ -5,6 +5,11 @@
 //!
 //! What this module does NOT model (recurrence, attendees, X-properties) survives a save
 //! verbatim; see `MANAGED` and `update_task`.
+//!
+//! - The model is a minimal VTODO: [`Task`] (list row), [`TaskDetail`] (editor), [`TaskCache`] (parsed tasks
+//!   per calendar and synctoken).
+//! - Status shown: a task without STATUS is open, or done when it carries a COMPLETED stamp
+//!   ([`Task::completed`]); a save writes no STATUS the user did not pick.
 
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::events::{self, Alarm, Link, Related};

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Performance regression bench (docs/MAP.md "bench"): a small set of key metrics of this checkout's server
+// Performance regression bench (docs/repo-overview.md "e2e/"; setup and calibration: the block above RULES): a small set of key metrics of this checkout's server
 // build on a large synthetic DB; with --ref, A/B against a reference build, interleaved on this machine in this run.
 //   node e2e/bench/bench.mjs [--out <dir>]              measure this checkout → <dir>/result.json, table.txt, the binary
 //   node e2e/bench/bench.mjs --ref <dir> [--out <dir>]  A/B against <dir> (a former --out; default out bench-<sha>-vs-<ref sha>); exit 1 on a regression,
@@ -41,7 +41,29 @@ const T0 = Date.now();
 let DB; // the cached bench DB (main)
 const log = m => console.error(`[bench ${((Date.now() - T0) / 1000).toFixed(0).padStart(3)} s] ${m}`);
 
-// ---------------------------------------------------------------- thresholds (calibration: docs/MAP.md "bench")
+// ---------------------------------------------------------------- setup and calibration
+// DB: fixture + alice 3,500 events (60 series), 150 tasks, 300 contacts, ~450 history changes, cached
+// `~/.cache/practical-e2e/bench-db-<sha of gen-db.py + fixture>.sqlite3`. Servers: production mode, password login,
+// real clock, retention 100 y, egress blocked, fresh DB copy per phase. Metrics: `srv.lat|cpu|inst.<ep>` (11 endpoints),
+// `srv.first.*`, `srv.sql.<ep>`, `srv.rss.*`/`srv.peak.burst`, `idle.cpu|inst|wakeups` (60 s, 1 SSE client, VAPID + 1 push
+// subscriber; login on a start of its own before the measured one), `wire.*`, `dom.*`, `ui.<action>(.cpu4|.busy|.reqs)`,
+// `size.binary`, `size.src.*`. Verdict: ref and cand alternate per round/sample in one session; alarm ⇔ median per-round
+// ratio > 1+rel AND median Δ > abs (`RULES`); stored numbers are information. `size.binary` is judged only between two
+// builds of one non-e2e profile (`E2E_PROFILE=release` against a release-profile ref); on `e2e` (256 codegen units,
+// module-partitioned) it is information. Power state (pmset) recorded per phase; a change → exit 4.
+// Calibration 2026-10-07 (901d09e vs itself, M4 Pro, Low Power Mode, host shared with other agents): idle.* ratios
+// 0.93-1.06 in 5 runs (idle.inst 4.8-6.2 Minstr/min; before the separate login start 9.7-12.2 at up to ±103 % noise);
+// size.binary release vs release 1.000. p90 latency is judged per round (median of the rounds' p90 ratios): pooled,
+// single 20-75 ms host-load samples in one round alarmed (contacts ×1.37, history ×1.75). ui.editor-open is bimodal
+// (~9 or ~23 ms per sample, busy time stable): its abs floor is 20 ms (alarmed at ×2.26/Δ 13.9 and ×2.40/Δ 11.9 on
+// identical code). With these rules 2 consecutive clean runs at load avg 6.3 and 20.5 (start of run); max p90 ratio
+// 1.05. Injected and caught: 20 ms sleep in the tasks handler → srv.lat.tasks.p50 ×11.6, p90 ×11.0; 50 ms busy loop
+// on every click → 12 ui.* metrics (editor-open ×6.6, task-toggle ×2.6, view-week ×2.3 …); poller every 100 ms
+// without the `db::Watch` gate → idle.cpu ×95, idle.inst ×188, idle.wakeups ×16; a 300 KB static → release
+// size.binary ×1.013 (threshold ×1.01: smallest catch ≈ 226 KB), e2e ×1.010 reported only. Earlier (befd301):
+// app.js + 5 KB → wire ×1.054; 30 MB per burst → srv.rss.burst ×1.12.
+// Runtime: bench ~2 min, bench-compare ~3 min + build.
+// ---------------------------------------------------------------- thresholds (calibration: the block above)
 // alarm ⇔ ratio (cand/ref) > 1 + rel AND delta (cand − ref) > abs: small values and small relative moves stay quiet
 const RULES = [
   [/^srv\.lat\..*\.p50$/, { rel: 0.15, abs: 2 }],

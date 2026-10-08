@@ -1,4 +1,11 @@
 //! Domain logic on RustiCal's store and the practical_* tables; routes/ calls in (no extractors or responses here).
+//!
+//! Layout: `<module>.rs` with its sub-modules in `<module>/`; `<module>/pinned.rs` pins today's behaviour
+//! (characterisation tests), `<module>/tests.rs` holds the unit tests. The objects: [`events`], [`tasks`],
+//! [`contacts`], their collections ([`collections`], [`groups`], [`tokens`]); the change history
+//! ([`history`], [`history_text`]); per-user data ([`prefs`], [`catrules`], [`colors`], [`search_history`]);
+//! search ([`search`]); outside sources ([`holidays`], [`geo`]); reminders ([`push`]); [`transfer`]
+//! (import/export) and the text helpers in [`ical`].
 
 pub mod catrules;
 pub mod collections;

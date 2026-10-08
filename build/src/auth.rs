@@ -1,5 +1,18 @@
 //! Login (OIDC via rustical_oidc, optional password), logout (local + IdP portal),
 //! and the guard that sends anonymous browsers to /login.
+//!
+//! The accounts are RustiCal's principals; PractiCal keeps no users of its own.
+//!
+//! - OIDC: PractiCal is its own client at RustiCal's identity provider. The callback only looks a
+//!   principal up and never creates one ([`LookupOnlyUserStore`]).
+//! - Password login is optional (`PRACTICAL__ALLOW_PASSWORD_LOGIN`). An unknown name is checked against a
+//!   dummy argon2 hash ([`dummy_hash`]), so it takes as long as a known one; [`LoginThrottle`] slows down
+//!   repeated failures.
+//! - [`require_user`] guards every page and API; [`safe_redirect`] keeps the post-login target on this site.
+//! - The login form's CSRF token is a cookie of its own ([`LOGIN_CSRF`]), so an anonymous visit creates no
+//!   session.
+//! - Logout ends the local session and, with OIDC, continues to the IdP's `LOGOUT_URL`: Authelia has no
+//!   `end_session_endpoint`, so this is its portal logout URL.
 
 use crate::csrf;
 use crate::ctx::{PageCtx, SESSION_USER};

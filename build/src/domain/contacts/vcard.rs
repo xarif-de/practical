@@ -120,12 +120,12 @@ pub fn parse_vcf(vcf: &str) -> AppResult<VcardContact> {
 }
 
 /// vCard 2.1 parameters without a name (`TEL;CELL;VOICE:…`, `EMAIL;INTERNET:…`; RFC 2426 §5: "The "TYPE="
-/// prefix to parameter values is required. In [VCARD] this was optional.") written as `TYPE=` parameters. caldata's
+/// prefix to parameter values is required. In \[VCARD\] this was optional.") written as `TYPE=` parameters. caldata's
 /// content-line parser takes every parameter as `name=value` and rejects the whole card otherwise (caldata
 /// 0.17.3 src/parser/content_line/mod.rs:62 `split_once('=')` → `MissingDelimiter`; `TEL;CELL;TYPE=HOME`
 /// even parses, as one parameter named `CELL;TYPE`) — and RustiCal's store then hides the card. A card without such a parameter comes back unchanged (borrowed); one with it unfolded.
 /// For reading and importing only: a stored card stays as it is until the user saves it here. Reported
-/// upstream: https://github.com/lennart-k/caldata-rs/issues/12 — drop this once caldata reads such cards.
+/// upstream: <https://github.com/lennart-k/caldata-rs/issues/12> — drop this once caldata reads such cards.
 pub fn bare_params_as_type(vcf: &str) -> std::borrow::Cow<'_, str> {
     let bare = |l: &str| split_unquoted(&l[..head_len(l)], ';').iter().skip(1).any(|p| !p.contains('='));
     let lines = unfold(vcf);

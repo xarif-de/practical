@@ -1,4 +1,8 @@
 //! Calendars and address books for the user and their groups.
+//!
+//! The collections a user sees are their own and those of their groups ([`owners`]). Create, update,
+//! delete to the trash, restore and purge go through RustiCal's store; [`delete_object`] deletes one object.
+//! Address-book colours are PractiCal's own (`practical_addressbook_colors`).
 
 use crate::domain::history_text::Store;
 use crate::error::{AppError, AppResult};

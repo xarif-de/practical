@@ -1,10 +1,161 @@
+//! PractiCal: a server-rendered web UI (axum + askama) on RustiCal's own SQLite store; this binary runs next to
+//! RustiCal in one image and one pod.
+//!
+//! This page is the entry point of the API doc (`mise run doc`). It explains how a request flows through the
+//! server, which module owns what, the rules every module keeps, and the background work. Files outside the
+//! crate (assets, templates, locales, build.rs, e2e/, deploy/) are described in `docs/repo-overview.md`.
+//!
+//! Every source file states its purpose in its first line (`//!`). Read that before opening more. `rg`/`fd`
+//! skip generated, vendored and golden data (`.ignore`; search those with `-u`).
+//!
+//! # How a request flows
+//!
+//! [`build_router_with`] stacks the layers, outermost first:
+//!
+//! 1. `TraceLayer` → [`error::catch_panic`] (the unlocalized one) → a `map_response` that adds the
+//!    [`content_security_policy`] to HTML and `Cache-Control: private, no-cache` to HTML and JSON.
+//! 2. `/assets/{name}` ([`routes::assets`]) and `/healthz` are merged *after* the layers below, so they run
+//!    without session, principal lookup, CSRF check or per-request compression.
+//! 3. `CompressionLayer` (gzip) → [`etag::revalidate`] (weak ETag, 304, brotli of the identity body) → the
+//!    session layer ([`sessions::DbStore`]) → [`sessions::activity`] (extends the expiry) → RustiCal's
+//!    `AuthenticationLayer` (the principal from the session or an HTTP Basic app token) →
+//!    [`csrf::origin_guard`] → the router.
+//! 4. The router: [`auth::router`] (`/login`, `/login/oidc*`, `/logout`), [`routes::dev`] (`/dev/reload`,
+//!    development only), `/` → `/calendar` ([`routes::pages`]), and the protected part:
+//!    [`auth::require_user`] → [`ctx::localize_errors`] → [`error::catch_panic`] → the page and API routers
+//!    [`routes::calendar`], [`routes::contacts`], [`routes::tasks`], [`routes::history`],
+//!    [`routes::settings`], [`routes::editor`], [`routes::api`] (each module's `router()` is merged here).
+//!
+//! Inside a handler:
+//!
+//! - Input comes through the validating extractors [`extract::Path`], [`extract::Query`], [`extract::Json`]
+//!   and [`extract::Form`]: a rejection names the field.
+//! - CSRF: [`csrf::Token`] or [`csrf::TokenOrBasic`] is extracted after the path and before the body, so a bad
+//!   token with a bad body answers 403.
+//! - The calendar pages extract [`routes::calendar::PageView`] (= [`ctx::PageCtx`] + [`routes::calendar::ViewCtx`]).
+//! - The handler calls into [`domain`] (no HTTP types there), which reads and writes RustiCal's stores
+//!   (`rustical_store_sqlite`: `SqliteCalendarStore`, `SqliteAddressbookStore`, `SqlitePrincipalStore`, held in
+//!   [`state::AppState`]) and the own `practical_*` tables through sqlx.
+//! - The answer is an askama template (`build/templates/`, context [`ctx::PageCtx`]), JSON, or an
+//!   [`error::AppError`] (an HTTP status plus a message key, [`error::Msg`], rendered in the page language).
+//!
+//! UI writes run between [`domain::history::begin`] and [`domain::history::Guard::commit`]. They hold one lock
+//! with the change poller, so each UI write becomes exactly one attributed change in the history.
+//!
+//! Live updates: [`tasks::spawn_change_poller`] → `state.changes` (a broadcast of [`state::ChangeEvent`]) →
+//! `/api/changes` (SSE, [`routes::api`]) → app.js refetches the fragment it shows.
+//!
+//! # Module map
+//!
+//! | module | owns |
+//! |---|---|
+//! | [`state`] | [`state::AppState`] (config, pool, stores, i18n, change broadcast, caches, history lock, VAPID keys, guards), [`state::Caches`], [`state::Guards`] |
+//! | [`config`] | [`config::Config::from_env`] (`PRACTICAL__*`) |
+//! | [`db`] | pool, own migrations, schema check, [`db::Watch`] |
+//! | [`auth`], [`sessions`], [`csrf`] | login and logout, the session store and its expiry, CSRF defence |
+//! | [`ctx`], [`extract`], [`error`], [`etag`] | page context, input gate, error answers, HTTP validators |
+//! | [`routes`] | HTTP handlers, one module per page or API area |
+//! | [`render`] | HTML of the calendar views |
+//! | [`domain`] | the logic on RustiCal's store and the own tables (no HTTP types) |
+//! | [`i18n`] | Fluent translations, language negotiation, plural forms |
+//! | [`bundle`], [`css_min`] | asset part order, the CSS minifier of build.rs |
+//! | [`clock`] | the server's "now" (fixed in development) |
+//! | [`tasks`] | background loops and [`tasks::guarded`] |
+//!
+//! Test-only modules are not in this doc: `testkit.rs` (a test router on a migrated temporary RustiCal
+//! database, golden files, allocation counting) and `it/*.rs` (route-level tests on the synthetic world of
+//! `it/seed.rs`: api_events, api_more, assets, auth, caches, history, http, pages, poison = the tier-0 chaos
+//! corpus, sessions, settings, units, validators). Pinned behaviour of a module sits in `<module>/pinned.rs`,
+//! its unit tests in `<module>/tests.rs`.
+//!
+//! # The shared database
+//!
+//! RustiCal and PractiCal run in the same pod, under the same uid, on one SQLite file in WAL mode.
+//!
+//! - PractiCal waits for RustiCal's `/ping` before it opens the file ([`wait_for_rustical`]): RustiCal runs its
+//!   own migrations at its start.
+//! - PractiCal never runs RustiCal's migrations ([`db::open`] calls `create_db_pool(.., migrate=false)`).
+//! - RustiCal's tables are touched only through its store crates. Exceptions are read-only queries, e.g. the
+//!   synctokens the change poller reads.
+//! - Own tables are named `practical_*`. Their ledger is `practical_migrations`, never `_sqlx_migrations`:
+//!   RustiCal's migrator aborts on a migration it does not know. `MIGRATIONS` in [`db`] is append-only;
+//!   [`db::check_schema`] checks the schema at start (refuses a missing or retyped column, logs other drift).
+//!
+//! # Background loops
+//!
+//! [`serve`] spawns them; every round runs inside [`tasks::guarded`], so a panic in one round is logged and the
+//! loop lives on.
+//!
+//! | loop | period | work |
+//! |---|---|---|
+//! | [`tasks::spawn_change_poller`] | 2 s (`PRACTICAL__DEV_POLL_MS` in development) | reads the [`db::Watch`] stamp; only after a commit by another connection: [`domain::history::poll`] (ingest), then the calendar and address-book synctokens → [`state::ChangeEvent`] |
+//! | [`domain::push::spawn_reminder_loop`] | 60 s from start, first tick at once; only with a VAPID key | rebuilds its [`domain::push::Plan`] only when the stamp moved, a user's day changed or a retry is due (backoff 1…16 min); fire window [now−2 min, now+1 min] |
+//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions |
+//! | [`tasks::spawn_holiday_coverage`] ([`domain::holidays::maintain`]) | 24 h; the first round only reads saved state | country coverage and CLDR release check, weekly (ETag, usually 304) |
+//! | [`tasks::spawn_dev_asset_watcher`] | 300 ms, development only | mtimes of `assets/**` → `dev_reload` → `/dev/reload` ([`routes::dev`]) |
+//!
+//! Idle cost (bench statement log, 1 SSE client and 1 push subscriber, 60 s): 31 × `PRAGMA data_version` (the
+//! poller every 2 s plus the reminder tick's), nothing else.
+//!
+//! # Caches
+//!
+//! All caches live in [`state::AppState`] (most in [`state::Caches`]). The rule: a write is never answered
+//! from before it. Keys therefore contain the synctoken, plus zone, day or language where the answer depends
+//! on them. Test: `it/caches.rs` (mutate, then the cached read must equal the uncached answer).
+//!
+//! | cache | key | invalidation / bound |
+//! |---|---|---|
+//! | [`domain::events::InstanceCache`] | (principal, cal, synctoken, tz, from, to), the exact window | LRU above 4 MiB; an entry above ¼ of that is not kept |
+//! | [`domain::events::DensityCache`] | (principal, cal) → (synctoken, tz, year) | ≤ 6 per calendar |
+//! | [`domain::events::ObjMetaCache`], [`domain::tasks::TaskCache`], [`domain::contacts::ContactCache`] | (principal, collection) | caught up through the store's `sync_changes` when the synctoken moved |
+//! | [`routes::api::MentionCache`] | user → (tz, today, [(principal, cal, synctoken, has VEVENT)]) | one per user |
+//! | [`routes::more::YearCache`] | (principal, cal, synctoken, tz, year) | LRU above 6 MiB |
+//! | [`routes::history::HistoryCache`] | user → key of everything the document is made of | LRU above 6 MiB |
+//! | [`domain::search::IndexCache`] | user → fingerprint of the synctokens of the user's collections | rebuilt in part on a change; dropped after 30 min idle |
+//! | [`domain::holidays::MemCache`] | (country, subdivision, year, kind-lang) | `cache_put` drops the key; ≤ 512 keys; freshness by `fetched_at` |
+//! | [`sessions::DbStore`] (memory part) | session id | write-through; expired records dropped on writes, at most every 10 min |
+//! | [`domain::geo::Geo`] | request string → places | 7 days; throttle 1 request/s per provider |
+//! | [`domain::history::PlanMemo`] | — | lives for one request |
+//!
+//! # Assets
+//!
+//! The shipped bytes are made by `build.rs` into `OUT_DIR`; [`routes::assets`] serves them.
+//!
+//! - [`bundle::BUNDLES`] is the single source of truth for the part order of app.js and style.css (order = JS
+//!   run order and CSS cascade). build.rs and the development mode both read it.
+//! - build.rs joins the parts, minifies (oxc for JS, target ES2020; [`css_min`] for CSS), stores gzip-9 and
+//!   brotli-11 forms and writes `OUT_DIR/assets.rs`. It also makes one `i18n-<lang>.js` per language from the
+//!   `.ftl` files (the `js-*` keys with their plural forms) and two gzip name tables from `regions.json`.
+//! - build.rs exports `RUSTICAL_TAG` ([`RUSTICAL_TAG`]): one tag for all `rustical_*` crates, equal to the
+//!   Dockerfile's RustiCal image tag (`practical check-rustical-image` compares them).
+//! - No inline script anywhere (CSP `script-src 'self'`); `?v=<hash>` URLs are immutable.
+//!
+//! # Development mode
+//!
+//! Four switches, all unset in production ([`config::Config`]):
+//!
+//! - `PRACTICAL__DEV_ASSETS_DIR`: assets from disk, `/dev/reload` ([`routes::assets`], [`routes::dev`]).
+//! - `PRACTICAL__DEV_LOGIN`: GET /login signs this user in without a password.
+//! - `PRACTICAL__DEV_NOW`: a fixed "now" ([`clock`]).
+//! - `PRACTICAL__DEV_POLL_MS`: another change-poller period ([`tasks::change_poll`]).
+//!
+//! The last three are only honoured together with `DEV_ASSETS_DIR` ([`config::Config::from_env`] refuses
+//! them otherwise).
+//!
+//! `mise run dev` sets the first two; the e2e servers (`e2e/lib/servers.mjs`) set all four.
+//!
+//! # Commands
+//!
+//! `practical serve` (default), `check-rustical-image <ref>` ([`check_rustical_image`]), `gen-vapid`,
+//! `--version`. The global allocator is mimalloc (tests: a counting wrapper, `testkit::Counting`).
 #![warn(clippy::all)]
 mod auth;
 mod bundle;
 mod clock;
 mod config;
 mod csrf;
-#[cfg(test)]
+// in the API doc too (`doc`): build.rs, which uses it, is outside the crate docs
+#[cfg(any(test, doc))]
 mod css_min;
 mod ctx;
 mod db;
@@ -72,6 +223,8 @@ fn check_rustical_image(reference: &str) -> i32 {
     }
 }
 
+/// Waits until RustiCal answers `/ping`: it runs its schema migrations at start, and PractiCal must never
+/// open the file before.
 async fn wait_for_rustical(url: &str) {
     // RustiCal runs its schema migrations at start; we must never open the file before.
     let client = reqwest::Client::builder().timeout(Duration::from_secs(3)).build().unwrap();
@@ -129,11 +282,13 @@ pub fn content_security_policy(cfg: &config::Config) -> String {
     )
 }
 
+/// The whole application router with the production session store (layer order: crate docs, "How a
+/// request flows").
 fn build_router(state: &SharedState) -> Result<Router, String> {
     build_router_with(state, sessions::DbStore::new(state.db.clone()))
 }
 
-/// `session_store`: a test keeps a handle on it (testkit).
+/// [`build_router`] with a given session store. `session_store`: a test keeps a handle on it (testkit).
 fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> Result<Router, String> {
     let lifetime = tower_sessions::cookie::time::Duration::hours(state.config.session_hours);
     let activity = sessions::Activity::new(session_store.clone(), lifetime);
@@ -198,6 +353,9 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .with_state(state.clone()))
 }
 
+/// `practical serve`: config → wait for RustiCal → open, check and migrate the database → [`AppState`] →
+/// router → background loops → listen until SIGTERM/Ctrl-C, then a graceful shutdown (at most
+/// [`SHUTDOWN_GRACE`]) and the database close.
 async fn serve() -> Result<(), String> {
     let config = Config::from_env()?;
     if let Some(at) = config.dev_now {
