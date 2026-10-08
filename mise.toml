@@ -71,6 +71,18 @@ echo "copy at $DEST — login ${DEV_USER:-thomass} / devpass on http://localhost
 description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): RustiCal CLI in docker + PractiCal HTTP, frozen clock, blocked egress"
 run = "e2e/seed/seed.sh"
 
+[tasks.readme-shots]
+description = "README/gallery screenshots: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + thumbs/ + e2e/demo/shots.json → docs/gallery/ pages (E2E_PORT, SEED_PORT)"
+run = '''
+set -e
+W="$PWD/e2e/.work/demo"
+(cd e2e && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npx playwright install chromium >/dev/null)
+e2e/build-server.sh "$W/practical"
+e2e/demo/seed.sh "$W/practical" "$W/demo.sqlite3"
+node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
+exec node e2e/demo/gallery.mjs
+'''
+
 [tasks.e2e]
 description = "Functional e2e suite (Playwright, e2e/functional) against an e2e-profile build of this checkout (E2E_PROFILE=release: the shipped profile); spec files on E2E_WORKERS (4) workers, each file on fresh servers + fixture copies"
 run = '''

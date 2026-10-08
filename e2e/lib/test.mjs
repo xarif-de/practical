@@ -20,7 +20,7 @@ const TILE = (() => {
 
 export const FREEZE_CSS = '*,*::before,*::after{transition:none!important;animation:none!important;caret-color:transparent!important}';
 
-function initScript([css]) {
+export function initScript([css]) {
   // pending timers by due time and pending animation frames: settle() lets the timers due within its quiet window
   // (the app's debounces, 120–300 ms, start requests and redraws from timers) and frame chains (eased glides,
   // 200–420 ms) run first. Behaviour unchanged: the original functions schedule and run the callbacks.
