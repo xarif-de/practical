@@ -20,7 +20,7 @@ Test net: Rust unit + router tests, Playwright functional and chaos suites, a vi
 ## Release policy (2026-10-06)
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → `[profile.dist]` build; kubernetes/rustical Renovate
   follows exact `vX.Y.Z` tags only, every other reference (`main`, `main-<sha8>`, `latest`, `vX.Y`) frozen.
-- `main` publishes build versions (`release` profile, `:main` / `main-<sha8>`); not deployed. Until the first release
+- `main` publishes build versions (`e2e` profile, `:main` / `main-<sha8>`); not deployed. Until the first release
   tag the deployment stays on its last `main` digest; then both containers move to `vX.Y.Z@sha256:…` once by hand.
 
 ## Known limits (accepted)

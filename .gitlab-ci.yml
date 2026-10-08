@@ -2,10 +2,11 @@
 # build, tests and image publishing run on Forgejo Actions (dagger-ci.yaml); these two jobs add the public site,
 # nothing else. Enabled for this repository alone by .gitlab-mirror.yaml (CI/CD, Pages, shared runners; read by
 # kubernetes/forgejo resources/mirror-lib.sh).
-#   api-doc  rustdoc of the Rust code (artifact api-doc/, kept 1 day)
+#   api-doc  rustdoc of the Rust code (artifact api-doc/, kept 1 day); cargo home + target cached on Cargo.lock
 #   pages    site/build.mjs: docs/index.md (gallery from e2e/demo/shots.json + documentation index), docs/*.md,
 #            CONTRIBUTING.md → public/ (every internal link and anchor checked: a broken one fails the job), then
-#            the rustdoc into public/api/ (the site links api/practical/index.html)
+#            the rustdoc into public/api/ (the site links api/practical/index.html); node_modules cached on the
+#            lockfile
 # Locally: `mise run site` (the same build into e2e/.work/site, with a fresh rustdoc).
 # Runs when main changes what the site is built from (Rust sources: the API doc; docs, site, the gallery's metadata),
 # for release tags and on a manual "Run pipeline". Both jobs share the rules: `needs:` fails when api-doc is absent.
@@ -38,6 +39,19 @@ api-doc:
     CARGO_TARGET_DIR: $CI_PROJECT_DIR/build/target
     # the same check as `mise run doc`: a broken intra-doc link fails the job
     RUSTDOCFLAGS: -D warnings
+    # rustdoc needs every dependency COMPILED (`--no-deps` only skips documenting them), and a doc build has no use
+    # for debug info: it is the biggest single item in both the job and the cache below.
+    CARGO_PROFILE_DEV_DEBUG: "0"
+  # Without this the job recompiled all ~400 crates on every run (no cache block at all until 2026-10-09). Keyed on
+  # the lockfile: a dependency bump starts a fresh cache instead of growing the old one, everything else reuses it.
+  # `pull-push` because this job is the only writer; `.cargo-home` holds the downloaded crates, `build/target` their
+  # compiled metadata (the two the next run would otherwise redo).
+  cache:
+    key:
+      files: [build/Cargo.lock]
+    paths:
+      - .cargo-home
+      - build/target
   script:
     # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (as build/Dockerfile)
     - apk add --no-cache build-base perl make
@@ -55,8 +69,13 @@ pages:
   needs:
     - job: api-doc
       artifacts: true
+  cache:
+    key:
+      files: [site/package-lock.json]
+    paths: [site/node_modules]
   script:
-    - cd site && npm ci --no-fund --no-audit
+    # `npm ci` deletes node_modules first; with the cache restored, `npm ci --prefer-offline` reuses the packages
+    - cd site && npm ci --no-fund --no-audit --prefer-offline
     - node build.mjs --out ../public
     - mv ../api-doc ../public/api
   artifacts:

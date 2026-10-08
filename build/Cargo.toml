@@ -130,9 +130,13 @@ inherits = "release"
 lto = true
 codegen-units = 1
 
-# e2e/build-server.sh's default (E2E_PROFILE=release: the shipped one): an edit rebuilds in 5.6-12.3 s vs 98-100 s
-# for release, cold 129 vs 185 s (host, 2026-10-06); its visual baseline = release's (0 of 1134 states differ). Its
-# binary size follows the module layout (256 units are partitioned per module): the bench judges size on release only.
+# Every build that is not a release: e2e/build-server.sh's default (E2E_PROFILE=release: the shipped one) AND the
+# image's (build/Dockerfile `CARGO_PROFILE`; a `v*` tag builds dist instead, dagger-ci.yaml). An edit rebuilds in
+# 5.6-12.3 s vs 98-100 s for release, cold 129 vs 185 s (host, 2026-10-06); in the image build, `mise run pipeline`
+# after a one-line change took 33.9 s vs 2m41s with release (2026-10-09). `incremental` is the lever, not the 256
+# units: a `codegen-units = 256` profile without it measured 3m22s. Its visual baseline = release's (0 of 1134 states
+# differ). Its binary size follows the module layout (256 units are partitioned per module): the bench judges size
+# on release only, and a `main` image is a test artefact that is never deployed (CONTRIBUTING.md).
 [profile.e2e]
 inherits = "release"
 codegen-units = 256

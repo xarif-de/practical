@@ -9,9 +9,11 @@ FROM rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d64644
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
 
-# release (every build) or dist (release tags: dagger-ci.yaml release-build-args);
-# see the two profiles in Cargo.toml
-ARG CARGO_PROFILE=release
+# e2e (every build) or dist (release tags: dagger-ci.yaml release-build-args); see the profiles in Cargo.toml. e2e
+# since 2026-10-09: it is `release` plus incremental compilation, and a `main` image is a test artefact that is never
+# deployed (CONTRIBUTING.md). `mise run pipeline` after a one-line change: 33.9 s vs 2m41s on release, both warm;
+# the first build on a profile is cold once (4m39s).
+ARG CARGO_PROFILE=e2e
 # Cached build (base/dagger-modules docs/rust-functions.md): registry + target/ in BuildKit cache mounts, so only
 # changed crates rebuild (a dummy-main.rs layer rebuilt every dependency on each Cargo.lock bump); arm64 8 CPUs,
 # release, 2026-10-02: cold 290 s, a CSS change 115 s. The binary is copied out in the same RUN (a cache mount is no

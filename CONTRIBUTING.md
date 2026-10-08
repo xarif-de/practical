@@ -141,7 +141,8 @@ A **gate** runs several of the checks above in a row and stops at the first fail
 | Command | What it runs | When to use it |
 | --- | --- | --- |
 | `mise run gate-quick` | `cargo test`, the API documentation, the docs link check, a server build and the functional suite | Every commit (about 80 seconds when the build is warm). |
-| `mise run gate -- <ref-dir>` | `gate-quick`, then chaos, accessibility, a visual baseline, a comparison against `<ref-dir>` and the dark-theme coverage check | Every change that can alter how a page looks: CSS, templates, locales, or a value that ends up on a page. |
+| `mise run gate` | `gate-quick`, then the chaos monkey and the accessibility checks | Before most commits. Needs nothing prepared. |
+| `mise run gate-visual -- <ref-dir>` | `gate`, then a visual baseline of your checkout, a comparison against `<ref-dir>` and the dark-theme coverage check | Opt-in. Use it for a rewrite that must change no pixel. It also needs a reference baseline of the commit you started from, built in a second worktree (`mise run e2e-baseline -- <dir>`), which takes about as long again. While you are designing a surface, every state differs on purpose and the comparison only produces noise. |
 
 `<ref-dir>` is a baseline of the commit that your change starts from. Every difference that the gate reports must
 be one that you intended.
@@ -183,7 +184,7 @@ builds the image and loads it into Docker as `xarif-practical`.
 
 | Trigger | What gets published | Build profile |
 | --- | --- | --- |
-| A push to `main` | `registry.gitlab.com/xarif/docker/practical:main` and `:main-<sha8>`. Skipped when the build inputs did not change. | `release` |
+| A push to `main` | `registry.gitlab.com/xarif/docker/practical:main` and `:main-<sha8>`. Skipped when the build inputs did not change. | `e2e` |
 | A `vX.Y.Z` tag | `:vX.Y.Z`, `:vX.Y`, `:vX` and `:latest` | `dist` (optimised for size) |
 
 Builds of `main` are never deployed. Only release tags are.

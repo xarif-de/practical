@@ -158,9 +158,13 @@ E2E_SUITE=a11y npx playwright test && exec node a11y-check.mjs
 '''
 
 [tasks.gate-quick]
-description = "Gate of a change without the visual part: cargo test → API doc (rustdoc -D warnings) → server build → functional suite (e2e/gate.sh); enough only for what cannot change how a page looks"
+description = "The cheapest gate: cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos and a11y"
 run = "e2e/gate.sh quick"
 
 [tasks.gate]
-description = "Full gate: gate-quick + visual baseline + compare against a reference baseline of the base commit: mise run gate -- <ref-dir> (or E2E_REF)"
+description = "Gate of an ordinary change: gate-quick + chaos + a11y. No reference baseline, no image comparison (that is `gate-visual`)"
 run = "e2e/gate.sh full"
+
+[tasks.gate-visual]
+description = "Gate of a change that must look identical: gate + visual baseline + compare against a reference baseline of the base commit + theme-cover: mise run gate-visual -- <ref-dir> (or E2E_REF). Opt-in — only for a refactoring whose point is that no pixel moves"
+run = "e2e/gate.sh visual"

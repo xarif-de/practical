@@ -2,24 +2,29 @@
 # The checks a change passes, cheapest first; stops at the first failure.
 #   gate.sh quick            cargo test → API doc (rustdoc, -D warnings: a broken intra-doc link fails; = mise run doc) →
 #                            docs-nav --check → site link check (site/build.mjs --check) → server build (E2E_PROFILE, default e2e) → functional suite
-#   gate.sh full <ref-dir>   quick → chaos (the seeded UI monkey, e2e/chaos, ~60 s) → a11y (axe over fixed states against
-#                            a11y-allow.txt + keyboard flows, e2e/a11y, ~30 s; a11y-check.mjs) → visual baseline of this checkout →
-#                            compare against <ref-dir> (or E2E_REF): a
+#   gate.sh full             quick → chaos (the seeded UI monkey, e2e/chaos, ~60 s) → a11y (axe over fixed states against
+#                            a11y-allow.txt + keyboard flows, e2e/a11y, ~30 s; a11y-check.mjs). The gate of an ordinary
+#                            change: no reference baseline to build, nothing to compare.
+#   gate.sh visual <ref-dir> full → visual baseline of this checkout → compare against <ref-dir> (or E2E_REF): a
 #                            baseline of the change's base commit, same fixture, same machine → every colour rule
 #                            shown by a dark state (theme-cover.mjs)
+#
+# The visual part is OPT-IN (decision 2026-10-09). It answers one question — "this rewrite changes no pixel" — and
+# only a deliberate refactoring asks it. While surfaces are being designed, every state differs on purpose, so the
+# comparison reports hundreds of intended differences and nobody reads them; meanwhile it costs the run itself plus a
+# reference baseline of the base commit in a second worktree (161-262 s each, measured 2026-10-08/09). Reach for it
+# when the point of the change is that nothing may look different.
 # Env as for the suites: E2E_PORT (functional: E2E_PORT … +2×E2E_WORKERS−1), E2E_FIXTURE, E2E_WORKERS (default 4),
-# E2E_OUT (the new baseline, default ~/.cache/practical-e2e/<sha>[+dirty]). quick has no visual part: no rule
-# derives the states a change can reach from the files it touches (a CSS rule, a template, a locale string or a
-# Rust value can show on any surface) — whatever can change how a page looks needs `full`.
+# E2E_OUT (the new baseline, default ~/.cache/practical-e2e/<sha>[+dirty]).
 set -eu
 unset E2E_SUITE # the functional suite first; baseline.sh selects the visual one itself
 E2E="$(cd "$(dirname "$0")" && pwd -P)"
 MODE="${1:-}"
 case "$MODE" in
-  quick) ;;
-  full) REF="${2:-${E2E_REF:-}}"
-        [ -n "$REF" ] && [ -f "$REF/.e2e-baseline" ] || { echo "gate full: no reference baseline (${REF:-none}); make one on the base commit: mise run e2e-baseline -- <dir>" >&2; exit 2; } ;;
-  *) echo "usage: gate.sh quick | full <reference-baseline-dir>" >&2; exit 2 ;;
+  quick|full) ;;
+  visual) REF="${2:-${E2E_REF:-}}"
+        [ -n "$REF" ] && [ -f "$REF/.e2e-baseline" ] || { echo "gate visual: no reference baseline (${REF:-none}); make one on the base commit: mise run e2e-baseline -- <dir>" >&2; exit 2; } ;;
+  *) echo "usage: gate.sh quick | full | visual <reference-baseline-dir>" >&2; exit 2 ;;
 esac
 T0=$(date +%s); LAST=$T0; SUMMARY=""
 step() { NOW=$(date +%s); SUMMARY="$SUMMARY  $1 $((NOW - LAST)) s\n"; LAST=$NOW; }
@@ -47,7 +52,7 @@ export E2E_SKIP_BUILD=1
 echo "== functional suite"
 npx playwright test
 step "functional"
-if [ "$MODE" = full ]; then
+if [ "$MODE" != quick ]; then
   echo "== chaos (seeded UI monkey + network chaos, one worker)"
   E2E_SUITE=chaos npx playwright test
   step "chaos"
@@ -55,6 +60,8 @@ if [ "$MODE" = full ]; then
   E2E_SUITE=a11y npx playwright test
   node a11y-check.mjs
   step "a11y"
+fi
+if [ "$MODE" = visual ]; then
   REV="$(git -C "$E2E/.." rev-parse --short HEAD)$( [ -n "$(git -C "$E2E/.." status --porcelain -- build)" ] && echo +dirty || true)"
   OUT="${E2E_OUT:-$HOME/.cache/practical-e2e/$REV}"
   echo "== visual baseline → $OUT"

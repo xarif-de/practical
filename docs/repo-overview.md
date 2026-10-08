@@ -14,7 +14,7 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 ## Root
 | path | purpose |
 |---|---|
-| mise.toml | every task (`mise tasks`): test, doc, logo, site, dev, dev-db, gate-quick, gate, a11y, chaos, e2e*, bench*, readme-shots, docs-nav, deny, image, pipeline |
+| mise.toml | every task (`mise tasks`): test, doc, logo, site, dev, dev-db, gate-quick, gate, gate-visual, a11y, chaos, e2e*, bench*, readme-shots, docs-nav, deny, image, pipeline |
 | dagger-ci.yaml, .forgejo/workflows/ci.yml | CI = `dagger call … ci` (base/dagger-modules): cargo-deny, image build with `cargo test`, tests/tests.yaml; Forgejo only triggers it |
 | renovate.json | dependency updates; groups: the rustical_* crates + RustiCal image move as one, the Rust builder image + rust-toolchain.toml as one |
 | AGENTS.md (CLAUDE.md = `@AGENTS.md`) | agent operating rules, gate table |
@@ -78,7 +78,7 @@ Client-side rules (the server side of each feature is in the module docs):
 | path | purpose |
 |---|---|
 | cargo.sh, build-server.sh | per-checkout cargo (AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
-| gate.sh | quick / full gate |
+| gate.sh | gate: quick (cargo+docs+functional) / full (+chaos+a11y) / visual (+baseline, compare, theme-cover; opt-in) |
 | seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…` |
 | demo/ | screenshots (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (34 states → docs/images/NN-*.webp, 1920 px; `SHOTS=<slug,…>` retakes; GROUPS = gallery group per slug), shots.json (order, titles, captions, group; read by site/build.mjs), docs-nav.mjs (`mise run docs-nav`: back links to docs/index.md + its documentation table on every listed page; `--check` in gate-quick) |
 | lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |

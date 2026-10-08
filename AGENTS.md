@@ -28,14 +28,19 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 |---|---|---|
 | `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → docs-nav + site link check (`node site/build.mjs --check`) → server build (`e2e` profile) → functional suite | every commit (~80 s warm; the doc step ~10 s) |
 | `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~30 s) | part of `gate`; alone after UI/ARIA/focus edits |
-| `mise run gate -- <ref-dir>` | quick → chaos → a11y → visual baseline → compare vs `<ref-dir>` → theme-cover | anything that can change a page's look (CSS, template, locale, Rust value) — i.e. before most commits |
+| `mise run gate` | quick → chaos → a11y | before most commits; no reference baseline needed |
+| `mise run gate-visual -- <ref-dir>` | gate → visual baseline → compare vs `<ref-dir>` → theme-cover | OPT-IN, for a refactoring whose point is that nothing looks different. While surfaces are being designed every state differs on purpose, so the comparison only reports noise and costs a reference baseline of the base commit too (161-262 s each) |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
 | `E2E_PROFILE=release <any of the above>` | the shipped profile | release candidates, Cargo profile changes, binary size |
 
+- Image/CI builds use `[profile.e2e]` (`CARGO_PROFILE` in build/Dockerfile); a `v*` tag builds `dist`
+  (dagger-ci.yaml). Measured 2026-10-09, `mise run pipeline` after a one-line change: 2m41s with `release`,
+  33.9 s with `e2e`; the first build on the new profile is a cold 4m39s.
+
 - References come from the base commit: `mise run e2e-baseline -- <dir>` / `mise run bench` in a worktree of it, or an
   existing `~/.cache/practical-e2e/<…>-<base-sha>`.
-- Visual rule: every state that `gate` reports as different must map to one intended change of yours, named per
-  state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
+- Visual rule (`gate-visual` only): every state it reports as different must map to one intended change of yours,
+  named per state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
 - a11y rule: a new axe finding fails (fix it, or add `<rule>⇥<key>⇥<reason>` to e2e/a11y-allow.txt); a line no state
   shows any more is STALE and fails — delete it: the list only shrinks. Icon-only controls need aria-label/title.
 - CI (dagger) runs cargo-deny, `cargo test` inside the image build step (build/Dockerfile: after the release build,
@@ -55,7 +60,7 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 ## Release policy
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → CI builds `[profile.dist]`; kubernetes/rustical's
   Renovate follows exact `vX.Y.Z` tags only.
-- Pushes to `main` publish build versions (`release` profile, `:main` / `main-<sha8>`): never deployed.
+- Pushes to `main` publish build versions (`e2e` profile, `:main` / `main-<sha8>`): never deployed.
 
 ## Code rules
 - Behaviour and look stay unchanged unless the task says otherwise. Desktop UI must never break; phone must not regress.
