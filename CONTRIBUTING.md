@@ -158,8 +158,7 @@ Run the benchmark when a change can cost time, memory or bytes.
 ### Screenshots
 
 `mise run readme-shots` builds a demo database and takes the screenshots in `docs/images/`. It also writes their
-titles, captions and gallery groups to `e2e/demo/shots.json` and makes the gallery thumbnails in
-`docs/images/thumbs/`.
+titles, captions and gallery groups to `e2e/demo/shots.json`.
 
 [AGENTS.md](AGENTS.md) has the full rules for tests: which gate a change needs, how to run several worktrees in
 parallel, the ports, and the lock for heavy runs.

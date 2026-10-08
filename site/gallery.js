@@ -1,7 +1,6 @@
 // site/gallery.js — the start page's screenshot gallery (markup: site/build.mjs galleryHtml). Without this script
 // every figure stays listed (no-JS fallback); with it one screenshot shows at a time: previous/next buttons, arrow
-// keys / Home / End while the stage is focused, touch swipe, group chips, a thumbnail strip (roving tabindex, arrow
-// keys), "n / N", the URL hash (#shot-<slug>) as a deep link. Hidden slides are display:none (from the first layout:
+// keys / Home / End while the stage is focused, touch swipe, group chips, "n / N", the URL hash (#shot-<slug>) as a deep link. Hidden slides are display:none (from the first layout:
 // html.js, set in <head>), so their lazy images load only when shown; once the user switches, the two neighbours of
 // the shown one load eagerly (ready when you get there).
 (function () {
@@ -9,7 +8,6 @@
   var g = document.querySelector('.gallery');
   if (!g) return;
   var slides = [].slice.call(g.querySelectorAll('.g-slide'));
-  var thumbs = [].slice.call(g.querySelectorAll('.g-thumb'));
   var chips = [].slice.call(g.querySelectorAll('.g-chip'));
   var stage = g.querySelector('.g-stage');
   var posN = g.querySelector('.g-pos-n');
@@ -24,18 +22,12 @@
     i = (i + n) % n;
     opts = opts || {};
     if (i === cur && !opts.force) return;
-    if (cur >= 0) { slides[cur].classList.remove('is-active'); thumbs[cur].removeAttribute('aria-current'); thumbs[cur].tabIndex = -1; }
+    if (cur >= 0) slides[cur].classList.remove('is-active');
     cur = i;
     var s = slides[i];
     s.classList.add('is-active');
     // after the first switch by the user: the neighbours load eagerly (not on page load: two pictures nobody may want)
     if (!opts.quiet) [i - 1, i + 1].forEach(function (k) { var img = slides[(k + n) % n].querySelector('img'); if (img) img.loading = 'eager'; });
-    var t = thumbs[i];
-    t.setAttribute('aria-current', 'true');
-    t.tabIndex = 0;
-    // keep the current thumbnail in view inside the strip only (never scroll the page)
-    var strip = t.parentNode, sr = strip.getBoundingClientRect(), tr = t.getBoundingClientRect();
-    if (tr.left < sr.left || tr.right > sr.right) strip.scrollLeft += tr.left - sr.left - (sr.width - tr.width) / 2;
     var group = s.getAttribute('data-group');
     chips.forEach(function (c) {
       var first = slides[+c.getAttribute('data-to')];
@@ -49,16 +41,6 @@
   g.querySelector('.g-prev').addEventListener('click', function () { show(cur - 1); });
   g.querySelector('.g-next').addEventListener('click', function () { show(cur + 1); });
   chips.forEach(function (c) { c.addEventListener('click', function () { show(+c.getAttribute('data-to')); }); });
-  thumbs.forEach(function (t, i) {
-    t.addEventListener('click', function () { show(i); });
-    t.addEventListener('keydown', function (e) {
-      var k = { ArrowLeft: cur - 1, ArrowRight: cur + 1, Home: 0, End: n - 1 }[e.key];
-      if (k === undefined) return;
-      e.preventDefault();
-      show(k);
-      thumbs[cur].focus();
-    });
-  });
   stage.addEventListener('keydown', function (e) {
     if (e.target !== stage && e.target.closest('.g-nav')) { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; }
     var k = { ArrowLeft: cur - 1, ArrowRight: cur + 1, Home: 0, End: n - 1 }[e.key];

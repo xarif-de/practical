@@ -81,15 +81,14 @@ description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): R
 run = "e2e/seed/seed.sh"
 
 [tasks.readme-shots]
-description = "Screenshots for the README, the site gallery and docs/features.md: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json → gallery thumbnails docs/images/thumbs/ (e2e/demo/thumbs.mjs) (E2E_PORT, SEED_PORT)"
+description = "Screenshots for the README, the site gallery and docs/features.md: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json (E2E_PORT, SEED_PORT)"
 run = '''
 set -e
 W="$PWD/e2e/.work/demo"
 (cd e2e && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npx playwright install chromium >/dev/null)
 e2e/build-server.sh "$W/practical"
 e2e/demo/seed.sh "$W/practical" "$W/demo.sqlite3"
-node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
-exec node e2e/demo/thumbs.mjs
+exec node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
 '''
 
 [tasks.docs-nav]

@@ -171,12 +171,6 @@ td code { white-space: nowrap; }
 .g-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .g-n { font-size: 12px; opacity: .75; margin-left: 2px; }
 
-.g-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 6px 4px 10px; margin: 6px -4px 0; scroll-snap-type: x proximity; scrollbar-width: thin; }
-.g-thumb { flex: none; width: 120px; padding: 0; border: 2px solid transparent; border-radius: 9px; background: var(--card); cursor: pointer; scroll-snap-align: center; opacity: .72; overflow: hidden; }
-.g-thumb img { display: block; width: 100%; height: 75px; object-fit: cover; object-position: top left; border-radius: 6px; }
-.g-thumb:hover { opacity: 1; }
-.g-thumb[aria-current="true"] { border-color: var(--accent); opacity: 1; }
-
 /* ---- footer */
 .site-footer { border-top: 1px solid var(--line); background: var(--bg); padding: 28px 0 36px; font-size: 14.5px; color: var(--fg-2); }
 .foot-h { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; color: var(--fg-2); }
@@ -200,7 +194,6 @@ td code { white-space: nowrap; }
   .g-nav { width: 38px; height: 38px; font-size: 26px; margin-top: calc(31.25% - 19px); }
   .g-prev { left: 6px; } .g-next { right: 6px; }
   .gallery.is-js .g-slide figcaption { min-height: 104px; padding: 12px 14px 14px; }
-  .g-thumb { width: 96px; } .g-thumb img { height: 60px; }
   /* one scrolling row of chips instead of three wrapped rows */
   .g-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 12px; padding: 2px 14px; scrollbar-width: none; }
   .g-chip { flex: none; }
@@ -208,4 +201,4 @@ td code { white-space: nowrap; }
   td:last-child, th:last-child { min-width: 260px; }
 }
 @media (max-width: 420px) { .top-nav a:nth-child(2) { display: none; } }
-@media print { .site-header, .site-footer, .toc, .back, .g-nav, .g-thumbs, .g-chips { display: none !important; } .prose { border: 0; box-shadow: none; padding: 0; } }
+@media print { .site-header, .site-footer, .toc, .back, .g-nav, .g-chips { display: none !important; } .prose { border: 0; box-shadow: none; padding: 0; } }

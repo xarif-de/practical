@@ -182,8 +182,8 @@ for (const s of shots) {
 const ordered = groups.flatMap(g => g.shots); // grouped order: a chip jumps to a contiguous run
 function galleryHtml() {
   const slides = ordered.map((s, i) => {
-    const img = `docs/images/${s.file}`, thumb = `docs/images/thumbs/${s.file}`;
-    for (const p of [img, thumb]) { if (fs.existsSync(path.join(REPO, p))) assets.add(p); else errors.push(`gallery: ${p} missing (thumbs: node e2e/demo/thumbs.mjs)`); }
+    const img = `docs/images/${s.file}`;
+    if (fs.existsSync(path.join(REPO, img))) assets.add(img); else errors.push(`gallery: ${img} missing (mise run readme-shots)`);
     if (errors.length) return '';
     const id = `shot-${s.file.replace(/^\d+-|\.webp$/g, '')}`;
     return `<li class="g-slide" id="${id}" data-group="${esc(s.group)}" aria-roledescription="slide" aria-label="${i + 1} of ${ordered.length}: ${esc(s.title)}">
@@ -191,7 +191,6 @@ function galleryHtml() {
 <figcaption><span class="g-group">${esc(s.group)}</span> <strong>${esc(s.title)}</strong> <span class="g-cap">${esc(s.caption)}</span></figcaption></figure></li>`;
   }).join('\n');
   const chips = groups.map(g => `<button type="button" class="g-chip" data-to="${ordered.indexOf(g.shots[0])}">${esc(g.name)} <span class="g-n">${g.shots.length}</span></button>`).join('');
-  const thumbs = ordered.map((s, i) => `<button type="button" class="g-thumb" data-i="${i}" aria-label="${esc(s.title)}" tabindex="-1"><img src="images/thumbs/${s.file}"${sizeAttrs(`docs/images/thumbs/${s.file}`)} alt="" loading="lazy" decoding="async"></button>`).join('');
   return `<section class="gallery" aria-label="Screenshot gallery" data-count="${ordered.length}">
 <div class="g-chips" role="group" aria-label="Jump to a group" hidden>${chips}</div>
 <div class="g-stage" tabindex="0" aria-roledescription="carousel" aria-label="Screenshots: left and right arrow keys switch">
@@ -203,7 +202,6 @@ ${slides}
 </div>
 <p class="g-pos" hidden><span class="g-pos-n">1</span> / ${ordered.length}</p>
 <p class="vh" aria-live="polite" aria-atomic="true"></p>
-<div class="g-thumbs" role="group" aria-label="All screenshots" hidden>${thumbs}</div>
 </section>
 `;
 }
@@ -278,7 +276,7 @@ if (CHECK) { console.log(`site: ${pages.size} pages, ${anchorChecks.length} anch
 
 // ---------------------------------------------------------------- write
 fs.rmSync(OUT, { recursive: true, force: true });
-fs.mkdirSync(path.join(OUT, 'images', 'thumbs'), { recursive: true });
+fs.mkdirSync(path.join(OUT, 'images'), { recursive: true });
 for (const [file, html] of built) fs.writeFileSync(path.join(OUT, file), html);
 for (const p of assets) fs.copyFileSync(path.join(REPO, p), path.join(OUT, p.slice('docs/'.length)));
 for (const f of ['style.css', 'gallery.js']) fs.copyFileSync(path.join(SITE_DIR, f), path.join(OUT, f));
