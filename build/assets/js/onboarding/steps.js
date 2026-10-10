@@ -59,13 +59,24 @@ const collection = (id, kind) => ({
   icon: id === 'calendar' ? 'calendar' : 'contacts',
   color: id === 'calendar' ? 'c1' : 'c2',
   // the remote pages are named after the store (cal | ab), not after the settings page
-  mine: w => w === 'collections' || w === `new-${kind}` || w === `import-${kind}` || w === `remote-${short(kind)}` || w === `remote-sync-${short(kind)}`,
+  mine: w => w === 'collections' || w === `new-${kind}` || w === `import-${kind}` || w === `sync-${kind}` || w === `remote-${short(kind)}` || w === `remote-sync-${short(kind)}`,
   at: () => {
     const w = where();
     const sh = short(kind);
-    // on a remote page the way on is the server row, then the list it offers
+    // on a remote page the way on is the sign-in, then the list it offers
     if (w === `remote-${sh}` || w === `remote-sync-${sh}`) {
-      return { sel: q(`#${w} .rm-take`, `#${w} .rm-go`), lead: `js-onb-remote${w.startsWith('remote-sync') ? '-sync' : ''}`, body: `js-onb-remote${w.startsWith('remote-sync') ? '-sync' : ''}-b` };
+      const k = w.startsWith('remote-sync') ? '-sync' : '';
+      return { sel: q(`#${w} .rm-take`, `#${w} .rm-go`), lead: `js-onb-remote${k}`, body: `js-onb-remote${k}-b` };
+    }
+    // the source lists: one row per place the data can come from
+    if (w === `import-${kind}` || w === `sync-${kind}`) {
+      const rows = w === `sync-${kind}`
+        ? q(`#sync-${kind} a[href="#remote-sync-${sh}"]`)
+        : q(`#import-${kind} .imp-pick`, `#import-${kind} a[href="#remote-${sh}"]`);
+      // the import page also carries the file flow: once a file is chosen its button is the way on
+      const go = $(`#import-${kind} .imp-go`);
+      if (w === `import-${kind}` && go && vis(go)) return { sel: q(`#import-${kind} .imp-go`), lead: 'js-onb-import', body: 'js-onb-import-b' };
+      return { sel: rows, lead: `js-onb-${w.startsWith('sync') ? 'sync' : 'from'}`, body: `js-onb-${w.startsWith('sync') ? 'sync' : 'from'}-b` };
     }
     if (w === `new-${kind}`) {
       // the name is a required field and starts EMPTY (macros.html coll_fields), so the submit
@@ -75,15 +86,13 @@ const collection = (id, kind) => ({
         ? { sel: q(`#new-${kind} input[name=name]`), lead: 'js-onb-name', body: 'js-onb-name-b' }
         : { sel: q(`#new-${kind} form button[type=submit]`), lead: 'js-onb-make', body: 'js-onb-make-b' };
     }
-    // the file row first; the import button appears only once a file is chosen (`.imp-fields[hidden]`)
-    if (w === `import-${kind}`) return { sel: q(`#import-${kind} .imp-go`, `#import-${kind} .imp-pick`), lead: 'js-onb-import', body: 'js-onb-import-b' };
-    /* Every way in, in the order the list shows them. The two remote rows are only there when a
-       server is configured (`remote_origins`), and `q` drops a missing or hidden target — so the
-       same waypoint covers an instance with the feature and one without, and the ring closes
-       around whatever is really offered. */
+    /* Every way in, in the order the list shows them. The sync row is only there when a server is
+       configured (`remote_sync`), and `q` drops a missing or hidden target — so the same waypoint
+       covers an instance with the feature and one without, and the ring closes around whatever is
+       really offered. */
     if (w === 'collections') {
       return {
-        sel: q(`a[href="#new-${kind}"]`, `a[href="#import-${kind}"]`, `a[href="#remote-${sh}"]`, `a[href="#remote-sync-${sh}"]`),
+        sel: q(`a[href="#new-${kind}"]`, `a[href="#import-${kind}"]`, `a[href="#sync-${kind}"]`),
         lead: `js-onb-${id}-ways`,
         body: `js-onb-${id}-ways-b`,
       };

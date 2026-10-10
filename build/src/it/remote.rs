@@ -134,3 +134,31 @@ async fn a_failed_push_does_not_advance_the_local_token() {
     assert_eq!((after.local_token, after.err.as_deref()), (42, None));
     assert!(after.full_at.is_some(), "a clean full pass is recorded, so the next one is a day away");
 }
+
+/// The ways in are nested, not flat: the collections list offers three choices, and the remote
+/// rows live one level down, beside the other sources of the same kind. That keeps the list short
+/// while leaving room for Google and Apple under the same two headings later.
+///
+/// `remote_sync` off (no key) must hide the sync row AND its page, or the list would point at a
+/// section that is not in the document.
+#[tokio::test]
+async fn the_ways_in_are_nested_under_import_and_sync() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    let page = alice.get("/settings").await;
+    let html = String::from_utf8_lossy(&page.ok().bytes).to_string();
+
+    // the list itself: create and import always, sync only with a key — the fixture has none
+    assert!(html.contains("href=\"#new-calendar\""));
+    assert!(html.contains("href=\"#import-calendar\""));
+    assert!(!html.contains("href=\"#sync-calendar\""), "no key: no sync row");
+    assert!(!html.contains("id=\"sync-calendar\""), "and no sync page to point at");
+    // the remote rows are NOT in the list any more; without an allowed origin they are nowhere
+    assert!(!html.contains("href=\"#remote-cal\""), "no origin: no remote source row");
+    assert!(!html.contains("id=\"remote-cal\""));
+
+    // the import page is where a source is chosen, so its file row is one source among several
+    let imp = html.split("id=\"import-calendar\"").nth(1).unwrap_or_default();
+    let imp = imp.split("</section>").next().unwrap_or_default();
+    assert!(imp.contains("imp-pick"), "the file row stays on the import page");
+}

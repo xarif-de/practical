@@ -137,11 +137,9 @@
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ m::ico("cal-plus") }}<span>{{ ctx.t("calendar-create") }}</span></a>
     <a class="cell btnrow" href="#import-calendar">{{ m::ico("cal-up") }}<span>{{ ctx.t("calendar-import") }}</span></a>
-    {%- if !remote_origins.is_empty() %}
-    <a class="cell btnrow" href="#remote-cal">{{ m::ico("globe") }}<span>{{ ctx.t("calendar-remote") }}</span></a>
     {%- if remote_sync %}
-    <a class="cell btnrow" href="#remote-sync-cal">{{ m::ico("swap") }}<span>{{ ctx.t("calendar-sync") }}</span></a>
-    {%- endif %}{%- endif %}
+    <a class="cell btnrow" href="#sync-calendar">{{ m::ico("swap") }}<span>{{ ctx.t("calendar-sync") }}</span></a>
+    {%- endif %}
   </div>
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
@@ -150,11 +148,9 @@
     {% endfor %}
     <a class="cell btnrow" href="#new-addressbook">{{ m::ico("book-plus") }}<span>{{ ctx.t("addressbook-create") }}</span></a>
     <a class="cell btnrow" href="#import-addressbook">{{ m::ico("book-up") }}<span>{{ ctx.t("addressbook-import") }}</span></a>
-    {%- if !remote_origins.is_empty() %}
-    <a class="cell btnrow" href="#remote-ab">{{ m::ico("globe") }}<span>{{ ctx.t("addressbook-remote") }}</span></a>
     {%- if remote_sync %}
-    <a class="cell btnrow" href="#remote-sync-ab">{{ m::ico("swap") }}<span>{{ ctx.t("addressbook-sync") }}</span></a>
-    {%- endif %}{%- endif %}
+    <a class="cell btnrow" href="#sync-addressbook">{{ m::ico("swap") }}<span>{{ ctx.t("addressbook-sync") }}</span></a>
+    {%- endif %}
   </div>
   {%- if !remote_links.is_empty() %}
   <div class="label">{{ ctx.t("rm-links") }}</div>
@@ -199,8 +195,12 @@
   {{ m::back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ ctx.t("set-import-calendar") }}</h1>
   <form class="imp-form" data-kind="calendars" data-default-tz="{{ default_timezone }}" data-default-color="{{ palette[0] }}">
+    {# the sources an import can read; more will be listed here (Google, Apple) #}
     <div class="group">
-      <label class="cell btnrow imp-pick"><span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".ics,text/calendar" hidden class="imp-file"></label>
+      <label class="cell btnrow imp-pick">{{ m::ico("cal-up") }}<span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".ics,text/calendar" hidden class="imp-file"></label>
+      {%- if !remote_origins.is_empty() %}
+      <a class="cell btnrow" href="#remote-cal">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
+      {%- endif %}
     </div>
     <p class="foot imp-info">{{ ctx.t("imp-hint") }}</p>
     <div class="imp-fields" hidden>
@@ -235,8 +235,12 @@
   {{ m::back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ ctx.t("set-import-addressbook") }}</h1>
   <form class="imp-form" data-kind="addressbooks" data-default-color="{{ palette[1] }}">
+    {# the sources an import can read; more will be listed here (Google, Apple) #}
     <div class="group">
-      <label class="cell btnrow imp-pick"><span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".vcf,text/vcard" hidden class="imp-file"></label>
+      <label class="cell btnrow imp-pick">{{ m::ico("book-up") }}<span>{{ ctx.t("imp-choose-vcf") }}</span><input type="file" accept=".vcf,text/vcard" hidden class="imp-file"></label>
+      {%- if !remote_origins.is_empty() %}
+      <a class="cell btnrow" href="#remote-ab">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
+      {%- endif %}
     </div>
     <p class="foot imp-info">{{ ctx.t("imp-ab-hint") }}</p>
     <div class="imp-fields" hidden>
@@ -248,9 +252,33 @@
   </form>
 </section>
 
+{%- if remote_sync %}
+<section class="page" id="sync-calendar">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-sync-calendar") }}</h1>
+  {# the servers a sync can hold on to; more will be listed here #}
+  <div class="group">
+    <a class="cell btnrow" href="#remote-sync-cal">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
+  </div>
+  <p class="foot">{{ ctx.t("sync-hint") }}</p>
+</section>
+{%- endif %}
+
+{%- if remote_sync %}
+<section class="page" id="sync-addressbook">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-sync-addressbook") }}</h1>
+  {# the servers a sync can hold on to; more will be listed here #}
+  <div class="group">
+    <a class="cell btnrow" href="#remote-sync-ab">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
+  </div>
+  <p class="foot">{{ ctx.t("sync-hint") }}</p>
+</section>
+{%- endif %}
+
 {%- if !remote_origins.is_empty() %}
 <section class="page" id="remote-cal">
-  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  {{ m::back("#import-calendar", ctx.t("set-import-calendar")) }}
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="false">
     <div class="group">
@@ -271,7 +299,7 @@
 
 {%- if remote_sync %}
 <section class="page" id="remote-sync-cal">
-  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  {{ m::back("#sync-calendar", ctx.t("set-sync-calendar")) }}
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="true">
     <div class="group">
@@ -302,7 +330,7 @@
 {%- endif %}
 
 <section class="page" id="remote-ab">
-  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  {{ m::back("#import-addressbook", ctx.t("set-import-addressbook")) }}
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="false">
     <div class="group">
@@ -323,7 +351,7 @@
 
 {%- if remote_sync %}
 <section class="page" id="remote-sync-ab">
-  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  {{ m::back("#sync-addressbook", ctx.t("set-sync-addressbook")) }}
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="true">
     <div class="group">
