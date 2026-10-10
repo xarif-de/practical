@@ -54,7 +54,7 @@ function guide() {
     </div>
     <p class="onb-lead">${esc(ST.say(wp.lead))}</p>
     <p class="onb-body">${esc(ST.say(wp.body))}</p>
-    ${targets.length > 1 ? `<p class="onb-either">${esc(tr('js-onb-either'))}</p>` : ''}
+    ${targets.length > 1 ? `<p class="onb-either">${esc(tr('js-onb-either', { n: targets.length }))}</p>` : ''}
     ${wp.confirm ? `<p class="onb-keep"><button type="button" class="link" data-confirm="${esc(wp.confirm)}">${ico('check')}<span>${esc(tr(wp.confirmText))}</span></button></p>` : ''}`;
   // confirming what is in force: the server records the mark and writes nothing (domain::onboarding)
   const ok = $('[data-confirm]', tip);
@@ -96,9 +96,13 @@ async function finished(say) {
   await req('/settings/onboarding/complete', { method: 'POST' });
 }
 
-// ---- the arrows (one dashed curve with an arrowhead per target) ----------------------------------
+/* ---- the arrow (ONE dashed curve with an arrowhead) --------------------------------------------
+   One arrow, whatever the number of targets: it points at the GROUP, and the ring around the group
+   says which rows belong to it. A fan of arrows, one per row, read as four separate instructions
+   for what is really one choice — the user picks any of the ways, not all of them. */
 function place(tip, targets, prefer) {
-  const side = anchor(tip, union(targets), prefer, targets.length > 1 ? 44 : 26);
+  const u = union(targets);
+  const side = anchor(tip, u, prefer, targets.length > 1 ? 44 : 26);
   let svg = $('.onb-arrows');
   if (!svg) {
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -106,26 +110,24 @@ function place(tip, targets, prefer) {
     document.body.appendChild(svg);
   }
   const b = tip.getBoundingClientRect(), flat = side === 'left' || side === 'right';
-  svg.innerHTML = targets.map(t => {
-    const r = t.getBoundingClientRect();
-    // leave the bubble at the target's own height, so several arrows fan out visibly
-    const from = flat
-      ? { x: side === 'left' ? b.right : b.left, y: Math.min(Math.max(r.top + r.height / 2, b.top + 14), b.bottom - 14) }
-      : { x: Math.min(Math.max(r.left + r.width / 2, b.left + 14), b.right - 14), y: side === 'top' ? b.bottom : b.top };
-    // the tip stops GAP short of the element's edge: an arrowhead drawn inside the ring looked like
-    // part of the row rather than something pointing at it
-    const G = 5;
-    const to = flat
-      ? { x: side === 'left' ? r.left - G : r.right + G, y: r.top + r.height / 2 }
-      : { x: r.left + r.width / 2, y: side === 'top' ? r.top - G : r.bottom + G };
-    // control points along the leaving axis, so the tangent at the tip points AT the target
-    const c1 = flat ? { x: (from.x + to.x) / 2, y: from.y } : { x: from.x, y: (from.y + to.y) / 2 };
-    const c2 = flat ? { x: (from.x + to.x) / 2, y: to.y } : { x: to.x, y: (from.y + to.y) / 2 };
-    const dx = to.x - c2.x, dy = to.y - c2.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
-    const H = 7, W = 4.2, bx = to.x - ux * H, by = to.y - uy * H;
-    return `<path fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="4 4" d="M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${bx} ${by}"/>`
-      + `<polygon fill="var(--accent)" points="${to.x},${to.y} ${bx - uy * W},${by + ux * W} ${bx + uy * W},${by - ux * W}"/>`;
-  }).join('');
+  // the group's own edge, so the tip lands on the ring and not on one row inside it
+  const r = u;
+  const from = flat
+    ? { x: side === 'left' ? b.right : b.left, y: Math.min(Math.max(r.top + r.height / 2, b.top + 14), b.bottom - 14) }
+    : { x: Math.min(Math.max(r.left + r.width / 2, b.left + 14), b.right - 14), y: side === 'top' ? b.bottom : b.top };
+  // the tip stops GAP short of the edge: an arrowhead drawn inside the ring looked like part of the
+  // row rather than something pointing at it
+  const G = 5;
+  const to = flat
+    ? { x: side === 'left' ? r.left - G : r.right + G, y: r.top + r.height / 2 }
+    : { x: r.left + r.width / 2, y: side === 'top' ? r.top - G : r.bottom + G };
+  // control points along the leaving axis, so the tangent at the tip points AT the target
+  const c1 = flat ? { x: (from.x + to.x) / 2, y: from.y } : { x: from.x, y: (from.y + to.y) / 2 };
+  const c2 = flat ? { x: (from.x + to.x) / 2, y: to.y } : { x: to.x, y: (from.y + to.y) / 2 };
+  const dx = to.x - c2.x, dy = to.y - c2.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+  const H = 7, W = 4.2, bx = to.x - ux * H, by = to.y - uy * H;
+  svg.innerHTML = `<path fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="4 4" d="M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${bx} ${by}"/>`
+    + `<polygon fill="var(--accent)" points="${to.x},${to.y} ${bx - uy * W},${by + ux * W} ${bx + uy * W},${by - ux * W}"/>`;
 }
 
 /** The smallest rect covering every element. */
@@ -157,17 +159,36 @@ function anchor(box, t, prefer, gap) {
   return side;
 }
 
+/* Marks the targets and draws ONE ring.
+   With several targets the ring goes around all of them (a body-level box over the union) instead of
+   one ring per row: four rings read as four things to do, while the point is that any ONE of the
+   ways is enough. A single target keeps its own inset ring, which follows the element's shape and
+   its exceptions (the gear, the back link — onboarding.css). */
 function aim(targets) {
-  $$('.onb-aim').forEach(e => e.classList.remove('onb-aim'));
+  $$('.onb-aim').forEach(e => e.classList.remove('onb-aim', 'onb-grouped'));
   targets.forEach(t => t.classList.add('onb-aim'));
   const u = union(targets);
+  let ring = $('.onb-ring');
+  if (targets.length > 1) {
+    targets.forEach(t => t.classList.add('onb-grouped'));
+    if (!ring) {
+      ring = document.createElement('div');
+      ring.className = 'onb-ring';
+      document.body.appendChild(ring);
+    }
+    const P = 4; // air between the rows and the ring
+    Object.assign(ring.style, { left: `${u.left - P}px`, top: `${u.top - P}px`, width: `${u.width + 2 * P}px`, height: `${u.height + 2 * P}px` });
+  } else {
+    ring?.remove();
+  }
   if (u.top < 70 || u.bottom > innerHeight - 120) targets[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 function clear() {
   $('.onb-tip')?.remove();
   $('.onb-arrows')?.remove();
-  $$('.onb-aim').forEach(e => e.classList.remove('onb-aim'));
+  $('.onb-ring')?.remove();
+  $$('.onb-aim').forEach(e => e.classList.remove('onb-aim', 'onb-grouped'));
 }
 
 function draw() {

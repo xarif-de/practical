@@ -1291,17 +1291,20 @@ js-onb-done-body = Every basic setting is in place. You will find each of them w
 js-onb-done-go = Let’s go
 js-onb-school-add = Add to the school holidays shown in the calendar.
 js-onb-school-add-b = More than one is allowed here too, if you want the school holidays of several regions shown.
-js-onb-either = Both ways are marked — take the one that suits you.
+js-onb-either = { $n ->
+    [one] One way is ringed.
+   *[other] All %n ways are ringed — take the one that suits you.
+}
 js-onb-calendar-title = Calendar
 js-onb-calendar-row = Create or import calendars and address books.
 js-onb-calendar-row-b = None exists yet — and without a calendar there is nowhere an event can be created.
-js-onb-calendar-ways = Two ways to a calendar.
-js-onb-calendar-ways-b = Create one if you are starting fresh. Import if you bring an .ics file. Both lead to the same place.
+js-onb-calendar-ways = Four ways to a calendar.
+js-onb-calendar-ways-b = Create one if you are starting fresh. Import an .ics file if you bring one. Take one from Nextcloud, once. Or sync with Nextcloud, and the two sides stay together. Any one is enough.
 js-onb-addressbook-title = Address book
 js-onb-addressbook-row = Create or import calendars and address books.
 js-onb-addressbook-row-b = Contacts still need an address book — without one there is nowhere a contact can be created.
-js-onb-addressbook-ways = Two ways to an address book.
-js-onb-addressbook-ways-b = Create one or import a .vcf file. Both lead to the same place.
+js-onb-addressbook-ways = Four ways to an address book.
+js-onb-addressbook-ways-b = Create one, import a .vcf file, take one from Nextcloud, or keep it in sync with Nextcloud. Any one is enough.
 js-onb-name = Give it a name.
 js-onb-name-b = The name shows in the list and on every device later. Colour and components are prefilled.
 js-onb-make = Every field is prefilled with a default.
@@ -1660,3 +1663,7 @@ err-remote-cut = The answer from Nextcloud was incomplete. The next round tries 
 err-remote-big = The answer from Nextcloud was too large (limit { $limit } bytes).
 err-remote-already-linked = This calendar is already being synced.
 err-remote-unreachable = Nextcloud could not be reached.
+js-onb-remote = Sign in at Nextcloud and pick.
+js-onb-remote-b = You sign in at Nextcloud itself, in a new window. After that you see your own calendars and address books; one of them is copied over, once.
+js-onb-remote-sync = Sign in at Nextcloud and pick.
+js-onb-remote-sync-b = Like the import, except the connection stays: changes then travel both ways. You can also choose "read only".

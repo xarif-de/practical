@@ -70,6 +70,12 @@
 .onb-aim { position: relative; background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .onb-aim::after { content: ""; position: absolute; inset: 1px; border-radius: 9px; pointer-events: none;
   box-shadow: inset 0 0 0 2px var(--accent); animation: onb-pulse 1.9s ease-in-out infinite; }
+/* Several rows at once keep the tint but lose their own ring: ONE ring goes around the group
+   (.onb-ring, placed by guide.js over their union), because any one of the ways is enough and a
+   ring per row read as a list of things to do. */
+.onb-grouped::after { content: none; }
+.onb-ring { position: fixed; z-index: 47; pointer-events: none; border-radius: 12px;
+  box-shadow: 0 0 0 2px var(--accent); animation: onb-pulse 1.9s ease-in-out infinite; }
 /* A small or inline target has no room for a ring inside it: an inset ring ate into the icon of the
    navigation button and into the text of the "‹ Einstellungen" link. Those get the ring outside,
    with air around the text. */
@@ -83,5 +89,5 @@
 .onb-fin .onb-gate-ic { background: color-mix(in srgb, var(--c2) 16%, transparent); color: var(--c2); }
 .onb-fin .onb-body { margin-bottom: 18px; }
 
-@media (prefers-reduced-motion: reduce) { .onb-aim::after, .onb-tip::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .onb-aim::after, .onb-ring, .onb-tip::after { animation: none; } }
 @media (max-width: 620px) { .onb-tip { width: calc(100vw - 24px); } }

@@ -1293,17 +1293,20 @@ js-onb-done-body = Todos los ajustes básicos están hechos. Encontrarás cada u
 js-onb-done-go = Empecemos
 js-onb-school-add = Ampliar las vacaciones mostradas en el calendario.
 js-onb-school-add-b = Aquí también puede ser más de una, si quieres ver las vacaciones de varias regiones.
-js-onb-either = Ambos caminos están marcados — toma el que te convenga.
+js-onb-either = { $n ->
+    [one] Un camino está marcado.
+   *[other] Los %n caminos están marcados: toma el que te convenga.
+}
 js-onb-calendar-title = Calendario
 js-onb-calendar-row = Crear o importar calendarios y libretas de direcciones.
 js-onb-calendar-row-b = Todavía no hay ninguno — y sin calendario no hay donde crear una cita.
-js-onb-calendar-ways = Dos caminos hacia un calendario.
-js-onb-calendar-ways-b = Crea uno si empiezas de cero. Importa si traes un archivo .ics. Ambos llevan al mismo sitio.
+js-onb-calendar-ways = Cuatro caminos hacia un calendario.
+js-onb-calendar-ways-b = Crear uno si empiezas de cero. Importar un archivo .ics si traes uno. Traer uno de Nextcloud, una vez. O sincronizar con Nextcloud, y los dos lados se mantienen juntos. Basta con uno.
 js-onb-addressbook-title = Libreta de direcciones
 js-onb-addressbook-row = Crear o importar calendarios y libretas de direcciones.
 js-onb-addressbook-row-b = Para los contactos aún falta una libreta de direcciones — sin ella no hay donde crear un contacto.
-js-onb-addressbook-ways = Dos caminos hacia una libreta de direcciones.
-js-onb-addressbook-ways-b = Crea una o importa un archivo .vcf. Ambos llevan al mismo sitio.
+js-onb-addressbook-ways = Cuatro caminos hacia una libreta de direcciones.
+js-onb-addressbook-ways-b = Crear una, importar un archivo .vcf, traer una de Nextcloud o mantenerla sincronizada con Nextcloud. Basta con uno.
 js-onb-name = Dale un nombre.
 js-onb-name-b = El nombre aparecerá en la lista y en cada dispositivo. Color y componentes vienen rellenos.
 js-onb-make = Todos los campos vienen rellenos con valores por omisión.
@@ -1662,3 +1665,7 @@ err-remote-cut = La respuesta de Nextcloud estaba incompleta. La próxima ronda 
 err-remote-big = La respuesta de Nextcloud era demasiado grande (límite { $limit } bytes).
 err-remote-already-linked = Este calendario ya se está sincronizando.
 err-remote-unreachable = No se pudo contactar con Nextcloud.
+js-onb-remote = Inicia sesión en Nextcloud y elige.
+js-onb-remote-b = El acceso se hace en Nextcloud mismo, en una ventana nueva. Después ves tus propios calendarios y libretas; uno de ellos se copia, una vez.
+js-onb-remote-sync = Inicia sesión en Nextcloud y elige.
+js-onb-remote-sync-b = Como el import, pero la conexión se queda: los cambios viajan luego en ambos sentidos. También puedes elegir «solo lectura».

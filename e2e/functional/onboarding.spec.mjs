@@ -173,13 +173,32 @@ test('the ring around a small target sits outside it, not over its text', async 
   await andBack(page);
 });
 
-test('a collection offers two ways, both ringed and each with its own arrow', async ({ page }) => {
+test('a collection offers every way at once: one arrow, one ring around them all', async ({ page }) => {
   await asFresh(page);
   await hash(page, '#collections');
   await settle(page);
   await expect(head(page)).toHaveText('Kalender');
+  // the two remote rows only exist where a server is configured, which the e2e build is not
   expect(await aims(page)).toEqual(['#new-calendar', '#import-calendar']);
-  expect(await arrows(page), 'one arrow per ringed way').toBe(2);
+  // ONE arrow, however many ways: any one of them is enough, so a fan of arrows would read as a
+  // list of things to do
+  expect(await arrows(page), 'one arrow for the group').toBe(1);
+  // and ONE ring, around all of them, instead of a ring per row
+  const ring = page.locator('.onb-ring');
+  await expect(ring).toBeVisible();
+  const { r, rows } = await page.evaluate(() => ({
+    r: document.querySelector('.onb-ring').getBoundingClientRect().toJSON(),
+    rows: [...document.querySelectorAll('.onb-aim')].map(e => e.getBoundingClientRect().toJSON()),
+  }));
+  for (const [i, b] of rows.entries()) {
+    expect(r.left, `row ${i} must sit inside the ring`).toBeLessThanOrEqual(b.left);
+    expect(r.right).toBeGreaterThanOrEqual(b.right);
+    expect(r.top).toBeLessThanOrEqual(b.top);
+    expect(r.bottom).toBeGreaterThanOrEqual(b.bottom);
+  }
+  // the rows keep their tint but lose their own ring, or there would be one ring too many
+  const own = await page.$$eval('.onb-aim', els => els.map(e => getComputedStyle(e, '::after').content));
+  expect(own.every(c => c === 'none'), `a grouped row still draws its own ring: ${own}`).toBe(true);
   await expect(page.locator('.onb-tip .onb-either')).toBeVisible();
   await andBack(page);
 });

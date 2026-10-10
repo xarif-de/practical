@@ -1294,17 +1294,20 @@ js-onb-done-body = Tous les réglages de base sont faits. Vous retrouverez chacu
 js-onb-done-go = C’est parti
 js-onb-school-add = Élargir les vacances affichées dans l’agenda.
 js-onb-school-add-b = Ici aussi, plusieurs sont possibles, si vous voulez voir les vacances de plusieurs régions.
-js-onb-either = Les deux chemins sont marqués — prenez celui qui vous convient.
+js-onb-either = { $n ->
+    [one] Un chemin est entouré.
+   *[other] Les %n chemins sont entourés — prenez celui qui vous convient.
+}
 js-onb-calendar-title = Agenda
 js-onb-calendar-row = Créer ou importer agendas et carnets d’adresses.
 js-onb-calendar-row-b = Aucun n’existe encore — et sans agenda, il n’y a nulle part où créer un événement.
-js-onb-calendar-ways = Deux chemins vers un agenda.
-js-onb-calendar-ways-b = Créez-en un si vous partez de zéro. Importez si vous apportez un fichier .ics. Les deux mènent au même résultat.
+js-onb-calendar-ways = Quatre chemins vers un agenda.
+js-onb-calendar-ways-b = En créer un si vous partez de zéro. Importer un fichier .ics si vous en avez un. En prendre un sur Nextcloud, une fois. Ou synchroniser avec Nextcloud, et les deux côtés restent ensemble. Un seul suffit.
 js-onb-addressbook-title = Carnet d'adresses
 js-onb-addressbook-row = Créer ou importer agendas et carnets d’adresses.
 js-onb-addressbook-row-b = Il manque encore un carnet d’adresses pour les contacts — sans lui, il n’y a nulle part où créer un contact.
-js-onb-addressbook-ways = Deux chemins vers un carnet d'adresses.
-js-onb-addressbook-ways-b = Créez-en un ou importez un fichier .vcf. Les deux mènent au même résultat.
+js-onb-addressbook-ways = Quatre chemins vers un carnet d’adresses.
+js-onb-addressbook-ways-b = En créer un, importer un fichier .vcf, en prendre un sur Nextcloud, ou le garder synchronisé avec Nextcloud. Un seul suffit.
 js-onb-name = Donnez-lui un nom.
 js-onb-name-b = Le nom apparaîtra dans la liste et sur chaque appareil. Couleur et composants sont préremplis.
 js-onb-make = Tous les champs sont préremplis avec des valeurs par défaut.
@@ -1664,3 +1667,7 @@ err-remote-cut = La réponse de Nextcloud était incomplète. La prochaine ronde
 err-remote-big = La réponse de Nextcloud était trop grande (limite { $limit } octets).
 err-remote-already-linked = Cet agenda est déjà synchronisé.
 err-remote-unreachable = Nextcloud était injoignable.
+js-onb-remote = Connectez-vous à Nextcloud et choisissez.
+js-onb-remote-b = La connexion se fait chez Nextcloud même, dans une nouvelle fenêtre. Ensuite vous voyez vos propres agendas et carnets d’adresses ; l’un d’eux est copié, une fois.
+js-onb-remote-sync = Connectez-vous à Nextcloud et choisissez.
+js-onb-remote-sync-b = Comme l’import, sauf que la connexion reste : les modifications circulent ensuite dans les deux sens. Vous pouvez aussi choisir « lecture seule ».

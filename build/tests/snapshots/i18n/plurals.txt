@@ -78,6 +78,10 @@ de js-imp-td 0: %n Aufgaben
 de js-imp-td 1: %n Aufgabe
 de js-imp-td 2: %n Aufgaben
 de js-imp-td 5: %n Aufgaben
+de js-onb-either 0: Die %n Wege sind markiert — nimm den, der dir passt.
+de js-onb-either 1: Ein Weg ist markiert.
+de js-onb-either 2: Die %n Wege sind markiert — nimm den, der dir passt.
+de js-onb-either 5: Die %n Wege sind markiert — nimm den, der dir passt.
 de js-set-imported 0: %n Objekte importiert.
 de js-set-imported 1: %n Objekt importiert.
 de js-set-imported 2: %n Objekte importiert.
@@ -262,6 +266,10 @@ en js-imp-td 0: %n tasks
 en js-imp-td 1: %n task
 en js-imp-td 2: %n tasks
 en js-imp-td 5: %n tasks
+en js-onb-either 0: All %n ways are ringed — take the one that suits you.
+en js-onb-either 1: One way is ringed.
+en js-onb-either 2: All %n ways are ringed — take the one that suits you.
+en js-onb-either 5: All %n ways are ringed — take the one that suits you.
 en js-set-imported 0: %n objects imported.
 en js-set-imported 1: %n object imported.
 en js-set-imported 2: %n objects imported.
@@ -442,6 +450,10 @@ fr js-imp-td 0: %n tâche
 fr js-imp-td 1: %n tâche
 fr js-imp-td 2: %n tâches
 fr js-imp-td 5: %n tâches
+fr js-onb-either 0: Un chemin est entouré.
+fr js-onb-either 1: Un chemin est entouré.
+fr js-onb-either 2: Les %n chemins sont entourés — prenez celui qui vous convient.
+fr js-onb-either 5: Les %n chemins sont entourés — prenez celui qui vous convient.
 fr js-set-imported 0: %n objet importé.
 fr js-set-imported 1: %n objet importé.
 fr js-set-imported 2: %n objets importés.
@@ -630,6 +642,10 @@ es js-imp-td 0: %n tareas
 es js-imp-td 1: %n tarea
 es js-imp-td 2: %n tareas
 es js-imp-td 5: %n tareas
+es js-onb-either 0: Los %n caminos están marcados: toma el que te convenga.
+es js-onb-either 1: Un camino está marcado.
+es js-onb-either 2: Los %n caminos están marcados: toma el que te convenga.
+es js-onb-either 5: Los %n caminos están marcados: toma el que te convenga.
 es js-set-imported 0: %n objetos importados.
 es js-set-imported 1: %n objeto importado.
 es js-set-imported 2: %n objetos importados.
