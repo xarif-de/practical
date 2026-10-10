@@ -9,6 +9,7 @@ mod caches;
 mod history;
 mod http;
 mod onboarding;
+mod remote;
 mod pages;
 mod poison;
 pub mod seed;

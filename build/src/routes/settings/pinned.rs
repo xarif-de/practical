@@ -5,6 +5,9 @@ use super::*;
 fn page(lang: &str, public: &str, school: &str, names: &[(&str, &str)], tz: Option<&str>) -> SettingsPage {
     let ctx = PageCtx { lang: lang.into(), user: None, csrf: String::new(), path: "/settings".into(), flash: None, i18n: crate::i18n::I18n::load(), public_dav_url: String::new(), push_enabled: false, dev: false, wants_json: false, onboarding: None, scheme: "auto".into() };
     SettingsPage {
+        remote_origins: vec![],
+        remote_sync: false,
+        remote_links: vec![],
         ctx, groups: vec![], individuals: vec![], trashed: vec![], calendars: vec![], addressbooks: vec![], deleted_calendars: vec![], deleted_addressbooks: vec![], tokens: vec![], new_token: None,
         prefs: Prefs { timezone: tz.map(str::to_string), scheme: Some("dark".into()), ..Prefs::defaults() }, owners: vec![], palette: vec![], retention_days: 90, default_timezone: "Europe/Berlin".into(),
         public_regions: public.into(), school_regions: school.into(), region_names: names.iter().map(|(c, n)| (c.to_string(), (n.to_string(), String::new()))).collect(),

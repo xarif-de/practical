@@ -21,6 +21,7 @@ pub mod ical;
 pub mod onboarding;
 pub mod prefs;
 pub mod push;
+pub mod remote;
 pub mod search;
 pub mod search_history;
 pub mod tasks;

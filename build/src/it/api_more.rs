@@ -165,6 +165,9 @@ async fn push_with_vapid() {
     let app = TestApp::new().await;
     // the keypair lives in the state, not in the config: rebuild the state around it
     let state = std::sync::Arc::new(crate::state::AppState {
+        remote_http: crate::domain::remote::client(),
+        remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
+        remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
         config: app.state.config.clone(),
         db: app.state.db.clone(),
         principals: app.state.principals.clone(),

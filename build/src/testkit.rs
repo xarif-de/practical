@@ -191,6 +191,9 @@ pub fn oidc_settings() -> crate::config::OidcSettings {
 
 pub fn config(db_path: &str) -> Config {
     Config {
+        // a test dials only a stub it started itself; the allow-list is filled by the tests that need it
+        remote_origins: vec![],
+        remote_secret_key: None,
         bind: "127.0.0.1:0".into(),
         db_path: db_path.into(),
         rustical_url: String::new(),
@@ -267,6 +270,10 @@ impl TestApp {
             dev_reload,
             // every outbound request fails at once: the discard port refuses, nothing leaves the host
             http: reqwest::Client::builder().proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(std::time::Duration::from_secs(2)).build().unwrap(),
+            // a test dials only what it starts itself; no proxy, so a stub on 127.0.0.1 is reachable
+            remote_http: crate::domain::remote::client(),
+            remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
+            remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
             geo: Default::default(),
             search_index: Default::default(),
             task_cache: Default::default(),

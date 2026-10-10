@@ -60,7 +60,7 @@ impl Hist {
     }
 }
 
-/// Who a change is attributed to. `src`: ui | import | undo (DAV changes are found, never begun).
+/// Who a change is attributed to. `src`: ui | import | sync | undo (DAV changes are found, never begun).
 pub struct Actor {
     pub src: &'static str,
     pub who: String,
@@ -74,6 +74,11 @@ impl Actor {
     }
     pub fn import(user: &Principal, label: impl Into<String>) -> Actor {
         Actor { src: "import", who: user.id.clone(), label: Some(label.into()), reverts: None }
+    }
+    /// A remote sync round writing on a user's behalf. Takes the principal id, not a `Principal`:
+    /// the round runs in a background task where no request user exists.
+    pub fn sync(principal: &str) -> Actor {
+        Actor { src: "sync", who: principal.to_string(), label: None, reverts: None }
     }
 }
 

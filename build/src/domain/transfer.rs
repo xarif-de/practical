@@ -100,7 +100,7 @@ pub const IMPORT_MAX_BYTES: usize = 8 * 1024 * 1024;
 pub const IMPORT_MAX_OBJECTS: usize = 10_000;
 /// One object (an event with its overrides and embedded files): the editor's own request limit.
 pub const IMPORT_MAX_OBJECT_BYTES: usize = 8 * 1024 * 1024;
-const IMPORT_CHUNK: usize = 500;
+pub(crate) const IMPORT_CHUNK: usize = 500;
 
 fn too_large(size: usize, limit: usize) -> AppError {
     AppError::BadRequest(crate::error::Msg { key: "err-import-too-large", args: vec![("size", size.to_string()), ("limit", limit.to_string())] })

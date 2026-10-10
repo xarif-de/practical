@@ -250,6 +250,64 @@ CREATE TABLE practical_holidays (
            ON CONFLICT(principal) DO UPDATE SET onboarding_json = excluded.onboarding_json
              WHERE practical_user_settings.onboarding_json IS NULL;",
     ),
+    (
+        18,
+        /* Remote collections (domain::remote): one Nextcloud account the user granted us, the
+           collections linked through it, and per object what the two sides last agreed on.
+
+           The credential sits on the ACCOUNT, not on the link: one browser login lets the user tick
+           several collections at once, and revoking one link must not break its siblings. Its own
+           row also gives a revoked app password ONE place to be reported instead of once per link.
+
+           `practical_remote_objects.mine` is the fingerprint of the text RUSTICAL STORED, which is
+           not the text either side sent: `CalendarObject::import` re-serialises from the parse tree
+           (rustical crates/ical/src/calendar_object.rs:76-88), so a fingerprint taken from our own
+           bytes would never match and every object would ping-pong between the two sides forever.
+
+           `object_id` is RustiCal's object id, because that is what `sync_changes` reports; `uid` is
+           kept beside it for the remote side, and the store's own
+           UNIQUE (principal, cal_id, uid) keeps that mapping 1:1. */
+        "CREATE TABLE practical_remote_accounts (
+           id        TEXT PRIMARY KEY,
+           principal TEXT NOT NULL,
+           base_url  TEXT NOT NULL,
+           login     TEXT NOT NULL,
+           secret    BLOB NOT NULL,
+           err       TEXT,
+           UNIQUE (principal, base_url, login)
+         );
+         CREATE TABLE practical_remote_links (
+           id            TEXT PRIMARY KEY,
+           account_id    TEXT NOT NULL REFERENCES practical_remote_accounts (id) ON DELETE CASCADE,
+           principal     TEXT NOT NULL,
+           kind          TEXT NOT NULL,
+           local_id      TEXT NOT NULL,
+           href          TEXT NOT NULL,
+           direction     TEXT NOT NULL,
+           every_min     INTEGER NOT NULL,
+           sync_token    TEXT,
+           local_token   INTEGER NOT NULL DEFAULT 0,
+           full_at       TEXT,
+           ran_full_at   TEXT,
+           ran_at        TEXT,
+           running_since TEXT,
+           err           TEXT,
+           UNIQUE (principal, kind, local_id),
+           UNIQUE (account_id, kind, href)
+         );
+         CREATE INDEX practical_remote_links_account ON practical_remote_links (account_id);
+         CREATE TABLE practical_remote_objects (
+           link_id   TEXT NOT NULL REFERENCES practical_remote_links (id) ON DELETE CASCADE,
+           object_id TEXT NOT NULL,
+           uid       TEXT NOT NULL,
+           href      TEXT NOT NULL,
+           etag      TEXT NOT NULL,
+           mine      TEXT NOT NULL,
+           PRIMARY KEY (link_id, object_id)
+         );
+         CREATE INDEX practical_remote_objects_uid  ON practical_remote_objects (link_id, uid);
+         CREATE INDEX practical_remote_objects_href ON practical_remote_objects (link_id, href);",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

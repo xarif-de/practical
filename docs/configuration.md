@@ -71,6 +71,8 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | Key | Default | What it does |
 | --- | --- | --- |
 | `HOLIDAYS_COUNTRY` | `DE` | The country the address search prefers while a user has named no region. Holiday regions themselves have no default. |
+| `REMOTE_ORIGINS` | – | Comma-separated list of servers a user may import from or sync with, for example `https://my.xarif.de`. An allow-list, not free text: see [Importing from, and syncing with, another server](#importing-from-and-syncing-with-another-server). Empty = both features are hidden. |
+| `REMOTE_SECRET_KEY` | – | 32 random bytes, base64, sealing a stored app password. Without it a lasting sync cannot be set up; a one-off import still works, because it stores nothing. |
 | `HOLIDAYS_ENABLED` | `true` | `false` turns off all holiday requests. See [Holidays](#holidays). |
 | `DEFAULT_TIMEZONE` | `Europe/Berlin` | The time zone for users who have not picked one. |
 | `DEFAULT_LANG` | `de` | The language for users who have not picked one: `de`, `en`, `fr` or `es`. |
@@ -185,6 +187,50 @@ These RustiCal variables go on the `rustical` container:
 > Do not let Kubernetes inject service-link variables into the `rustical` container: set
 > `enableServiceLinks: false`. RustiCal reads every `RUSTICAL_*` variable as configuration and refuses unknown keys.
 > A Service named `rustical` would stop it from starting.
+
+## Importing from, and syncing with, another server
+
+PractiCal can copy a calendar or address book from another CalDAV/CardDAV server once, or keep it in
+sync. Nextcloud is what this is tested against.
+
+**Which servers may be dialled is configuration, not user input.** `PRACTICAL__REMOTE_ORIGINS` holds
+the allowed origins; the settings page offers exactly those and nothing else. Two reasons, either
+sufficient:
+
+- a free-text field is a server-side request forgery: the pod would dial whatever it is told, and in
+  a cluster a public name can resolve to an internal address (a `*.xarif.de` name resolves to
+  Traefik's ClusterIP, a private address);
+- PractiCal's own guard refuses a non-public address, so free text could not reach such a server
+  anyway, and loosening the guard is exactly what must not happen.
+
+An entry is `scheme://host[:port]` without a path, `https` only (`http://localhost` is accepted in a
+development build). A malformed entry fails the start instead of hiding the feature silently.
+
+**Signing in** uses Nextcloud's Login Flow v2: the user's own browser signs in at their Nextcloud,
+so a native login, two-factor and an SSO provider all work without PractiCal knowing anything about
+them. PractiCal never sees the account password; it receives an app password that the user can
+revoke per client in Nextcloud.
+
+**An app password reaches the whole account, including files** — Nextcloud has no calendar-only
+scope. A one-off import therefore keeps it in memory only and destroys it at Nextcloud when it is
+done. A sync link has to keep it, so it is stored encrypted with `PRACTICAL__REMOTE_SECRET_KEY`: a
+copy of the database alone is not enough to use it. The settings page tells the user to switch
+filesystem access off for that app password.
+
+**Only the user's own collections are offered.** A shared one is refused rather than warned about,
+because Nextcloud withholds `CLASS:PRIVATE` objects from anyone but the owner and reduces
+`CLASS:CONFIDENTIAL` ones to a busy slot — a copy would be incomplete without showing it. Calendars
+Nextcloud generates from other data (the birthday calendar) and webcal subscriptions are left out
+too.
+
+**Two directions or one.** A sync link is either `both` or `pull`. When both sides changed the same
+object, Nextcloud wins; the local version stays in the change history and can be brought back from
+there. A deletion on either side travels to the other. PractiCal pushes its own changes within
+seconds; it asks Nextcloud every `every_min` minutes (5 by default), which is one tiny request that
+usually answers "nothing changed".
+
+In the cluster this also needs a NetworkPolicy egress rule to Traefik on 443, because the default
+posture denies it.
 
 <!-- docs-nav:bottom -->
 ---

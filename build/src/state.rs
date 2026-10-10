@@ -30,6 +30,14 @@ pub struct AppState {
     /// Development only (`config.dev_assets_dir`): fired when an asset file changes → `/dev/reload`.
     pub dev_reload: broadcast::Sender<()>,
     pub http: reqwest::Client,
+    /// Separate from `http`: a remote DAV server needs a 60 s request timeout (a batched multiget
+    /// does not fit in push's 10 s) and must not follow redirects.
+    pub remote_http: reqwest::Client,
+    /// Logins a user started but has not finished. In process on purpose: an app password reaches
+    /// the whole Nextcloud account, so a one-off import must not put one at rest.
+    pub remote_logins: Arc<crate::domain::remote::login::Logins>,
+    /// Per-link round locks and the echo filter of the sync loop.
+    pub remote_runner: Arc<crate::domain::remote::sched::Runner>,
     /// geocoder proxy: throttle + cache (`domain::geo`)
     pub geo: crate::domain::geo::Geo,
     /// the top-bar search's per-user corpus (`domain::search`)

@@ -88,6 +88,21 @@ pub struct SettingsPage {
     pub alarm_snaps_end: String,
     pub alarm_snaps_default_start: String,
     pub alarm_snaps_default_end: String,
+    /// the servers a remote import or sync may dial; empty hides both rows
+    pub remote_origins: Vec<String>,
+    /// a sync link needs a key to seal its app password; without one only the one-off import shows
+    pub remote_sync: bool,
+    /// the user's links as the page renders them, newest-looking first
+    pub remote_links: Vec<RemoteLinkRow>,
+}
+
+/// One sync link in the collections list and on a collection's own page.
+pub struct RemoteLinkRow {
+    pub id: String,
+    pub name: String,
+    pub two_way: bool,
+    pub ran_at: String,
+    pub err: String,
 }
 
 /// The rule as the page edits it: (kind, value). A rule from before v2 ("category or title word")
@@ -170,6 +185,20 @@ impl SettingsPage {
     }
 }
 
+/// The user's links, with the local collection's name so a row reads without a lookup.
+async fn remote_rows(state: &SharedState, user: &Principal, cals: &[CalInfo], abs: &[AbInfo]) -> AppResult<Vec<RemoteLinkRow>> {
+    let mut out = vec![];
+    for l in crate::domain::remote::links_of(state, user).await? {
+        let name = match l.kind {
+            crate::domain::remote::dav::Kind::Cal => cals.iter().find(|c| c.id == l.local_id).map(|c| c.displayname.clone()),
+            crate::domain::remote::dav::Kind::Ab => abs.iter().find(|a| a.id == l.local_id).map(|a| a.displayname.clone()),
+        };
+        // a link whose collection the user no longer sees is still listed, so it can be removed
+        out.push(RemoteLinkRow { id: l.id, name: name.unwrap_or_default(), two_way: l.two_way, ran_at: l.ran_at.unwrap_or_default(), err: l.err.unwrap_or_default() });
+    }
+    Ok(out)
+}
+
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let p = prefs::get(&state.db, &user.id).await?;
@@ -188,7 +217,12 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         "calendar" => format!("„{}“", cals_all.iter().find(|c| format!("{}/{}", c.principal, c.id) == vac_value).map_or(vac_value.as_str(), |c| c.displayname.as_str())),
         _ => format!("„{vac_value}“"),
     };
+    let abs_all = collections::addressbooks_for(&state, &user, false).await?;
+    let remote_links = remote_rows(&state, &user, &cals_all, &abs_all).await?;
     Ok(SettingsPage {
+        remote_origins: state.config.remote_origins.clone(),
+        remote_sync: crate::domain::remote::sync_enabled(&state),
+        remote_links,
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
         alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),
@@ -197,7 +231,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         individuals: groups::individuals(&state).await?,
         trashed: groups::trashed_for_user(&state, &user).await?,
         calendars: cals_all.clone(),
-        addressbooks: collections::addressbooks_for(&state, &user, false).await?,
+        addressbooks: abs_all.clone(),
         deleted_calendars: collections::calendars_for(&state, &user, true).await?,
         deleted_addressbooks: collections::addressbooks_for(&state, &user, true).await?,
         tokens: tokens::list(&state, &user).await?,
@@ -374,7 +408,15 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/import/calendars/{owner}/{id}", post(import_calendar))
         .route("/settings/import/addressbooks", post(import_new_addressbook).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
+        .route("/settings/remote/login", post(remote::login))
+        .route("/settings/remote/poll", post(remote::poll))
+        .route("/settings/remote/collections", post(remote::collections_offered))
+        .route("/settings/remote/import", post(remote::import))
+        .route("/settings/remote/link", post(remote::link))
+        .route("/settings/remote/link/{id}", post(remote::edit))
 }
+
+mod remote;
 
 #[cfg(test)]
 mod pinned;

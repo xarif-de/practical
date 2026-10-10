@@ -137,6 +137,11 @@
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ m::ico("cal-plus") }}<span>{{ ctx.t("calendar-create") }}</span></a>
     <a class="cell btnrow" href="#import-calendar">{{ m::ico("cal-up") }}<span>{{ ctx.t("calendar-import") }}</span></a>
+    {%- if !remote_origins.is_empty() %}
+    <a class="cell btnrow" href="#remote-cal">{{ m::ico("globe") }}<span>{{ ctx.t("calendar-remote") }}</span></a>
+    {%- if remote_sync %}
+    <a class="cell btnrow" href="#remote-sync-cal">{{ m::ico("swap") }}<span>{{ ctx.t("calendar-sync") }}</span></a>
+    {%- endif %}{%- endif %}
   </div>
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
@@ -145,7 +150,21 @@
     {% endfor %}
     <a class="cell btnrow" href="#new-addressbook">{{ m::ico("book-plus") }}<span>{{ ctx.t("addressbook-create") }}</span></a>
     <a class="cell btnrow" href="#import-addressbook">{{ m::ico("book-up") }}<span>{{ ctx.t("addressbook-import") }}</span></a>
+    {%- if !remote_origins.is_empty() %}
+    <a class="cell btnrow" href="#remote-ab">{{ m::ico("globe") }}<span>{{ ctx.t("addressbook-remote") }}</span></a>
+    {%- if remote_sync %}
+    <a class="cell btnrow" href="#remote-sync-ab">{{ m::ico("swap") }}<span>{{ ctx.t("addressbook-sync") }}</span></a>
+    {%- endif %}{%- endif %}
   </div>
+  {%- if !remote_links.is_empty() %}
+  <div class="label">{{ ctx.t("rm-links") }}</div>
+  <div class="group">
+    {%- for l in remote_links %}
+    <div class="cell noic rm-row" data-rm-id="{{ l.id }}"><span>{{ l.name }}<span class="sub">{% if l.two_way %}{{ ctx.t("rm-both") }}{% else %}{{ ctx.t("rm-pull") }}{% endif %} · {% if l.err.is_empty() %}{% if l.ran_at.is_empty() %}{{ ctx.t("rm-never") }}{% else %}{{ l.ran_at }}{% endif %}{% else %}<span class="bad">{{ ctx.t(l.err.as_str()) }}</span>{% endif %}</span></span><span class="val"><button type="button" class="btn rm-now">{{ ctx.t("rm-now") }}</button> <button type="button" class="btn rm-drop">{{ ctx.t("rm-remove") }}</button></span></div>
+    {%- endfor %}
+  </div>
+  <p class="foot">{{ ctx.t("rm-remove-hint") }}</p>
+  {%- endif %}
 </section>
 
 {% for c in calendars %}
@@ -228,6 +247,112 @@
     </div>
   </form>
 </section>
+
+{%- if !remote_origins.is_empty() %}
+<section class="page" id="remote-cal">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-remote-import") }}</h1>
+  <form class="rm-form" data-kind="cal" data-sync="false">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+    </div>
+    <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
+    <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
+    <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    <div class="rm-picked" hidden>
+      <div class="label">{{ ctx.t("rm-pick") }}</div>
+      <div class="group rm-list"></div>
+      <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      <div class="group sp"><button class="cell btnrow rm-take" type="submit">{{ ctx.t("rm-import-go") }}</button></div>
+    </div>
+  </form>
+</section>
+
+{%- if remote_sync %}
+<section class="page" id="remote-sync-cal">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-remote-sync") }}</h1>
+  <form class="rm-form" data-kind="cal" data-sync="true">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+    </div>
+    <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
+    <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
+    <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    <div class="rm-picked" hidden>
+      <div class="label">{{ ctx.t("rm-pick") }}</div>
+      <div class="group rm-list"></div>
+      <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      <div class="label">{{ ctx.t("rm-direction") }}</div>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-both") }}</span><span class="val"><input type="radio" name="rmdir" value="both" checked></span></label>
+        <label class="cell noic"><span>{{ ctx.t("rm-pull") }}</span><span class="val"><input type="radio" name="rmdir" value="pull"></span></label>
+      </div>
+      <p class="foot rm-dir-hint">{{ ctx.t("rm-both-hint") }}</p>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-every") }}</span><span class="val"><input type="number" class="rm-every" min="5" max="1440" step="5" value="5"> {{ ctx.t("rm-minutes") }}</span></label>
+      </div>
+      <p class="foot">{{ ctx.t("rm-every-hint") }}</p>
+      <div class="group sp"><button class="cell btnrow rm-take" type="submit">{{ ctx.t("rm-link-go") }}</button></div>
+    </div>
+  </form>
+</section>
+{%- endif %}
+
+<section class="page" id="remote-ab">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-remote-import") }}</h1>
+  <form class="rm-form" data-kind="ab" data-sync="false">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+    </div>
+    <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
+    <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
+    <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    <div class="rm-picked" hidden>
+      <div class="label">{{ ctx.t("rm-pick") }}</div>
+      <div class="group rm-list"></div>
+      <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      <div class="group sp"><button class="cell btnrow rm-take" type="submit">{{ ctx.t("rm-import-go") }}</button></div>
+    </div>
+  </form>
+</section>
+
+{%- if remote_sync %}
+<section class="page" id="remote-sync-ab">
+  {{ m::back("#collections", ctx.t("tab-collections")) }}
+  <h1>{{ ctx.t("set-remote-sync") }}</h1>
+  <form class="rm-form" data-kind="ab" data-sync="true">
+    <div class="group">
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+    </div>
+    <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
+    <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
+    <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    <div class="rm-picked" hidden>
+      <div class="label">{{ ctx.t("rm-pick") }}</div>
+      <div class="group rm-list"></div>
+      <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      <div class="label">{{ ctx.t("rm-direction") }}</div>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-both") }}</span><span class="val"><input type="radio" name="rmdir" value="both" checked></span></label>
+        <label class="cell noic"><span>{{ ctx.t("rm-pull") }}</span><span class="val"><input type="radio" name="rmdir" value="pull"></span></label>
+      </div>
+      <p class="foot rm-dir-hint">{{ ctx.t("rm-both-hint") }}</p>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-every") }}</span><span class="val"><input type="number" class="rm-every" min="5" max="1440" step="5" value="5"> {{ ctx.t("rm-minutes") }}</span></label>
+      </div>
+      <p class="foot">{{ ctx.t("rm-every-hint") }}</p>
+      <div class="group sp"><button class="cell btnrow rm-take" type="submit">{{ ctx.t("rm-link-go") }}</button></div>
+    </div>
+  </form>
+</section>
+{%- endif %}
+{%- endif %}
 
 <section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.tp("cat-count") }}" data-t-count-task="{{ ctx.tp("cat-count-task") }}" data-t-none="{{ ctx.t("cat-none") }}">
   {{ m::back("#", ctx.t("nav-settings")) }}

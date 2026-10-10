@@ -47,11 +47,22 @@ thiserror = "2.0"
 async-trait = "0.1"
 uuid = { version = "1.19", features = ["v4", "fast-rng"] }
 rand = "0.10"
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "http2", "json"] }
+# "stream" is what lets domain::remote::dav cap an answer WHILE reading it: a DAV answer
+# declares no length, and a truncated multistatus reads as a shorter list, which a full
+# reconciliation answers by deleting locally.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "http2", "json", "stream"] }
 url = "2.5"
 futures-util = "0.3"
 base64ct = { version = "1.8", features = ["alloc"] }
 sha2 = "0.11"
+# Reading WebDAV multistatus answers (domain::remote::xml). Already in RustiCal's graph
+# through its own DAV crates, so this resolves to the copy that is there anyway.
+quick-xml = "0.42"
+# Sealing a Nextcloud app password at rest (domain::remote::seal). An app password reaches
+# the account's FILES too (Nextcloud has no calendar-only scope), so a copy of the SQLite
+# file must not hand it over. ChaCha20-Poly1305 and not AES-GCM because `chacha20` is
+# already resolved in the graph (web-push), so no new cipher subtree.
+chacha20poly1305 = "0.10"
 web-push = { git = "https://github.com/lennart-k/rust-web-push" }
 openidconnect = "4.0"
 regex = "1.13"

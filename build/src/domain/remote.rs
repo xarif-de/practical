@@ -1,0 +1,421 @@
+//! Importing from, and keeping in sync with, a remote CalDAV/CardDAV server. Nextcloud is the
+//! first; the protocol half is standard, so only signing in differs per provider.
+//!
+//! Two shapes, one client ([`dav`]):
+//! - **import** runs once, through the existing `domain::transfer::import_new_*`, and stores no
+//!   credential at all;
+//! - **sync** keeps a link ([`Link`]) and runs rounds ([`round`]). Direction `both` or `pull`.
+//!
+//! The credential sits on the ACCOUNT, not the link: one browser login lets the user tick several
+//! collections, and revoking one link must not break its siblings.
+//!
+//! Which server may be dialled is a config allow-list ([`crate::config::Config::remote_origins`]),
+//! never user text — in the cluster a public name resolves to a private ClusterIP, so the existing
+//! SSRF guard would refuse the real target and loosening it would open the cluster network.
+//!
+//! `PLAN.md` carries the measurements behind every protocol decision.
+
+pub mod dav;
+pub mod login;
+pub mod round;
+pub mod sched;
+pub mod take;
+pub mod seal;
+pub mod xml;
+
+use crate::error::{AppError, AppResult};
+use crate::state::AppState;
+use dav::{Dav, Kind, Secret};
+use rustical_store::auth::Principal;
+use sqlx::Row;
+
+/// Caps, so a handful of links cannot turn into a request storm against a server that rate-limits.
+pub const MAX_LINKS_PER_USER: usize = 8;
+pub const MAX_LINKS_TOTAL: usize = 64;
+/// The scheduler's floor; "sync now" bypasses it and is itself rate-limited.
+pub const MIN_EVERY_MIN: i64 = 5;
+pub const MAX_EVERY_MIN: i64 = 1440;
+pub const DEFAULT_EVERY_MIN: i64 = 5;
+/// A full reconciliation this often regardless of tokens: the server-agnostic backstop for
+/// anything a token cannot tell us.
+pub const FULL_EVERY_HOURS: i64 = 24;
+/// A round lease older than this is from a process that died; PractiCal is one pod, so the
+/// in-process mutex is what actually excludes concurrent rounds and this only matters on restart.
+pub const LEASE_MINUTES: i64 = 10;
+
+#[derive(Debug, Clone)]
+pub struct Account {
+    pub id: String,
+    pub principal: String,
+    pub base_url: String,
+    pub login: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Link {
+    pub id: String,
+    pub account_id: String,
+    pub principal: String,
+    pub kind: Kind,
+    pub local_id: String,
+    pub href: String,
+    pub two_way: bool,
+    pub every_min: i64,
+    pub sync_token: Option<String>,
+    pub local_token: i64,
+    pub full_at: Option<String>,
+    /// when a full pass last RAN, clean or not: a permanently unreadable object must not hold the
+    /// link in a full pass on every tick
+    pub ran_full_at: Option<String>,
+    pub ran_at: Option<String>,
+    pub running_since: Option<String>,
+    pub err: Option<String>,
+}
+
+fn row_to_link(r: &sqlx::sqlite::SqliteRow) -> AppResult<Link> {
+    Ok(Link {
+        id: r.get("id"),
+        account_id: r.get("account_id"),
+        principal: r.get("principal"),
+        kind: Kind::parse(r.get("kind"))?,
+        local_id: r.get("local_id"),
+        href: r.get("href"),
+        two_way: r.get::<String, _>("direction") == "both",
+        every_min: r.get("every_min"),
+        sync_token: r.get("sync_token"),
+        local_token: r.get("local_token"),
+        full_at: r.get("full_at"),
+        ran_full_at: r.get("ran_full_at"),
+        ran_at: r.get("ran_at"),
+        running_since: r.get("running_since"),
+        err: r.get("err"),
+    })
+}
+
+/// The HTTP client for remote servers. Separate from the push client because the timeouts differ by
+/// an order of magnitude: a 500-object multiget does not fit in push's 10 s.
+///
+/// `redirect::Policy::none()` — discovery follows its single `.well-known` hop by hand, bounded to
+/// the same origin ([`Dav::discover`]).
+pub fn client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(60))
+        .user_agent("PractiCal")
+        .build()
+        .expect("the remote client builds from constants")
+}
+
+/// Refuses an origin the configuration does not list. Everything outbound goes through here.
+pub fn allowed(state: &AppState, origin: &str) -> AppResult<String> {
+    state
+        .config
+        .remote_origins
+        .iter()
+        .find(|o| o.as_str() == origin)
+        .cloned()
+        .ok_or_else(|| AppError::bad("err-remote-origin"))
+}
+
+/// Percent-encodes one path or form value. Same rule as `domain::geo::enc`; kept here so the
+/// remote module has no cross-dependency on the geocoder for three lines.
+pub fn pct(v: &str) -> String {
+    let mut out = String::with_capacity(v.len());
+    for b in v.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+pub fn enabled(state: &AppState) -> bool {
+    !state.config.remote_origins.is_empty()
+}
+
+/// Sync needs a key to seal the app password; import does not store one, so it works without.
+pub fn sync_enabled(state: &AppState) -> bool {
+    enabled(state) && state.config.remote_secret_key.is_some()
+}
+
+// ---------------------------------------------------------------- accounts
+
+/// Finds or creates the account row for one granted login, and (re)seals the secret — a fresh login
+/// for an account we already know replaces a revoked password without losing its links.
+pub async fn upsert_account(state: &AppState, user: &Principal, origin: &str, login: &str, secret: &Secret) -> AppResult<String> {
+    let key = state.config.remote_secret_key.as_deref().ok_or_else(|| AppError::bad("err-remote-no-key"))?;
+    let existing: Option<String> = sqlx::query_scalar("SELECT id FROM practical_remote_accounts WHERE principal = ? AND base_url = ? AND login = ?")
+        .bind(&user.id)
+        .bind(origin)
+        .bind(login)
+        .fetch_optional(&state.db)
+        .await?;
+    let id = existing.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let sealed = seal::seal(key, &id, &user.id, &secret.0)?;
+    sqlx::query(
+        "INSERT INTO practical_remote_accounts (id, principal, base_url, login, secret, err) VALUES (?, ?, ?, ?, ?, NULL)
+           ON CONFLICT(id) DO UPDATE SET secret = excluded.secret, err = NULL",
+    )
+    .bind(&id)
+    .bind(&user.id)
+    .bind(origin)
+    .bind(login)
+    .bind(&sealed)
+    .execute(&state.db)
+    .await?;
+    Ok(id)
+}
+
+/// The account of a link, with its secret opened. Scoped by principal, so a link id alone never
+/// reaches another user's credential.
+pub async fn account_of(state: &AppState, link: &Link) -> AppResult<(Account, Secret)> {
+    let key = state.config.remote_secret_key.as_deref().ok_or_else(|| AppError::bad("err-remote-no-key"))?;
+    let r = sqlx::query("SELECT id, principal, base_url, login, secret FROM practical_remote_accounts WHERE id = ? AND principal = ?")
+        .bind(&link.account_id)
+        .bind(&link.principal)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let sealed: Vec<u8> = r.get("secret");
+    let a = Account { id: r.get("id"), principal: r.get("principal"), base_url: r.get("base_url"), login: r.get("login") };
+    let s = seal::open(key, &a.id, &a.principal, &sealed)?;
+    Ok((a, s))
+}
+
+/// A ready-to-use client for a link.
+pub async fn dav_for(state: &AppState, link: &Link) -> AppResult<(Account, Dav)> {
+    let (a, s) = account_of(state, link).await?;
+    // re-check the origin: the allow-list may have been narrowed since the link was made
+    let origin = allowed(state, &a.base_url)?;
+    let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-origin"))?;
+    Ok((a.clone(), Dav::new(state.remote_http.clone(), base, a.login.clone(), s)))
+}
+
+/// Marks every link of an account as blocked by a revoked password. One revoked secret invalidates
+/// all of them, so it is reported once, on the account.
+pub async fn account_failed(state: &AppState, account_id: &str, msg: &str) -> AppResult<()> {
+    sqlx::query("UPDATE practical_remote_accounts SET err = ? WHERE id = ?").bind(msg).bind(account_id).execute(&state.db).await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------- links
+
+/// Every link of every user: what the background loop iterates. Only the loop calls this; a request
+/// handler must use [`links_of`], which is scoped to its user.
+pub async fn all_links(state: &AppState) -> AppResult<Vec<Link>> {
+    sqlx::query("SELECT * FROM practical_remote_links ORDER BY ran_at IS NOT NULL, ran_at")
+        .fetch_all(&state.db)
+        .await?
+        .iter()
+        .map(row_to_link)
+        .collect()
+}
+
+/// One link by id, without a user scope: for the background loop, which re-reads a link after
+/// waiting for its lock. Never reachable from a request — those go through [`link_of`].
+pub async fn link_by_id(state: &AppState, id: &str) -> AppResult<Link> {
+    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE id = ?").bind(id).fetch_optional(&state.db).await?.ok_or(AppError::NotFound)?;
+    row_to_link(&r)
+}
+
+/// A user's links, each already carrying its account's error if there is one — a revoked app
+/// password is recorded once, on the account, and every link of it is blocked by it.
+pub async fn links_of(state: &AppState, user: &Principal) -> AppResult<Vec<Link>> {
+    let rows = sqlx::query(
+        "SELECT l.*, a.err AS account_err FROM practical_remote_links l
+           JOIN practical_remote_accounts a ON a.id = l.account_id
+         WHERE l.principal = ? ORDER BY l.kind, l.local_id",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await?;
+    rows.iter()
+        .map(|r| {
+            let mut l = row_to_link(r)?;
+            l.err = r.get::<Option<String>, _>("account_err").or(l.err);
+            Ok(l)
+        })
+        .collect()
+}
+
+/// One link of THIS user. A foreign id answers NotFound (404, not 403) so ids are not enumerable.
+pub async fn link_of(state: &AppState, user: &Principal, id: &str) -> AppResult<Link> {
+    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE id = ? AND principal = ?")
+        .bind(id)
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    row_to_link(&r)
+}
+
+/// The link of a local collection, if it has one. Used by the sync loop to decide whether a local
+/// change is worth pushing.
+///
+/// It does NOT make a `pull` collection read-only: PractiCal's own write paths do not consult it,
+/// and a third-party CalDAV client talking to RustiCal could not be stopped anyway. A local edit in
+/// a `pull` collection is simply overwritten the next time that object changes remotely, and the
+/// link row in the settings says the direction is one-way.
+pub async fn link_for_collection(state: &AppState, principal: &str, kind: Kind, local_id: &str) -> AppResult<Option<Link>> {
+    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE principal = ? AND kind = ? AND local_id = ?")
+        .bind(principal)
+        .bind(kind.as_str())
+        .bind(local_id)
+        .fetch_optional(&state.db)
+        .await?;
+    r.as_ref().map(row_to_link).transpose()
+}
+
+/// Everything that can refuse a new link, checked BEFORE the local collection is created — an
+/// error after that point would leave an empty calendar the user has to delete by hand. The UNIQUE
+/// constraints still guard the race; this only turns the common cases into a message.
+pub async fn room_for_a_link(state: &AppState, user: &Principal, account_id: &str, kind: Kind, href: &str) -> AppResult<()> {
+    let mine: i64 = sqlx::query_scalar("SELECT count(*) FROM practical_remote_links WHERE principal = ?").bind(&user.id).fetch_one(&state.db).await?;
+    let all: i64 = sqlx::query_scalar("SELECT count(*) FROM practical_remote_links").fetch_one(&state.db).await?;
+    if mine as usize >= MAX_LINKS_PER_USER || all as usize >= MAX_LINKS_TOTAL {
+        return Err(AppError::bad("err-remote-too-many"));
+    }
+    let taken: i64 = sqlx::query_scalar("SELECT count(*) FROM practical_remote_links WHERE account_id = ? AND kind = ? AND href = ?")
+        .bind(account_id)
+        .bind(kind.as_str())
+        .bind(href)
+        .fetch_one(&state.db)
+        .await?;
+    if taken > 0 {
+        return Err(AppError::bad("err-remote-already-linked"));
+    }
+    Ok(())
+}
+
+pub async fn create_link(state: &AppState, user: &Principal, account_id: &str, kind: Kind, local_id: &str, href: &str, two_way: bool, every_min: i64) -> AppResult<String> {
+    room_for_a_link(state, user, account_id, kind, href).await?;
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO practical_remote_links (id, account_id, principal, kind, local_id, href, direction, every_min, local_token)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+    )
+    .bind(&id)
+    .bind(account_id)
+    .bind(&user.id)
+    .bind(kind.as_str())
+    .bind(local_id)
+    .bind(href)
+    .bind(if two_way { "both" } else { "pull" })
+    .bind(every_min.clamp(MIN_EVERY_MIN, MAX_EVERY_MIN))
+    .execute(&state.db)
+    .await?;
+    Ok(id)
+}
+
+pub async fn set_link(state: &AppState, user: &Principal, id: &str, two_way: Option<bool>, every_min: Option<i64>) -> AppResult<()> {
+    let link = link_of(state, user, id).await?;
+    sqlx::query("UPDATE practical_remote_links SET direction = ?, every_min = ? WHERE id = ? AND principal = ?")
+        .bind(if two_way.unwrap_or(link.two_way) { "both" } else { "pull" })
+        .bind(every_min.unwrap_or(link.every_min).clamp(MIN_EVERY_MIN, MAX_EVERY_MIN))
+        .bind(id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await?;
+    Ok(())
+}
+
+/// Removes a link. The local collection and its data stay. When this was the account's last link,
+/// the app password is destroyed at Nextcloud and the account row goes with it — otherwise a
+/// sibling link would stop working.
+pub async fn delete_link(state: &AppState, user: &Principal, id: &str) -> AppResult<()> {
+    let link = link_of(state, user, id).await?;
+    let creds = account_of(state, &link).await.ok();
+    sqlx::query("DELETE FROM practical_remote_links WHERE id = ? AND principal = ?").bind(id).bind(&user.id).execute(&state.db).await?;
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM practical_remote_links WHERE account_id = ?").bind(&link.account_id).fetch_one(&state.db).await?;
+    if left == 0 {
+        if let Some((a, s)) = creds {
+            login::revoke(&state.remote_http, &a.base_url, &a.login, &s).await;
+        }
+        sqlx::query("DELETE FROM practical_remote_accounts WHERE id = ? AND principal = ?").bind(&link.account_id).bind(&user.id).execute(&state.db).await?;
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------- object mapping
+
+/// What the two sides last agreed on for one object.
+#[derive(Debug, Clone)]
+pub struct Mapped {
+    pub object_id: String,
+    pub uid: String,
+    pub href: String,
+    pub etag: String,
+    /// fingerprint of the text RUSTICAL STORED, which is not the text either side sent
+    pub mine: String,
+}
+
+pub async fn mapping(state: &AppState, link_id: &str) -> AppResult<Vec<Mapped>> {
+    Ok(sqlx::query("SELECT object_id, uid, href, etag, mine FROM practical_remote_objects WHERE link_id = ?")
+        .bind(link_id)
+        .fetch_all(&state.db)
+        .await?
+        .iter()
+        .map(|r| Mapped { object_id: r.get("object_id"), uid: r.get("uid"), href: r.get("href"), etag: r.get("etag"), mine: r.get("mine") })
+        .collect())
+}
+
+/// Written immediately after the write it describes, in its own statement — never batched to the
+/// end of a round. An abort then costs a re-read instead of a double push plus a 412 storm.
+pub async fn map_put(state: &AppState, link_id: &str, m: &Mapped) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO practical_remote_objects (link_id, object_id, uid, href, etag, mine) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(link_id, object_id) DO UPDATE SET uid = excluded.uid, href = excluded.href, etag = excluded.etag, mine = excluded.mine",
+    )
+    .bind(link_id)
+    .bind(&m.object_id)
+    .bind(&m.uid)
+    .bind(&m.href)
+    .bind(&m.etag)
+    .bind(&m.mine)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
+pub async fn map_del(state: &AppState, link_id: &str, object_id: &str) -> AppResult<()> {
+    sqlx::query("DELETE FROM practical_remote_objects WHERE link_id = ? AND object_id = ?").bind(link_id).bind(object_id).execute(&state.db).await?;
+    Ok(())
+}
+
+/// How a remote body is parsed. `rfc7809` lets a `TZID` stand without its `VTIMEZONE` block, which
+/// RFC 7809 allows for IANA zones and which nextcloud relies on: measured, a `multiget` hands out
+/// an event carrying `DTSTART;TZID=Europe/Berlin` with no `VTIMEZONE` beside it, and the strict
+/// parser refuses it (`TZID Europe/Berlin does not refer to a valid timezone`).
+///
+/// It is also what RustiCal's own CalDAV endpoint uses for every write a phone makes
+/// (`rustical/crates/caldav/src/lib.rs:73-78`, `rfc7809: true` by default), so the sync is exactly
+/// as permissive as the server next to it — not stricter.
+pub fn parser_options() -> caldata::parser::ParserOptions {
+    caldata::parser::ParserOptions { rfc7809: true }
+}
+
+/// The fingerprint RustiCal will hold for a text, which is what makes echo suppression work.
+///
+/// The two kinds differ and must not be unified: `CalendarObject::import` re-serialises from the
+/// parse tree (so `get_etag` hashes UID + regenerated text), while `AddressObject` has NO `import`
+/// and `from_vcf` caches its input. Both are applied to the text AFTER our own write-path
+/// normalisation (`complete_ics` / `bare_params_as_type`), because that is what reaches the store.
+pub fn fingerprint(kind: Kind, text: &str) -> AppResult<String> {
+    Ok(match kind {
+        Kind::Cal => {
+            let normalised = crate::domain::transfer::complete_ics(text);
+            rustical_ical::CalendarObject::import(&normalised, Some(parser_options()))?.get_etag()
+        }
+        Kind::Ab => {
+            let normalised = crate::domain::contacts::bare_params_as_type(text);
+            rustical_ical::AddressObject::from_vcf(normalised.into_owned())?.get_etag()
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests;
