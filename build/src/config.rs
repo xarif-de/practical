@@ -34,7 +34,6 @@ pub struct Config {
     pub vapid_subject: String,
     /// OpenHolidays defaults: ISO country + subdivision code, e.g. DE / DE-SN.
     pub holidays_country: String,
-    pub holidays_subdivision: String,
     /// Disable the OpenHolidays fetch entirely (no egress).
     pub holidays_enabled: bool,
     pub default_timezone: String,
@@ -155,7 +154,6 @@ impl Config {
             vapid_private_key_pem: var("VAPID_PRIVATE_KEY_PEM").map(|v| v.replace("\\n", "\n")),
             vapid_subject: var_or("VAPID_SUBJECT", "mailto:admin@example.org"),
             holidays_country: var_or("HOLIDAYS_COUNTRY", "DE"),
-            holidays_subdivision: var_or("HOLIDAYS_SUBDIVISION", ""),
             holidays_enabled: var_bool("HOLIDAYS_ENABLED", true)?,
             default_timezone: var_or("DEFAULT_TIMEZONE", "Europe/Berlin"),
             default_lang: var_or("DEFAULT_LANG", "de"),

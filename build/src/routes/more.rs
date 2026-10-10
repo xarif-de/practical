@@ -190,10 +190,10 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
     let (Some(start), Some(end)) = (NaiveDate::from_ymd_opt(year, 1, 1).filter(|d| crate::domain::ical::year_ok(*d)), NaiveDate::from_ymd_opt(year + 1, 1, 1)) else { return Err(crate::error::AppError::bad("err-date-range")) };
     let instances = year_instances(state, cals, (start, end), year, vc.tz).await?;
     let p = &vc.prefs;
-    let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
+    let (public_regions, school_regions) = (p.regions(false), p.regions(true));
     let public = if p.holidays_enabled { holidays::for_regions(state, "public", &public_regions, year, &ctx.lang).await? } else { vec![] };
     let school = if p.school_holidays_enabled { holidays::for_regions(state, "school", &school_regions, year, &ctx.lang).await? } else { vec![] };
-    let own = match p.own_region(&state.config).filter(|_| p.holidays_enabled) {
+    let own = match p.own_region().filter(|_| p.holidays_enabled) {
         Some(r) => holidays::for_regions(state, "public", &[r], year, &ctx.lang).await?,
         None => vec![],
     };

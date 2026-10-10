@@ -221,6 +221,35 @@ CREATE TABLE practical_holidays (
          DROP TABLE practical_category_rules;
          ALTER TABLE practical_category_rules_new RENAME TO practical_category_rules;",
     ),
+    (
+        16,
+        // the first-start record (domain::onboarding): which steps the user confirmed, and whether
+        // everything was through once. A preference column cannot carry this — the settings form
+        // submits the *effective* region list, so a value there would mark a default as the user's
+        // decision.
+        "ALTER TABLE practical_user_settings ADD COLUMN onboarding_json TEXT;",
+    ),
+    (
+        17,
+        /* A missing record reads as a brand-new user, so without this every user of an existing
+           instance would meet the language gate on every page and be asked for settings they made
+           long ago. A user who OWNS something was there before the first start existed, so their
+           setup is through; `Settings › Erste Schritte` offers the hints to anyone who wants them.
+           A principal without a single collection is taken at face value as a new user — that is
+           what a freshly created one is (`e2e/first-start-db.sh`), and an old one in that state is
+           indeed still missing a calendar. A record already written is never touched.
+
+           Its own migration, because it reads RustiCal's tables (read-only, see this module's
+           header) and they need not exist yet: `needed` skips this where they are absent, which is
+           also what lets `check_schema` replay the list on an empty database. */
+        "INSERT INTO practical_user_settings (principal, onboarding_json)
+           SELECT p.id, '{\"v\":1,\"confirmed\":[],\"completed\":true}' FROM principals p
+           WHERE p.principal_type = 'INDIVIDUAL'
+             AND (EXISTS (SELECT 1 FROM calendars c WHERE c.principal = p.id)
+               OR EXISTS (SELECT 1 FROM addressbooks a WHERE a.principal = p.id))
+           ON CONFLICT(principal) DO UPDATE SET onboarding_json = excluded.onboarding_json
+             WHERE practical_user_settings.onboarding_json IS NULL;",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.
@@ -229,6 +258,14 @@ async fn needed(version: i64, tx: &mut sqlx::SqliteConnection) -> Result<bool, s
     Ok(match version {
         // the drift: `scope` is not part of the primary key
         15 => sqlx::query_scalar::<_, i64>("SELECT pk FROM pragma_table_info('practical_category_rules') WHERE name = 'scope'").fetch_optional(&mut *tx).await? == Some(0),
+        // nothing to carry over where RustiCal's tables are not there (a bare database, or the
+        // replay `check_schema` does in memory)
+        17 => {
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('principals', 'calendars', 'addressbooks')")
+                .fetch_one(&mut *tx)
+                .await?
+                == 3
+        }
         _ => true,
     })
 }

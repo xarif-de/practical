@@ -4,6 +4,17 @@
   if (!settings) return;
   const { esc } = practical;
   const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
+  /* A suggested name ("Mein Kalender") is there to be replaced: while it is still untouched,
+     focusing the field selects all of it, so the first keystroke overwrites the whole word. The
+     mousedown is stopped because a click would otherwise collapse the selection to a caret. Once
+     the user has changed the text it behaves like any other field. */
+  settings.querySelectorAll('input[data-pick-all]').forEach(i => {
+    const first = i.value;
+    i.addEventListener('focus', () => { if (i.value === first) i.select(); });
+    i.addEventListener('mousedown', e => {
+      if (i.value === first && document.activeElement !== i) { e.preventDefault(); i.focus(); }
+    });
+  });
   // import: read the chosen file, POST its bytes (no multipart)
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => { const w = practical.writer(inp.closest('form') || inp); inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;

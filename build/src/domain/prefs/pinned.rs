@@ -14,20 +14,24 @@ fn derived_values() {
     }
     assert_eq!(d.holiday_css(), "");
     assert_eq!(Prefs { school_color: Some("#00ff00".into()), holiday_color: Some("red".into()), ..Default::default() }.holiday_css(), ":root{--fer:#00ff00;}");
-    // regions: the lists, else the single region of before, else the configured default
-    assert_eq!(d.regions(&cfg, false), ["DE-SN"]);
-    assert_eq!(d.regions(&cfg, true), ["DE-SN"]);
+    // regions: the lists, else the user's own single region of before — and otherwise NONE. The
+    // configured HOLIDAYS_COUNTRY/SUBDIVISION are no fallback here: holidays are nobody's default,
+    // and an unasked one could not be told from a choice.
+    let empty: [&str; 0] = [];
+    assert_eq!(d.regions(false), empty, "a fresh user has no region, whatever the server is configured for");
+    assert_eq!(d.regions(true), empty);
     let at = Prefs { holiday_country: Some("AT".into()), ..Default::default() };
-    assert_eq!(at.regions(&cfg, false), ["AT"], "the default subdivision belongs to the default country only");
-    let whole = Prefs { holiday_subdivision: Some(String::new()), ..Default::default() };
-    assert_eq!(whole.regions(&cfg, false), ["DE"]);
+    assert_eq!(at.regions(false), ["AT"], "a region the user chose before the lists still counts");
+    let whole = Prefs { holiday_country: Some("DE".into()), holiday_subdivision: Some(String::new()), ..Default::default() };
+    assert_eq!(whole.regions(false), ["DE"], "the whole country is a choice too");
     let lists = Prefs { public_regions: Some("DE-BY,AT".into()), school_regions: Some(String::new()), ..Default::default() };
-    assert_eq!((lists.regions(&cfg, false), lists.regions(&cfg, true)), (vec!["DE-BY".to_string(), "AT".into()], vec![]));
-    assert_eq!((lists.own_region(&cfg).as_deref(), lists.home_country(&cfg)), (Some("DE-BY"), "DE".to_string()));
+    assert_eq!((lists.regions(false), lists.regions(true)), (vec!["DE-BY".to_string(), "AT".into()], vec![]));
+    assert_eq!((lists.own_region().as_deref(), lists.home_country(&cfg)), (Some("DE-BY"), "DE".to_string()));
     let only_school = Prefs { public_regions: Some(String::new()), school_regions: Some("FR-75".into()), ..Default::default() };
-    assert_eq!((only_school.own_region(&cfg).as_deref(), only_school.home_country(&cfg)), (Some("FR-75"), "FR".to_string()));
+    assert_eq!((only_school.own_region().as_deref(), only_school.home_country(&cfg)), (Some("FR-75"), "FR".to_string()));
     let none = Prefs { public_regions: Some(String::new()), school_regions: Some(String::new()), ..Default::default() };
-    assert_eq!((none.own_region(&cfg), none.home_country(&cfg)), (None, "DE".to_string()));
+    assert_eq!((none.own_region(), none.home_country(&cfg)), (None, "DE".to_string()),
+        "without a region the address search still prefers the configured country");
     assert!(is_hex_color("#a1B2c3") && !is_hex_color("#a1b2c") && !is_hex_color("a1b2c3d") && !is_hex_color("#gggggg"));
     // the rule of before v2 and its legacy flag
     assert_eq!(VacationRule::of(&d), VacationRule { v: 0, kind: "category".into(), value: "Urlaub".into() });
@@ -40,7 +44,7 @@ fn derived_values() {
 async fn stored_round_trip() {
     let app = TestApp::new().await;
     assert_eq!(serde_json::to_value(get(&app.state.db, "nobody").await.unwrap()).unwrap(), serde_json::to_value(Prefs::defaults()).unwrap());
-    assert_eq!(get_look(&app.state.db, "nobody").await.unwrap(), (None, None));
+    assert_eq!(get_look(&app.state.db, "nobody").await.unwrap(), Look::default());
     let p = Prefs {
         lang: Some("fr".into()), scheme: Some("dark".into()), timezone: Some("Asia/Tokyo".into()), holidays_enabled: false, school_holidays_enabled: true,
         holiday_country: Some("AT".into()), holiday_subdivision: Some("AT-9".into()), public_regions: Some("AT-9".into()), school_regions: Some(String::new()),
@@ -49,7 +53,7 @@ async fn stored_round_trip() {
     };
     set(&app.state.db, "u", &p).await.unwrap();
     assert_eq!(serde_json::to_value(get(&app.state.db, "u").await.unwrap()).unwrap(), serde_json::to_value(&p).unwrap());
-    assert_eq!(get_look(&app.state.db, "u").await.unwrap(), (Some("fr".into()), Some("dark".into())));
+    assert_eq!(get_look(&app.state.db, "u").await.unwrap(), Look { lang: Some("fr".into()), scheme: Some("dark".into()), onboarding: None });
     // an update replaces every column
     set(&app.state.db, "u", &Prefs::defaults()).await.unwrap();
     assert_eq!(serde_json::to_value(get(&app.state.db, "u").await.unwrap()).unwrap(), serde_json::to_value(Prefs::defaults()).unwrap());

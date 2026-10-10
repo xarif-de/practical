@@ -1,6 +1,6 @@
 // axe over contacts, tasks, settings, the history and the login page (a11y/_axe.mjs).
-import { expect } from '../lib/test.mjs';
-import { LOGIN_BASE } from '../lib/env.mjs';
+import { api, expect, loginAs } from '../lib/test.mjs';
+import { BASE, LOGIN_BASE } from '../lib/env.mjs';
 import { a11y, go, phone } from './_axe.mjs';
 
 a11y('contacts: list, contact, edit, table', async (page, check, testInfo) => {
@@ -50,4 +50,34 @@ a11y('history: map and list, the login page', async (page, check) => {
   await check('hx-list');
   await go(page, `${LOGIN_BASE}/login`, 'form.pwform');
   await check('login');
+});
+
+/* First start (domain::onboarding): the fixture is through the setup, so the states have to be asked
+   for — `reopen` forgets the completion and keeps the confirmations, and the fixture confirmed none.
+   bob owns no collections, no zone and no regions, so every point is open for him; alice would have
+   only the language left. */
+a11y('first start: the language gate, a hint and the closing word', async (page, check) => {
+  await loginAs(page, 'bob');
+  await go(page, '/settings', '#settings');
+  const csrf = await page.locator('meta[name=csrf]').getAttribute('content');
+  const post = (path, form = {}) => page.request.post(path, { form: { csrf, ...form }, headers: { Origin: BASE } });
+  await post('/settings/onboarding/reopen');
+
+  await go(page, '/calendar', '#onb-gate');
+  await check('onb-gate');
+
+  // confirming the language leaves the gate and the first hint takes over, with its arrow
+  await page.locator('#onb-gate button[type=submit]').click();
+  await page.locator('.onb-tip').waitFor();
+  await check('onb-hint');
+
+  // the closing word comes when the LAST point is answered in a tab that was being guided
+  for (const step of ['tz', 'regions', 'school']) await api(page, 'POST', '/settings/onboarding/confirm', { step });
+  for (const kind of ['calendar', 'addressbook']) {
+    await go(page, `/settings#new-${kind}`, `#new-${kind} form button[type=submit]`);
+    // the submit navigates: without waiting for it the next `go` cancels it and nothing is created
+    await Promise.all([page.waitForLoadState(), page.locator(`#new-${kind} form button[type=submit]`).click()]);
+  }
+  await page.locator('#onb-done').waitFor();
+  await check('onb-done');
 });

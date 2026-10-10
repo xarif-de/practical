@@ -70,8 +70,7 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `HOLIDAYS_COUNTRY` | `DE` | The holiday country (ISO code) until a user picks their own regions. |
-| `HOLIDAYS_SUBDIVISION` | – | The holiday region (ISO code, for example `DE-SN`) until a user picks their own. |
+| `HOLIDAYS_COUNTRY` | `DE` | The country the address search prefers while a user has named no region. Holiday regions themselves have no default. |
 | `HOLIDAYS_ENABLED` | `true` | `false` turns off all holiday requests. See [Holidays](#holidays). |
 | `DEFAULT_TIMEZONE` | `Europe/Berlin` | The time zone for users who have not picked one. |
 | `DEFAULT_LANG` | `de` | The language for users who have not picked one: `de`, `en`, `fr` or `es`. |
@@ -164,7 +163,8 @@ PractiCal gets public and school holidays from [OpenHolidays](https://www.openho
 [Nager.Date](https://date.nager.at) is the fallback. The holidays are cached in the database. The hosts that
 PractiCal contacts are listed in [deployment.md](deployment.md#network).
 
-`HOLIDAYS_COUNTRY` and `HOLIDAYS_SUBDIVISION` only preset the region, using ISO codes such as `DE` and `DE-SN`.
+`HOLIDAYS_COUNTRY` is only the country the address search prefers (ISO code, for example `DE`). Holiday
+regions have no server default: until a user names one, no holidays are drawn.
 Every user picks their own regions in the settings.
 
 If the server has no internet access, set `HOLIDAYS_ENABLED=false`.

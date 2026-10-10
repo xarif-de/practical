@@ -203,7 +203,7 @@ function serverEnv(port, db, extra = {}) {
   return {
     PATH: process.env.PATH, HOME: process.env.HOME, RUST_LOG: 'warn', NO_COLOR: '1',
     PRACTICAL__DB_PATH: db, PRACTICAL__RUSTICAL_URL: '', PRACTICAL__BIND: `127.0.0.1:${port}`, PRACTICAL__PUBLIC_URL: `http://127.0.0.1:${port}`,
-    PRACTICAL__ALLOW_PASSWORD_LOGIN: 'true', PRACTICAL__HOLIDAYS_COUNTRY: 'DE', PRACTICAL__HOLIDAYS_SUBDIVISION: 'DE-SN',
+    PRACTICAL__ALLOW_PASSWORD_LOGIN: 'true', PRACTICAL__HOLIDAYS_COUNTRY: 'DE',
     PRACTICAL__PUBLIC_DAV_URL: 'https://dav.example.org', PRACTICAL__DEFAULT_TIMEZONE: 'Europe/Berlin', PRACTICAL__DEFAULT_LANG: 'de',
     // the real clock (development mode would serve other assets and poll them): no purge may change the DB as dates pass
     PRACTICAL__HISTORY_RETENTION_DAYS: '36500', PRACTICAL__TRASH_RETENTION_DAYS: '36500',

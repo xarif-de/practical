@@ -46,6 +46,13 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 - CI (dagger) runs cargo-deny, `cargo test` inside the image build step (build/Dockerfile: after the release build,
   2 jobs, own cache mount, no `-D warnings`) and tests/tests.yaml. e2e, visual, a11y, bench: local gates only.
 - A fixed bug gets a test that fails on the old code. A new cache gets a test that writes and reads back.
+- Every person in the e2e fixture is marked through the first start (`e2e/seed/02-practical.py` `pin()`,
+  `onboarding_json` completed). A user without that record gets the language gate over every page, and no suite can
+  click anything: on 2026-10-09 every a11y state and three functional tests failed at once for that reason. A test
+  that wants the first start asks for it (`POST /settings/onboarding/reopen`); a confirmation cannot be taken back
+  over HTTP, so a test that confirms runs last in its file. A preference can: `POST /settings/prefs` writes every
+  field it carries, so a test may hand a zone or a region list back. `/settings/onboarding/confirm` takes JSON, not
+  a form.
 - An intended bench cost is named in the commit with its ratio from the bench table.
 
 ## Parallel work

@@ -135,7 +135,7 @@ impl<T: DeserializeOwned + Send> FromRequest<SharedState> for Form<T> {
         // a settings form answers as its handler would (routes::settings::finish): the autosave reads
         // {ok, msg}, a page form gets an error flash and the page again
         let stored = match &user {
-            Some(u) => crate::domain::prefs::get_look(&state.db, u).await.ok().and_then(|(l, _)| l),
+            Some(u) => crate::domain::prefs::get_look(&state.db, u).await.ok().and_then(|l| l.lang),
             None => None,
         };
         let msg = e.user_message(&state.i18n, &stored.unwrap_or_else(|| crate::i18n::negotiate(accept.as_deref(), &state.config.default_lang)));

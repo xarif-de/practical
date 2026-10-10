@@ -1,0 +1,87 @@
+/* css/onboarding.css — first start: the language gate (server-rendered, layout.html) and the hints
+   that lead to a setting (js/onboarding/*.js).
+   Every class is prefixed `onb-`: .chip, .sub, .tl, .more, .wk, .acts, .fab, .cal and .ed are taken. */
+
+/* ---- the veil behind the two dialogs --------------------------------------------------------- */
+.onb-veil { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+  background: color-mix(in srgb, var(--fg) 40%, transparent); backdrop-filter: blur(6px); }
+.onb-box { background: var(--bg); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.28); box-sizing: border-box; }
+.onb-h { font: 700 19px/1.25 var(--font-display); letter-spacing: -.01em; margin: 0 0 6px; }
+.onb-body { font-size: 13px; color: var(--fg-2); margin: 0; line-height: 1.5; }
+.onb-foot { font-size: 11.5px; color: var(--fg-3); margin: 11px 0 0; }
+
+/* ---- the language gate: one question, nothing else -------------------------------------------- */
+.onb-gate { width: min(360px, 100%); padding: 22px 22px 18px; text-align: center; }
+.onb-gate-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; margin: 0 auto 13px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.onb-gate-ic .ico { width: 21px; height: 21px; }
+.onb-gate .onb-body { margin-bottom: 16px; }
+.onb-langs { display: grid; gap: 4px; margin-bottom: 16px; text-align: left; }
+.onb-lang { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;
+  background: var(--tile); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; }
+.onb-lang input { position: absolute; opacity: 0; pointer-events: none; } /* the row is the control */
+.onb-lang .onb-flag { font-size: 17px; line-height: 1; flex: none;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.onb-lang .onb-lname { flex: 1; }
+.onb-lang .ico { width: 16px; height: 16px; color: var(--accent); visibility: hidden; }
+.onb-lang:hover { background: var(--bg-3); }
+.onb-lang:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, transparent); border-color: var(--accent); font-weight: 500; }
+.onb-lang:has(input:checked) .ico { visibility: visible; }
+.onb-lang:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.onb-wide { width: 100%; justify-content: center; padding: 10px 16px; font-size: 14.5px; }
+
+/* ---- shared by the gate and the hint ---------------------------------------------------------- */
+.onb-ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #fff; flex: none; }
+.onb-ic .ico { width: 15px; height: 15px; }
+.onb-count { font-size: 11.5px; color: var(--fg-3); letter-spacing: .02em; }
+
+/* ---- the hint: a bubble beside the target, with an arrow to each -------------------------------
+   No dimmer anywhere: the app stays usable while a hint is up, which is the point — the user may
+   walk away and come back, and the hint re-aims. */
+/* A red edge with a pulsing halo, because a bubble is not a remark but something waiting for the
+   user to act. The halo is its own layer and only its OPACITY moves: animating the box's own
+   box-shadow repaints the bubble (and its text) on every frame, which a hint that may sit there for
+   minutes must not do. */
+.onb-tip { position: fixed; z-index: 48; width: min(330px, calc(100vw - 24px)); padding: 15px 16px 14px;
+  border-color: var(--err); box-shadow: 0 14px 44px rgba(0,0,0,.19); }
+.onb-tip::after { content: ""; position: absolute; inset: -1px; border-radius: 16px; pointer-events: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 28%, transparent);
+  animation: onb-edge 1.9s ease-in-out infinite; will-change: opacity; }
+@keyframes onb-edge { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.onb-tip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.onb-tip-head .onb-sp { flex: 1; }
+.onb-tip-head .onb-ic { width: 24px; height: 24px; border-radius: 7px; }
+.onb-tip-head .onb-ic .ico { width: 13px; height: 13px; }
+.onb-lead { font-size: 14px; font-weight: 500; color: var(--fg); margin: 0 0 6px; line-height: 1.45; }
+/* "keep the current value": the bubble's only control, in the app's own link style. It replaced the
+   path chip — leading the user to the setting already shows them where they are. */
+.onb-keep { margin: 11px 0 0; }
+.onb-keep button.link { padding: 0; font-size: 13px; font-weight: 500; }
+/* said only when a waypoint has more than one target, so the two rings read as a choice */
+.onb-either { font-size: 12px; color: var(--accent); margin: 8px 0 0; display: flex; align-items: flex-start; gap: 6px; line-height: 1.45; }
+.onb-either::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; margin-top: .45em; }
+.onb-dots { display: inline-flex; gap: 5px; align-items: center; }
+.onb-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); display: block; }
+.onb-dots i.on { background: var(--accent); }
+.onb-arrows { position: fixed; inset: 0; z-index: 47; pointer-events: none; width: 100%; height: 100%; }
+
+/* the aimed element: a tint and a ring, nothing moves and nothing is covered */
+.onb-aim { position: relative; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.onb-aim::after { content: ""; position: absolute; inset: 1px; border-radius: 9px; pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--accent); animation: onb-pulse 1.9s ease-in-out infinite; }
+/* A small or inline target has no room for a ring inside it: an inset ring ate into the icon of the
+   navigation button and into the text of the "‹ Einstellungen" link. Those get the ring outside,
+   with air around the text. */
+.topbar .nav .onb-aim::after, .tabbar .onb-aim::after { inset: -3px; }
+.set .back.onb-aim { background: none; }
+.set .back.onb-aim::after { inset: -4px -8px; border-radius: 8px; }
+@keyframes onb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* the closing word, once everything is answered */
+.onb-fin { width: min(380px, 100%); padding: 24px 22px 20px; text-align: center; }
+.onb-fin .onb-gate-ic { background: color-mix(in srgb, var(--c2) 16%, transparent); color: var(--c2); }
+.onb-fin .onb-body { margin-bottom: 18px; }
+
+@media (prefers-reduced-motion: reduce) { .onb-aim::after, .onb-tip::after { animation: none; } }
+@media (max-width: 620px) { .onb-tip { width: calc(100vw - 24px); } }

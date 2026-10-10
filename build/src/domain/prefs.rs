@@ -62,32 +62,32 @@ impl Prefs {
         }
         if v.is_empty() { v } else { format!(":root{{{v}}}") }
     }
-    /// The single region of before the lists: the user's choice, else the configured default
-    /// (the default subdivision only belongs to the default country).
-    fn region(&self, cfg: &crate::config::Config) -> (String, String) {
-        let country = self.holiday_country.clone().unwrap_or_else(|| cfg.holidays_country.clone());
-        let sub = self.holiday_subdivision.clone().unwrap_or_else(|| if country == cfg.holidays_country { cfg.holidays_subdivision.clone() } else { String::new() });
-        (country, sub)
-    }
     /// The regions of public (`school` false) or school holidays, in the user's order.
-    pub fn regions(&self, cfg: &crate::config::Config, school: bool) -> Vec<String> {
+    ///
+    /// Empty until the user names one: holidays are nobody's default. The server's configuration is
+    /// NOT a fallback — a server in Saxony must not decide that a user in Vienna has Saxon
+    /// holidays, and an unasked default could not be told from a choice (that is what the first
+    /// start asks for, `domain::onboarding`). Without a region the views draw none. The one
+    /// fallback is the user's OWN earlier single region (`holiday_country`/`holiday_subdivision`,
+    /// the columns before the lists), so a choice made then still counts.
+    pub fn regions(&self, school: bool) -> Vec<String> {
         match if school { &self.school_regions } else { &self.public_regions } {
             Some(list) => list.split(',').filter(|c| !c.is_empty()).map(str::to_string).collect(),
             None => {
-                let (country, sub) = self.region(cfg);
-                let one = if sub.is_empty() { country } else { sub };
+                let sub = self.holiday_subdivision.clone().unwrap_or_default();
+                let one = if sub.is_empty() { self.holiday_country.clone().unwrap_or_default() } else { sub };
                 if one.is_empty() { vec![] } else { vec![one] }
             }
         }
     }
     /// The user's own region: the first of the public holidays' list (vacation days and bridge
     /// days count by it), else of the school holidays'.
-    pub fn own_region(&self, cfg: &crate::config::Config) -> Option<String> {
-        self.regions(cfg, false).into_iter().next().or_else(|| self.regions(cfg, true).into_iter().next())
+    pub fn own_region(&self) -> Option<String> {
+        self.regions(false).into_iter().next().or_else(|| self.regions(true).into_iter().next())
     }
     /// The user's home country (address search prefers it): the own region's, else the configured one.
     pub fn home_country(&self, cfg: &crate::config::Config) -> String {
-        self.own_region(cfg).map(|r| crate::domain::holidays::split(&r).0.to_string()).unwrap_or_else(|| cfg.holidays_country.clone())
+        self.own_region().map(|r| crate::domain::holidays::split(&r).0.to_string()).unwrap_or_else(|| cfg.holidays_country.clone())
     }
 }
 
@@ -125,14 +125,24 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
     })
 }
 
-/// Language and colour scheme — what every page needs (`PageCtx`), in one query.
-pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<(Option<String>, Option<String>), sqlx::Error> {
-    Ok(sqlx::query("SELECT lang, scheme FROM practical_user_settings WHERE principal = ?")
+/// Language, colour scheme and the first-start record — what every page needs ([`crate::ctx::PageCtx`]),
+/// in one query. The onboarding record rides along so a page view that has nothing to onboard costs
+/// no second statement (`domain::onboarding`).
+pub async fn get_look(db: &SqlitePool, principal: &str) -> Result<Look, sqlx::Error> {
+    Ok(sqlx::query("SELECT lang, scheme, onboarding_json FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?
-        .map(|r| (r.get("lang"), r.get("scheme")))
+        .map(|r| Look { lang: r.get("lang"), scheme: r.get("scheme"), onboarding: r.get("onboarding_json") })
         .unwrap_or_default())
+}
+
+/// What [`get_look`] reads: the two look-and-feel columns plus the raw onboarding record.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Look {
+    pub lang: Option<String>,
+    pub scheme: Option<String>,
+    pub onboarding: Option<String>,
 }
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {

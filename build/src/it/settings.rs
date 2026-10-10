@@ -140,7 +140,11 @@ async fn preferences_form() {
         ("vacation_title", "^Urlaub"), ("alarm_snaps_start", "5 min, 1 h"), ("alarm_snaps_end", ""), ("search_history_days", "30"),
     ];
     let r = c.post_form_json("/settings/prefs", &fields).await;
-    assert_eq!(r.ok().json(), json!({ "ok": true, "msg": "Saved." }), "the answer speaks the language just chosen");
+    let answer = r.ok().json();
+    assert_eq!(answer["ok"], json!(true));
+    assert_eq!(answer["msg"], json!("Saved."), "the answer speaks the language just chosen");
+    // the save echoes both holiday lists back, because it may change one the page did not touch
+    assert_eq!(answer["regions"], json!({ "public": "DE-SN,DE-BY", "school": "" }));
     let p = prefs::get(&s.app.state.db, "alice").await.unwrap();
     assert_eq!(p.lang.as_deref(), Some("en"));
     assert_eq!(p.scheme.as_deref(), Some("dark"));
@@ -197,7 +201,7 @@ async fn the_stored_language_wins_and_automatic_follows_the_browser() {
     let csrf = c.csrf.clone();
     let body = format!("lang=&csrf={csrf}");
     let r = c.send(Method::POST, "/settings/prefs", &[("content-type", "application/x-www-form-urlencoded"), ("accept", "application/json"), ("sec-fetch-site", "same-origin"), en[0]], axum::body::Body::from(body)).await;
-    assert_eq!(r.json(), json!({ "ok": true, "msg": "Saved." }));
+    assert_eq!((r.json()["ok"].clone(), r.json()["msg"].clone()), (json!(true), json!("Saved.")));
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().lang, None);
     assert_eq!(lang_of(&c.send(Method::GET, "/settings", &en, axum::body::Body::empty()).await.body), "en");
     assert_eq!(lang_of(&c.get("/settings").await.body), "de");

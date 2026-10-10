@@ -71,6 +71,8 @@ trash-retention = { $days ->
 }
 calendars = Calendarios
 addressbooks = Libretas de direcciones
+col-first-calendar = Mi calendario
+col-first-addressbook = Mis contactos
 col-name = Nombre
 col-owner = Pertenece a
 col-components = Contenido
@@ -1264,6 +1266,51 @@ js-search-k-typo = parecido a «%m»
 js-search-k-phone = dígitos
 js-search-k-date = fecha
 
+# first start (js/onboarding/*.js): the overview and the hints that lead to each setting
+js-onb-start-title = Primeros pasos
+js-onb-go-settings = Antes de poder usar PractiCal faltan todavía algunos ajustes.
+js-onb-go-settings-b = Pulsa en cualquier momento este engranaje para llegar a los ajustes del programa.
+js-onb-back = Volver a todos los ajustes.
+js-onb-back-b = Aquí no queda nada abierto. El siguiente punto está un nivel más arriba.
+js-onb-tz-title = Zona horaria
+js-onb-tz-row = Definir tu zona horaria local.
+js-onb-tz-row-b = Así las horas de las citas del calendario se ajustan a tu hora local.
+js-onb-tz-act = Propuesta: %tz
+js-onb-tz-act-b = Busca tu zona en la lista, o confirma la propuesta. Después cada cita sin zona propia se calculará con ella.
+js-onb-regions-title = Festivos
+js-onb-regions-row = Ajustar la región de los festivos mostrados.
+js-onb-regions-none = No mostrar festivos
+js-onb-tz-keep = Mantener la propuesta
+js-onb-regions-row-b = Elige tu región para que el calendario dibuje los festivos. Sin región no aparecen.
+js-onb-regions-add = Ampliar los festivos mostrados en el calendario.
+js-onb-regions-add-b = Puedes añadir varias, si quieres ver los festivos de más de una región.
+js-onb-school-title = Vacaciones escolares
+js-onb-school-row = Ajustar la región de las vacaciones escolares mostradas.
+js-onb-school-row-b = Elige la región cuyas vacaciones quieres ver — puede ser distinta de la de los festivos. Sin región no se muestra ningún periodo de vacaciones.
+js-onb-school-none = No mostrar vacaciones escolares
+js-onb-done-title = Todo configurado
+js-onb-done-body = Todos los ajustes básicos están hechos. Encontrarás cada uno donde te lo mostré.
+js-onb-done-go = Empecemos
+js-onb-school-add = Ampliar las vacaciones mostradas en el calendario.
+js-onb-school-add-b = Aquí también puede ser más de una, si quieres ver las vacaciones de varias regiones.
+js-onb-either = Ambos caminos están marcados — toma el que te convenga.
+js-onb-calendar-title = Calendario
+js-onb-calendar-row = Crear o importar calendarios y libretas de direcciones.
+js-onb-calendar-row-b = Todavía no hay ninguno — y sin calendario no hay donde crear una cita.
+js-onb-calendar-ways = Dos caminos hacia un calendario.
+js-onb-calendar-ways-b = Crea uno si empiezas de cero. Importa si traes un archivo .ics. Ambos llevan al mismo sitio.
+js-onb-addressbook-title = Libreta de direcciones
+js-onb-addressbook-row = Crear o importar calendarios y libretas de direcciones.
+js-onb-addressbook-row-b = Para los contactos aún falta una libreta de direcciones — sin ella no hay donde crear un contacto.
+js-onb-addressbook-ways = Dos caminos hacia una libreta de direcciones.
+js-onb-addressbook-ways-b = Crea una o importa un archivo .vcf. Ambos llevan al mismo sitio.
+js-onb-name = Dale un nombre.
+js-onb-name-b = El nombre aparecerá en la lista y en cada dispositivo. Color y componentes vienen rellenos.
+js-onb-make = Todos los campos vienen rellenos con valores por omisión.
+js-onb-make-b = Puedes cambiar todo, o crearlo y ajustarlo más tarde.
+js-onb-import = Elige el archivo e impórtalo.
+js-onb-import-b = La colección se crea a partir del archivo; puedes renombrarla después.
+
 ## change history (/history): values and labels (domain::history_text), placeholders %name
 hx-unit-min = min
 hx-unit-h = h
@@ -1547,3 +1594,13 @@ hxj-back = Lista
 hxj-hist-of = Historial de «%title»
 hxj-ruler = Línea de tiempo
 hxj-none = Nada encontrado.
+
+# first start (domain::onboarding): the language gate and the way back to the hints
+onb-lang-title = Idioma
+onb-lang-ask = PractiCal habla el idioma de tu navegador. ¿Es correcto?
+onb-lang-go = Continuar
+onb-lang-later = Más tarde: Ajustes › General › Idioma
+onb-reopen = Primeros pasos
+onb-reopen-hint = Vuelve a mostrar las indicaciones de configuración. Lo que ya confirmaste sigue confirmado.
+err-onboarding-step = Paso de configuración desconocido.
+err-lang = Ese idioma no existe.

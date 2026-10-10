@@ -44,6 +44,8 @@ pub struct PageCtx {
     /// The user's colour scheme: auto (the system's) | light | dark — rendered into `<html>`, so it
     /// holds on every device and nothing flickers
     pub scheme: String,
+    /// The first-start hints; `None` = nothing to onboard, and the page frame renders nothing.
+    pub onboarding: Option<crate::domain::onboarding::View>,
 }
 
 impl PageCtx {
@@ -94,6 +96,20 @@ impl PageCtx {
     /// (code, native name) of every UI language, for the language choice
     pub fn languages(&self) -> &'static [(&'static str, &'static str)] {
         crate::i18n::NATIVE
+    }
+    /// The flag beside a language's native name in the first-start dialog (decoration, `crate::i18n::FLAG`).
+    pub fn flag(&self, code: &str) -> &'static str {
+        crate::i18n::FLAG.iter().find(|(c, _)| *c == code).map_or("", |(_, f)| f)
+    }
+    /// Whether a first-start step is still open — the page frame renders the language gate from this,
+    /// so it works without JavaScript.
+    pub fn onboarding_open(&self, step: &str) -> bool {
+        self.onboarding.as_ref().is_some_and(|v| v.open.iter().any(|s| s == step))
+    }
+    /// The hints' state for the browser, escaped like every other island (`render::script_json`):
+    /// the proposed zone falls back to `DEFAULT_TIMEZONE`, which is whatever an operator wrote.
+    pub fn onboarding_json(&self) -> String {
+        self.onboarding.as_ref().and_then(|v| serde_json::to_string(v).ok()).map(crate::render::script_json).unwrap_or_default()
     }
     pub fn user_id(&self) -> &str {
         self.user.as_ref().map(|u| u.id.as_str()).unwrap_or("")
@@ -163,13 +179,19 @@ impl FromRequestParts<SharedState> for PageCtx {
         // the user's stored language, else the browser's (Accept-Language): "automatic" (no stored choice)
         // follows the browser at once. The DB row is read on every request, so nothing else keeps a copy.
         let mut scheme = "auto".to_string();
+        let mut onboarding = None;
         if let Some(u) = &user
-            && let Ok((l, s)) = crate::domain::prefs::get_look(&state.db, &u.id).await
+            && let Ok(look) = crate::domain::prefs::get_look(&state.db, &u.id).await
         {
-            lang = l;
-            if let Some(s) = s.filter(|s| s == "light" || s == "dark") {
+            lang = look.lang;
+            if let Some(s) = look.scheme.filter(|s| s == "light" || s == "dark") {
                 scheme = s;
             }
+            // The first-start hints. The record rides along in the same query; only while it is
+            // active are the user's collections counted, so a user who is through pays nothing
+            // beyond that one column (domain::onboarding::view).
+            let rec = crate::domain::onboarding::parse(look.onboarding.as_deref());
+            onboarding = crate::domain::onboarding::view(state, &u.id, &rec).await;
         }
         let lang = lang.unwrap_or_else(|| negotiate(accept.as_deref(), &state.config.default_lang));
         Ok(Self {
@@ -184,6 +206,7 @@ impl FromRequestParts<SharedState> for PageCtx {
             dev: state.config.dev_assets_dir.is_some(),
             wants_json,
             scheme,
+            onboarding,
         })
     }
 }
@@ -203,7 +226,7 @@ pub async fn localize_errors(axum::extract::State(state): axum::extract::State<S
         return res;
     }
     let stored = match &user {
-        Some(u) => crate::domain::prefs::get_look(&state.db, u).await.ok().and_then(|(l, _)| l),
+        Some(u) => crate::domain::prefs::get_look(&state.db, u).await.ok().and_then(|l| l.lang),
         None => None,
     };
     let lang = stored.unwrap_or_else(|| negotiate(accept.as_deref(), &state.config.default_lang));

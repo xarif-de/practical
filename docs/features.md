@@ -19,6 +19,34 @@ desktop browsers and on phones. All screenshots show synthetic demo data.
 > - A **DAV client** is any app that syncs this way, for example DAVx⁵ on Android, Apple Calendar or Thunderbird.
 > - **iCalendar** (`.ics`) and **vCard** (`.vcf`) are the file formats for events, tasks and contacts.
 
+## The first start
+
+The first time you open PractiCal, it asks one question: your language. The guess comes from your browser, so
+usually you only confirm it. Clicking a language shows the question in that language straight away, so you can read
+what you are choosing; only the button ends it. The answer decides every word you read afterwards, which is why it
+comes first and on its own.
+
+After that a speech bubble points at the settings button and tells you what is still missing: your time zone, the
+region for public holidays, the region for school holidays, a calendar and an address book. There is nothing else —
+no list to work through and no buttons in the bubble. You go where you like, in any order, and the bubble follows:
+it points at the place where that setting lives and walks you there click by click — the settings button, then the
+row, then the control. You end up having made the setting yourself, in the place you will find it again next time.
+Walk into another unfinished setting and the bubble takes that one up instead.
+
+A bubble has a red edge, because it is not a remark but something waiting for you. It stays until you have answered
+that point, and the next one takes its place. When the last one is answered, PractiCal says so once and gets out of
+the way.
+
+Answering does not always mean changing something. Taking the time zone that is proposed to you is an answer, and
+so is picking a city. For the holidays there is nothing proposed — without a region PractiCal draws no holidays at
+all — so the bubble offers to show none, and that is an answer too. The first holiday region you name is copied to
+the other list, because one region usually answers both; from then on the two are independent.
+
+Creating your first calendar or address book, PractiCal suggests a name so you need not invent one; clicking the
+field hands you the whole word, so typing replaces it.
+
+To walk through the hints again later: **Settings › First steps**.
+
 ## Calendar
 
 The calendar has four main views: **Day**, **Week**, **Month** and **Year**. The year view is a planner for the

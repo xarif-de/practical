@@ -45,5 +45,11 @@ pub async fn seed() -> Seed {
     // Freunde: a full card, an organisation
     app.put_vcf("alice", &freunde, "anna", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:anna\r\nFN:Anna Schmidt\r\nN:Schmidt;Anna;;;\r\nEMAIL;TYPE=HOME:anna@example.org\r\nTEL;TYPE=CELL:+49 160 1234567\r\nBDAY:1985-04-02\r\nCATEGORIES:Familie\r\nNOTE:Mag Tee\r\nEND:VCARD\r\n").await;
     app.put_vcf("alice", &freunde, "acme", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:acme\r\nFN:ACME GmbH\r\nN:;;;;\r\nORG:ACME GmbH;Einkauf\r\nEND:VCARD\r\n").await;
+    // alice names her holiday regions. Holidays have no default (prefs::Prefs::regions), so without
+    // this every test that expects a holiday or a school-holiday band in a view would see none.
+    let mut p = crate::domain::prefs::Prefs::defaults();
+    p.public_regions = Some("DE-SN".into());
+    p.school_regions = Some("DE-SN".into());
+    crate::domain::prefs::set(&app.state.db, "alice", &p).await.unwrap();
     Seed { app, arbeit, privat, aufgaben, familie, freunde }
 }

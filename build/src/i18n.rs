@@ -22,6 +22,12 @@ pub const LANGS: &[&str] = &["de", "en", "fr", "es"];
 /// Native names for the language choice (never translated: a reader must find their own).
 pub const NATIVE: &[(&str, &str)] = &[("de", "Deutsch"), ("en", "English"), ("fr", "Français"), ("es", "Español")];
 
+/// A flag beside the native name in the first-start language dialog, decoration only (`aria-hidden`):
+/// flags are country symbols and no flag is correct for a language — English has none (GB by
+/// convention, the locale is en-GB), and German is spoken in three countries. The name is the answer;
+/// this only makes the list scannable before it is read.
+pub const FLAG: &[(&str, &str)] = &[("de", "🇩🇪"), ("en", "🇬🇧"), ("fr", "🇫🇷"), ("es", "🇪🇸")];
+
 /// BCP 47 locale per language for date formatting in the browser (`Intl`).
 pub const LOCALE: &[(&str, &str)] = &[("de", "de-DE"), ("en", "en-GB"), ("fr", "fr-FR"), ("es", "es-ES")];
 

@@ -41,6 +41,8 @@ pub(super) async fn prefs_save(State(state): State<SharedState>, user: Principal
         csrf::check(&session, &f.csrf).await?;
         let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
         let mut p = prefs::get(&state.db, &user.id).await?;
+        // what the two holiday lists held before this save, for the one-off copy further down
+        let had = (!p.regions(false).is_empty(), !p.regions(true).is_empty());
         p.lang = Some(f.lang.clone()).filter(|l| crate::i18n::supported(l));
         p.scheme = Some(f.scheme.clone()).filter(|s| s == "light" || s == "dark");
         p.timezone = Some(f.timezone.trim().to_string()).filter(|t| !t.is_empty() && t.parse::<chrono_tz::Tz>().is_ok());
@@ -63,6 +65,7 @@ pub(super) async fn prefs_save(State(state): State<SharedState>, user: Principal
         if let Some(v) = &f.school_regions {
             p.school_regions = Some(regions(v));
         }
+        mirror_first_region(&state, &user.id, &mut p, had).await?;
         p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
         // vacation rule: the chosen kind with its own field; a title pattern must parse
         let (kind, value) = match f.vacation_kind.as_str() {
@@ -86,10 +89,51 @@ pub(super) async fn prefs_save(State(state): State<SharedState>, user: Principal
         // the answer ("Saved.") speaks the language just chosen — "automatic": the browser's
         let accept = headers.get(axum::http::header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok());
         ctx.lang = p.lang.clone().unwrap_or_else(|| crate::i18n::negotiate(accept, &state.config.default_lang));
-        Ok(Some("flash-saved"))
+        /* The two holiday lists go back to the page, because this save can change one the user did
+           not touch (`mirror_first_region`). Without the echo the page keeps its old hidden field
+           and the NEXT save posts it, undoing the copy (found 2026-10-09). */
+        let echo = serde_json::json!({
+            "public": p.public_regions.clone().unwrap_or_default(),
+            "school": p.school_regions.clone().unwrap_or_default(),
+        });
+        Ok((Some("flash-saved"), echo))
     }
     .await;
-    finish(&state, &session, &ctx, r, "prefs").await
+    let mut more = serde_json::Map::new();
+    let r = r.map(|(msg, echo)| {
+        more.insert("regions".into(), echo);
+        msg
+    });
+    super::finish_more(&state, &session, &ctx, r, "prefs", more).await
+}
+
+/// The one-off copy between the two holiday lists: one region usually answers both, so the save
+/// that FIRST names one fills the other as well (asked for 2026-10-09). `had` is what the two lists
+/// held before this save, and that is what makes it one-off: only a list that was empty before and
+/// is named now copies over. Any later save sees `had` set and leaves the other list alone — so a
+/// user who empties one again keeps it empty, which a "both empty now" test would undo on the next
+/// save of any unrelated field.
+///
+/// A region the user declined in the first steps is not filled in either: declining means wanting
+/// none. That record is read only when a list was just named, so an ordinary save of this form
+/// costs no extra statement.
+async fn mirror_first_region(state: &SharedState, principal: &str, p: &mut prefs::Prefs, had: (bool, bool)) -> Result<(), AppError> {
+    let public = p.public_regions.clone().unwrap_or_default();
+    let school = p.school_regions.clone().unwrap_or_default();
+    // "just named": empty before this save, non-empty now
+    let (named_public, named_school) = (!had.0 && !public.is_empty(), !had.1 && !school.is_empty());
+    let (fill_school, fill_public) = (named_public && school.is_empty() && !had.1, named_school && public.is_empty() && !had.0);
+    if !fill_school && !fill_public {
+        return Ok(());
+    }
+    use crate::domain::onboarding::Step;
+    let rec = crate::domain::onboarding::get(&state.db, principal).await?;
+    if fill_school && !rec.has(Step::School) {
+        p.school_regions = Some(public);
+    } else if fill_public && !rec.has(Step::Regions) {
+        p.public_regions = Some(school);
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]

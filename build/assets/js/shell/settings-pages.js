@@ -39,6 +39,11 @@
     // time per form, the newest state last (two at once could each carry one change only: the later answer would win)
     const save = (form, w) => w.run(async () => {
       const r = await practical.req(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(new FormData(form)) });
+      // the server may have changed a region list this page did not touch: take its word for both
+      const g = r.ok && r.data && r.data.regions;
+      if (g) {
+        ['public', 'school'].forEach(k => { const i = hid(k + '_regions'); if (i && typeof g[k] === 'string' && i.value !== g[k]) { i.value = g[k]; summary(k); drawRegions(k); } });
+      }
       return !r.ok || (r.data && r.data.ok) ? r : { ok: false, kind: 'invalid', msg: (r.data && r.data.msg) || tr('js-req-server') };
     }, true).then(r => r && r.ok && (r.data.msg || settings.dataset.tSaved));
     $$('form[data-autosave]', settings).forEach(form => {
@@ -47,6 +52,10 @@
       form.addEventListener('change', async e => {
         if (!e.target.name || e.target.type === 'file' || !form.reportValidity()) return;
         const msg = await save(form, w); if (!msg) return;
+        /* The first-start hints read their state from the server, and a save of this form can close
+           one of their points (picking a city answers the time zone). Without this they only found
+           out on the next page load and kept asking for something already done (found 2026-10-09). */
+        document.dispatchEvent(new CustomEvent('practical:prefs-saved'));
         if (e.target.name === 'scheme') applyScheme(e.target.value);
         if (form.hasAttribute('data-reload') || e.target.hasAttribute('data-reload')) { sessionStorage.toast = msg; practical.leaving = true; location.reload(); } else toast(msg);
       });

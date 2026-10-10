@@ -32,6 +32,7 @@ use tower_sessions::Session;
 
 mod group_forms;
 mod collection_forms;
+mod onboarding;
 mod token_forms;
 mod pref_forms;
 mod transfer;
@@ -119,6 +120,11 @@ impl SettingsPage {
     /// the colour pickers' values: the user's colour, else the (light) theme's
     /// "Holidays: OpenHolidays, Nager.Date · School holidays: OpenHolidays"
     pub fn sources_text(&self) -> String {
+        // Nothing chosen, nothing to source: naming the data sources of no region read like a
+        // failure ("Feiertage: keine Quelle") where in truth the user has simply not picked one.
+        if self.public_regions.is_empty() && self.school_regions.is_empty() {
+            return String::new();
+        }
         // over every chosen country, in chain order
         let mut public = vec![];
         let mut school = vec![];
@@ -137,6 +143,16 @@ impl SettingsPage {
         args.set("public", list(public));
         args.set("school", list(school));
         self.ctx.i18n.t_args(&self.ctx.lang, "set-sources", Some(&args))
+    }
+    /// A name to suggest on the create page while the first start still asks for this kind: the
+    /// very first collection should not make the user invent a word (asked for 2026-10-09). Once
+    /// they have one, naming the next is a real decision and the field stays empty.
+    ///
+    /// The question is the onboarding one — does this user own none? — not `self.calendars`, which
+    /// also holds the collections of their groups (bob sees a family calendar and owns nothing).
+    pub fn first_name(&self, addressbook: bool) -> String {
+        let step = if addressbook { "addressbook" } else { "calendar" };
+        if self.ctx.onboarding_open(step) { self.ctx.t(&format!("col-first-{step}")) } else { String::new() }
     }
     /// the time zone as shown in its row: the chosen one or "Default (Europe/Berlin)"
     pub fn tz_name(&self) -> String {
@@ -158,7 +174,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let p = prefs::get(&state.db, &user.id).await?;
     let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
-    let (public_regions, school_regions) = (p.regions(&state.config, false), p.regions(&state.config, true));
+    let (public_regions, school_regions) = (p.regions(false), p.regions(true));
     let mut region_names = HashMap::new();
     for code in public_regions.iter().chain(&school_regions) {
         if !region_names.contains_key(code) {
@@ -242,14 +258,48 @@ async fn api_subdivisions(State(state): State<SharedState>, _user: Principal, ct
 /// Redirect back to the section. A success says something only when the reloaded
 /// page cannot show it (a save leaves the same values on screen); store errors
 /// become error flashes so the user never lands on a bare error page after a form post.
-async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<Option<&str>>, anchor: &str) -> Response {
-    // a form saved by fetch (settings autosave) gets its message back instead of a flash for the next page
+/// The language gate and the confirmations answer on the page the user is on, not under `/settings`:
+/// the gate blocks whatever page was opened first, so it has to come back to that one.
+async fn finish_here(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<Option<&str>>, back: &str) -> Response {
     if ctx.wants_json {
         let (ok, msg) = match result {
             Ok(key) => (true, key.map(|k| state.i18n.t(&ctx.lang, k))),
             Err(e) => (false, Some(failed(state, ctx, &e))),
         };
         return axum::Json(serde_json::json!({ "ok": ok, "msg": msg })).into_response();
+    }
+    match result {
+        Ok(None) => {}
+        Ok(Some(key)) => set_flash(session, "ok", state.i18n.t(&ctx.lang, key)).await,
+        Err(e) => set_flash(session, "error", failed(state, ctx, &e)).await,
+    }
+    Redirect::to(back).into_response()
+}
+
+async fn finish(state: &SharedState, session: &Session, ctx: &PageCtx, result: AppResult<Option<&str>>, anchor: &str) -> Response {
+    finish_more(state, session, ctx, result, anchor, serde_json::Map::new()).await
+}
+
+/// [`finish`] plus fields for the JSON answer, for a save whose outcome the page cannot predict.
+async fn finish_more(
+    state: &SharedState,
+    session: &Session,
+    ctx: &PageCtx,
+    result: AppResult<Option<&str>>,
+    anchor: &str,
+    more: serde_json::Map<String, serde_json::Value>,
+) -> Response {
+    // a form saved by fetch (settings autosave) gets its message back instead of a flash for the next page
+    if ctx.wants_json {
+        let (ok, msg) = match result {
+            Ok(key) => (true, key.map(|k| state.i18n.t(&ctx.lang, k))),
+            Err(e) => (false, Some(failed(state, ctx, &e))),
+        };
+        let mut o = serde_json::Map::new();
+        o.insert("ok".into(), ok.into());
+        o.insert("msg".into(), msg.into());
+        o.extend(more);
+        return axum::Json(serde_json::Value::Object(o)).into_response();
     }
     match result {
         Ok(None) => {}
@@ -279,8 +329,8 @@ fn failed(state: &SharedState, ctx: &PageCtx, e: &AppError) -> String {
 }
 
 #[derive(Deserialize)]
-struct Csrf {
-    csrf: String,
+pub(super) struct Csrf {
+    pub(super) csrf: String,
 }
 
 pub fn router() -> Router<SharedState> {
@@ -306,6 +356,11 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/prefs", post(prefs_save))
+        .route("/settings/onboarding/lang", post(onboarding::lang_save))
+        .route("/settings/onboarding/confirm", post(onboarding::confirm))
+        .route("/settings/onboarding/complete", post(onboarding::complete))
+        .route("/settings/onboarding/reopen", post(onboarding::reopen))
+        .route("/api/onboarding", get(onboarding::api_state))
         .route("/settings/holiday-display", post(holiday_display_save))
         .route("/settings/scheme", post(scheme_save))
         .route("/api/holidays/countries", get(api_countries))

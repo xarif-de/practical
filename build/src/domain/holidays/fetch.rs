@@ -207,7 +207,7 @@ pub async fn marks(state: &AppState, p: &crate::domain::prefs::Prefs, from: Naiv
         if !on {
             continue;
         }
-        let regions = p.regions(&state.config, kind == "school");
+        let regions = p.regions(kind == "school");
         for year in from.year()..=to.year() {
             for h in for_regions(state, kind, &regions, year, lang).await? {
                 if !seen.insert((kind, h.start, h.end, h.name.clone(), h.tags.clone())) {

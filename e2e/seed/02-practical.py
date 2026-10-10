@@ -26,7 +26,7 @@ ENV = dict(os.environ,
     PRACTICAL__PUBLIC_URL=BASE, PRACTICAL__ALLOW_PASSWORD_LOGIN="true",
     PRACTICAL__DEV_ASSETS_DIR=os.path.join(REPO, "build", "assets"), PRACTICAL__DEV_LOGIN="alice",
     PRACTICAL__DEV_NOW=FROZEN.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    PRACTICAL__HOLIDAYS_COUNTRY="DE", PRACTICAL__HOLIDAYS_SUBDIVISION="DE-SN",
+    PRACTICAL__HOLIDAYS_COUNTRY="DE",
     PRACTICAL__PUBLIC_DAV_URL="https://dav.example.org", PRACTICAL__DEFAULT_TIMEZONE="Europe/Berlin",
     PRACTICAL__DEFAULT_LANG="de",
     HTTP_PROXY=BLOCK, HTTPS_PROXY=BLOCK, http_proxy=BLOCK, https_proxy=BLOCK, ALL_PROXY=BLOCK, NO_PROXY="", no_proxy="",
@@ -167,6 +167,12 @@ def seed_through_http():
         "vacation_calendar": "", "vacation_title": "", "alarm_snaps_start": "2 min, 5 min, 15 min, 30 min, 1 h, 3 h, 8 h, 1 d, 2 d, 3 d, 1 w, 2 w", "alarm_snaps_end": "5 min, 10 min, 15 min, 30 min, 1 h",
         "search_history_days": "90"}), "prefs")
 
+    # ---- first start: these are long-standing users with data, so the setup is through
+    # (domain::onboarding `completed`, which also keeps the language unset — "" above means the
+    # suite renders de and en from Accept-Language). Without this the language gate covers every
+    # page and nothing is reachable: on 2026-10-09 every a11y and e2e state failed at once.
+    ok(req("POST", "/settings/onboarding/complete"), "onboarding complete")
+
     # ---- calendars (import: object id = UID)
     demo = open(os.path.join(REPO, "build", "tests", "fixtures", "demo-event-full.ics"), "rb").read()
     work = import_new("alice", "Arbeit", "#0a84ff", "VEVENT,VTODO", ics(
@@ -264,6 +270,13 @@ def replace_everywhere(con, old, new):
 
 def pin(con, ids):
     con.execute("PRAGMA foreign_keys = OFF")
+    # every person is a long-standing user here, not a first-time one: the setup is through for all of
+    # them (domain::onboarding). Only alice went through it over HTTP above; the others get the record
+    # written directly, or the language gate would block every test that logs in as them.
+    done = '{"v":1,"confirmed":[],"completed":true}'
+    for (pid,) in con.execute("SELECT id FROM principals WHERE principal_type = 'INDIVIDUAL'").fetchall():
+        con.execute("INSERT INTO practical_user_settings (principal, onboarding_json) VALUES (?, ?)"
+                    " ON CONFLICT(principal) DO UPDATE SET onboarding_json = excluded.onboarding_json", (pid, done))
     remap = {}
     for label, cid in ids.items():
         remap[cid] = fixed_uuid(0, COLL_IDS[label])

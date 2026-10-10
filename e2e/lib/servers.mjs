@@ -37,7 +37,7 @@ function start(bin, runDir, port, db, dev, tag) {
     PATH: process.env.PATH, HOME: process.env.HOME, RUST_LOG: 'info,tower_http=warn',
     PRACTICAL__DB_PATH: db, PRACTICAL__RUSTICAL_URL: '', PRACTICAL__BIND: `127.0.0.1:${port}`,
     PRACTICAL__PUBLIC_URL: `http://127.0.0.1:${port}`, PRACTICAL__ALLOW_PASSWORD_LOGIN: 'true',
-    PRACTICAL__HOLIDAYS_COUNTRY: 'DE', PRACTICAL__HOLIDAYS_SUBDIVISION: 'DE-SN',
+    PRACTICAL__HOLIDAYS_COUNTRY: 'DE',
     PRACTICAL__PUBLIC_DAV_URL: 'https://dav.example.org', PRACTICAL__DEFAULT_TIMEZONE: 'Europe/Berlin',
     PRACTICAL__DEFAULT_LANG: 'de',
     HTTP_PROXY: BLOCK, HTTPS_PROXY: BLOCK, http_proxy: BLOCK, https_proxy: BLOCK, ALL_PROXY: BLOCK, NO_PROXY: '', no_proxy: '',

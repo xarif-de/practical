@@ -71,6 +71,8 @@ trash-retention = { $days ->
 }
 calendars = Calendriers
 addressbooks = Carnets d'adresses
+col-first-calendar = Mon agenda
+col-first-addressbook = Mes contacts
 col-name = Nom
 col-owner = Appartient à
 col-components = Contenu
@@ -1265,6 +1267,51 @@ js-search-k-typo = proche de « %m »
 js-search-k-phone = chiffres
 js-search-k-date = date
 
+# first start (js/onboarding/*.js): the overview and the hints that lead to each setting
+js-onb-start-title = Premiers pas
+js-onb-go-settings = Avant de pouvoir utiliser PractiCal, il manque encore quelques réglages.
+js-onb-go-settings-b = Cliquez à tout moment sur cette roue dentée pour accéder aux paramètres du programme.
+js-onb-back = Retour à tous les paramètres.
+js-onb-back-b = Rien n'est ouvert ici. Le point suivant est au niveau supérieur.
+js-onb-tz-title = Fuseau horaire
+js-onb-tz-row = Définir votre fuseau horaire local.
+js-onb-tz-row-b = Les heures des événements de l’agenda sont ainsi ajustées à votre heure locale.
+js-onb-tz-act = Proposé : %tz
+js-onb-tz-act-b = Trouvez votre fuseau dans la liste, ou confirmez la proposition. Tout événement sans fuseau propre sera ensuite compté dedans.
+js-onb-regions-title = Jours fériés
+js-onb-regions-row = Ajuster la région des jours fériés affichés.
+js-onb-regions-none = N’afficher aucun jour férié
+js-onb-tz-keep = Garder la proposition
+js-onb-regions-row-b = Choisissez votre région pour que l’agenda affiche les jours fériés. Sans région, ils n’apparaissent pas.
+js-onb-regions-add = Élargir les jours fériés affichés dans l’agenda.
+js-onb-regions-add-b = Vous pouvez en ajouter plusieurs, si vous voulez voir les jours fériés de plusieurs régions.
+js-onb-school-title = Vacances scolaires
+js-onb-school-row = Ajuster la région des vacances scolaires affichées.
+js-onb-school-row-b = Choisissez la région dont vous voulez voir les vacances — elle peut différer de celle des jours fériés. Sans région, aucune période de vacances n’est affichée.
+js-onb-school-none = N’afficher aucune vacance scolaire
+js-onb-done-title = Configuration terminée
+js-onb-done-body = Tous les réglages de base sont faits. Vous retrouverez chacun d’eux là où je vous l’ai montré.
+js-onb-done-go = C’est parti
+js-onb-school-add = Élargir les vacances affichées dans l’agenda.
+js-onb-school-add-b = Ici aussi, plusieurs sont possibles, si vous voulez voir les vacances de plusieurs régions.
+js-onb-either = Les deux chemins sont marqués — prenez celui qui vous convient.
+js-onb-calendar-title = Agenda
+js-onb-calendar-row = Créer ou importer agendas et carnets d’adresses.
+js-onb-calendar-row-b = Aucun n’existe encore — et sans agenda, il n’y a nulle part où créer un événement.
+js-onb-calendar-ways = Deux chemins vers un agenda.
+js-onb-calendar-ways-b = Créez-en un si vous partez de zéro. Importez si vous apportez un fichier .ics. Les deux mènent au même résultat.
+js-onb-addressbook-title = Carnet d'adresses
+js-onb-addressbook-row = Créer ou importer agendas et carnets d’adresses.
+js-onb-addressbook-row-b = Il manque encore un carnet d’adresses pour les contacts — sans lui, il n’y a nulle part où créer un contact.
+js-onb-addressbook-ways = Deux chemins vers un carnet d'adresses.
+js-onb-addressbook-ways-b = Créez-en un ou importez un fichier .vcf. Les deux mènent au même résultat.
+js-onb-name = Donnez-lui un nom.
+js-onb-name-b = Le nom apparaîtra dans la liste et sur chaque appareil. Couleur et composants sont préremplis.
+js-onb-make = Tous les champs sont préremplis avec des valeurs par défaut.
+js-onb-make-b = Vous pouvez tout changer, ou simplement créer et ajuster plus tard.
+js-onb-import = Choisissez le fichier et importez-le.
+js-onb-import-b = La collection est créée à partir du fichier ; vous pourrez la renommer ensuite.
+
 ## change history (/history): values and labels (domain::history_text), placeholders %name
 hx-unit-min = min
 hx-unit-h = h
@@ -1549,3 +1596,13 @@ hxj-back = Liste
 hxj-hist-of = Historique de « %title »
 hxj-ruler = Frise
 hxj-none = Rien trouvé.
+
+# first start (domain::onboarding): the language gate and the way back to the hints
+onb-lang-title = Langue
+onb-lang-ask = PractiCal parle la langue de votre navigateur. Est-ce correct ?
+onb-lang-go = Continuer
+onb-lang-later = Plus tard : Paramètres › Général › Langue
+onb-reopen = Premiers pas
+onb-reopen-hint = Affiche de nouveau les conseils d'installation. Ce que vous avez déjà confirmé reste confirmé.
+err-onboarding-step = Étape d'installation inconnue.
+err-lang = Cette langue n'existe pas.

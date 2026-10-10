@@ -232,7 +232,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     let picker = render::picker(date.year(), date.month(), &density, &vc.l);
     let p = vc.prefs;
     let isl = crate::routes::editor::islands(&state, &user, &p, "event").await?;
-    let has_school = p.regions(&state.config, true).iter().any(|r| crate::domain::holidays::has_school(crate::domain::holidays::split(r).0));
+    let has_school = p.regions(true).iter().any(|r| crate::domain::holidays::has_school(crate::domain::holidays::split(r).0));
     Ok(CalendarPage {
         holidays_on: p.holidays_enabled,
         school_on: p.school_holidays_enabled,

@@ -71,6 +71,8 @@ trash-retention = { $days ->
 }
 calendars = Calendars
 addressbooks = Address books
+col-first-calendar = My calendar
+col-first-addressbook = My contacts
 col-name = Name
 col-owner = Belongs to
 col-components = Contents
@@ -1262,6 +1264,51 @@ js-search-k-typo = like "%m"
 js-search-k-phone = digits
 js-search-k-date = date
 
+# first start (js/onboarding/*.js): the overview and the hints that lead to each setting
+js-onb-start-title = First steps
+js-onb-go-settings = Before you can use PractiCal, a few settings are still missing.
+js-onb-go-settings-b = Click this gear at any time to reach the program settings.
+js-onb-back = Back to all settings.
+js-onb-back-b = Nothing is open here. The next point is one level up.
+js-onb-tz-title = Time zone
+js-onb-tz-row = Set your local time zone.
+js-onb-tz-row-b = This adjusts the times in calendar events to your local clock.
+js-onb-tz-act = Proposed: %tz
+js-onb-tz-act-b = Find your zone in the list, or confirm the proposal. Every event without a zone of its own will then be counted in it.
+js-onb-regions-title = Public holidays
+js-onb-regions-row = Adjust the region of the public holidays shown.
+js-onb-regions-none = Show no public holidays
+js-onb-tz-keep = Keep the proposal
+js-onb-regions-row-b = Pick your region so the calendar draws the public holidays. Without a region they stay out.
+js-onb-regions-add = Add to the public holidays shown in the calendar.
+js-onb-regions-add-b = You may add several, if you want the public holidays of more than one region shown.
+js-onb-school-title = School holidays
+js-onb-school-row = Adjust the region of the school holidays shown.
+js-onb-school-row-b = Pick the region whose school holidays you want shown — it may differ from the one for public holidays. Without a region no holiday periods are drawn.
+js-onb-school-none = Show no school holidays
+js-onb-done-title = All set up
+js-onb-done-body = Every basic setting is in place. You will find each of them where I showed it to you.
+js-onb-done-go = Let’s go
+js-onb-school-add = Add to the school holidays shown in the calendar.
+js-onb-school-add-b = More than one is allowed here too, if you want the school holidays of several regions shown.
+js-onb-either = Both ways are marked — take the one that suits you.
+js-onb-calendar-title = Calendar
+js-onb-calendar-row = Create or import calendars and address books.
+js-onb-calendar-row-b = None exists yet — and without a calendar there is nowhere an event can be created.
+js-onb-calendar-ways = Two ways to a calendar.
+js-onb-calendar-ways-b = Create one if you are starting fresh. Import if you bring an .ics file. Both lead to the same place.
+js-onb-addressbook-title = Address book
+js-onb-addressbook-row = Create or import calendars and address books.
+js-onb-addressbook-row-b = Contacts still need an address book — without one there is nowhere a contact can be created.
+js-onb-addressbook-ways = Two ways to an address book.
+js-onb-addressbook-ways-b = Create one or import a .vcf file. Both lead to the same place.
+js-onb-name = Give it a name.
+js-onb-name-b = The name shows in the list and on every device later. Colour and components are prefilled.
+js-onb-make = Every field is prefilled with a default.
+js-onb-make-b = You can change anything, or just create it and adjust later.
+js-onb-import = Choose the file and import it.
+js-onb-import-b = The collection is made from the file; you can rename it afterwards.
+
 ## change history (/history): values and labels (domain::history_text), placeholders %name
 hx-unit-min = min
 hx-unit-h = h
@@ -1545,3 +1592,13 @@ hxj-back = List
 hxj-hist-of = History of “%title”
 hxj-ruler = Time ruler
 hxj-none = Nothing found.
+
+# first start (domain::onboarding): the language gate and the way back to the hints
+onb-lang-title = Language
+onb-lang-ask = PractiCal speaks your browser's language. Is that right?
+onb-lang-go = Continue
+onb-lang-later = Later: Settings › General › Language
+onb-reopen = First steps
+onb-reopen-hint = Shows the setup hints again. Whatever you already confirmed stays confirmed.
+err-onboarding-step = Unknown setup step.
+err-lang = No such language.

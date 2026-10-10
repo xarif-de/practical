@@ -315,6 +315,8 @@ async fn session_csrf_token_is_required_for_session_writes() {
             (Method::POST, "/settings/scheme", r#"{"scheme":"dark"}"#),
             (Method::POST, "/api/search/history", r#"{"q":"x"}"#),
             (Method::POST, "/api/history/1/undo", "{}"),
+            (Method::POST, "/settings/onboarding/confirm", r#"{"step":"tz"}"#),
+            (Method::POST, "/settings/onboarding/complete", "null"),
         ] {
             let r = c.json(method.clone(), path, serde_json::from_str(body).unwrap()).await;
             assert_eq!((r.status, r.body.as_str()), (StatusCode::FORBIDDEN, "Dafür fehlt die Berechtigung."), "{method} {path} with {token:?}");

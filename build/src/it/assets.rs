@@ -290,7 +290,9 @@ async fn development_mode_joins_bundles_from_their_parts() {
     }
     let part = |p: &str| std::fs::read_to_string(assets_dir().join(p)).unwrap();
     let js = String::from_utf8(crate::bundle::read(&assets_dir(), "app.js").unwrap()).unwrap();
-    assert!(js.starts_with(&part("js/core.js")) && js.ends_with(&part("js/settings.js")));
+    // the last part is the onboarding wrap's closing line, so settings.js is checked where it sits
+    assert!(js.starts_with(&part("js/core.js")) && js.ends_with(&format!("{}{}\n", part("js/onboarding/guide.js"), "})();")));
+    assert!(js.contains(&format!("{}(function () {{\n{}", part("js/settings.js"), part("js/onboarding/steps.js"))));
     // the editor's parts: one function, run at load and callable again (bundle.rs ED_OPEN/ED_END)
     assert!(js.contains(&format!("{}practical.editorInit = function () {{\n{}", part("js/calendar.js"), part("js/editor/setup.js"))));
     assert!(js.contains(&format!("{}}};\npractical.editorInit();\n{}", part("js/editor/wiring.js"), part("js/search.js"))));

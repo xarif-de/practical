@@ -52,6 +52,38 @@
 </main>
 {# a toast, not a banner: fixed, so it never pushes the page down #}
 {% if let Some(f) = ctx.flash %}<div class="toast {{ f.kind }}" role="{% if f.kind == "error" %}alert{% else %}status{% endif %}"><span>{{ f.text }}</span><button type="button" class="toast-x" aria-label="{{ ctx.t("ed-close") }}">×</button></div>{% endif %}
+{%- if ctx.user.is_some() && ctx.onboarding.is_some() %}
+{# first start (domain::onboarding): the state the hints read, and the language gate as a real form.
+   The gate blocks because the language decides every later word; it needs no JavaScript — with it,
+   picking a language shows the gate in that language at once. Everything else — the hints that lead
+   to each setting — is js/onboarding/*.js. #}
+<script type="application/json" id="onboarding">{{ ctx.onboarding_json()|safe }}</script>
+{% if ctx.onboarding_open("lang") %}
+<div class="onb-veil" id="onb-gate">
+  <div class="onb-box onb-gate" role="dialog" aria-modal="true" aria-labelledby="onb-gate-h">
+  <form method="post" action="/settings/onboarding/lang" id="onb-lang-form">
+    {{ m::csrf() }}
+    <input type="hidden" name="back" value="{{ ctx.path }}">
+    {# js/onboarding/guide.js sets this when a language is merely tried on, and the button's submit clears it again #}
+    <input type="hidden" name="try_only" value="">
+    <span class="onb-gate-ic">{{ m::ico("globe") }}</span>
+    <h1 class="onb-h" id="onb-gate-h">{{ ctx.t("onb-lang-title") }}</h1>
+    <p class="onb-body">{{ ctx.t("onb-lang-ask") }}</p>
+    <div class="onb-langs">
+      {% for (code, name) in ctx.languages() %}
+      <label class="onb-lang{% if ctx.lang == *code %} on{% endif %}">
+        <input type="radio" name="lang" value="{{ code }}"{% if ctx.lang == *code %} checked{% endif %}>
+        <span class="onb-flag" aria-hidden="true">{{ ctx.flag(code) }}</span><span class="onb-lname">{{ name }}</span>{{ m::ico("check") }}
+      </label>
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary onb-wide" type="submit">{{ ctx.t("onb-lang-go") }}</button>
+    <p class="onb-foot">{{ ctx.t("onb-lang-later") }}</p>
+  </form>
+  </div>
+</div>
+{% endif %}
+{%- endif %}
 {% if ctx.user.is_some() %}
 <nav class="tabbar">{% for (href, icon, label) in nav %}
   <a href="{{ href }}"{% if ctx.is_active(href) %} aria-current="page"{% endif %}>{{ m::ico(icon) }}<span>{{ label }}</span></a>{% endfor %}

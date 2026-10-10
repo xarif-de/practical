@@ -71,6 +71,8 @@ trash-retention = { $days ->
 }
 calendars = Kalender
 addressbooks = Adressbücher
+col-first-calendar = Mein Kalender
+col-first-addressbook = Meine Kontakte
 col-name = Name
 col-owner = Gehört zu
 col-components = Inhalte
@@ -1259,6 +1261,51 @@ js-search-k-typo = ähnlich wie „%m“
 js-search-k-phone = Ziffern
 js-search-k-date = Datum
 
+# first start (js/onboarding/*.js): the overview and the hints that lead to each setting
+js-onb-start-title = Erste Schritte
+js-onb-go-settings = Bevor du PractiCal nutzen kannst, fehlen noch ein paar Einstellungen.
+js-onb-go-settings-b = Klicke jederzeit auf dieses Zahnrad, um zu den Programmeinstellungen zu gelangen.
+js-onb-back = Zurück zu allen Einstellungen.
+js-onb-back-b = Hier ist nichts mehr offen. Der nächste Punkt liegt eine Ebene höher.
+js-onb-tz-title = Zeitzone
+js-onb-tz-row = Lokale Zeitzone festlegen.
+js-onb-tz-row-b = Dadurch werden Zeitangaben in Kalenderterminen an deine lokale Uhrzeit angepasst.
+js-onb-tz-act = Vorgeschlagen: %tz
+js-onb-tz-act-b = Suche deine Zone in der Liste — oder bestätige den Vorschlag. Danach rechnet jeder Termin ohne eigene Zone damit.
+js-onb-regions-title = Feiertage
+js-onb-regions-row = Region angezeigter Feiertage anpassen.
+js-onb-regions-none = Keine Feiertage anzeigen
+js-onb-tz-keep = Vorschlag übernehmen
+js-onb-regions-row-b = Wähle deine Region, damit der Kalender die Feiertage einzeichnet. Ohne Region bleiben sie aus.
+js-onb-regions-add = Im Kalender angezeigte Feiertage erweitern.
+js-onb-regions-add-b = Du kannst auch mehrere hinzufügen, wenn du die Feiertage mehrerer Regionen angezeigt bekommen möchtest.
+js-onb-school-title = Schulferien
+js-onb-school-row = Region angezeigter Schulferien anpassen.
+js-onb-school-row-b = Wähle die Region, deren Ferien du angezeigt bekommen möchtest — sie kann eine andere sein als die der Feiertage. Ohne Region werden keine Ferienzeiten dargestellt.
+js-onb-school-none = Keine Schulferien anzeigen
+js-onb-done-title = Fertig eingerichtet
+js-onb-done-body = Alle Grundeinstellungen sind vorgenommen. Jede davon findest du dort wieder, wo ich sie dir gezeigt habe.
+js-onb-done-go = Los geht’s
+js-onb-school-add = Im Kalender angezeigte Ferien erweitern.
+js-onb-school-add-b = Auch hier darfs mehr als eine sein, wenn du die Ferien mehrerer Regionen angezeigt bekommen möchtest.
+js-onb-either = Beide Wege sind markiert — nimm den, der dir passt.
+js-onb-calendar-title = Kalender
+js-onb-calendar-row = Kalender und Adressbücher anlegen oder importieren.
+js-onb-calendar-row-b = Noch ist keiner angelegt — und ohne Kalender gibt es nichts, wo ein Termin angelegt werden kann.
+js-onb-calendar-ways = Zwei Wege zum Kalender.
+js-onb-calendar-ways-b = Neu anlegen, wenn du frisch anfängst. Importieren, wenn du eine .ics-Datei mitbringst. Beides führt zum selben Ziel.
+js-onb-addressbook-title = Adressbuch
+js-onb-addressbook-row = Kalender und Adressbücher anlegen oder importieren.
+js-onb-addressbook-row-b = Für Kontakte fehlt noch ein Adressbuch — ohne eines gibt es nichts, wo ein Kontakt angelegt werden kann.
+js-onb-addressbook-ways = Zwei Wege zum Adressbuch.
+js-onb-addressbook-ways-b = Neu anlegen oder eine .vcf-Datei importieren. Beides führt zum selben Ziel.
+js-onb-name = Gib ihm einen Namen.
+js-onb-name-b = Der Name steht später in der Liste und auf jedem Gerät. Farbe und Komponenten sind vorbelegt.
+js-onb-make = Alle Felder sind mit Standardwerten vorbelegt.
+js-onb-make-b = Du kannst alles ändern — oder einfach anlegen und später anpassen.
+js-onb-import = Wähle die Datei und importiere sie.
+js-onb-import-b = Aus der Datei entsteht die Sammlung; umbenennen kannst du sie danach.
+
 ## change history (/history): values and labels (domain::history_text), placeholders %name
 hx-unit-min = Min.
 hx-unit-h = Std.
@@ -1542,3 +1589,13 @@ hxj-back = Liste
 hxj-hist-of = Verlauf von „%title“
 hxj-ruler = Zeitleiste
 hxj-none = Nichts gefunden.
+
+# first start (domain::onboarding): the language gate and the way back to the hints
+onb-lang-title = Sprache
+onb-lang-ask = PractiCal spricht die Sprache deines Browsers. Stimmt das?
+onb-lang-go = Weiter
+onb-lang-later = Später: Einstellungen › Allgemein › Sprache
+onb-reopen = Erste Schritte
+onb-reopen-hint = Zeigt die Einrichtungshinweise wieder an. Was du schon bestätigt hast, bleibt bestätigt.
+err-onboarding-step = Unbekannter Einrichtungsschritt.
+err-lang = Diese Sprache gibt es nicht.

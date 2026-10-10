@@ -180,7 +180,10 @@
     f.key.value = c ? KEY(c) : ''; f.etag.value = c ? c.etag : '';
     ['given', 'family', 'nickname', 'prefix', 'additional', 'suffix', 'org', 'department', 'title', 'note', 'full_name'].forEach(k => f[k].value = c ? (c[k] || '') : '');
     fnAuto = !c || !c.full_name || c.full_name === [c.given, c.family].filter(Boolean).join(' ');
-    f.ab.value = c ? `${c.principal}/${c.ab_id}` : f.ab.options[0].value;
+    // A user without a single address book has an EMPTY picker, and reading `.options[0].value`
+    // threw — which killed the rest of app.js with it, including the first-start hints
+    // (found 2026-10-09). Nothing can be saved in that state anyway; the page must still work.
+    f.ab.value = c ? `${c.principal}/${c.ab_id}` : (f.ab.options[0] ? f.ab.options[0].value : '');
     setDate($('[data-date=birthday]', form), c ? c.birthday : ''); setDate($('[data-date=anniversary]', form), c ? c.anniversary : '');
     ['phones', 'emails', 'addresses', 'urls', 'impp', 'related', 'dates'].forEach(l => { rows(l).forEach(r => r.remove()); (c ? c[l] : []).forEach(it => addRow(l, it)); });
     if (!c) addRow('phones', { kind: 'cell', value: '' });

@@ -26,7 +26,7 @@ async fn csrf_token_check() {
 
 fn ctx(name: Option<&str>, id: &str, path: &str) -> PageCtx {
     let user = rustical_store::auth::Principal { id: id.into(), displayname: name.map(str::to_string), principal_type: Default::default(), password: None, memberships: vec![] };
-    PageCtx { lang: "de".into(), user: Some(user), csrf: String::new(), path: path.into(), flash: None, i18n: crate::i18n::I18n::load(), public_dav_url: String::new(), push_enabled: false, dev: false, wants_json: false, scheme: "auto".into() }
+    PageCtx { lang: "de".into(), user: Some(user), csrf: String::new(), path: path.into(), flash: None, i18n: crate::i18n::I18n::load(), public_dav_url: String::new(), push_enabled: false, dev: false, wants_json: false, onboarding: None, scheme: "auto".into() }
 }
 
 #[test]

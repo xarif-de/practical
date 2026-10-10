@@ -204,7 +204,6 @@ pub fn config(db_path: &str) -> Config {
         vapid_private_key_pem: None,
         vapid_subject: "mailto:admin@example.org".into(),
         holidays_country: "DE".into(),
-        holidays_subdivision: "DE-SN".into(),
         holidays_enabled: true,
         default_timezone: "Europe/Berlin".into(),
         default_lang: "de".into(),

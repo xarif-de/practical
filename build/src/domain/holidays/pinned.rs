@@ -39,6 +39,8 @@ async fn marks_of_several_regions_and_years() {
     put(&app, "DE-BY", 2026, "school2-de", serde_json::json!([h("2026-10-05", "2026-10-17", "Herbstferien"), h("2026-12-24", "2027-01-05", "Weihnachtsferien")]), "2999-01-01 00:00:00").await;
     put(&app, "DE-BY", 2027, "school2-de", serde_json::json!([h("2026-12-24", "2027-01-05", "Weihnachtsferien")]), "2999-01-01 00:00:00").await;
     let mut p = crate::domain::prefs::Prefs::defaults();
+    // both lists are named: a user without a region gets no holidays at all (prefs::Prefs::regions)
+    p.public_regions = Some("DE-SN".into());
     p.school_regions = Some("DE-SN,DE-BY".into());
     crate::domain::prefs::set(&app.state.db, "u", &p).await.unwrap();
     let m = marks(&app.state, &crate::domain::prefs::get(&app.state.db, "u").await.unwrap(), date("2026-10-01"), date("2027-01-03"), "de").await.unwrap();

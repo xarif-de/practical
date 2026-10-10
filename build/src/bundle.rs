@@ -58,6 +58,8 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("js/contacts.js"),
         File("js/tasks.js"),
         File("js/settings.js"),
+        // first start: the overview and the hints that lead to each setting (one function scope)
+        Wrap(IIFE, &[File("js/onboarding/steps.js"), File("js/onboarding/guide.js")], END),
     ]),
     ("style.css", &[
         File("css/base.css"),
@@ -75,6 +77,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("css/links-location.css"),
         File("css/tasks.css"),
         File("css/settings.css"),
+        File("css/onboarding.css"),
         File("css/color-picker.css"),
         File("css/color-optimiser.css"),
     ]),

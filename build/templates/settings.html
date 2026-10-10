@@ -44,6 +44,10 @@
     {% call m::nav_cell("#groups", "var(--c5)", "users") %}<span>{{ ctx.t("tab-groups") }}</span><span class="val">{{ groups.len() }}{% endcall %}
     {% call m::nav_cell("#trash", "var(--fg-3)", "trash") %}<span>{{ ctx.t("tab-trash") }}</span><span class="val">{{ trashed.len() + deleted_calendars.len() + deleted_addressbooks.len() }}{% endcall %}
   </div>
+  {# first start again (domain::onboarding): the button belongs to the form after #prefs-form, because
+     a form inside a form is invalid HTML #}
+  <div class="group sp"><button class="cell btnrow" type="submit" form="onb-reopen">{{ m::ico("wand") }}<span>{{ ctx.t("onb-reopen") }}</span></button></div>
+  <p class="foot">{{ ctx.t("onb-reopen-hint") }}</p>
 </section>
 
 <section class="page" id="vacation">
@@ -102,6 +106,7 @@
   <p class="foot">{{ ctx.t("set-colors-hint") }}</p>
 </section>
 </form>
+<form id="onb-reopen" method="post" action="/settings/onboarding/reopen">{{ m::csrf() }}</form>
 
 {# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}
 {% for kind in ["public", "school"] %}
@@ -159,7 +164,7 @@
   <form method="post" action="/settings/calendars">
     {{ m::csrf() }}
     <div class="group">
-      {{ m::coll_fields("\n      ", palette[0], ctx.t("set-new-calendar"), true) }}
+      {{ m::coll_fields("\n      ", palette[0], ctx.t("set-new-calendar"), true, self.first_name(false)) }}
     </div>
     <div class="label">{{ ctx.t("col-components") }}</div>
     <div class="group">
@@ -181,7 +186,7 @@
     <p class="foot imp-info">{{ ctx.t("imp-hint") }}</p>
     <div class="imp-fields" hidden>
       <div class="group sp">
-        {{ m::coll_fields("\n        ", palette[0], ctx.t("set-import-calendar"), true) }}
+        {{ m::coll_fields("\n        ", palette[0], ctx.t("set-import-calendar"), true, "") }}
       </div>
       <div class="label">{{ ctx.t("col-components") }}</div>
       <div class="group">
@@ -201,7 +206,7 @@
   <form method="post" action="/settings/addressbooks">
     {{ m::csrf() }}
     <div class="group">
-      {{ m::coll_fields("\n      ", palette[1], ctx.t("set-new-addressbook"), false) }}
+      {{ m::coll_fields("\n      ", palette[1], ctx.t("set-new-addressbook"), false, self.first_name(true)) }}
     </div>
     <div class="group sp"><button class="cell btnrow" type="submit">{{ ctx.t("create") }}</button></div>
   </form>
@@ -217,7 +222,7 @@
     <p class="foot imp-info">{{ ctx.t("imp-ab-hint") }}</p>
     <div class="imp-fields" hidden>
       <div class="group sp">
-        {{ m::coll_fields("\n        ", palette[1], ctx.t("set-import-addressbook"), false) }}
+        {{ m::coll_fields("\n        ", palette[1], ctx.t("set-import-addressbook"), false, "") }}
       </div>
       <div class="group sp"><button class="cell btnrow imp-go" type="submit">{{ ctx.t("imp-go") }}</button></div>
     </div>

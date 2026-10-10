@@ -18,6 +18,7 @@ pub mod history;
 pub mod history_text;
 pub mod holidays;
 pub mod ical;
+pub mod onboarding;
 pub mod prefs;
 pub mod push;
 pub mod search;

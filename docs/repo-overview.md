@@ -44,9 +44,11 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 - `js/**`, `css/**` = parts of app.js / style.css, order = src/bundle.rs `BUNDLES` (a new part must be listed there).
   app.js: core.js, prefetch.js, req.js, IIFE(shell/base, settings-pages, popovers-stream), IIFE(colors/picker,
   fields, optimise), calendar.js, `practical.editorInit = function` (editor/setup … wiring, 18 parts; runs at load
-  and again after GET /editor), search.js, contacts.js, tasks.js, settings.js. style.css: base, frame, grid,
-  chrome, dialogs, generic, views, icon-buttons, card-form, reminders, recurrence, editor-cards, links-location,
-  tasks, settings, color-picker, color-optimiser. A Wrap part is a fragment of one function scope (no script alone).
+  and again after GET /editor), search.js, contacts.js, tasks.js, settings.js, IIFE(onboarding/steps, guide).
+  style.css: base, frame, grid, chrome, dialogs, generic, views, icon-buttons, card-form, reminders, recurrence,
+  editor-cards, links-location, tasks, settings, onboarding, color-picker, color-optimiser. A Wrap part is a
+  fragment of one function scope (no script alone): `onboarding/guide.js` uses `ST` and the helpers that
+  `onboarding/steps.js` declares, and declaring either twice breaks the join.
 - Others: history.js/.css (/history only, after app.js) · sw.js (service worker, Web Push) · theme.js (colour
   scheme before first paint) · icons.svg (sprite `<symbol id="i-…">`; `i-sort` dims an arrow via
   `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · icon.svg (favicon) + lettering.svg (top bar) + logo.svg (README, site; all generated, brand/) · leaflet.* (vendored 1.9.4, BSD-2,
@@ -73,13 +75,15 @@ Client-side rules (the server side of each feature is in the module docs):
 | contacts | contacts.js | sort in the client (`localStorage.ctSort`/`ctDesc`) |
 | push | sw.js, settings.js | logout ends this browser's subscription |
 | map | editor/location.js, map.js | asks after a 2 s typing pause or on a button; tiles tile.openstreetmap.org with attribution |
+| first start | domain/onboarding.rs, routes/settings/onboarding.rs, js/onboarding/*, css/onboarding.css | one open point = one bubble beside the setting it means, red edge, no buttons but the one confirmation link; order free (`ST.pick` follows `location.hash`, not the active page). A point closes by a value only the user can have put there (`Facts`: a stored zone, a named region, an existing collection) or by a mark (`confirmed`) for "what is in force is fine" — `confirm` writes NO preference, so an accepted default stays the default. The language gate is server-rendered (layout.html) and blocks; clicking a language reloads in it without answering (`try_only`). A picker saves without a page load, so the hints re-ask on `practical:prefs-saved` — the hash empties before the post lands |
 
 ## e2e/ (Playwright + harness; commands: CONTRIBUTING.md "Tests and gates")
 | path | purpose |
 |---|---|
 | cargo.sh, build-server.sh | per-checkout cargo (AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
 | gate.sh | gate: quick (cargo+docs+functional) / full (+chaos+a11y) / visual (+baseline, compare, theme-cover; opt-in) |
-| seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…` |
+| seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol (pw `devpass`; carol empty), group `group.familie`, fixed UUIDs `5eed0000-…`. Every person is marked through the first start (`onboarding_json` completed, in `pin()`): without it the language gate covers every page and no suite can click anything |
+| first-start-db.sh | a DB in a brand-new user's state (one principal, no collections, no preferences) for judging the first start locally: `mise run dev` with `DB=~/.cache/practical-dev/first-start.sqlite3` |
 | demo/ | screenshots (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (34 states → docs/images/NN-*.webp, 1920 px; `SHOTS=<slug,…>` retakes; GROUPS = gallery group per slug), shots.json (order, titles, captions, group; read by site/build.mjs), docs-nav.mjs (`mise run docs-nav`: back links to docs/index.md + its documentation table on every listed page; `--check` in gate-quick) |
 | lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
 | functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs` = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
