@@ -461,3 +461,57 @@ test('push without VAPID: the page says unavailable, the API refuses a subscript
   expect(r.status()).toBe(400);
   expect(await r.text()).toBe('Benachrichtigungen sind auf diesem Server ausgeschaltet.'); // B8: a browser session reads it in its language
 });
+
+/* The remote address row. Its three parts are all browser behaviour, which is why they are tested
+   here and not in Rust: the field has no dropdown marker of its own, Enter in it CONNECTS instead
+   of submitting the batch around it, and the arrow is the row's one action so it carries the
+   accent. No Nextcloud is needed — what is asserted happens before any request is answered. */
+test('the remote address row: no dropdown marker, Enter connects, the arrow is the accent', async ({ page }) => {
+  await reloadAt(page, '#remote-cal');
+  const field = page.locator('#remote-cal .rm-origin');
+  const button = page.locator('#remote-cal .rm-go');
+  await expect(field).toBeVisible();
+
+  // the marker is gone, and the placeholder is not clipped by the button beside it
+  const clipped = await field.evaluate(el => {
+    const before = el.value;
+    el.value = el.placeholder;
+    const over = el.scrollWidth - el.clientWidth;
+    el.value = before;
+    return over;
+  });
+  expect(clipped).toBeLessThanOrEqual(0);
+  /* The marker itself: Chromium answers getComputedStyle on that pseudo-element with the INPUT's
+     own values (measured: display "block", width 169 px — the field's width), so it cannot be read
+     back. What is checkable is that the rule hiding it is in the stylesheet the page loaded. */
+  const hides = await page.evaluate(() => [...document.styleSheets]
+    .flatMap(sh => { try { return [...sh.cssRules]; } catch { return []; } })
+    .some(r => r.selectorText && r.selectorText.includes('calendar-picker-indicator')
+      && r.selectorText.includes('rm-in') && r.style.display === 'none'));
+  expect(hides).toBe(true);
+
+  // the arrow: accent background, white glyph
+  const look = await button.evaluate(el => ({ bg: getComputedStyle(el).backgroundColor, ico: getComputedStyle(el.querySelector('.ico')).color }));
+  expect(look.bg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(look.bg).toBe(await page.evaluate(() => {
+    const p = document.createElement('i');
+    p.style.color = 'var(--accent)';
+    document.body.appendChild(p);
+    const c = getComputedStyle(p).color;
+    p.remove();
+    return c;
+  }));
+  expect(look.ico).toBe('rgb(255, 255, 255)');
+
+  /* Enter must not submit the form it sits in — that form's submit is the import BATCH, so an
+     address plus Enter would have started importing nothing at all. */
+  const calls = [];
+  await page.route('**/settings/remote/**', route => { calls.push(new URL(route.request().url()).pathname); route.abort(); });
+  await field.fill('nextcloud.example.com');
+  await field.press('Enter');
+  await settle(page);
+  expect(calls.some(p => p.endsWith('/reuse') || p.endsWith('/login'))).toBe(true);
+  expect(calls.some(p => p.endsWith('/import'))).toBe(false);
+  await expect(page.locator('.rm-dlg')).not.toBeVisible();
+  await page.unroute('**/settings/remote/**');
+});

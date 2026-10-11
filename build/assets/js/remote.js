@@ -100,6 +100,25 @@
     };
     origin.addEventListener('input', () => origin.setCustomValidity(''));
 
+    /* Enter in the address field means "connect": the field sits in the import form, whose submit
+       is the BATCH, so without this an address and a press of Enter would start importing nothing. */
+    origin.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (!go.disabled) go.click();
+    });
+
+    /* The suggestions have no dropdown marker any more (settings.css), so they are opened here.
+       `showPicker` needs a user gesture: a focus from a click or a keypress has one, a focus the
+       page itself moved does not, and that throws — which is not a failure of anything. */
+    if (origin.hasAttribute('list')) {
+      origin.addEventListener('focus', () => {
+        try {
+          origin.showPicker();
+        } catch (_) { /* no user gesture, or a browser without it: typing still filters the list */ }
+      });
+    }
+
     // the direction radios decide what the hint under them says, and a collection the remote will
     // not let us write can only ever be pulled
     const dirHint = q('.rm-dir-hint');
