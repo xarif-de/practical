@@ -409,6 +409,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/remote/poll", post(remote::poll))
         .route("/settings/remote/collections", post(remote::collections_offered))
         .route("/settings/remote/import", post(remote::import))
+        .route("/settings/remote/done", post(remote::done))
         .route("/settings/remote/link", post(remote::link))
         .route("/settings/remote/link/{id}", post(remote::edit))
 }

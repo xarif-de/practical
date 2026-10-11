@@ -1618,7 +1618,7 @@ js-rm-waiting = Waiting for you to confirm in the other window …
 rm-waiting = Waiting for you to confirm in the other window …
 rm-scope-hint = Nextcloud also lets an app password reach your files. You can switch that off for this password under “Security” in Nextcloud.
 rm-pick = What would you like to take over?
-rm-pick-hint = Your own calendars and address books only. Shared ones are not offered: Nextcloud withholds private events from anyone else and reduces confidential ones to “Busy”, so a copy would be incomplete without showing it.
+rm-pick-hint = Several at once is fine. Only your own calendars and address books are offered: Nextcloud does not hand a shared one over in full — private events are missing entirely, confidential ones shrink to "Busy".
 js-rm-nothing = There is nothing here to take over.
 js-rm-readonly-src = read only (Nextcloud allows no writing)
 rm-import-go = Import once
@@ -1679,3 +1679,13 @@ err-remote-no-server = A server address is needed.
 err-remote-bad-server = That is not a server address. Something like cloud.example.org is expected.
 err-remote-https = The address must be reachable over https:// — otherwise the password and your events would travel in the clear.
 err-remote-private = That address is not on the open internet. For safety the server only reaches public addresses; an internal server has to be allowed by the operator.
+js-rm-need-pick = Please choose at least one.
+js-rm-doing = Fetching %name … (%n of %of)
+js-rm-took = { $n ->
+    [one] %n calendar taken over.
+   *[other] %n calendars taken over.
+}
+js-rm-failed = { $n ->
+    [one] %n entry could not be taken over.
+   *[other] %n entries could not be taken over.
+}

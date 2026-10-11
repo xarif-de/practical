@@ -1622,7 +1622,7 @@ js-rm-waiting = En attente de votre confirmation dans l’autre fenêtre …
 rm-waiting = En attente de votre confirmation dans l’autre fenêtre …
 rm-scope-hint = Nextcloud donne aussi accès à vos fichiers à un mot de passe d’application. Vous pouvez le désactiver pour ce mot de passe sous « Sécurité » dans Nextcloud.
 rm-pick = Que voulez-vous reprendre ?
-rm-pick-hint = Uniquement vos propres agendas et carnets d’adresses. Les partagés ne sont pas proposés : Nextcloud ne transmet pas les événements privés et réduit les confidentiels à « Occupé », donc une copie serait incomplète sans que cela se voie.
+rm-pick-hint = Plusieurs à la fois, c’est possible. Seuls vos propres agendas et carnets d’adresses sont proposés : Nextcloud ne transmet pas un agenda partagé en entier — les événements privés manquent, les confidentiels se réduisent à « Occupé ».
 js-rm-nothing = Il n’y a rien à reprendre ici.
 js-rm-readonly-src = lecture seule (Nextcloud n’autorise pas l’écriture)
 rm-import-go = Importer une fois
@@ -1683,3 +1683,13 @@ err-remote-no-server = Une adresse de serveur est nécessaire.
 err-remote-bad-server = Ce n’est pas une adresse de serveur. On attend par exemple cloud.example.org.
 err-remote-https = L’adresse doit être joignable en https:// — sinon le mot de passe et vos événements circuleraient en clair.
 err-remote-private = Cette adresse n’est pas sur l’internet ouvert. Par sécurité le serveur n’atteint que des adresses publiques ; un serveur interne doit être autorisé par l’exploitant.
+js-rm-need-pick = Veuillez en choisir au moins un.
+js-rm-doing = Récupération de %name … (%n sur %of)
+js-rm-took = { $n ->
+    [one] %n agenda repris.
+   *[other] %n agendas repris.
+}
+js-rm-failed = { $n ->
+    [one] %n entrée n’a pu être reprise.
+   *[other] %n entrées n’ont pu être reprises.
+}

@@ -1615,7 +1615,7 @@ js-rm-waiting = Warte auf die Bestätigung im anderen Fenster …
 rm-waiting = Warte auf die Bestätigung im anderen Fenster …
 rm-scope-hint = Nextcloud gibt dem App-Passwort auch Zugriff auf deine Dateien. Du kannst das in Nextcloud unter „Sicherheit“ für dieses Passwort abschalten.
 rm-pick = Was möchtest du übernehmen?
-rm-pick-hint = Nur deine eigenen Kalender und Adressbücher. Geteilte werden nicht angeboten: Nextcloud gibt private Termine an andere gar nicht heraus und kürzt vertrauliche auf „Beschäftigt“ – eine Kopie wäre unvollständig, ohne dass man es sieht.
+rm-pick-hint = Mehrere auf einmal sind möglich. Angeboten werden nur deine eigenen Kalender und Adressbücher: geteilte gibt Nextcloud nicht vollständig heraus — private Termine fehlen ganz, vertrauliche schrumpfen auf „Beschäftigt“.
 js-rm-nothing = Hier ist nichts, was sich übernehmen lässt.
 js-rm-readonly-src = nur lesen (Nextcloud erlaubt kein Schreiben)
 rm-import-go = Einmalig importieren
@@ -1676,3 +1676,13 @@ err-remote-no-server = Ohne Server-Adresse geht es nicht.
 err-remote-bad-server = Das ist keine Server-Adresse. Erwartet wird z. B. cloud.example.org.
 err-remote-https = Die Adresse muss mit https:// erreichbar sein — sonst gehen Passwort und Termine unverschlüsselt über die Leitung.
 err-remote-private = Diese Adresse liegt nicht im offenen Internet. Aus Sicherheitsgründen erreicht der Server nur öffentliche Adressen; eigene Server muss die Betreiberin freigeben.
+js-rm-need-pick = Bitte mindestens einen Eintrag wählen.
+js-rm-doing = Hole %name … (%n von %of)
+js-rm-took = { $n ->
+    [one] %n Kalender übernommen.
+   *[other] %n Kalender übernommen.
+}
+js-rm-failed = { $n ->
+    [one] %n Eintrag konnte nicht übernommen werden.
+   *[other] %n Einträge konnten nicht übernommen werden.
+}

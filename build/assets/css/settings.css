@@ -23,7 +23,7 @@
 .set .cell .swatch .ico, .cpk .sq .ico, .cpk-pvp .sq .ico { width: 16px; height: 16px; }
 .set .cell .sub { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set .cell .val { color: var(--fg-3); display: inline-flex; gap: 8px; align-items: center; justify-self: end; text-align: right; min-width: 0; }
-.set .cell .val :is(input[type=text], input[type=number], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
+.set .cell .val :is(input[type=text], input[type=number], input[type=url], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
 .set .cell .val select { text-align-last: right; cursor: pointer; }
 .set .cell .val input:focus, .set .cell .val select:focus { outline: none; color: var(--fg); }
 .set .cell .val code { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -128,3 +128,13 @@
 .dayblock li.hols span { display: flex; flex-wrap: wrap; gap: 4px; }
 .doc .hols { display: flex; flex-wrap: wrap; gap: 6px; margin: -14px 0 18px; }
 .doc .hols .hday { font-size: 13px; padding: 2px 8px; }
+
+/* The remote server address: the field and its sign-in arrow are ONE control, framed together, the
+   way the colour picker frames its text field and dice (`.cpk-in`). Two separate rows read as two
+   steps, which they are not — nothing happens without the address. */
+.set .rm-in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; max-width: 320px; }
+.set .cell .val .rm-in input[type=url] { text-align: left; padding: 7px 10px; max-width: none; }
+.set .rm-in .btn { border: 0; border-left: 1px solid var(--line); border-radius: 0; align-self: stretch; padding: 0 10px; background: none; }
+.set .rm-in .btn:hover { background: var(--bg-2); }
+/* while a round is running the arrow is not a way out: it is disabled, and the line below says why */
+.set .rm-in .btn[disabled] { opacity: .5; cursor: progress; }

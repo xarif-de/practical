@@ -123,9 +123,10 @@ pub(super) async fn import(State(state): State<SharedState>, user: Principal, _:
     let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = remote::dav::Dav::new(state.remote_http.clone(), base, login.clone(), secret.clone());
     let (id, count) = remote::take::import(&state, &user, &dav, kind, &q.href, &q.name, &q.color).await?;
-    // a one-off needs no credential afterwards, so the app password is destroyed at the source
-    state.remote_logins.forget(&q.handle, &user.id);
-    remote::login::revoke(&state.remote_http, &origin, &login, &secret).await;
+    /* The credential is NOT destroyed here: a user may take several collections from one sign-in,
+       and each one is its own request. Doing it per import left the second request without a
+       password (measured: picking two calendars imported one). `/settings/remote/done` is what
+       ends the sign-in, and the handle expires on its own if the page is simply left. */
     Ok(axum::Json(Took { id, owner: user.id, count, link_id: None }).into_response())
 }
 
@@ -152,6 +153,20 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
     )
     .await?;
     Ok(axum::Json(Took { id, owner: user.id, count, link_id: Some(link_id) }).into_response())
+}
+
+/// Ends a sign-in: forgets the handle and destroys the app password at the remote. Called once the
+/// user is done taking collections, which is the only moment we know they are.
+///
+/// Not reaching it (the page is closed mid-way) leaves an app password behind at the remote, named
+/// after this app in its security settings, where the user can revoke it. The alternative — ending
+/// the sign-in after the first import — breaks taking two collections at once, which is worse.
+pub(super) async fn done(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<HandleQ>) -> AppResult<Response> {
+    if let Ok((origin, login, secret)) = state.remote_logins.granted(&q.handle, &user.id) {
+        remote::login::revoke(&state.remote_http, &origin, &login, &secret).await;
+    }
+    state.remote_logins.forget(&q.handle, &user.id);
+    Ok(axum::Json(Polled { granted: false }).into_response())
 }
 
 #[derive(Deserialize)]

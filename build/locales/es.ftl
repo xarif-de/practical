@@ -1620,7 +1620,7 @@ js-rm-waiting = Esperando tu confirmación en la otra ventana …
 rm-waiting = Esperando tu confirmación en la otra ventana …
 rm-scope-hint = Nextcloud también da acceso a tus archivos a una contraseña de aplicación. Puedes desactivarlo para esta contraseña en «Seguridad» dentro de Nextcloud.
 rm-pick = ¿Qué quieres traer?
-rm-pick-hint = Solo tus propios calendarios y libretas de direcciones. Los compartidos no se ofrecen: Nextcloud no entrega los eventos privados a nadie más y reduce los confidenciales a «Ocupado», así que una copia quedaría incompleta sin que se note.
+rm-pick-hint = Varios a la vez es posible. Solo se ofrecen tus propios calendarios y libretas: Nextcloud no entrega uno compartido por completo; los eventos privados faltan y los confidenciales se reducen a «Ocupado».
 js-rm-nothing = Aquí no hay nada que traer.
 js-rm-readonly-src = solo lectura (Nextcloud no permite escribir)
 rm-import-go = Importar una vez
@@ -1681,3 +1681,13 @@ err-remote-no-server = Hace falta una dirección de servidor.
 err-remote-bad-server = Esa no es una dirección de servidor. Se espera algo como cloud.example.org.
 err-remote-https = La dirección tiene que ser accesible por https://; si no, la contraseña y tus eventos viajarían sin cifrar.
 err-remote-private = Esa dirección no está en la internet abierta. Por seguridad el servidor solo alcanza direcciones públicas; un servidor interno lo tiene que permitir quien administra.
+js-rm-need-pick = Elige al menos uno.
+js-rm-doing = Trayendo %name … (%n de %of)
+js-rm-took = { $n ->
+    [one] %n calendario traído.
+   *[other] %n calendarios traídos.
+}
+js-rm-failed = { $n ->
+    [one] %n entrada no se pudo traer.
+   *[other] %n entradas no se pudieron traer.
+}

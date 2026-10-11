@@ -220,3 +220,22 @@ async fn a_private_address_typed_as_a_number_is_refused_too() {
     // and a name is left to the resolver, which sees what it really resolves to
     assert_eq!(o("https://cloud.example.org").unwrap(), "https://cloud.example.org");
 }
+
+/// A sign-in has to survive the whole batch. Measured during development: destroying the app
+/// password after the first import left the second request without one, so picking two calendars
+/// imported one — and said it had succeeded. `/settings/remote/done` is what ends it.
+#[tokio::test]
+async fn one_sign_in_serves_several_collections() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    // no granted handle: every route that needs one answers 404, `done` included — it must not be
+    // a way to probe which handles exist
+    let unknown = uuid::Uuid::new_v4().to_string();
+    for route in ["/settings/remote/collections", "/settings/remote/import"] {
+        let r = alice.json(Method::POST, route, json!({"handle": unknown, "kind": "cal", "href": "/x/", "name": "X", "color": ""})).await;
+        assert_eq!(r.status, StatusCode::NOT_FOUND, "{route}");
+    }
+    // `done` on an unknown handle is harmless and says nothing about it
+    let r = alice.json(Method::POST, "/settings/remote/done", json!({"handle": unknown})).await;
+    assert_eq!(r.status, StatusCode::OK, "done must not fail on a handle that is already gone");
+}

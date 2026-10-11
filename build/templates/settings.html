@@ -277,12 +277,15 @@
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="false">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
-      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+      {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
+          splitting them over two rows made the button look like a second, separate step -#}
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
     <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    {#- what the import is doing right now: the step, and the collection it is on -#}
+    <p class="foot rm-busy" hidden aria-live="polite"></p>
     <div class="rm-picked" hidden>
       <div class="label">{{ ctx.t("rm-pick") }}</div>
       <div class="group rm-list"></div>
@@ -298,12 +301,15 @@
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="true">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
-      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+      {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
+          splitting them over two rows made the button look like a second, separate step -#}
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
     <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    {#- what the import is doing right now: the step, and the collection it is on -#}
+    <p class="foot rm-busy" hidden aria-live="polite"></p>
     <div class="rm-picked" hidden>
       <div class="label">{{ ctx.t("rm-pick") }}</div>
       <div class="group rm-list"></div>
@@ -329,12 +335,15 @@
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="false">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
-      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+      {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
+          splitting them over two rows made the button look like a second, separate step -#}
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
     <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    {#- what the import is doing right now: the step, and the collection it is on -#}
+    <p class="foot rm-busy" hidden aria-live="polite"></p>
     <div class="rm-picked" hidden>
       <div class="label">{{ ctx.t("rm-pick") }}</div>
       <div class="group rm-list"></div>
@@ -350,12 +359,15 @@
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="true">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
-      <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
+      {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
+          splitting them over two rows made the button look like a second, separate step -#}
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
     <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    {#- what the import is doing right now: the step, and the collection it is on -#}
+    <p class="foot rm-busy" hidden aria-live="polite"></p>
     <div class="rm-picked" hidden>
       <div class="label">{{ ctx.t("rm-pick") }}</div>
       <div class="group rm-list"></div>

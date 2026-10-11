@@ -61,6 +61,14 @@ test('app.js reads its strings from the language script', async ({ page }) => {
   expect(t.n).toBeGreaterThan(300);
   expect(t.cancel).toBe('Abbrechen');
   expect(t.missing).toBe('js-no-such-key');
+  /* A placeholder whose name is a PREFIX of another must not eat it. Measured: with insertion
+     order, "Hole %name … (%n von %of)" came out as "Hole 1ame … (1 von 4)", because `%n` matched
+     inside `%name` first. The substitution therefore goes longest name first (core.js `tr`). */
+  const ph = await page.evaluate(() => {
+    window.I18N['js-ph-probe'] = 'a %name b %n c %of d';
+    return tr('js-ph-probe', { n: 1, of: 4, name: 'X' });
+  });
+  expect(ph).toBe('a X b 1 c 4 d');
 });
 
 test('"auto" scheme on a dark system is dark before the first paint', async ({ browser }) => {
