@@ -64,12 +64,9 @@ impl Logins {
     /// replaces the first, so an abandoned attempt cannot pile up.
     pub async fn start(&self, http: &reqwest::Client, origin: &str, principal: &str) -> AppResult<(String, String)> {
         let url = format!("{origin}/index.php/login/v2");
-        let r = http
-            .post(&url)
-            .header(reqwest::header::USER_AGENT, "PractiCal")
-            .send()
-            .await
-            .map_err(|_| AppError::bad("err-remote-login"))?;
+        // the transport failure is mapped, not swallowed: a private address is the likeliest one
+        // and has a message of its own (`dav::net_err`)
+        let r = http.post(&url).header(reqwest::header::USER_AGENT, "PractiCal").send().await.map_err(super::dav::net_err)?;
         if !r.status().is_success() {
             return Err(AppError::BadRequest(crate::error::Msg { key: "err-remote-status", args: vec![("status", r.status().as_u16().to_string())] }));
         }
@@ -112,7 +109,7 @@ impl Logins {
             .body(format!("token={}", super::pct(&token)))
             .send()
             .await
-            .map_err(|_| AppError::bad("err-remote-login"))?;
+            .map_err(super::dav::net_err)?;
         if r.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(false);
         }

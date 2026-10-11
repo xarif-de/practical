@@ -63,10 +63,14 @@ const collection = (id, kind) => ({
   at: () => {
     const w = where();
     const sh = short(kind);
-    // on a remote page the way on is the sign-in, then the list it offers
+    /* On a remote page the address comes first: the sign-in does nothing without it (remote.js
+       `needServer`), so pointing at the button while the field is empty would be the wrong order —
+       the same reason the create page points at the name field first. */
     if (w === `remote-${sh}` || w === `remote-sync-${sh}`) {
       const k = w.startsWith('remote-sync') ? '-sync' : '';
-      return { sel: q(`#${w} .rm-take`, `#${w} .rm-go`), lead: `js-onb-remote${k}`, body: `js-onb-remote${k}-b` };
+      const addr = $(`#${w} .rm-origin`);
+      const sel = addr && !addr.value.trim() ? q(`#${w} .rm-origin`) : q(`#${w} .rm-take`, `#${w} .rm-go`);
+      return { sel, lead: `js-onb-remote${k}`, body: `js-onb-remote${k}-b` };
     }
     // the source lists: one row per place the data can come from
     if (w === `import-${kind}` || w === `sync-${kind}`) {

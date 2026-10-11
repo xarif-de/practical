@@ -45,6 +45,17 @@ pub async fn export_addressbook(state: &AppState, user: &Principal, principal: &
 /// PRODID of what PractiCal writes, and of an imported calendar that names no producer.
 pub const PRODID: &str = "-//xarif.de//PractiCal//DE";
 
+/// How an imported .ics is parsed. `rfc7809` lets a `TZID` stand without its `VTIMEZONE` block,
+/// which RFC 7809 allows for IANA zones and which real exports rely on: measured, a nextcloud
+/// `multiget` hands out an event with `DTSTART;TZID=Europe/Berlin` and no `VTIMEZONE` beside it,
+/// and the strict parser refuses the whole file (`TZID Europe/Berlin does not refer to a valid
+/// timezone`). RustiCal's own CalDAV endpoint accepts it too
+/// (`rustical/crates/caldav/src/lib.rs`, `rfc7809: true`), so an import that refused it would be
+/// stricter than the server a phone writes to.
+pub fn options() -> ParserOptions {
+    ParserOptions { rfc7809: true }
+}
+
 /// The required properties a sloppy .ics leaves out (RFC 5545 §3.6, §3.8.4.7, §3.8.7.2), supplied before it is
 /// parsed: PRODID and VERSION of each VCALENDAR, UID and DTSTAMP of each VEVENT/VTODO/VJOURNAL in it. Without
 /// VERSION, UID or DTSTAMP caldata rejects the file; without PRODID it parses, but the objects stored from it
@@ -211,14 +222,14 @@ fn parse_chunk(text: &str, new_calendar: bool, found: &mut Vec<CalendarObjectTyp
 fn parse_chunk_inner(text: &str, new_calendar: bool, found: &mut Vec<CalendarObjectType>) -> AppResult<Vec<CalendarObject>> {
     let bad = |e: &dyn std::fmt::Display| AppError::bad1("err-ics", "detail", e);
     let mut objects = vec![];
-    for cal in IcalParser::from_slice(complete_ics(text).as_bytes()) {
+    for cal in IcalParser::from_slice(complete_ics(text).as_bytes()).with_options(options()) {
         let mut cal = cal.map_err(|e| bad(&e))?;
         if new_calendar {
             let mut m = cal.mutable();
             for p in ["X-WR-CALNAME", "X-WR-CALDESC", "X-WR-CALCOLOR", "X-WR-TIMEZONE", "X-APPLE-CALENDAR-COLOR"] {
                 m.remove_property(p);
             }
-            cal = m.build(&ParserOptions::default(), None).map_err(|e| bad(&e))?;
+            cal = m.build(&options(), None).map_err(|e| bad(&e))?;
         }
         for (has, t) in [(!cal.events.is_empty(), CalendarObjectType::Event), (!cal.todos.is_empty(), CalendarObjectType::Todo), (!cal.journals.is_empty(), CalendarObjectType::Journal)] {
             if has && !found.contains(&t) {

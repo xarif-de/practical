@@ -26,7 +26,7 @@ pub(super) struct LoginStarted {
 /// Starts Nextcloud's Login Flow v2. The user's own browser signs in, which is why this one path
 /// works for a native login and for SSO alike.
 pub(super) async fn login(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<LoginQ>) -> AppResult<Response> {
-    let origin = remote::allowed(&state, q.origin.trim())?;
+    let origin = remote::origin_of(&state, &q.origin)?;
     let (handle, url) = state.remote_logins.start(&state.remote_http, &origin, &user.id).await?;
     Ok(axum::Json(LoginStarted { handle, url }).into_response())
 }
@@ -69,7 +69,7 @@ pub(super) struct Offer {
 /// quietly store wrong data.
 pub(super) async fn collections_offered(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<HandleQ>) -> AppResult<Response> {
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
-    let base: url::Url = remote::allowed(&state, &origin)?.parse().map_err(|_| AppError::bad("err-remote-origin"))?;
+    let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = remote::dav::Dav::new(state.remote_http.clone(), base, login, secret);
     let (cal_home, ab_home) = dav.discover().await?;
     let principal = principal_of(&dav).await?;
@@ -120,7 +120,7 @@ pub(super) struct Took {
 pub(super) async fn import(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<TakeQ>) -> AppResult<Response> {
     let kind = Kind::parse(&q.kind)?;
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
-    let base: url::Url = remote::allowed(&state, &origin)?.parse().map_err(|_| AppError::bad("err-remote-origin"))?;
+    let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = remote::dav::Dav::new(state.remote_http.clone(), base, login.clone(), secret.clone());
     let (id, count) = remote::take::import(&state, &user, &dav, kind, &q.href, &q.name, &q.color).await?;
     // a one-off needs no credential afterwards, so the app password is destroyed at the source
@@ -137,7 +137,7 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
     }
     let kind = Kind::parse(&q.kind)?;
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
-    let origin = remote::allowed(&state, &origin)?;
+
     let account = remote::upsert_account(&state, &user, &origin, &login, &secret).await?;
     let (id, count, link_id) = remote::take::link(
         &state,

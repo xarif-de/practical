@@ -36,11 +36,12 @@ pub struct Config {
     pub holidays_country: String,
     /// Disable the OpenHolidays fetch entirely (no egress).
     pub holidays_enabled: bool,
-    /// Origins a remote import or sync may dial, e.g. `https://my.xarif.de`. An ALLOW-LIST and
-    /// never free text: in the cluster a public name resolves to Traefik's private ClusterIP, so
-    /// the existing SSRF guard (`domain::push::PublicOnly`) would refuse the real target and
-    /// loosening it would open a path into the cluster network. Empty = the feature is hidden.
-    pub remote_origins: Vec<String>,
+    /// Origins a remote import or sync may dial even though they do NOT resolve to a public
+    /// address, e.g. `https://my.xarif.de` — which from inside the cluster resolves to Traefik's
+    /// private ClusterIP. Every other address the user types must resolve publicly
+    /// (`domain::remote::PublicOrAllowed`), or the field would be a way to reach the pod's
+    /// neighbours. Empty = only public servers can be reached, which is the safe default.
+    pub remote_private_origins: Vec<String>,
     /// 32 random bytes (base64) sealing a stored app password. None = sync links cannot be
     /// created; a one-off import still works, it stores nothing.
     pub remote_secret_key: Option<Vec<u8>>,
@@ -99,22 +100,22 @@ fn var_bool(key: &str, default: bool) -> Result<bool, String> {
     }
 }
 
-/// The remote origins, each checked at start-up so a typo is a start failure and not a silently
-/// hidden feature. Stored as `scheme://host[:port]` without a path, which is what every later
-/// comparison uses. `http` is refused except for localhost, which only a development instance
-/// reaches (the deployed config has no such entry).
-fn remote_origins() -> Result<Vec<String>, String> {
-    let raw = var_or("REMOTE_ORIGINS", "");
+/// The origins exempt from the public-address rule, each checked at start-up so a typo fails the
+/// start instead of silently leaving the one server unreachable. Stored as `scheme://host[:port]`
+/// without a path. `http` is refused except for localhost, which only a development instance
+/// reaches.
+fn remote_private_origins() -> Result<Vec<String>, String> {
+    let raw = var_or("REMOTE_PRIVATE_ORIGINS", "");
     let mut out = vec![];
     for part in raw.split(',').map(str::trim).filter(|p| !p.is_empty()) {
-        let u: url::Url = part.parse().map_err(|e| format!("PRACTICAL__REMOTE_ORIGINS: {part:?}: {e}"))?;
-        let host = u.host_str().ok_or_else(|| format!("PRACTICAL__REMOTE_ORIGINS: {part:?} has no host"))?;
+        let u: url::Url = part.parse().map_err(|e| format!("PRACTICAL__REMOTE_PRIVATE_ORIGINS: {part:?}: {e}"))?;
+        let host = u.host_str().ok_or_else(|| format!("PRACTICAL__REMOTE_PRIVATE_ORIGINS: {part:?} has no host"))?;
         let local = host == "localhost" || host == "127.0.0.1";
         if u.scheme() != "https" && !(u.scheme() == "http" && local) {
-            return Err(format!("PRACTICAL__REMOTE_ORIGINS: {part:?} must be https"));
+            return Err(format!("PRACTICAL__REMOTE_PRIVATE_ORIGINS: {part:?} must be https"));
         }
         if !u.path().is_empty() && u.path() != "/" {
-            return Err(format!("PRACTICAL__REMOTE_ORIGINS: {part:?} must be an origin, without a path"));
+            return Err(format!("PRACTICAL__REMOTE_PRIVATE_ORIGINS: {part:?} must be an origin, without a path"));
         }
         let origin = match u.port() {
             Some(p) => format!("{}://{host}:{p}", u.scheme()),
@@ -201,7 +202,7 @@ impl Config {
             vapid_subject: var_or("VAPID_SUBJECT", "mailto:admin@example.org"),
             holidays_country: var_or("HOLIDAYS_COUNTRY", "DE"),
             holidays_enabled: var_bool("HOLIDAYS_ENABLED", true)?,
-            remote_origins: remote_origins()?,
+            remote_private_origins: remote_private_origins()?,
             remote_secret_key: remote_secret_key()?,
             default_timezone: var_or("DEFAULT_TIMEZONE", "Europe/Berlin"),
             default_lang: var_or("DEFAULT_LANG", "de"),

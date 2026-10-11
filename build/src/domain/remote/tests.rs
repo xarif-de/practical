@@ -302,3 +302,48 @@ fn a_truncated_answer_is_an_error_not_a_short_list() {
     // and something that is not XML at all is refused too
     assert!(xml::etags("<<<not xml").is_none());
 }
+
+/// With the address typed in, the resolver is the ONLY thing between the field and the pod's
+/// neighbours: a name that resolves to a private address must not be dialled, however it was
+/// spelled. `localhost` is the cheapest name that always resolves to loopback.
+#[tokio::test]
+async fn a_name_that_resolves_privately_is_not_dialled() {
+    use reqwest::dns::Resolve;
+    let bare = super::PublicOrAllowed { allow: std::sync::Arc::new(vec![]) };
+    let e = bare.resolve("localhost".parse().unwrap()).await;
+    assert!(e.is_err_and(|e| e.to_string().contains("no public address")), "loopback must be refused");
+
+    // the operator's exemption, and ONLY for the host it names
+    let allowed = super::PublicOrAllowed { allow: std::sync::Arc::new(vec!["localhost".to_string()]) };
+    assert!(allowed.resolve("localhost".parse().unwrap()).await.is_ok(), "an exempt host resolves");
+    assert!(
+        super::PublicOrAllowed { allow: std::sync::Arc::new(vec!["other.invalid".to_string()]) }
+            .resolve("localhost".parse().unwrap())
+            .await
+            .is_err(),
+        "the exemption must not cover a different host"
+    );
+}
+
+/// The exemption list is reduced to host names, because that is what a resolved name is. A scheme
+/// or a port in the configured origin must not make the host unrecognisable, and an unusable entry
+/// must be dropped rather than matched by accident.
+#[test]
+fn the_exemption_list_is_read_as_host_names() {
+    let hosts = super::exempt_hosts(&["https://my.xarif.de".into(), "http://localhost:8099".into(), "not a url".into(), String::new()]);
+    assert_eq!(hosts, ["my.xarif.de", "localhost"], "scheme and port dropped, nonsense dropped");
+}
+
+/// The one-off import and the sync must read a body by the SAME rule, or a calendar can be synced
+/// but not imported. Measured during development: the import refused every event in a named zone
+/// with "TZID Europe/Berlin does not refer to a valid timezone" while the sync took it, because
+/// only the sync had been given the RFC 7809 option.
+#[test]
+fn the_import_and_the_sync_parse_a_body_by_one_rule() {
+    assert_eq!(super::parser_options().rfc7809, crate::domain::transfer::options().rfc7809);
+    assert!(crate::domain::transfer::options().rfc7809, "a TZID without its VTIMEZONE must be accepted");
+    // and it really is the case the strict parser refuses, or this pins nothing
+    let no_vtimezone = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//x//y//EN\r\nBEGIN:VEVENT\r\nUID:tz2\r\nDTSTAMP:20261001T120000Z\r\nDTSTART;TZID=Europe/Berlin:20261012T090000\r\nDTEND;TZID=Europe/Berlin:20261012T100000\r\nSUMMARY:Standup\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    assert!(rustical_ical::CalendarObject::import(no_vtimezone, None).is_err());
+    assert!(rustical_ical::CalendarObject::import(no_vtimezone, Some(super::parser_options())).is_ok());
+}

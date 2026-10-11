@@ -88,8 +88,6 @@ pub struct SettingsPage {
     pub alarm_snaps_end: String,
     pub alarm_snaps_default_start: String,
     pub alarm_snaps_default_end: String,
-    /// the servers a remote import or sync may dial; empty hides both rows
-    pub remote_origins: Vec<String>,
     /// a sync link needs a key to seal its app password; without one only the one-off import shows
     pub remote_sync: bool,
     /// the user's links as the page renders them, newest-looking first
@@ -220,7 +218,6 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     let abs_all = collections::addressbooks_for(&state, &user, false).await?;
     let remote_links = remote_rows(&state, &user, &cals_all, &abs_all).await?;
     Ok(SettingsPage {
-        remote_origins: state.config.remote_origins.clone(),
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_links,
         alarm_snaps_start: events::fmt_offsets(&snaps.start),

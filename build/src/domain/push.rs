@@ -149,7 +149,8 @@ impl reqwest::dns::Resolve for PublicOnly {
 }
 
 /// Globally routable unicast (the parts of std's unstable `is_global` that matter here).
-fn public_ip(ip: std::net::IpAddr) -> bool {
+/// Also used by `domain::remote`, whose server address the user types in.
+pub(crate) fn public_ip(ip: std::net::IpAddr) -> bool {
     use std::net::{IpAddr, Ipv4Addr};
     let v4 = |a: Ipv4Addr| {
         let [o0, o1, o2, _] = a.octets();

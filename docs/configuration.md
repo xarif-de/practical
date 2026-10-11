@@ -71,7 +71,7 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | Key | Default | What it does |
 | --- | --- | --- |
 | `HOLIDAYS_COUNTRY` | `DE` | The country the address search prefers while a user has named no region. Holiday regions themselves have no default. |
-| `REMOTE_ORIGINS` | – | Comma-separated list of servers a user may import from or sync with, for example `https://my.xarif.de`. An allow-list, not free text: see [Importing from, and syncing with, another server](#importing-from-and-syncing-with-another-server). Empty = both features are hidden. |
+| `REMOTE_PRIVATE_ORIGINS` | – | Comma-separated list of servers that may be dialled even though their name does NOT resolve to a public address, for example `https://my.xarif.de` — which from inside the cluster resolves to Traefik's private ClusterIP. See [Importing from, and syncing with, another server](#importing-from-and-syncing-with-another-server). Empty = only public servers are reachable. |
 | `REMOTE_SECRET_KEY` | – | 32 random bytes, base64, sealing a stored app password. Without it a lasting sync cannot be set up; a one-off import still works, because it stores nothing. |
 | `HOLIDAYS_ENABLED` | `true` | `false` turns off all holiday requests. See [Holidays](#holidays). |
 | `DEFAULT_TIMEZONE` | `Europe/Berlin` | The time zone for users who have not picked one. |
@@ -193,18 +193,23 @@ These RustiCal variables go on the `rustical` container:
 PractiCal can copy a calendar or address book from another CalDAV/CardDAV server once, or keep it in
 sync. Nextcloud is what this is tested against.
 
-**Which servers may be dialled is configuration, not user input.** `PRACTICAL__REMOTE_ORIGINS` holds
-the allowed origins; the settings page offers exactly those and nothing else. Two reasons, either
-sufficient:
+**The server address is typed in by the user and required.** Nothing starts without one.
 
-- a free-text field is a server-side request forgery: the pod would dial whatever it is told, and in
-  a cluster a public name can resolve to an internal address (a `*.xarif.de` name resolves to
-  Traefik's ClusterIP, a private address);
-- PractiCal's own guard refuses a non-public address, so free text could not reach such a server
-  anyway, and loosening the guard is exactly what must not happen.
+What keeps that safe is not a list of permitted servers but the resolver every remote request goes
+through: **a name must resolve to a public address.** Without that rule the field would be a
+server-side request forgery — the pod can reach the API server, the database and every other
+service in the cluster, and a name under someone else's control can point at any of them.
 
-An entry is `scheme://host[:port]` without a path, `https` only (`http://localhost` is accepted in a
-development build). A malformed entry fails the start instead of hiding the feature silently.
+The address is also checked for shape before anything is dialled: `https` only (`http` for
+localhost in a development build, because a credential and a whole calendar would otherwise travel
+in the clear), no userinfo, no path, no query. A bare `cloud.example.org` is read as `https://`.
+
+**`PRACTICAL__REMOTE_PRIVATE_ORIGINS` is the exemption**, and it exists for one case: a
+deployment's own Nextcloud. From inside the cluster `my.xarif.de` resolves to Traefik's ClusterIP,
+a private address, so without the exemption the one server the instance exists for would be the one
+it cannot reach. It is configuration, never user input, so no request can ask to be exempt. An
+entry is `scheme://host[:port]` without a path; a malformed one fails the start instead of silently
+leaving that server unreachable.
 
 **Signing in** uses Nextcloud's Login Flow v2: the user's own browser signs in at their Nextcloud,
 so a native login, two-factor and an SSO provider all work without PractiCal knowing anything about

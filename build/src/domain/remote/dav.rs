@@ -156,8 +156,9 @@ pub struct Dav {
 }
 
 impl Dav {
-    /// `base` must already be an allowed origin ([`super::allowed`]); nothing here re-opens that
-    /// decision, and every href is checked against it before it is dialled.
+    /// `base` is the origin [`super::origin_of`] accepted; nothing here re-opens that decision, and
+    /// every server-supplied href is checked against it before it is dialled. Whether the origin
+    /// may be reached at all is the resolver's call ([`super::client`]).
     pub fn new(http: reqwest::Client, base: url::Url, login: String, secret: Secret) -> Self {
         Self { http, base, login, secret }
     }
@@ -407,7 +408,14 @@ fn retry_after(h: &reqwest::header::HeaderMap) -> Option<u64> {
 
 /// A transport failure, named by its kind only: a reqwest error's Display carries the URL, and a URL
 /// is the one place a credential could still appear.
-fn net_err(e: reqwest::Error) -> AppError {
+///
+/// The resolver's refusal gets its OWN message. It is the most likely failure of a typed-in address
+/// and the only one a user cannot guess from "not reachable": the name resolves fine, it just does
+/// not resolve to somewhere this server is allowed to go.
+pub fn net_err(e: reqwest::Error) -> AppError {
+    if refused_by_resolver(&e) {
+        return AppError::bad("err-remote-private");
+    }
     let what = if e.is_timeout() {
         "timeout"
     } else if e.is_connect() {
@@ -418,6 +426,19 @@ fn net_err(e: reqwest::Error) -> AppError {
         "request"
     };
     AppError::BadRequest(crate::error::Msg { key: "err-remote-net", args: vec![("what", what.to_string())] })
+}
+
+/// Did `PublicOrAllowed` refuse the name? Its error text is the only marker reqwest carries it in,
+/// so the string is matched against the one this crate produces (`super::PublicOrAllowed`).
+fn refused_by_resolver(e: &reqwest::Error) -> bool {
+    let mut src: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(x) = src {
+        if x.to_string().contains("no public address") {
+            return true;
+        }
+        src = x.source();
+    }
+    false
 }
 
 /// The answer was not a whole document. Its own error, because reading a cut multistatus as a

@@ -198,9 +198,7 @@
     {# the sources an import can read; more will be listed here (Google, Apple) #}
     <div class="group">
       <label class="cell btnrow imp-pick">{{ m::ico("cal-up") }}<span>{{ ctx.t("imp-choose") }}</span><input type="file" accept=".ics,text/calendar" hidden class="imp-file"></label>
-      {%- if !remote_origins.is_empty() %}
       <a class="cell btnrow" href="#remote-cal">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
-      {%- endif %}
     </div>
     <p class="foot imp-info">{{ ctx.t("imp-hint") }}</p>
     <div class="imp-fields" hidden>
@@ -238,9 +236,7 @@
     {# the sources an import can read; more will be listed here (Google, Apple) #}
     <div class="group">
       <label class="cell btnrow imp-pick">{{ m::ico("book-up") }}<span>{{ ctx.t("imp-choose-vcf") }}</span><input type="file" accept=".vcf,text/vcard" hidden class="imp-file"></label>
-      {%- if !remote_origins.is_empty() %}
       <a class="cell btnrow" href="#remote-ab">{{ m::ico("globe") }}<span>{{ ctx.t("src-nextcloud") }}</span></a>
-      {%- endif %}
     </div>
     <p class="foot imp-info">{{ ctx.t("imp-ab-hint") }}</p>
     <div class="imp-fields" hidden>
@@ -276,13 +272,12 @@
 </section>
 {%- endif %}
 
-{%- if !remote_origins.is_empty() %}
 <section class="page" id="remote-cal">
   {{ m::back("#import-calendar", ctx.t("set-import-calendar")) }}
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="false">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
       <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
@@ -303,7 +298,7 @@
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="cal" data-sync="true">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
       <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
@@ -334,7 +329,7 @@
   <h1>{{ ctx.t("set-remote-import") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="false">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
       <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
@@ -355,7 +350,7 @@
   <h1>{{ ctx.t("set-remote-sync") }}</h1>
   <form class="rm-form" data-kind="ab" data-sync="true">
     <div class="group">
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><select class="rm-origin">{%- for o in remote_origins %}<option value="{{ o }}">{{ o }}</option>{%- endfor %}</select></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" placeholder="{{ ctx.t("rm-server-ph") }}"></span></label>
       <button type="button" class="cell btnrow rm-go">{{ m::ico("globe") }}<span>{{ ctx.t("rm-connect") }}</span></button>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
@@ -379,7 +374,6 @@
     </div>
   </form>
 </section>
-{%- endif %}
 {%- endif %}
 
 <section class="page" id="categories" data-t-rule="{{ ctx.t("set-rule") }}" data-t-count="{{ ctx.tp("cat-count") }}" data-t-count-task="{{ ctx.tp("cat-count-task") }}" data-t-none="{{ ctx.t("cat-none") }}">

@@ -9,9 +9,10 @@
 //! The credential sits on the ACCOUNT, not the link: one browser login lets the user tick several
 //! collections, and revoking one link must not break its siblings.
 //!
-//! Which server may be dialled is a config allow-list ([`crate::config::Config::remote_origins`]),
-//! never user text — in the cluster a public name resolves to a private ClusterIP, so the existing
-//! SSRF guard would refuse the real target and loosening it would open the cluster network.
+//! The server address is typed in by the user and required. What keeps that safe is the resolver
+//! ([`PublicOrAllowed`]): a name must resolve to a public address, so the field cannot be used to
+//! reach the pod's neighbours. A deployment's own Nextcloud may resolve privately from inside the
+//! cluster, which is what `PRACTICAL__REMOTE_PRIVATE_ORIGINS` exempts — configuration, not input.
 //!
 //! `PLAN.md` carries the measurements behind every protocol decision.
 
@@ -92,15 +93,54 @@ fn row_to_link(r: &sqlx::sqlite::SqliteRow) -> AppResult<Link> {
     })
 }
 
+/// The resolver every remote request goes through: a name must resolve to a PUBLIC address, or the
+/// request is refused before a connection is opened.
+///
+/// This is what makes a typed-in server address safe. Without it the server would dial whatever it
+/// is told — including its own neighbours: in a cluster the pod reaches the API server, the
+/// database and every other service, and a name under someone else's control can point at any of
+/// them. That is a server-side request forgery, and the address field would be the way in.
+///
+/// `allow`: host names from `PRACTICAL__REMOTE_PRIVATE_ORIGINS`, exempt from the check. Needed
+/// because a deployment's OWN Nextcloud can resolve to a private address from inside the cluster
+/// (`my.xarif.de` resolves to Traefik's ClusterIP there), so without the exemption the one server
+/// the instance exists for would be the one it cannot reach. The list is configuration, never user
+/// input, so no request can ask for the exemption.
+#[derive(Clone)]
+struct PublicOrAllowed {
+    allow: std::sync::Arc<Vec<String>>,
+}
+
+impl reqwest::dns::Resolve for PublicOrAllowed {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        let allow = self.allow.clone();
+        Box::pin(async move {
+            let all: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.as_str(), 0)).await?.collect();
+            if allow.iter().any(|h| h == &host) {
+                return Ok(Box::new(all.into_iter()) as reqwest::dns::Addrs);
+            }
+            let public: Vec<std::net::SocketAddr> = all.into_iter().filter(|a| crate::domain::push::public_ip(a.ip())).collect();
+            if public.is_empty() {
+                // this text is logged; the user is told `err-remote-private`
+                return Err(format!("{host}: no public address").into());
+            }
+            Ok(Box::new(public.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
 /// The HTTP client for remote servers. Separate from the push client because the timeouts differ by
 /// an order of magnitude: a 500-object multiget does not fit in push's 10 s.
 ///
 /// `redirect::Policy::none()` — discovery follows its single `.well-known` hop by hand, bounded to
 /// the same origin ([`Dav::discover`]).
-pub fn client() -> reqwest::Client {
+pub fn client(private_origins: &[String]) -> reqwest::Client {
+    let allow = exempt_hosts(private_origins);
     reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(std::sync::Arc::new(PublicOrAllowed { allow: std::sync::Arc::new(allow) }))
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(60))
         .user_agent("PractiCal")
@@ -108,15 +148,56 @@ pub fn client() -> reqwest::Client {
         .expect("the remote client builds from constants")
 }
 
-/// Refuses an origin the configuration does not list. Everything outbound goes through here.
-pub fn allowed(state: &AppState, origin: &str) -> AppResult<String> {
-    state
-        .config
-        .remote_origins
-        .iter()
-        .find(|o| o.as_str() == origin)
-        .cloned()
-        .ok_or_else(|| AppError::bad("err-remote-origin"))
+/// The host names of the exempt origins: what [`PublicOrAllowed`] compares. A configured origin
+/// carries a scheme and may carry a port, neither of which a resolved name has.
+fn exempt_hosts(origins: &[String]) -> Vec<String> {
+    origins.iter().filter_map(|o| o.parse::<url::Url>().ok()).filter_map(|u| u.host_str().map(str::to_string)).collect()
+}
+
+/// The origin of a server address the user typed, or an error naming what is wrong with it.
+///
+/// Only the SHAPE is checked here. WHETHER it may be dialled is decided by the resolver above, at
+/// connection time, when the name's real addresses are known — a check against the name alone could
+/// not do it anyway, because DNS may answer differently a moment later.
+///
+/// - the field is required: an empty address is `err-remote-no-server`, so nothing starts without one
+/// - `https` only; `http` is refused except for localhost in a development build, because a
+///   credential and a whole calendar would otherwise travel in the clear
+/// - no userinfo, no path, no query: `https://a@b/c?d` is not a server address, and taking one would
+///   make the part that decides where we connect (the host) the part hardest to read
+pub fn origin_of(state: &AppState, typed: &str) -> AppResult<String> {
+    let typed = typed.trim();
+    if typed.is_empty() {
+        return Err(AppError::bad("err-remote-no-server"));
+    }
+    // "my.xarif.de" is what a user types; assuming https beats refusing it
+    let with_scheme = if typed.contains("://") { typed.to_string() } else { format!("https://{typed}") };
+    let u: url::Url = with_scheme.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
+    let host = u.host_str().filter(|h| !h.is_empty()).ok_or_else(|| AppError::bad("err-remote-bad-server"))?;
+    let local = host == "localhost" || host == "127.0.0.1" || host == "::1";
+    if u.scheme() != "https" && !(u.scheme() == "http" && local && state.config.dev_login.is_some()) {
+        return Err(AppError::bad("err-remote-https"));
+    }
+    if !u.username().is_empty() || u.password().is_some() || u.query().is_some() || !matches!(u.path(), "" | "/") {
+        return Err(AppError::bad("err-remote-bad-server"));
+    }
+    let origin = match u.port() {
+        Some(p) => format!("{}://{host}:{p}", u.scheme()),
+        None => format!("{}://{host}", u.scheme()),
+    };
+    /* An ADDRESS, not a name, never reaches the resolver: reqwest connects to an IP literal
+       directly, so `PublicOrAllowed` is not consulted at all. Measured — `https://10.43.0.1`
+       answered "timeout", which is what a cluster-internal service would answer only because
+       nothing happened to listen there. So the same rule is applied here, where the address is
+       already known, and the exemption list is honoured so an operator can still name one.
+       `url::Host` is what parsed the host, so this costs no second parse of untrusted text. */
+    if let url::Host::Ipv4(_) | url::Host::Ipv6(_) = u.host().ok_or_else(|| AppError::bad("err-remote-bad-server"))? {
+        let ip: std::net::IpAddr = host.trim_matches(['[', ']']).parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
+        if !crate::domain::push::public_ip(ip) && !exempt_hosts(&state.config.remote_private_origins).iter().any(|h| h == host) {
+            return Err(AppError::bad("err-remote-private"));
+        }
+    }
+    Ok(origin)
 }
 
 /// Percent-encodes one path or form value. Same rule as `domain::geo::enc`; kept here so the
@@ -133,13 +214,10 @@ pub fn pct(v: &str) -> String {
     out
 }
 
-pub fn enabled(state: &AppState) -> bool {
-    !state.config.remote_origins.is_empty()
-}
-
-/// Sync needs a key to seal the app password; import does not store one, so it works without.
+/// Sync needs a key to seal the app password; import stores none, so it needs nothing configured
+/// and is always offered.
 pub fn sync_enabled(state: &AppState) -> bool {
-    enabled(state) && state.config.remote_secret_key.is_some()
+    state.config.remote_secret_key.is_some()
 }
 
 // ---------------------------------------------------------------- accounts
@@ -189,9 +267,8 @@ pub async fn account_of(state: &AppState, link: &Link) -> AppResult<(Account, Se
 /// A ready-to-use client for a link.
 pub async fn dav_for(state: &AppState, link: &Link) -> AppResult<(Account, Dav)> {
     let (a, s) = account_of(state, link).await?;
-    // re-check the origin: the allow-list may have been narrowed since the link was made
-    let origin = allowed(state, &a.base_url)?;
-    let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-origin"))?;
+    // the stored origin was checked when the link was made; the resolver checks every dial anyway
+    let base: url::Url = a.base_url.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     Ok((a.clone(), Dav::new(state.remote_http.clone(), base, a.login.clone(), s)))
 }
 
@@ -386,16 +463,11 @@ pub async fn map_del(state: &AppState, link_id: &str, object_id: &str) -> AppRes
     Ok(())
 }
 
-/// How a remote body is parsed. `rfc7809` lets a `TZID` stand without its `VTIMEZONE` block, which
-/// RFC 7809 allows for IANA zones and which nextcloud relies on: measured, a `multiget` hands out
-/// an event carrying `DTSTART;TZID=Europe/Berlin` with no `VTIMEZONE` beside it, and the strict
-/// parser refuses it (`TZID Europe/Berlin does not refer to a valid timezone`).
-///
-/// It is also what RustiCal's own CalDAV endpoint uses for every write a phone makes
-/// (`rustical/crates/caldav/src/lib.rs:73-78`, `rfc7809: true` by default), so the sync is exactly
-/// as permissive as the server next to it — not stricter.
+/// How a remote body is parsed: the same options the file import uses
+/// ([`crate::domain::transfer::options`]), so a calendar taken from a server and the same calendar
+/// exported to a file are read by one rule.
 pub fn parser_options() -> caldata::parser::ParserOptions {
-    caldata::parser::ParserOptions { rfc7809: true }
+    crate::domain::transfer::options()
 }
 
 /// The fingerprint RustiCal will hold for a text, which is what makes echo suppression work.

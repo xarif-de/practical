@@ -123,7 +123,8 @@ async fn meta_with(state: &AppState, user: &Principal, account_id: &str, kind: K
         };
         super::account_of(state, &probe).await?
     };
-    let base: url::Url = super::allowed(state, &a.base_url)?.parse().map_err(|_| AppError::bad("err-remote-origin"))?;
+    // the origin was checked when the link was made; the resolver checks every dial anyway
+    let base: url::Url = a.base_url.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = Dav::new(state.remote_http.clone(), base, a.login, s);
     meta(&dav, kind, href).await
 }

@@ -396,7 +396,7 @@ async fn serve() -> Result<(), String> {
         changes,
         dev_reload,
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
-        remote_http: crate::domain::remote::client(),
+        remote_http: crate::domain::remote::client(&config.remote_private_origins),
         remote_logins: Arc::new(crate::domain::remote::login::Logins::default()),
         remote_runner: Arc::new(crate::domain::remote::sched::Runner::default()),
         geo: Default::default(),

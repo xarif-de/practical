@@ -57,15 +57,44 @@ async fn a_link_id_is_useless_to_anyone_but_its_owner() {
     assert!(!rows[0].two_way);
 }
 
+/// The address is typed in, so the shape check is the first line and the field is required.
+/// WHETHER an address may be dialled is not decided here — the resolver does that at connection
+/// time, when the name's real addresses are known (`domain::remote::PublicOrAllowed`).
 #[tokio::test]
-async fn only_a_configured_origin_may_be_dialled() {
+async fn the_server_address_is_required_and_must_be_one() {
     let s = seed().await;
     let mut alice = s.app.login("alice").await;
-    // the fixture configures no origin at all, so nothing is allowed — including a plausible one
-    for origin in ["https://my.xarif.de", "http://localhost:8099", "https://evil.example", "", "not a url"] {
+    for (origin, why) in [
+        ("", "the field is required"),
+        ("   ", "and whitespace is empty"),
+        ("not a url", "a sentence is not an address"),
+        ("http://cloud.example.org", "http would carry the password in the clear"),
+        ("https://user:pw@cloud.example.org", "userinfo in a server address hides where we connect"),
+        ("https://cloud.example.org/nextcloud", "a path is not part of an origin"),
+        ("https://cloud.example.org/?x=1", "nor is a query"),
+    ] {
         let r = alice.json(Method::POST, "/settings/remote/login", json!({"origin": origin})).await;
-        assert_eq!(r.status, StatusCode::BAD_REQUEST, "{origin} was accepted");
+        assert_eq!(r.status, StatusCode::BAD_REQUEST, "{origin:?} was accepted ({why})");
     }
+    /* A well-formed address gets past the shape check and then fails at the connection, which is
+       the honest order: the shape is ours to judge, reachability is not. `invalid.` is reserved by
+       RFC 2606 and never resolves, so this does not touch the network. */
+    let r = alice.json(Method::POST, "/settings/remote/login", json!({"origin": "https://nextcloud.invalid."})).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "an unreachable server is still an error");
+}
+
+/// A bare host is what a user types, and refusing it would be pedantry: https is assumed.
+#[tokio::test]
+async fn a_bare_host_is_read_as_https() {
+    let s = seed().await;
+    let app = &s.app;
+    let o = |t: &str| crate::domain::remote::origin_of(&app.state, t);
+    assert_eq!(o("cloud.example.org").unwrap(), "https://cloud.example.org");
+    assert_eq!(o("  cloud.example.org  ").unwrap(), "https://cloud.example.org", "and it is trimmed");
+    assert_eq!(o("https://cloud.example.org/").unwrap(), "https://cloud.example.org", "a trailing slash is not a path");
+    assert_eq!(o("https://cloud.example.org:8443").unwrap(), "https://cloud.example.org:8443", "a port is kept");
+    // http only for localhost, and only where a development login is configured
+    assert!(o("http://localhost:8099").is_err(), "the fixture has no dev login");
 }
 
 #[tokio::test]
@@ -149,16 +178,45 @@ async fn the_ways_in_are_nested_under_import_and_sync() {
     let html = String::from_utf8_lossy(&page.ok().bytes).to_string();
 
     // the list itself: create and import always, sync only with a key — the fixture has none
-    assert!(html.contains("href=\"#new-calendar\""));
-    assert!(html.contains("href=\"#import-calendar\""));
-    assert!(!html.contains("href=\"#sync-calendar\""), "no key: no sync row");
+    let list = html.split("id=\"collections\"").nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default();
+    assert!(list.contains("href=\"#new-calendar\""));
+    assert!(list.contains("href=\"#import-calendar\""));
+    assert!(!list.contains("href=\"#sync-calendar\""), "no key: no sync row");
     assert!(!html.contains("id=\"sync-calendar\""), "and no sync page to point at");
-    // the remote rows are NOT in the list any more; without an allowed origin they are nowhere
-    assert!(!html.contains("href=\"#remote-cal\""), "no origin: no remote source row");
-    assert!(!html.contains("id=\"remote-cal\""));
+    // the remote rows moved one level down, onto the import page, where they need nothing
+    // configured — the address is typed in
+    assert!(!list.contains("#remote-cal"), "the list must not offer the source directly");
+    assert!(html.contains("id=\"remote-cal\""), "the import source page is always there");
 
     // the import page is where a source is chosen, so its file row is one source among several
     let imp = html.split("id=\"import-calendar\"").nth(1).unwrap_or_default();
     let imp = imp.split("</section>").next().unwrap_or_default();
     assert!(imp.contains("imp-pick"), "the file row stays on the import page");
+}
+
+/// An IP literal never reaches the resolver: reqwest connects to an address directly, so
+/// `PublicOrAllowed` is not consulted at all. Measured during development — `https://10.43.0.1`
+/// answered "timeout", which in a cluster is the difference between "refused" and "connected".
+/// The same rule therefore applies where the address is already known.
+#[tokio::test]
+async fn a_private_address_typed_as_a_number_is_refused_too() {
+    let s = seed().await;
+    let app = &s.app;
+    let o = |t: &str| crate::domain::remote::origin_of(&app.state, t);
+    for bad in [
+        "https://10.43.0.1",        // a cluster service
+        "https://192.168.1.1",      // a home router
+        "https://127.0.0.1",        // the pod itself
+        "https://169.254.169.254",  // a cloud metadata service
+        "https://[::1]",
+        "https://[fd00::1]",
+        "https://2130706433",       // 127.0.0.1 written as one number
+    ] {
+        let r = o(bad);
+        assert!(matches!(&r, Err(crate::error::AppError::BadRequest(m)) if m.key == "err-remote-private" || m.key == "err-remote-bad-server"), "{bad} was accepted: {r:?}");
+    }
+    // a public address is fine, because the rule is about where it points, not about being a number
+    assert_eq!(o("https://142.250.185.74").unwrap(), "https://142.250.185.74");
+    // and a name is left to the resolver, which sees what it really resolves to
+    assert_eq!(o("https://cloud.example.org").unwrap(), "https://cloud.example.org");
 }

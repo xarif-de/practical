@@ -7,7 +7,7 @@
   const settings = document.querySelector('.settings');
   if (!settings) return;
   const { $, $$, escQ, req, send, tell } = practical;
-  const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint']);
+  const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server']);
 
   settings.querySelectorAll('.rm-form').forEach(form => {
     const kind = form.dataset.kind, sync = form.dataset.sync === 'true';
@@ -28,7 +28,20 @@
     // a page left mid-flow must not keep asking
     addEventListener('pagehide', stop);
 
+    /* The address is required and nothing starts without it. Checked here so the user is told at
+       the field rather than by a failed request; the server checks it again (`origin_of`) and the
+       resolver checks what it resolves to, because a browser check is a courtesy, not a guard. */
+    const needServer = () => {
+      if (origin.value.trim()) return false;
+      origin.setCustomValidity(T['need-server']);
+      origin.reportValidity();
+      origin.focus();
+      return true;
+    };
+    origin.addEventListener('input', () => origin.setCustomValidity(''));
+
     go.addEventListener('click', async () => {
+      if (needServer()) return;
       const r = await req('/settings/remote/login', { method: 'POST', json: { origin: origin.value } });
       if (!tell(r).ok) return;
       handle = r.data.handle;
@@ -76,6 +89,7 @@
 
     form.addEventListener('submit', async e => {
       e.preventDefault();
+      if (needServer()) return;
       if (!chosen || !handle) return;
       const c = chosen[+(form.querySelector('input[name=rmpick]:checked') || {}).value || 0];
       const body = { handle, kind, href: c.href, name: c.name, color: c.color || '' };
