@@ -146,14 +146,22 @@
 /* The field needs its own width: the value cell is sized by its content, so sharing the 280 px cap
    with the button clipped the placeholder by 15 px (measured: scrollWidth 182 against 167 of room).
    `min-width` rather than a fixed one, so a long address still widens the field up to the cap. */
-.set .rm-in { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.set .rm-in { display: flex; align-items: center; gap: 8px; min-width: 0; position: relative; }
+
+/* The addresses used before, built like the search suggestions (`.sres` in chrome.css shares the
+   surface). Its own list rather than a <datalist>, which wears a dropdown triangle in Chromium
+   that no other field here has — and that triangle cannot be styled, only hidden, and came back on
+   hover.
+   `fixed`, with the coordinates set when it opens (remote.js): the settings group around the field
+   is `overflow: hidden` for its rounded corners, which clipped an absolutely positioned list away
+   entirely (measured: open, 190x83, and nothing of it on screen). */
+.set .rm-sug { position: fixed; min-width: 190px; max-width: 320px; padding: 6px; z-index: 30; text-align: left; } /* the value cell is right-aligned; a list is read from the left */
+.set .rm-sug .r { display: block; padding: 7px 10px; border-radius: 8px; font-size: 14px; color: var(--fg); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set .rm-sug .r:hover, .set .rm-sug .r[aria-selected=true] { background: var(--tile); }
 .set .cell .val .rm-in input[type=text] { min-width: 190px; max-width: 280px; }
 /* the phone keeps its narrow fields: 190 px plus the button wrapped the row to 56 px (measured at
    390 px wide). This override has to sit AFTER the rule above — a media query adds no specificity. */
 @media (max-width: 520px) { .set .cell .val .rm-in input[type=text] { min-width: 0; max-width: 160px; } }
-/* the browser's own dropdown triangle for a `list=` field: the suggestions open on focus and while
-   typing (remote.js `showPicker`), so the marker only competed with the button beside it */
-.set .rm-in input::-webkit-calendar-picker-indicator { display: none; }
 /* The way on, so it carries the accent: this is the one action of the row. The selector has to
    match `.set .cell .val .btn.icon-btn` above (five classes), which blanks an icon button in a
    value cell — the general case here is the exception. */

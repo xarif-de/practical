@@ -182,6 +182,10 @@ impl SettingsPage {
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }
+    /// The remembered server addresses as the page's JSON island (`#rm-servers`).
+    pub fn servers_json(&self) -> String {
+        serde_json::to_string(&self.remote_servers).map(crate::render::script_json).unwrap_or_else(|_| "[]".into())
+    }
     /// The sync link of one collection, if it has one. A collection has at most one
     /// (`UNIQUE (principal, kind, local_id)` in migration 18), so the first match is the answer.
     pub fn link_for(&self, kind: &str, local_id: &str) -> Option<&RemoteLinkRow> {

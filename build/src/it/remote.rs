@@ -347,10 +347,9 @@ async fn the_address_field_offers_the_servers_used_before() {
     let st = &s.app.state;
     let mut alice = s.app.login("alice").await;
 
-    // nothing used yet: no list at all, rather than an empty dropdown
+    // nothing used yet: no island at all, rather than an empty one
     let html = String::from_utf8_lossy(&alice.get("/settings").await.ok().bytes).to_string();
     assert!(!html.contains("id=\"rm-servers\""), "an empty list must not be rendered");
-    assert!(!html.contains("list=\"rm-servers\""), "and the field must not point at one");
 
     for (i, origin) in ["https://a.example.org", "https://b.example.org", "https://c.example.org", "https://d.example.org"].iter().enumerate() {
         crate::domain::remote::remember_server(st, &who, origin).await;
@@ -377,11 +376,22 @@ async fn the_address_field_offers_the_servers_used_before() {
     assert!(crate::domain::remote::servers_of(st, &bob).await.unwrap().is_empty(), "alice's servers reached bob");
 
     let html = String::from_utf8_lossy(&alice.get("/settings").await.ok().bytes).to_string();
-    assert_eq!(html.matches("id=\"rm-servers\"").count(), 1, "one list for every address field");
-    // two fields here, not four: the fixture configures no key, so the two SYNC pages do not exist
-    // (`the_ways_in_are_nested_under_import_and_sync`). Both import fields must point at the list.
-    assert_eq!(html.matches("list=\"rm-servers\"").count(), 2, "an address field does not offer the list");
-    assert!(html.contains("value=\"https://a.example.org\""));
+    assert_eq!(html.matches("id=\"rm-servers\"").count(), 1, "one island for every address field");
+    assert!(html.contains("https://a.example.org"), "the island does not carry the addresses");
+    /* The list is ours, not the browser's: a <datalist> wears a dropdown triangle in Chromium that
+       no other field here has. So the field is a combobox over a `.rm-sug` listbox — one per form,
+       and two forms here, because the fixture configures no key and the two SYNC pages therefore do
+       not exist (`the_ways_in_are_nested_under_import_and_sync`). */
+    assert!(!html.contains("<datalist"), "no browser dropdown anywhere");
+    assert!(!html.contains("list=\"rm-servers\""), "and no field pointing at one");
+    assert_eq!(html.matches("class=\"rm-sug\"").count(), 2, "every address field needs its own listbox");
+    // the search field in the frame is a combobox too, so this counts only the address ones
+    assert_eq!(html.matches("class=\"rm-origin\" required inputmode=\"url\"").count(), 2);
+    for row in html.split("class=\"rm-origin\"").skip(1) {
+        let field = row.split('>').next().unwrap_or_default();
+        assert!(field.contains("role=\"combobox\""), "an address field does not say what it is: {field}");
+        assert!(field.contains("aria-expanded=\"false\""), "and must start closed: {field}");
+    }
 }
 
 /// A credential the user already granted for the same address is used again, so a second import or

@@ -11,6 +11,11 @@
   const settings = document.querySelector('.settings');
   if (!settings) return;
   const { $, $$, escQ, req, send, tell } = practical;
+  /* The addresses the user signed in at before (`#rm-servers`, settings.html). Read once: the same
+     list serves all four pages, because it is the same question each time. */
+  let SERVERS = [];
+  try { SERVERS = JSON.parse($('#rm-servers')?.textContent || '[]'); } catch (_) { SERVERS = []; }
+
   const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server', 'need-pick', 'doing-title']);
   T['doing'] = T['doing-title'];
 
@@ -100,24 +105,103 @@
     };
     origin.addEventListener('input', () => origin.setCustomValidity(''));
 
-    /* Enter in the address field means "connect": the field sits in the import form, whose submit
-       is the BATCH, so without this an address and a press of Enter would start importing nothing. */
-    origin.addEventListener('keydown', e => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      if (!go.disabled) go.click();
-    });
+    /* ---- the addresses used before ------------------------------------------------------------
+       Built like the search suggestions (search.js): a listbox of our own, not a <datalist>, whose
+       dropdown triangle no other field here has and which came back on hover even when hidden.
+       Opens on focus, narrows as letters are typed, ↑/↓ walks it, Enter takes the marked one. */
+    const sug = q('.rm-sug');
+    let marked = -1, shown = [];
 
-    /* The suggestions have no dropdown marker any more (settings.css), so they are opened here.
-       `showPicker` needs a user gesture: a focus from a click or a keypress has one, a focus the
-       page itself moved does not, and that throws — which is not a failure of anything. */
-    if (origin.hasAttribute('list')) {
-      origin.addEventListener('focus', () => {
-        try {
-          origin.showPicker();
-        } catch (_) { /* no user gesture, or a browser without it: typing still filters the list */ }
-      });
+    const closeSug = () => {
+      sug.hidden = true;
+      marked = -1;
+      origin.setAttribute('aria-expanded', 'false');
+      origin.removeAttribute('aria-activedescendant');
+    };
+
+    const mark = i => {
+      marked = i;
+      [...sug.children].forEach((el, n) => el.setAttribute('aria-selected', String(n === i)));
+      if (i >= 0) origin.setAttribute('aria-activedescendant', sug.children[i].id);
+      else origin.removeAttribute('aria-activedescendant');
+    };
+
+    /* The list is `fixed` (settings.css), so its place is set here. It is put under the FIELD, not
+       the row, so it lines up with what is being typed, and kept inside the window. */
+    const place = () => {
+      const f = origin.getBoundingClientRect();
+      sug.style.width = `${Math.max(f.width, 190)}px`;
+      sug.style.left = `${Math.min(f.left, innerWidth - sug.offsetWidth - 8)}px`;
+      const below = innerHeight - f.bottom;
+      // above the field when there is no room below it
+      if (below < sug.offsetHeight + 12 && f.top > sug.offsetHeight + 12) {
+        sug.style.top = `${f.top - sug.offsetHeight - 4}px`;
+      } else {
+        sug.style.top = `${f.bottom + 4}px`;
+      }
+    };
+
+    function drawSug() {
+      const typed = origin.value.trim().toLowerCase();
+      // what is already typed in full is no suggestion: offering it back says nothing
+      shown = SERVERS.filter(v => v.toLowerCase().includes(typed) && v.toLowerCase() !== typed);
+      sug.innerHTML = shown
+        .map((v, i) => `<div class="r" role="option" id="${sug.id}-o${i}" aria-selected="false" data-v="${escQ(v)}">${escQ(v)}</div>`)
+        .join('');
+      sug.hidden = !shown.length;
+      origin.setAttribute('aria-expanded', String(!!shown.length));
+      if (shown.length) place();
+      mark(-1);
     }
+
+    const takeSug = v => {
+      origin.value = v;
+      origin.setCustomValidity('');
+      closeSug();
+      origin.focus();
+    };
+
+    if (sug && SERVERS.length) {
+      sug.id = `rm-sug-${form.closest('.page').id}`;
+      origin.setAttribute('aria-controls', sug.id);
+      origin.addEventListener('focus', drawSug);
+      origin.addEventListener('input', drawSug);
+      // a click must not pull the focus out of the field first
+      sug.addEventListener('mousedown', e => e.preventDefault());
+      sug.addEventListener('click', e => {
+        const r = e.target.closest('.r');
+        if (r) takeSug(r.dataset.v);
+      });
+      sug.addEventListener('mousemove', e => {
+        const r = e.target.closest('.r');
+        if (r) mark([...sug.children].indexOf(r));
+      });
+      origin.addEventListener('blur', () => setTimeout(closeSug, 120));
+      // a fixed box does not travel with the page: scrolling or resizing closes it rather than
+      // leaving it beside the field it belongs to
+      addEventListener('scroll', () => { if (!sug.hidden) closeSug(); }, { passive: true, capture: true });
+      addEventListener('resize', () => { if (!sug.hidden) closeSug(); });
+    }
+
+    origin.addEventListener('keydown', e => {
+      const open = !sug.hidden && shown.length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!open) { drawSug(); return; }
+        e.preventDefault();
+        const n = shown.length;
+        mark(e.key === 'ArrowDown' ? (marked + 1) % n : (marked <= 0 ? n : marked) - 1);
+        return;
+      }
+      if (e.key === 'Escape' && open) { e.stopPropagation(); closeSug(); return; }
+      /* Enter: take the marked suggestion, else connect. It must never reach the form, whose
+         submit is the import BATCH — an address plus Enter would have imported nothing. */
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (marked >= 0) { takeSug(shown[marked]); return; }
+        closeSug();
+        if (!go.disabled) go.click();
+      }
+    });
 
     // the direction radios decide what the hint under them says, and a collection the remote will
     // not let us write can only ever be pulled

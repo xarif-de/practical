@@ -462,17 +462,25 @@ test('push without VAPID: the page says unavailable, the API refuses a subscript
   expect(await r.text()).toBe('Benachrichtigungen sind auf diesem Server ausgeschaltet.'); // B8: a browser session reads it in its language
 });
 
-/* The remote address row. Its three parts are all browser behaviour, which is why they are tested
-   here and not in Rust: the field has no dropdown marker of its own, Enter in it CONNECTS instead
-   of submitting the batch around it, and the arrow is the row's one action so it carries the
-   accent. No Nextcloud is needed — what is asserted happens before any request is answered. */
-test('the remote address row: no dropdown marker, Enter connects, the arrow is the accent', async ({ page }) => {
+/* The remote address row. All of this is browser behaviour, which is why it is tested here and not
+   in Rust: the field is a combobox over a list of OUR OWN (a <datalist> wears a dropdown triangle
+   in Chromium that no other field here has, and it came back on hover even when hidden), Enter in
+   it CONNECTS instead of submitting the batch around it, and the arrow is the row's one action so
+   it carries the accent. No Nextcloud is needed — all of it happens before a request is answered. */
+test('the remote address row: own suggestion list, Enter connects, the arrow is the accent', async ({ page }) => {
   await reloadAt(page, '#remote-cal');
   const field = page.locator('#remote-cal .rm-origin');
   const button = page.locator('#remote-cal .rm-go');
   await expect(field).toBeVisible();
 
-  // the marker is gone, and the placeholder is not clipped by the button beside it
+  // no browser dropdown anywhere: no <datalist>, and the field points at no list of the browser's
+  expect(await page.locator('datalist').count()).toBe(0);
+  expect(await field.getAttribute('list')).toBeNull();
+  // it is a combobox over our own listbox instead
+  expect(await field.getAttribute('role')).toBe('combobox');
+  expect(await field.getAttribute('aria-expanded')).toBe('false');
+
+  // the placeholder is not clipped by the button beside it
   const clipped = await field.evaluate(el => {
     const before = el.value;
     el.value = el.placeholder;
@@ -481,26 +489,18 @@ test('the remote address row: no dropdown marker, Enter connects, the arrow is t
     return over;
   });
   expect(clipped).toBeLessThanOrEqual(0);
-  /* The marker itself: Chromium answers getComputedStyle on that pseudo-element with the INPUT's
-     own values (measured: display "block", width 169 px — the field's width), so it cannot be read
-     back. What is checkable is that the rule hiding it is in the stylesheet the page loaded. */
-  const hides = await page.evaluate(() => [...document.styleSheets]
-    .flatMap(sh => { try { return [...sh.cssRules]; } catch { return []; } })
-    .some(r => r.selectorText && r.selectorText.includes('calendar-picker-indicator')
-      && r.selectorText.includes('rm-in') && r.style.display === 'none'));
-  expect(hides).toBe(true);
 
   // the arrow: accent background, white glyph
   const look = await button.evaluate(el => ({ bg: getComputedStyle(el).backgroundColor, ico: getComputedStyle(el.querySelector('.ico')).color }));
-  expect(look.bg).not.toBe('rgba(0, 0, 0, 0)');
-  expect(look.bg).toBe(await page.evaluate(() => {
+  const accent = await page.evaluate(() => {
     const p = document.createElement('i');
     p.style.color = 'var(--accent)';
     document.body.appendChild(p);
     const c = getComputedStyle(p).color;
     p.remove();
     return c;
-  }));
+  });
+  expect(look.bg).toBe(accent);
   expect(look.ico).toBe('rgb(255, 255, 255)');
 
   /* Enter must not submit the form it sits in — that form's submit is the import BATCH, so an
@@ -514,4 +514,41 @@ test('the remote address row: no dropdown marker, Enter connects, the arrow is t
   expect(calls.some(p => p.endsWith('/import'))).toBe(false);
   await expect(page.locator('.rm-dlg')).not.toBeVisible();
   await page.unroute('**/settings/remote/**');
+});
+
+/* The suggestion list itself, with addresses put in by hand: it opens on focus, narrows as letters
+   are typed, and ↑/↓ plus Enter take one. It has to be `fixed` and placed from script — the
+   settings group around the field is `overflow: hidden` for its rounded corners, which clipped an
+   absolutely positioned list away entirely while it reported itself as open. */
+test('the address suggestions open, filter and can be taken with the keyboard', async ({ page }) => {
+  /* The addresses come from the page's island, which the fixture has none of (nothing was ever
+     signed in at). It is handed in with the answer, in the HEAD: `remote.js` reads it once while
+     the bundle runs at the end of the body, so anything appended later is already too late. */
+  await page.route('**/settings', async route => {
+    const res = await route.fetch();
+    const island = '<script type="application/json" id="rm-servers">["https://one.example.org","https://two.example.org"]</script>';
+    await route.fulfill({ response: res, body: (await res.text()).replace('</head>', `${island}</head>`) });
+  });
+  await reloadAt(page, '#remote-cal');
+
+  const field = page.locator('#remote-cal .rm-origin');
+  const list = page.locator('#remote-cal .rm-sug');
+  await field.click();
+  await expect(list).toBeVisible();
+  await expect(list.locator('.r')).toHaveCount(2);
+  // and it is really on screen, not clipped by the group around it
+  expect(await list.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + 14)?.closest('.rm-sug') === el;
+  })).toBe(true);
+
+  await field.fill('two');
+  await expect(list.locator('.r')).toHaveCount(1);
+  await field.press('ArrowDown');
+  await expect(list.locator('.r[aria-selected=true]')).toHaveText('https://two.example.org');
+  await field.press('Enter');
+  await expect(field).toHaveValue('https://two.example.org');
+  await expect(list).not.toBeVisible();
+  await expect(field).toHaveAttribute('aria-expanded', 'false');
+  await page.unroute('**/settings');
 });

@@ -278,7 +278,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"{% if !remote_servers.is_empty() %} list="rm-servers"{% endif %}><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -302,7 +302,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"{% if !remote_servers.is_empty() %} list="rm-servers"{% endif %}><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -336,7 +336,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"{% if !remote_servers.is_empty() %} list="rm-servers"{% endif %}><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -360,7 +360,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"{% if !remote_servers.is_empty() %} list="rm-servers"{% endif %}><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -487,11 +487,12 @@
   </div>
   <p class="foot">{{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
 </section>
-{#- The addresses this user signed in at before. A <datalist> is the whole feature: the browser
-    drops it down on focus and narrows it as letters are typed, with its own keyboard handling and
-    no script of ours. Same list for all four fields — it is the same question each time. -#}
+{#- The addresses this user signed in at before, for the address field to offer back (remote.js).
+    One island for all four fields — it is the same question each time. Not a <datalist>: that wears
+    a dropdown triangle of its own in Chromium, which no other field here has, and its look cannot
+    be touched. The list is built like the search suggestions instead (`.sres`, chrome.css). -#}
 {%- if !remote_servers.is_empty() %}
-<datalist id="rm-servers">{% for sv in remote_servers %}<option value="{{ sv }}">{% endfor %}</datalist>
+<script type="application/json" id="rm-servers">{{ self.servers_json()|safe }}</script>
 {%- endif %}
 {#- One dialog for all four remote pages: a batch runs on one page at a time. The bar is a
     <progress> without a value while ONE collection runs — there is nothing to divide then, and a
