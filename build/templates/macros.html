@@ -60,7 +60,7 @@
     <div class="cell noic"><span>{{ ctx.t("rm-direction") }}</span><span class="val">{% if l.two_way %}{{ ctx.t("rm-both") }}{% else %}{{ ctx.t("rm-pull") }}{% endif %}</span></div>
     <div class="cell noic"><span>{{ ctx.t("rm-ran") }}</span><span class="val">{% if l.err.is_empty() %}{% if l.ran_at.is_empty() %}{{ ctx.t("rm-never") }}{% else %}{{ l.ran_at }}{% endif %}{% else %}<span class="bad">{{ ctx.t(l.err.as_str()) }}</span>{% endif %}</span></div>
     <button type="button" class="cell btnrow rm-now">{{ ico("repeat") }}<span>{{ ctx.t("rm-now") }}</span></button>
-    <button type="button" class="cell btnrow danger rm-drop">{{ ico("x") }}<span>{{ ctx.t("rm-remove") }}</span></button>
+    <button type="button" class="cell btnrow danger rm-drop">{{ ico("unlink") }}<span>{{ ctx.t("rm-remove") }}</span></button>
   </div>
   <p class="foot">{{ ctx.t("rm-remove-hint") }}</p>
   {%- endif %}

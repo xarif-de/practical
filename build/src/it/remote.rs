@@ -289,6 +289,10 @@ async fn a_link_is_shown_on_the_collection_it_syncs() {
     // the calendar's own page: direction, last run, and the way out
     let page = html.split(&format!("id=\"cal-alice-{cal}\"")).nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default();
     assert!(page.contains("rm-drop"), "a sync cannot be ended where it is set up");
+    /* Ending a sync is a chain coming apart, not an "x": the collection and its entries stay, only
+       the connection goes (`rm-remove-hint`), and an x reads as "delete this". */
+    let drop_row = page.split("rm-drop").nth(1).unwrap_or_default().split("</button>").next().unwrap_or_default();
+    assert!(drop_row.contains("#i-unlink"), "the way out of a sync does not show a parting link: {drop_row}");
     assert!(page.contains("rm-now"), "and running one by hand belongs there too");
     assert!(page.contains(&format!("data-rm-id=\"{link}\"")));
 }
