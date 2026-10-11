@@ -229,6 +229,8 @@ pub async fn update_calendar(state: &AppState, user: &Principal, owner: &str, id
 pub async fn delete_calendar(state: &AppState, user: &Principal, owner: &str, id: &str, hard: bool) -> AppResult<()> {
     ensure_owner(user, owner)?;
     state.calendars.delete_calendar(owner, id, !hard).await?;
+    // a sync link is reached through its collection, so it has to end with it
+    crate::domain::remote::unlink_collection(state, user, crate::domain::remote::dav::Kind::Cal, id).await;
     Ok(())
 }
 
@@ -275,6 +277,7 @@ pub async fn update_addressbook(state: &AppState, user: &Principal, owner: &str,
 pub async fn delete_addressbook(state: &AppState, user: &Principal, owner: &str, id: &str, hard: bool) -> AppResult<()> {
     ensure_owner(user, owner)?;
     state.addressbooks.delete_addressbook(owner, id, !hard).await?;
+    crate::domain::remote::unlink_collection(state, user, crate::domain::remote::dav::Kind::Ab, id).await;
     if hard {
         sqlx::query("DELETE FROM practical_addressbook_colors WHERE principal = ? AND id = ?").bind(owner).bind(id).execute(&state.db).await?;
     }

@@ -69,7 +69,10 @@ const collection = (id, kind) => ({
     if (w === `remote-${sh}` || w === `remote-sync-${sh}`) {
       const k = w.startsWith('remote-sync') ? '-sync' : '';
       const addr = $(`#${w} .rm-origin`);
-      const sel = addr && !addr.value.trim() ? q(`#${w} .rm-origin`) : q(`#${w} .rm-take`, `#${w} .rm-go`);
+      /* `.rm-in`, not the field inside it: the arrow stops 5 px short of its TARGET, and with the
+         field as target that tip landed on the arrow button beside it, inside the row (measured:
+         tip at x=1129, field ending at 1124, wrapper at 1151). */
+      const sel = addr && !addr.value.trim() ? q(`#${w} .rm-in`) : q(`#${w} .rm-take`, `#${w} .rm-go`);
       return { sel, lead: `js-onb-remote${k}`, body: `js-onb-remote${k}-b` };
     }
     // the source lists: one row per place the data can come from

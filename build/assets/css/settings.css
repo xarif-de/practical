@@ -23,7 +23,7 @@
 .set .cell .swatch .ico, .cpk .sq .ico, .cpk-pvp .sq .ico { width: 16px; height: 16px; }
 .set .cell .sub { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set .cell .val { color: var(--fg-3); display: inline-flex; gap: 8px; align-items: center; justify-self: end; text-align: right; min-width: 0; }
-.set .cell .val :is(input[type=text], input[type=number], input[type=url], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
+.set .cell .val :is(input[type=text], input[type=number], select) { font: inherit; color: var(--fg-2); background: transparent; border: 0; text-align: right; padding: 4px 0; width: 100%; max-width: 280px; min-width: 60px; }
 .set .cell .val select { text-align-last: right; cursor: pointer; }
 .set .cell .val input:focus, .set .cell .val select:focus { outline: none; color: var(--fg); }
 .set .cell .val code { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -132,9 +132,43 @@
 /* The remote server address: the field and its sign-in arrow are ONE control, framed together, the
    way the colour picker frames its text field and dice (`.cpk-in`). Two separate rows read as two
    steps, which they are not — nothing happens without the address. */
-.set .rm-in { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; max-width: 320px; }
-.set .cell .val .rm-in input[type=url] { text-align: left; padding: 7px 10px; max-width: none; }
-.set .rm-in .btn { border: 0; border-left: 1px solid var(--line); border-radius: 0; align-self: stretch; padding: 0 10px; background: none; }
-.set .rm-in .btn:hover { background: var(--bg-2); }
+/* The address is one row: the field wears the settings' own text-field look (the rule above), and
+   the arrow sits beside it like the colour button does — no frame of its own, because a framed
+   field next to unframed ones read as a different kind of setting. The wrapper stays: it is what
+   the onboarding arrow points at, so the tip lands before the FIELD AND the button instead of on
+   top of the button (measured: tip at x=1129 inside a frame ending at 1151). */
+/* A synced collection's row carries its own button, which cannot sit inside the row's <a>: nested
+   interactive elements are neither valid nor reachable by keyboard in order. So the link covers the
+   row through an overlay and the button sits above it. `.cell` is already positioned (above). */
+.set .cell .rowlink { color: inherit; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set .cell .rowlink::before { content: ''; position: absolute; inset: 0; }
+.set .cell.rm-row .val { position: relative; }
+.set .rm-in { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.set .rm-in .btn { border: 0; background: none; color: var(--fg-2); padding: 4px; min-width: 28px; }
+.set .rm-in .btn:hover { color: var(--fg); }
 /* while a round is running the arrow is not a way out: it is disabled, and the line below says why */
 .set .rm-in .btn[disabled] { opacity: .5; cursor: progress; }
+
+/* The import/sync progress dialog (assets/js/remote.js). <dialog> brings the focus trap, the
+   backdrop and Escape with it; the batch takes Escape away again while it runs, because nothing
+   here can call back a request the server is already serving. The surface follows the popover
+   surface of chrome.css (one place defines what a raised panel looks like). */
+.rm-dlg { width: min(420px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--fg); box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+.rm-dlg::backdrop { background: rgba(0,0,0,.35); }
+.rm-dlg h2 { margin: 0 0 14px; font-size: 17px; }
+.rm-dlg .rm-dlg-now { margin: 10px 0 0; font-size: 13px; color: var(--fg-2); min-height: 1.3em; }
+.rm-dlg .rm-dlg-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--fg-2); }
+.rm-dlg .rm-dlg-list li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+.rm-dlg .rm-dlg-list .ico { width: 15px; height: 15px; flex: none; }
+.rm-dlg .rm-dlg-list li.bad { color: var(--today); }
+.rm-dlg .rm-dlg-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+.rm-dlg .rm-dlg-foot:not(:has(.btn:not([hidden]))) { display: none; }
+/* the bar: full width, and the browser's own look replaced so it matches the rest */
+.rm-dlg .rm-dlg-bar { display: block; width: 100%; height: 6px; border: 0; border-radius: 999px; background: var(--bg-3); appearance: none; }
+.rm-dlg .rm-dlg-bar::-webkit-progress-bar { background: var(--bg-3); border-radius: 999px; }
+.rm-dlg .rm-dlg-bar::-webkit-progress-value { background: var(--accent); border-radius: 999px; transition: width .2s; }
+.rm-dlg .rm-dlg-bar::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+/* no value = "it is running": an indeterminate bar sweeps instead of standing still at zero */
+.rm-dlg .rm-dlg-bar:not([value]) { background: linear-gradient(90deg, var(--bg-3) 0 35%, var(--accent) 50%, var(--bg-3) 65% 100%) 0 0 / 300% 100% no-repeat; animation: rm-sweep 1.1s linear infinite; }
+@keyframes rm-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .rm-dlg .rm-dlg-bar:not([value]) { animation-duration: 3s; } }

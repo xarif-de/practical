@@ -1658,7 +1658,7 @@ err-remote-big = Die Antwort von Nextcloud war zu groß (Grenze { $limit } Bytes
 err-remote-already-linked = Dieser Kalender wird schon abgeglichen.
 err-remote-unreachable = Nextcloud war nicht erreichbar.
 js-onb-remote = Adresse eintragen, dann anmelden.
-js-onb-remote-b = Die Adresse deines Nextcloud, z. B. cloud.example.org. Die Anmeldung läuft danach in einem neuen Fenster bei Nextcloud selbst; PractiCal sieht dein Passwort nie.
+js-onb-remote-b = Die Adresse deines Nextcloud, z. B. nextcloud.example.com. Die Anmeldung läuft danach in einem neuen Fenster bei Nextcloud selbst; PractiCal sieht dein Passwort nie.
 js-onb-remote-sync = Adresse eintragen, dann anmelden.
 js-onb-remote-sync-b = Wie beim Import, nur bleibt die Verbindung bestehen: Änderungen gehen danach in beide Richtungen. Du kannst auch „nur lesen“ wählen.
 src-nextcloud = Von Nextcloud …
@@ -1670,19 +1670,25 @@ js-onb-from = Woher sollen die Einträge kommen?
 js-onb-from-b = Aus einer Datei, die du exportiert hast, oder direkt von Nextcloud. Beides holt einmalig und merkt sich danach nichts.
 js-onb-sync = Womit soll abgeglichen werden?
 js-onb-sync-b = Die Verbindung bleibt bestehen: was du hier änderst, steht auch dort, und umgekehrt.
-rm-server-ph = z. B. cloud.example.org
+rm-server-ph = nextcloud.example.com
+rm-doing = Wird übernommen …
+js-rm-doing-title = Wird übernommen …
+js-rm-entry-count = { $n ->
+    [one] 1 Eintrag
+   *[other] { $n } Einträge
+  }
 js-rm-need-server = Bitte die Adresse deines Nextcloud eintragen.
 err-remote-no-server = Ohne Server-Adresse geht es nicht.
-err-remote-bad-server = Das ist keine Server-Adresse. Erwartet wird z. B. cloud.example.org.
+err-remote-bad-server = Das ist keine Server-Adresse. Erwartet wird z. B. nextcloud.example.com.
 err-remote-https = Die Adresse muss mit https:// erreichbar sein — sonst gehen Passwort und Termine unverschlüsselt über die Leitung.
 err-remote-private = Diese Adresse liegt nicht im offenen Internet. Aus Sicherheitsgründen erreicht der Server nur öffentliche Adressen; eigene Server muss die Betreiberin freigeben.
-js-rm-need-pick = Bitte mindestens einen Eintrag wählen.
+js-rm-need-pick = Bitte mindestens eines auswählen.
 js-rm-doing = Hole %name … (%n von %of)
 js-rm-took = { $n ->
-    [one] %n Kalender übernommen.
-   *[other] %n Kalender übernommen.
+    [one] %n übernommen.
+   *[other] %n übernommen.
 }
 js-rm-failed = { $n ->
-    [one] %n Eintrag konnte nicht übernommen werden.
-   *[other] %n Einträge konnten nicht übernommen werden.
+    [one] %n nicht übernommen.
+   *[other] %n nicht übernommen.
 }

@@ -94,10 +94,13 @@ pub struct SettingsPage {
     pub remote_links: Vec<RemoteLinkRow>,
 }
 
-/// One sync link in the collections list and on a collection's own page.
+/// One sync link, as the collection's row and its own page read it. `kind`/`local_id` are what
+/// [`SettingsPage::link_for`] matches on: a link belongs to one collection, and both lists are
+/// rendered by the same two loops.
 pub struct RemoteLinkRow {
     pub id: String,
-    pub name: String,
+    pub kind: String,
+    pub local_id: String,
     pub two_way: bool,
     pub ran_at: String,
     pub err: String,
@@ -177,22 +180,42 @@ impl SettingsPage {
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }
+    /// The sync link of one collection, if it has one. A collection has at most one
+    /// (`UNIQUE (principal, kind, local_id)` in migration 18), so the first match is the answer.
+    pub fn link_for(&self, kind: &str, local_id: &str) -> Option<&RemoteLinkRow> {
+        self.remote_links.iter().find(|l| l.kind == kind && l.local_id == local_id)
+    }
     /// VEVENT/VTODO/VJOURNAL as words ("Termine, Aufgaben")
     pub fn comps(&self, c: &[String]) -> String {
         c.iter().map(|k| match k.as_str() { "VEVENT" => self.ctx.t("set-comp-event"), "VTODO" => self.ctx.t("set-comp-todo"), "VJOURNAL" => self.ctx.t("set-comp-journal"), o => o.to_string() }).collect::<Vec<_>>().join(", ")
     }
 }
 
-/// The user's links, with the local collection's name so a row reads without a lookup.
-async fn remote_rows(state: &SharedState, user: &Principal, cals: &[CalInfo], abs: &[AbInfo]) -> AppResult<Vec<RemoteLinkRow>> {
+/// The user's links. No name of its own: a link is shown on the row and the page of the collection
+/// it syncs, which is where its name already is. A link whose collection was deleted does not
+/// exist — `collections::delete_*` ends it (`remote::unlink_collection`).
+async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<RemoteLinkRow>> {
     let mut out = vec![];
     for l in crate::domain::remote::links_of(state, user).await? {
-        let name = match l.kind {
-            crate::domain::remote::dav::Kind::Cal => cals.iter().find(|c| c.id == l.local_id).map(|c| c.displayname.clone()),
-            crate::domain::remote::dav::Kind::Ab => abs.iter().find(|a| a.id == l.local_id).map(|a| a.displayname.clone()),
+        let kind = match l.kind {
+            crate::domain::remote::dav::Kind::Cal => "cal",
+            crate::domain::remote::dav::Kind::Ab => "ab",
         };
-        // a link whose collection the user no longer sees is still listed, so it can be removed
-        out.push(RemoteLinkRow { id: l.id, name: name.unwrap_or_default(), two_way: l.two_way, ran_at: l.ran_at.unwrap_or_default(), err: l.err.unwrap_or_default() });
+        out.push(RemoteLinkRow {
+            id: l.id,
+            kind: kind.to_string(),
+            local_id: l.local_id,
+            two_way: l.two_way,
+            // the stored value is RFC 3339 with microseconds; shown like every other timestamp in
+            // the settings (the API tokens' "created"), and left as it is if it cannot be parsed
+            ran_at: l
+                .ran_at
+                .map(|t| {
+                    chrono::DateTime::parse_from_rfc3339(&t).map_or(t.clone(), |d| d.naive_local().format("%Y-%m-%d %H:%M").to_string())
+                })
+                .unwrap_or_default(),
+            err: l.err.unwrap_or_default(),
+        });
     }
     Ok(out)
 }
@@ -216,7 +239,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         _ => format!("„{vac_value}“"),
     };
     let abs_all = collections::addressbooks_for(&state, &user, false).await?;
-    let remote_links = remote_rows(&state, &user, &cals_all, &abs_all).await?;
+    let remote_links = remote_rows(&state, &user).await?;
     Ok(SettingsPage {
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_links,

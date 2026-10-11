@@ -1663,7 +1663,7 @@ err-remote-big = La respuesta de Nextcloud era demasiado grande (límite { $limi
 err-remote-already-linked = Este calendario ya se está sincronizando.
 err-remote-unreachable = No se pudo contactar con Nextcloud.
 js-onb-remote = Escribe la dirección y luego inicia sesión.
-js-onb-remote-b = La dirección de tu Nextcloud, p. ej. cloud.example.org. El acceso se hace después en Nextcloud mismo, en una ventana nueva; PractiCal nunca ve tu contraseña.
+js-onb-remote-b = La dirección de tu Nextcloud, p. ej. nextcloud.example.com. El acceso se hace después en Nextcloud mismo, en una ventana nueva; PractiCal nunca ve tu contraseña.
 js-onb-remote-sync = Escribe la dirección y luego inicia sesión.
 js-onb-remote-sync-b = Como el import, pero la conexión se queda: los cambios viajan luego en ambos sentidos. También puedes elegir «solo lectura».
 src-nextcloud = Desde Nextcloud …
@@ -1675,19 +1675,25 @@ js-onb-from = ¿De dónde deben venir las entradas?
 js-onb-from-b = De un archivo que hayas exportado, o directamente de Nextcloud. En ambos casos se trae una vez y después no se recuerda nada.
 js-onb-sync = ¿Con qué se debe sincronizar?
 js-onb-sync-b = La conexión se queda: lo que cambies aquí aparece allí, y al revés.
-rm-server-ph = p. ej. cloud.example.org
+rm-server-ph = nextcloud.example.com
+rm-doing = Copiando …
+js-rm-doing-title = Copiando …
+js-rm-entry-count = { $n ->
+    [one] 1 entrada
+   *[other] { $n } entradas
+  }
 js-rm-need-server = Introduce la dirección de tu Nextcloud.
 err-remote-no-server = Hace falta una dirección de servidor.
-err-remote-bad-server = Esa no es una dirección de servidor. Se espera algo como cloud.example.org.
+err-remote-bad-server = Esa no es una dirección de servidor. Se espera algo como nextcloud.example.com.
 err-remote-https = La dirección tiene que ser accesible por https://; si no, la contraseña y tus eventos viajarían sin cifrar.
 err-remote-private = Esa dirección no está en la internet abierta. Por seguridad el servidor solo alcanza direcciones públicas; un servidor interno lo tiene que permitir quien administra.
 js-rm-need-pick = Elige al menos uno.
 js-rm-doing = Trayendo %name … (%n de %of)
 js-rm-took = { $n ->
-    [one] %n calendario traído.
-   *[other] %n calendarios traídos.
+    [one] %n copiado.
+   *[other] %n copiados.
 }
 js-rm-failed = { $n ->
-    [one] %n entrada no se pudo traer.
-   *[other] %n entradas no se pudieron traer.
+    [one] %n sin copiar.
+   *[other] %n sin copiar.
 }

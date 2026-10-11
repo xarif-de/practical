@@ -417,6 +417,30 @@ pub async fn delete_link(state: &AppState, user: &Principal, id: &str) -> AppRes
     Ok(())
 }
 
+/// Ends the link of a collection that is being deleted, if it has one. A link lives on its
+/// collection's row and page (`RemoteLinkRow`), so a link whose collection is gone would have no
+/// way out while its rounds kept running. Called for the bin as well as for a purge: restoring a
+/// collection brings back its entries, not its sign-in, which the user can set up again.
+///
+/// Never fails the deletion it accompanies: a remote that cannot be reached must not keep a user
+/// from throwing a collection away. The app password is then left at the remote, where its own
+/// security settings can revoke it — the same case as a page closed mid-import (`login::revoke`).
+pub async fn unlink_collection(state: &AppState, user: &Principal, kind: dav::Kind, local_id: &str) {
+    let id: Option<String> =
+        sqlx::query_scalar("SELECT id FROM practical_remote_links WHERE principal = ? AND kind = ? AND local_id = ?")
+            .bind(&user.id)
+            .bind(kind.as_str())
+            .bind(local_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+    if let Some(id) = id
+        && let Err(e) = delete_link(state, user, &id).await
+    {
+        tracing::warn!(link = %id, error = %e, "could not end the link of a deleted collection");
+    }
+}
+
 // ---------------------------------------------------------------- object mapping
 
 /// What the two sides last agreed on for one object.

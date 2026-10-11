@@ -11,7 +11,75 @@
   const settings = document.querySelector('.settings');
   if (!settings) return;
   const { $, $$, escQ, req, send, tell } = practical;
-  const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server', 'need-pick']);
+  const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server', 'need-pick', 'doing-title']);
+  T['doing'] = T['doing-title'];
+
+  /* The progress dialog, shared by all four remote pages (one batch runs at a time). It is the
+     whole progress report: a bar divided by the NUMBER OF COLLECTIONS, which this file already
+     knows because each one is its own request, so the server needs no say in it. One collection
+     leaves nothing to divide — the bar then carries no value, which is what makes it sweep.
+
+     Escape and the backdrop are taken away while the batch runs: a request the server is already
+     serving cannot be called back, and a dialog that closes on a collection still being imported
+     would say the opposite. */
+  const dlgEl = $('.rm-dlg');
+  const dlg = {
+    head: dlgEl && $('#rm-dlg-h', dlgEl),
+    bar: dlgEl && $('.rm-dlg-bar', dlgEl),
+    now: dlgEl && $('.rm-dlg-now', dlgEl),
+    list: dlgEl && $('.rm-dlg-list', dlgEl),
+    close: dlgEl && $('.rm-dlg-close', dlgEl),
+    busy: false,
+    start(n) {
+      if (!dlgEl) return;
+      this.busy = true;
+      this.list.innerHTML = '';
+      this.now.textContent = '';
+      this.head.textContent = T['doing'];
+      this.close.hidden = true;
+      if (n > 1) { this.bar.max = n; this.bar.value = 0; } else this.bar.removeAttribute('value');
+      if (!dlgEl.open) dlgEl.showModal();
+    },
+    at(done, n, name) {
+      if (!dlgEl) return;
+      if (n > 1) this.bar.value = done;
+      if (name) this.now.textContent = tr('js-rm-doing', { n: done + 1, of: n, name });
+    },
+    /* `why` is the server's own message for a refused collection. It goes in the ROW, not only in
+       the toast `tell` raises: the toast times out while the dialog stays, and "work" with a red
+       cross and no reason is the one thing the user cannot act on. */
+    add(name, count, why) {
+      if (!dlgEl) return;
+      const li = document.createElement('li');
+      if (count == null) li.className = 'bad';
+      li.innerHTML = practical.ico(count == null ? 'x' : 'check');
+      li.append(` ${name}`, count == null ? (why ? ` · ${why}` : '') : ` · ${tr('js-rm-entry-count', { n: count })}`);
+      this.list.appendChild(li);
+    },
+    /* A clean batch is followed by a reload of the collections list, which takes the dialog with
+       it; leaving it open until then keeps the page from flashing empty. A batch with a failure
+       keeps the page, so the dialog stays with its lines readable and its button is the way on —
+       which still reloads when something WAS taken, or the list would not show it. */
+    end(failed, done) {
+      if (!dlgEl) return;
+      this.busy = false;
+      this.now.textContent = '';
+      this.reloadOnClose = failed > 0 && done > 0;
+      if (failed) {
+        // a heading still reading "being taken over" over a finished list said the wrong thing
+        this.head.textContent = tr('js-rm-failed', { n: failed });
+        this.close.hidden = false;
+        this.close.focus();
+      } else dlgEl.close();
+    },
+  };
+  if (dlgEl) {
+    dlgEl.addEventListener('cancel', e => { if (dlg.busy) e.preventDefault(); });
+    dlg.close.addEventListener('click', () => {
+      if (dlg.reloadOnClose) { practical.leaving = true; location.hash = '#collections'; location.reload(); return; }
+      dlgEl.close();
+    });
+  }
 
   settings.querySelectorAll('.rm-form').forEach(form => {
     const kind = form.dataset.kind, sync = form.dataset.sync === 'true';
@@ -121,37 +189,49 @@
       const direction = sync ? (form.querySelector('input[name=rmdir]:checked') || {}).value || 'both' : null;
       const every = sync ? +(q('.rm-every') || {}).value || 5 : null;
 
-      /* One request per collection, so the line can name the one that is running. The writer gives
-         the page its busy cursor and the top bar's progress line, and disables the buttons for as
-         long as the batch runs — without that, a second click would start the whole batch again. */
+      /* One request per collection, so the dialog can name the one that is running AND divide the
+         bar by their number — no progress has to be asked of the server for that. With a single
+         collection there is nothing to divide, and the bar says "running" instead (see dlg.start).
+         The writer still runs around the batch: it disables the buttons, without which a second
+         click would start the whole batch again. */
       const w = practical.writer(form, { buttons: () => [take, go] });
       let done = 0, failed = 0;
+      dlg.start(picks.length);
       await w.run(async () => {
         let last = { ok: true };
         for (const [i, c] of picks.entries()) {
-          say(tr('js-rm-doing', { n: i + 1, of: picks.length, name: c.name }));
+          dlg.at(i, picks.length, c.name);
           const body = { handle, kind, href: c.href, name: c.name, color: c.color || '' };
           if (sync) {
             body.direction = direction;
             body.every_min = every;
           }
           last = await req(sync ? '/settings/remote/link' : '/settings/remote/import', { method: 'POST', json: body });
-          if (last.ok) done += 1;
-          else {
+          if (last.ok) {
+            done += 1;
+            dlg.add(c.name, (last.data || {}).count);
+          } else {
             // one collection the server will not take must not lose the others
             failed += 1;
+            dlg.add(c.name, null, last.msg);
             tell(last);
           }
+          dlg.at(i + 1, picks.length, null);
         }
         // the sign-in is over once the batch is: one request, so a password is not left behind
         if (!sync) await req('/settings/remote/done', { method: 'POST', json: { handle } });
-        if (done) {
+        /* A clean batch leaves at once: back to the overview the user started from, which is where
+           the new collections are. A batch with a failure must NOT — measured: with one collection
+           refused and one taken, the reload tore the dialog away before its red line could be
+           read, so the only thing left was a toast that did not say which one. The dialog stays,
+           and leaving is what its button does (`dlg.end`). */
+        if (done && !failed) {
           sessionStorage.toast = tr('js-rm-took', { n: done });
           practical.leaving = true;
-          // back to the overview the user started from: that is where the new collections are
           location.hash = '#collections';
           location.reload();
         }
+        dlg.end(failed, done);
         say(failed ? tr('js-rm-failed', { n: failed }) : '');
         // the writer wants an answer to tell about; a partial batch has already told each failure
         return { ok: true, status: 200, data: null };

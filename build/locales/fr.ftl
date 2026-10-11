@@ -1665,7 +1665,7 @@ err-remote-big = La réponse de Nextcloud était trop grande (limite { $limit } 
 err-remote-already-linked = Cet agenda est déjà synchronisé.
 err-remote-unreachable = Nextcloud était injoignable.
 js-onb-remote = Saisissez l’adresse, puis connectez-vous.
-js-onb-remote-b = L’adresse de votre Nextcloud, p. ex. cloud.example.org. La connexion se fait ensuite chez Nextcloud même, dans une nouvelle fenêtre ; PractiCal ne voit jamais votre mot de passe.
+js-onb-remote-b = L’adresse de votre Nextcloud, p. ex. nextcloud.example.com. La connexion se fait ensuite chez Nextcloud même, dans une nouvelle fenêtre ; PractiCal ne voit jamais votre mot de passe.
 js-onb-remote-sync = Saisissez l’adresse, puis connectez-vous.
 js-onb-remote-sync-b = Comme l’import, sauf que la liaison reste : les modifications circulent ensuite dans les deux sens. Vous pouvez aussi choisir « lecture seule ».
 src-nextcloud = Depuis Nextcloud …
@@ -1677,19 +1677,25 @@ js-onb-from = D’où doivent venir les entrées ?
 js-onb-from-b = D’un fichier que vous avez exporté, ou directement de Nextcloud. Dans les deux cas, une seule fois, et rien n’est retenu ensuite.
 js-onb-sync = Avec quoi synchroniser ?
 js-onb-sync-b = La liaison reste : ce que vous changez ici apparaît là-bas, et inversement.
-rm-server-ph = p. ex. cloud.example.org
+rm-server-ph = nextcloud.example.com
+rm-doing = Reprise en cours …
+js-rm-doing-title = Reprise en cours …
+js-rm-entry-count = { $n ->
+    [one] 1 entrée
+   *[other] { $n } entrées
+  }
 js-rm-need-server = Veuillez saisir l’adresse de votre Nextcloud.
 err-remote-no-server = Une adresse de serveur est nécessaire.
-err-remote-bad-server = Ce n’est pas une adresse de serveur. On attend par exemple cloud.example.org.
+err-remote-bad-server = Ce n’est pas une adresse de serveur. On attend par exemple nextcloud.example.com.
 err-remote-https = L’adresse doit être joignable en https:// — sinon le mot de passe et vos événements circuleraient en clair.
 err-remote-private = Cette adresse n’est pas sur l’internet ouvert. Par sécurité le serveur n’atteint que des adresses publiques ; un serveur interne doit être autorisé par l’exploitant.
 js-rm-need-pick = Veuillez en choisir au moins un.
 js-rm-doing = Récupération de %name … (%n sur %of)
 js-rm-took = { $n ->
-    [one] %n agenda repris.
-   *[other] %n agendas repris.
+    [one] %n repris.
+   *[other] %n repris.
 }
 js-rm-failed = { $n ->
-    [one] %n entrée n’a pu être reprise.
-   *[other] %n entrées n’ont pu être reprises.
+    [one] %n non repris.
+   *[other] %n non repris.
 }

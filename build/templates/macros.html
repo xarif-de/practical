@@ -34,9 +34,15 @@
     replaces it (js/settings.js) -#}
 {%- macro coll_fields(nl, color, title, tz, preset) -%}<label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name"{% if preset != "" %} value="{{ preset }}" data-pick-all{% endif %} required></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-title="{{ title }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>{{ nl }}<label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" placeholder="–"></span></label>{% if tz %}{{ nl }}<label class="cell noic"><span>{{ ctx.t("timezone") }}</span><span class="val"><input type="text" name="timezone" value="{{ default_timezone }}"></span></label>{% endif %}{%- endmacro -%}
 
+{#- settings collections list: the row of a collection that has a sync link. A button cannot sit
+    inside the row's <a> (nested interactive elements), so the link covers the row through a
+    ::before overlay (settings.css `.rowlink`) and the button sits above it in `.val`. A collection
+    without a link keeps the plain <a> row, so nothing changes for anyone not syncing. -#}
+{%- macro coll_row(pre, icon, c, sub2, link_id) -%}<div class="cell link rm-row" data-rm-id="{{ link_id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="{% if pre == "cal" %}calendar{% else %}addressbook{% endif %}:{{ c.principal }}/{{ c.id }}">{{ ico(icon) }}</span><a class="rowlink" href="#{{ pre }}-{{ c.principal }}-{{ c.id }}">{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}{% if sub2 != "" %} · {{ sub2 }}{% endif %}</span></a><span class="val"><button type="button" class="btn icon-btn rm-now" title="{{ ctx.t("rm-now") }}" aria-label="{{ ctx.t("rm-now") }}">{{ ico("repeat") }}</button><span class="chev">›</span></span></div>{%- endmacro -%}
+
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
-{%- macro coll_page(kinds, kind, pre, c, export_label, accept) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
@@ -47,6 +53,17 @@
     <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>{{ caller() }}
   </form>
   <p class="foot">ID <code>{{ c.id }}</code></p>
+  {%- if let Some(l) = link %}
+  {#- the sync belongs to the collection it syncs, so it is edited where its name and colour are -#}
+  <div class="label">{{ ctx.t("rm-links") }}</div>
+  <div class="group rm-row" data-rm-id="{{ l.id }}">
+    <div class="cell noic"><span>{{ ctx.t("rm-direction") }}</span><span class="val">{% if l.two_way %}{{ ctx.t("rm-both") }}{% else %}{{ ctx.t("rm-pull") }}{% endif %}</span></div>
+    <div class="cell noic"><span>{{ ctx.t("rm-ran") }}</span><span class="val">{% if l.err.is_empty() %}{% if l.ran_at.is_empty() %}{{ ctx.t("rm-never") }}{% else %}{{ l.ran_at }}{% endif %}{% else %}<span class="bad">{{ ctx.t(l.err.as_str()) }}</span>{% endif %}</span></div>
+    <button type="button" class="cell btnrow rm-now">{{ ico("repeat") }}<span>{{ ctx.t("rm-now") }}</span></button>
+    <button type="button" class="cell btnrow danger rm-drop">{{ ico("x") }}<span>{{ ctx.t("rm-remove") }}</span></button>
+  </div>
+  <p class="foot">{{ ctx.t("rm-remove-hint") }}</p>
+  {%- endif %}
   <div class="group sp">
     <a class="cell btnrow" href="/settings/export/{{ kinds }}/{{ c.principal }}/{{ c.id }}">{{ ico("file-export") }}<span>{{ export_label }}</span></a>
     <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept="{{ accept }}" hidden data-import="/settings/import/{{ kinds }}/{{ c.principal }}/{{ c.id }}"></label>

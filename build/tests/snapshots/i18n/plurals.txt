@@ -82,14 +82,18 @@ de js-onb-either 0: Die %n Wege sind markiert — nimm den, der dir passt.
 de js-onb-either 1: Ein Weg ist markiert.
 de js-onb-either 2: Die %n Wege sind markiert — nimm den, der dir passt.
 de js-onb-either 5: Die %n Wege sind markiert — nimm den, der dir passt.
-de js-rm-failed 0: %n Einträge konnten nicht übernommen werden.
-de js-rm-failed 1: %n Eintrag konnte nicht übernommen werden.
-de js-rm-failed 2: %n Einträge konnten nicht übernommen werden.
-de js-rm-failed 5: %n Einträge konnten nicht übernommen werden.
-de js-rm-took 0: %n Kalender übernommen.
-de js-rm-took 1: %n Kalender übernommen.
-de js-rm-took 2: %n Kalender übernommen.
-de js-rm-took 5: %n Kalender übernommen.
+de js-rm-entry-count 0: 0 Einträge
+de js-rm-entry-count 1: 1 Eintrag
+de js-rm-entry-count 2: 2 Einträge
+de js-rm-entry-count 5: 5 Einträge
+de js-rm-failed 0: %n nicht übernommen.
+de js-rm-failed 1: %n nicht übernommen.
+de js-rm-failed 2: %n nicht übernommen.
+de js-rm-failed 5: %n nicht übernommen.
+de js-rm-took 0: %n übernommen.
+de js-rm-took 1: %n übernommen.
+de js-rm-took 2: %n übernommen.
+de js-rm-took 5: %n übernommen.
 de js-set-imported 0: %n Objekte importiert.
 de js-set-imported 1: %n Objekt importiert.
 de js-set-imported 2: %n Objekte importiert.
@@ -278,14 +282,18 @@ en js-onb-either 0: All %n ways are ringed — take the one that suits you.
 en js-onb-either 1: One way is ringed.
 en js-onb-either 2: All %n ways are ringed — take the one that suits you.
 en js-onb-either 5: All %n ways are ringed — take the one that suits you.
-en js-rm-failed 0: %n entries could not be taken over.
-en js-rm-failed 1: %n entry could not be taken over.
-en js-rm-failed 2: %n entries could not be taken over.
-en js-rm-failed 5: %n entries could not be taken over.
-en js-rm-took 0: %n calendars taken over.
-en js-rm-took 1: %n calendar taken over.
-en js-rm-took 2: %n calendars taken over.
-en js-rm-took 5: %n calendars taken over.
+en js-rm-entry-count 0: 0 entries
+en js-rm-entry-count 1: 1 entry
+en js-rm-entry-count 2: 2 entries
+en js-rm-entry-count 5: 5 entries
+en js-rm-failed 0: %n not taken over.
+en js-rm-failed 1: %n not taken over.
+en js-rm-failed 2: %n not taken over.
+en js-rm-failed 5: %n not taken over.
+en js-rm-took 0: %n taken over.
+en js-rm-took 1: %n taken over.
+en js-rm-took 2: %n taken over.
+en js-rm-took 5: %n taken over.
 en js-set-imported 0: %n objects imported.
 en js-set-imported 1: %n object imported.
 en js-set-imported 2: %n objects imported.
@@ -470,14 +478,18 @@ fr js-onb-either 0: Un chemin est entouré.
 fr js-onb-either 1: Un chemin est entouré.
 fr js-onb-either 2: Les %n chemins sont entourés — prenez celui qui vous convient.
 fr js-onb-either 5: Les %n chemins sont entourés — prenez celui qui vous convient.
-fr js-rm-failed 0: %n entrée n’a pu être reprise.
-fr js-rm-failed 1: %n entrée n’a pu être reprise.
-fr js-rm-failed 2: %n entrées n’ont pu être reprises.
-fr js-rm-failed 5: %n entrées n’ont pu être reprises.
-fr js-rm-took 0: %n agenda repris.
-fr js-rm-took 1: %n agenda repris.
-fr js-rm-took 2: %n agendas repris.
-fr js-rm-took 5: %n agendas repris.
+fr js-rm-entry-count 0: 1 entrée
+fr js-rm-entry-count 1: 1 entrée
+fr js-rm-entry-count 2: 2 entrées
+fr js-rm-entry-count 5: 5 entrées
+fr js-rm-failed 0: %n non repris.
+fr js-rm-failed 1: %n non repris.
+fr js-rm-failed 2: %n non repris.
+fr js-rm-failed 5: %n non repris.
+fr js-rm-took 0: %n repris.
+fr js-rm-took 1: %n repris.
+fr js-rm-took 2: %n repris.
+fr js-rm-took 5: %n repris.
 fr js-set-imported 0: %n objet importé.
 fr js-set-imported 1: %n objet importé.
 fr js-set-imported 2: %n objets importés.
@@ -670,14 +682,18 @@ es js-onb-either 0: Los %n caminos están marcados: toma el que te convenga.
 es js-onb-either 1: Un camino está marcado.
 es js-onb-either 2: Los %n caminos están marcados: toma el que te convenga.
 es js-onb-either 5: Los %n caminos están marcados: toma el que te convenga.
-es js-rm-failed 0: %n entradas no se pudieron traer.
-es js-rm-failed 1: %n entrada no se pudo traer.
-es js-rm-failed 2: %n entradas no se pudieron traer.
-es js-rm-failed 5: %n entradas no se pudieron traer.
-es js-rm-took 0: %n calendarios traídos.
-es js-rm-took 1: %n calendario traído.
-es js-rm-took 2: %n calendarios traídos.
-es js-rm-took 5: %n calendarios traídos.
+es js-rm-entry-count 0: 0 entradas
+es js-rm-entry-count 1: 1 entrada
+es js-rm-entry-count 2: 2 entradas
+es js-rm-entry-count 5: 5 entradas
+es js-rm-failed 0: %n sin copiar.
+es js-rm-failed 1: %n sin copiar.
+es js-rm-failed 2: %n sin copiar.
+es js-rm-failed 5: %n sin copiar.
+es js-rm-took 0: %n copiados.
+es js-rm-took 1: %n copiado.
+es js-rm-took 2: %n copiados.
+es js-rm-took 5: %n copiados.
 es js-set-imported 0: %n objetos importados.
 es js-set-imported 1: %n objeto importado.
 es js-set-imported 2: %n objetos importados.

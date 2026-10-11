@@ -1661,7 +1661,7 @@ err-remote-big = The answer from Nextcloud was too large (limit { $limit } bytes
 err-remote-already-linked = This calendar is already being synced.
 err-remote-unreachable = Nextcloud could not be reached.
 js-onb-remote = Enter the address, then sign in.
-js-onb-remote-b = The address of your Nextcloud, e.g. cloud.example.org. The sign-in then happens at Nextcloud itself, in a new window; PractiCal never sees your password.
+js-onb-remote-b = The address of your Nextcloud, e.g. nextcloud.example.com. The sign-in then happens at Nextcloud itself, in a new window; PractiCal never sees your password.
 js-onb-remote-sync = Enter the address, then sign in.
 js-onb-remote-sync-b = Like the import, except the connection stays: changes then travel both ways. You can also choose "read only".
 src-nextcloud = From Nextcloud …
@@ -1673,19 +1673,25 @@ js-onb-from = Where should the entries come from?
 js-onb-from-b = From a file you exported, or straight from Nextcloud. Either way it is fetched once and nothing is remembered afterwards.
 js-onb-sync = What should it sync with?
 js-onb-sync-b = The connection stays: what you change here shows up there, and the other way round.
-rm-server-ph = e.g. cloud.example.org
+rm-server-ph = nextcloud.example.com
+rm-doing = Taking it over …
+js-rm-doing-title = Taking it over …
+js-rm-entry-count = { $n ->
+    [one] 1 entry
+   *[other] { $n } entries
+  }
 js-rm-need-server = Please enter the address of your Nextcloud.
 err-remote-no-server = A server address is needed.
-err-remote-bad-server = That is not a server address. Something like cloud.example.org is expected.
+err-remote-bad-server = That is not a server address. Something like nextcloud.example.com is expected.
 err-remote-https = The address must be reachable over https:// — otherwise the password and your events would travel in the clear.
 err-remote-private = That address is not on the open internet. For safety the server only reaches public addresses; an internal server has to be allowed by the operator.
-js-rm-need-pick = Please choose at least one.
+js-rm-need-pick = Please pick at least one.
 js-rm-doing = Fetching %name … (%n of %of)
 js-rm-took = { $n ->
-    [one] %n calendar taken over.
-   *[other] %n calendars taken over.
+    [one] %n taken over.
+   *[other] %n taken over.
 }
 js-rm-failed = { $n ->
-    [one] %n entry could not be taken over.
-   *[other] %n entries could not be taken over.
+    [one] %n not taken over.
+   *[other] %n not taken over.
 }

@@ -133,7 +133,11 @@
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     {% for c in calendars %}
+    {%- if let Some(l) = self.link_for("cal", c.id.as_str()) %}
+    {{ m::coll_row("cal", "calendar", c, self.comps(c.components), l.id.as_str()) }}
+    {%- else %}
     <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}">{{ m::ico("calendar") }}</span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
+    {%- endif %}
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ m::ico("cal-plus") }}<span>{{ ctx.t("calendar-create") }}</span></a>
     <a class="cell btnrow" href="#import-calendar">{{ m::ico("cal-up") }}<span>{{ ctx.t("calendar-import") }}</span></a>
@@ -144,7 +148,11 @@
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
     {% for a in addressbooks %}
+    {%- if let Some(l) = self.link_for("ab", a.id.as_str()) %}
+    {{ m::coll_row("ab", "contacts", a, "", l.id.as_str()) }}
+    {%- else %}
     <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}" data-cpk-swatch="addressbook:{{ a.principal }}/{{ a.id }}">{{ m::ico("contacts") }}</span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
+    {%- endif %}
     {% endfor %}
     <a class="cell btnrow" href="#new-addressbook">{{ m::ico("book-plus") }}<span>{{ ctx.t("addressbook-create") }}</span></a>
     <a class="cell btnrow" href="#import-addressbook">{{ m::ico("book-up") }}<span>{{ ctx.t("addressbook-import") }}</span></a>
@@ -152,25 +160,16 @@
     <a class="cell btnrow" href="#sync-addressbook">{{ m::ico("swap") }}<span>{{ ctx.t("addressbook-sync") }}</span></a>
     {%- endif %}
   </div>
-  {%- if !remote_links.is_empty() %}
-  <div class="label">{{ ctx.t("rm-links") }}</div>
-  <div class="group">
-    {%- for l in remote_links %}
-    <div class="cell noic rm-row" data-rm-id="{{ l.id }}"><span>{{ l.name }}<span class="sub">{% if l.two_way %}{{ ctx.t("rm-both") }}{% else %}{{ ctx.t("rm-pull") }}{% endif %} · {% if l.err.is_empty() %}{% if l.ran_at.is_empty() %}{{ ctx.t("rm-never") }}{% else %}{{ l.ran_at }}{% endif %}{% else %}<span class="bad">{{ ctx.t(l.err.as_str()) }}</span>{% endif %}</span></span><span class="val"><button type="button" class="btn rm-now">{{ ctx.t("rm-now") }}</button> <button type="button" class="btn rm-drop">{{ ctx.t("rm-remove") }}</button></span></div>
-    {%- endfor %}
-  </div>
-  <p class="foot">{{ ctx.t("rm-remove-hint") }}</p>
-  {%- endif %}
 </section>
 
 {% for c in calendars %}
-{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar") %}
+{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.id.as_str())) %}
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
     {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}{% endcall %}
 {% endfor %}
 
 {% for a in addressbooks %}
-{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard") %}{% endcall %}
+{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.id.as_str())) %}{% endcall %}
 {% endfor %}
 
 <section class="page" id="new-calendar">
@@ -279,7 +278,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -303,7 +302,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -337,7 +336,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -361,7 +360,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="url" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}"><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ m::ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
@@ -488,5 +487,15 @@
   </div>
   <p class="foot">{{ ctx.tn("trash-retention", "days", retention_days as i64) }}</p>
 </section>
+{#- One dialog for all four remote pages: a batch runs on one page at a time. The bar is a
+    <progress> without a value while ONE collection runs — there is nothing to divide then, and a
+    bar sitting at 0 until it jumps to 100 says less than one that simply moves. -#}
+<dialog class="rm-dlg" aria-labelledby="rm-dlg-h">
+  <h2 id="rm-dlg-h">{{ ctx.t("rm-doing") }}</h2>
+  <progress class="rm-dlg-bar"></progress>
+  <p class="rm-dlg-now" aria-live="polite"></p>
+  <ul class="rm-dlg-list"></ul>
+  <div class="rm-dlg-foot"><button type="button" class="btn rm-dlg-close" hidden>{{ ctx.t("js-close") }}</button></div>
+</dialog>
 </div>
 {% endblock %}
