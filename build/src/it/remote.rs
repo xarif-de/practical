@@ -335,3 +335,95 @@ async fn the_progress_dialog_is_on_the_page_once() {
     assert!(html.contains("aria-labelledby=\"rm-dlg-h\""));
     assert!(dlg.contains("id=\"rm-dlg-h\""));
 }
+
+/// The address field offers back what the user signed in at before, because they type the same
+/// server every time. Written only once a sign-in was GRANTED, capped at `SERVERS_OFFERED`, newest
+/// first — and it is only the address: no credential is kept here, so a one-off import, which keeps
+/// nothing else, still leaves its address behind.
+#[tokio::test]
+async fn the_address_field_offers_the_servers_used_before() {
+    let s = seed().await;
+    let who = s.app.principal("alice").await;
+    let st = &s.app.state;
+    let mut alice = s.app.login("alice").await;
+
+    // nothing used yet: no list at all, rather than an empty dropdown
+    let html = String::from_utf8_lossy(&alice.get("/settings").await.ok().bytes).to_string();
+    assert!(!html.contains("id=\"rm-servers\""), "an empty list must not be rendered");
+    assert!(!html.contains("list=\"rm-servers\""), "and the field must not point at one");
+
+    for (i, origin) in ["https://a.example.org", "https://b.example.org", "https://c.example.org", "https://d.example.org"].iter().enumerate() {
+        crate::domain::remote::remember_server(st, &who, origin).await;
+        // the stored stamp decides the order, and four writes inside one test share a clock
+        sqlx::query("UPDATE practical_remote_servers SET used_at = ? WHERE principal = ? AND origin = ?")
+            .bind(format!("2026-10-0{}T00:00:00+00:00", i + 1))
+            .bind(&who.id)
+            .bind(origin)
+            .execute(&st.db)
+            .await
+            .unwrap();
+    }
+    let offered = crate::domain::remote::servers_of(st, &who).await.unwrap();
+    assert_eq!(offered, vec!["https://d.example.org", "https://c.example.org", "https://b.example.org"], "newest first, capped at three");
+
+    // the same address twice is one entry, moved to the front
+    crate::domain::remote::remember_server(st, &who, "https://a.example.org").await;
+    let again = crate::domain::remote::servers_of(st, &who).await.unwrap();
+    assert_eq!(again[0], "https://a.example.org", "a re-used address is the newest one");
+    assert_eq!(again.len(), 3);
+
+    // and it is the user's own list
+    let bob = s.app.principal("bob").await;
+    assert!(crate::domain::remote::servers_of(st, &bob).await.unwrap().is_empty(), "alice's servers reached bob");
+
+    let html = String::from_utf8_lossy(&alice.get("/settings").await.ok().bytes).to_string();
+    assert_eq!(html.matches("id=\"rm-servers\"").count(), 1, "one list for every address field");
+    // two fields here, not four: the fixture configures no key, so the two SYNC pages do not exist
+    // (`the_ways_in_are_nested_under_import_and_sync`). Both import fields must point at the list.
+    assert_eq!(html.matches("list=\"rm-servers\"").count(), 2, "an address field does not offer the list");
+    assert!(html.contains("value=\"https://a.example.org\""));
+}
+
+/// A credential the user already granted for the same address is used again, so a second import or
+/// a second link needs no sign-in. Without a reusable account the answer is 404 and the page falls
+/// back to the sign-in — which is the normal case after a one-off import, whose app password is
+/// revoked at the remote on purpose.
+#[tokio::test]
+async fn an_existing_connection_is_offered_again() {
+    let s = seed().await;
+    let who = s.app.principal("alice").await;
+    let cal = crate::domain::collections::calendars_for(&s.app.state, &who, false).await.unwrap()[0].id.clone();
+    let mut alice = s.app.login("alice").await;
+
+    // the fixture keeps no key, so nothing can be reused and nothing is claimed to be
+    let r = alice.json(Method::POST, "/settings/remote/reuse", json!({"origin": "https://example.org"})).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "without a key there is no sealed credential to open");
+
+    // an account without a link is not reusable either: a one-off import leaves none behind
+    let _ = a_link(&s.app, "alice", &cal).await;
+    let r = alice.json(Method::POST, "/settings/remote/reuse", json!({"origin": "https://nowhere.example.org"})).await;
+    assert!(matches!(r.status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST), "a foreign address must not resolve to an account: {:?}", r.status);
+}
+
+/// A borrowed credential must survive the batch that used it. `done` revokes an app password at the
+/// remote, and a reused one belongs to an account that still carries a link: revoking it would let
+/// an import quietly cost the user the sync they already had.
+#[tokio::test]
+async fn an_import_does_not_revoke_a_borrowed_credential() {
+    let s = seed().await;
+    let logins = &s.app.state.remote_logins;
+    let secret = crate::domain::remote::dav::Secret("borrowed-pw".into());
+
+    let borrowed = logins.adopt("https://example.org", "alice", "alice", secret.clone());
+    assert!(logins.is_borrowed(&borrowed, "alice"), "a reused credential is not marked as borrowed");
+    // and it is readable as a granted login, which is what the import reads
+    let (origin, login, got) = logins.granted(&borrowed, "alice").unwrap();
+    assert_eq!((origin.as_str(), login.as_str(), got.0.as_str()), ("https://example.org", "alice", "borrowed-pw"));
+
+    // nobody else's: a handle of alice's says nothing to bob
+    assert!(!logins.is_borrowed(&borrowed, "bob"));
+    assert!(logins.granted(&borrowed, "bob").is_err());
+
+    // an unknown handle is not borrowed, so `done` on it does not skip a revoke by accident
+    assert!(!logins.is_borrowed(&uuid::Uuid::new_v4().to_string(), "alice"));
+}

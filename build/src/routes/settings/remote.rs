@@ -45,6 +45,10 @@ pub(super) struct Polled {
 /// nothing keeps running when the user closes the page.
 pub(super) async fn poll(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<HandleQ>) -> AppResult<Response> {
     let granted = state.remote_logins.poll(&state.remote_http, &q.handle, &user.id).await?;
+    // an address that really worked is worth offering back; one that never did is not
+    if granted && let Ok((origin, _, _)) = state.remote_logins.granted(&q.handle, &user.id) {
+        remote::remember_server(&state, &user, &origin).await;
+    }
     Ok(axum::Json(Polled { granted }).into_response())
 }
 
@@ -162,11 +166,35 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
 /// after this app in its security settings, where the user can revoke it. The alternative — ending
 /// the sign-in after the first import — breaks taking two collections at once, which is worse.
 pub(super) async fn done(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<HandleQ>) -> AppResult<Response> {
-    if let Ok((origin, login, secret)) = state.remote_logins.granted(&q.handle, &user.id) {
+    /* A BORROWED credential is not destroyed: it came from an account that still carries a link
+       (`reuse`), and revoking it would break the sync the user already has — an import would then
+       quietly cost them their sync. Only a password this sign-in obtained is ours to revoke. */
+    if !state.remote_logins.is_borrowed(&q.handle, &user.id)
+        && let Ok((origin, login, secret)) = state.remote_logins.granted(&q.handle, &user.id)
+    {
         remote::login::revoke(&state.remote_http, &origin, &login, &secret).await;
     }
     state.remote_logins.forget(&q.handle, &user.id);
     Ok(axum::Json(Polled { granted: false }).into_response())
+}
+
+/// Takes a credential this user already granted for the same address and hands back a handle, so a
+/// second import or a second link needs no browser sign-in at all.
+///
+/// Answers 404 when there is nothing to reuse, which is the normal case after a ONE-OFF import: its
+/// app password is revoked at the remote, deliberately, so there is no credential left. The page
+/// then starts the usual sign-in.
+///
+/// The handle is marked as borrowed, which is what keeps `done` from revoking it: that password
+/// belongs to an existing link, and destroying it would break the sync the user already has.
+pub(super) async fn reuse(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<LoginQ>) -> AppResult<Response> {
+    let origin = remote::origin_of(&state, &q.origin)?;
+    let Some((account, secret)) = remote::account_for_origin(&state, &user, &origin).await? else {
+        return Err(AppError::NotFound);
+    };
+    let handle = state.remote_logins.adopt(&origin, &user.id, &account.login, secret);
+    remote::remember_server(&state, &user, &origin).await;
+    Ok(axum::Json(LoginStarted { handle, url: String::new() }).into_response())
 }
 
 #[derive(Deserialize)]

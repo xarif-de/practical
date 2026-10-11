@@ -52,6 +52,9 @@ struct Pending {
     at: chrono::DateTime<chrono::Utc>,
     /// set once the poll succeeded; the import reads it from here and then drops the handle
     got: Option<(String, super::dav::Secret)>,
+    /// the credential came from an account we already keep ([`Logins::adopt`]), so it is NOT ours
+    /// to destroy: it belongs to a link the user still has, and revoking it would break that sync
+    borrowed: bool,
 }
 
 #[derive(Default)]
@@ -82,7 +85,15 @@ impl Logins {
         m.retain(|_, p| p.principal != principal && chrono::Utc::now().signed_duration_since(p.at).num_seconds() < PENDING_SECS);
         m.insert(
             handle.clone(),
-            Pending { principal: principal.to_string(), origin: origin.to_string(), token: a.poll.token, endpoint: a.poll.endpoint, at: chrono::Utc::now(), got: None },
+            Pending {
+                principal: principal.to_string(),
+                origin: origin.to_string(),
+                token: a.poll.token,
+                endpoint: a.poll.endpoint,
+                at: chrono::Utc::now(),
+                got: None,
+                borrowed: false,
+            },
         );
         // the login URL is shown to the user, so it must be on the expected origin too
         let login: url::Url = a.login.parse().map_err(|_| AppError::bad("err-remote-login"))?;
@@ -131,6 +142,35 @@ impl Logins {
         let p = m.get(handle).filter(|p| p.principal == principal).ok_or(AppError::NotFound)?;
         let (login, secret) = p.got.clone().ok_or(AppError::NotFound)?;
         Ok((p.origin.clone(), login, secret))
+    }
+
+    /// Puts a credential we already keep into the map and returns a handle for it, so a page can
+    /// go on as if a sign-in had just been granted. Marked `borrowed`: [`Logins::is_borrowed`] is
+    /// what stops the import from revoking a password that an existing link depends on.
+    pub fn adopt(&self, origin: &str, principal: &str, login: &str, secret: super::dav::Secret) -> String {
+        let handle = uuid::Uuid::new_v4().to_string();
+        let mut m = self.by_handle.lock().unwrap();
+        m.retain(|_, p| p.principal != principal && chrono::Utc::now().signed_duration_since(p.at).num_seconds() < PENDING_SECS);
+        m.insert(
+            handle.clone(),
+            Pending {
+                principal: principal.to_string(),
+                origin: origin.to_string(),
+                token: String::new(),
+                endpoint: String::new(),
+                at: chrono::Utc::now(),
+                got: Some((login.to_string(), secret)),
+                borrowed: true,
+            },
+        );
+        handle
+    }
+
+    /// Whether this handle's credential belongs to an account we keep. A borrowed one must survive
+    /// the batch that used it.
+    pub fn is_borrowed(&self, handle: &str, principal: &str) -> bool {
+        let m = self.by_handle.lock().unwrap();
+        m.get(handle).is_some_and(|p| p.principal == principal && p.borrowed)
     }
 
     /// Forgets a handle: after a one-off import (whose app password is also revoked at Nextcloud)

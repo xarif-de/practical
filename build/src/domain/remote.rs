@@ -441,6 +441,72 @@ pub async fn unlink_collection(state: &AppState, user: &Principal, kind: dav::Ki
     }
 }
 
+/// How many addresses the field offers back. Three is what fits a dropdown without becoming a
+/// list to read; the user can always type.
+pub const SERVERS_OFFERED: usize = 3;
+
+/// Remembers an address the user signed in at successfully. Only the address — the table holds no
+/// credential, so this is safe for a one-off import too, which keeps nothing else.
+pub async fn remember_server(state: &AppState, user: &Principal, origin: &str) {
+    let r = sqlx::query(
+        "INSERT INTO practical_remote_servers (principal, origin, used_at) VALUES (?, ?, ?)
+           ON CONFLICT(principal, origin) DO UPDATE SET used_at = excluded.used_at",
+    )
+    .bind(&user.id)
+    .bind(origin)
+    .bind(crate::clock::now().to_rfc3339())
+    .execute(&state.db)
+    .await;
+    if let Err(e) = r {
+        // a suggestion list is a convenience: failing to write it must not fail the sign-in
+        tracing::warn!(error = %e, "could not remember the remote server address");
+    }
+}
+
+/// The addresses to offer, most recently used first.
+pub async fn servers_of(state: &AppState, user: &Principal) -> AppResult<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "SELECT origin FROM practical_remote_servers WHERE principal = ? ORDER BY used_at DESC LIMIT ?",
+    )
+    .bind(&user.id)
+    .bind(SERVERS_OFFERED as i64)
+    .fetch_all(&state.db)
+    .await?)
+}
+
+/// The account for an address the user already granted, if there is one. This is what lets a second
+/// import or a second link skip the whole browser sign-in: the credential is already here and
+/// already reaches this server, so asking for a new one buys nothing.
+///
+/// Only an account with a KEPT credential can be reused, which means one that carries a link. A
+/// one-off import revokes its app password at the remote, so after one there is nothing to reuse —
+/// that is the point of revoking it.
+pub async fn account_for_origin(state: &AppState, user: &Principal, origin: &str) -> AppResult<Option<(Account, Secret)>> {
+    let key = state.config.remote_secret_key.as_deref().ok_or_else(|| AppError::bad("err-remote-no-key"))?;
+    let row = sqlx::query(
+        "SELECT a.id, a.principal, a.base_url, a.login, a.secret
+           FROM practical_remote_accounts a
+          WHERE a.principal = ? AND a.base_url = ? AND a.err IS NULL
+            AND EXISTS (SELECT 1 FROM practical_remote_links l WHERE l.account_id = a.id)
+          LIMIT 1",
+    )
+    .bind(&user.id)
+    .bind(origin)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(r) = row else { return Ok(None) };
+    let sealed: Vec<u8> = r.get("secret");
+    let a = Account { id: r.get("id"), principal: r.get("principal"), base_url: r.get("base_url"), login: r.get("login") };
+    // a secret that will not open is not a reason to refuse: the sign-in is still offered
+    match seal::open(key, &a.id, &a.principal, &sealed) {
+        Ok(s) => Ok(Some((a, s))),
+        Err(e) => {
+            tracing::warn!(account = %a.id, error = %e, "stored credential will not open; asking for a new sign-in");
+            Ok(None)
+        }
+    }
+}
+
 // ---------------------------------------------------------------- object mapping
 
 /// What the two sides last agreed on for one object.

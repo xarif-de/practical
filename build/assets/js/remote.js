@@ -119,6 +119,18 @@
     go.addEventListener('click', async () => {
       if (needServer()) return;
       go.disabled = true;
+      /* A credential this user already granted for the same address is used again, so a second
+         import or a second link asks for no sign-in at all. 404 means there is nothing to reuse —
+         the normal case after a one-off import, whose password is revoked at the remote on
+         purpose — and then the usual flow runs. */
+      const reuse = await req('/settings/remote/reuse', { method: 'POST', json: { origin: origin.value } });
+      if (reuse.ok) {
+        handle = reuse.data.handle;
+        go.disabled = false;
+        await offer();
+        return;
+      }
+      if (!reuse.ok && reuse.status !== 404) { go.disabled = false; tell(reuse); return; }
       const r = await req('/settings/remote/login', { method: 'POST', json: { origin: origin.value } });
       go.disabled = false;
       if (!tell(r).ok) return;

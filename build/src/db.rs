@@ -308,6 +308,24 @@ CREATE TABLE practical_holidays (
          CREATE INDEX practical_remote_objects_uid  ON practical_remote_objects (link_id, uid);
          CREATE INDEX practical_remote_objects_href ON practical_remote_objects (link_id, href);",
     ),
+    (
+        19,
+        /* The server addresses a user has signed in at, so the address field can offer them back
+           (`<datalist>` on the remote pages). An address is NOT a credential and this table holds
+           nothing else: a one-off import revokes its app password at the remote and keeps no
+           secret, yet the user still types the same address next time.
+
+           Separate from `practical_remote_accounts`, which exists only where a credential is kept:
+           an account means "we can still reach this server", a row here means "the user went
+           there". Written once a login was granted, so an address that never worked is not
+           offered. */
+        "CREATE TABLE practical_remote_servers (
+           principal TEXT NOT NULL,
+           origin    TEXT NOT NULL,
+           used_at   TEXT NOT NULL,
+           PRIMARY KEY (principal, origin)
+         );",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

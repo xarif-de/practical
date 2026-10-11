@@ -92,6 +92,8 @@ pub struct SettingsPage {
     pub remote_sync: bool,
     /// the user's links as the page renders them, newest-looking first
     pub remote_links: Vec<RemoteLinkRow>,
+    /// addresses the user signed in at before, newest first, for the address field to offer back
+    pub remote_servers: Vec<String>,
 }
 
 /// One sync link, as the collection's row and its own page read it. `kind`/`local_id` are what
@@ -242,6 +244,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     let remote_links = remote_rows(&state, &user).await?;
     Ok(SettingsPage {
         remote_sync: crate::domain::remote::sync_enabled(&state),
+        remote_servers: crate::domain::remote::servers_of(&state, &user).await?,
         remote_links,
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
@@ -430,6 +433,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/import/addressbooks/{owner}/{id}", post(import_addressbook))
         .route("/settings/remote/login", post(remote::login))
         .route("/settings/remote/poll", post(remote::poll))
+        .route("/settings/remote/reuse", post(remote::reuse))
         .route("/settings/remote/collections", post(remote::collections_offered))
         .route("/settings/remote/import", post(remote::import))
         .route("/settings/remote/done", post(remote::done))
