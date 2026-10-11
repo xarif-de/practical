@@ -233,7 +233,12 @@ async fn html_fragments_for_the_endless_lists() {
     assert_eq!(c.get_json("/api/days?start=2026-10-13&count=0").await.body.matches("class=\"lrow").count(), 1);
     assert_eq!(c.get_json("/api/days?start=2026-10-13&count=999").await.body.matches("class=\"lrow").count(), 120);
     let weeks = c.get_json("/api/weeks?start=2026-10-14&count=1").await;
-    weeks.ok().has("<div class=\"week\" data-week=\"2026-10-12\"><h2 class=\"wk\">KW 42 <span>12.10. – 18.10.</span> <b class=\"fname\">Herbstferien</b></h2>");
+    /* The class list is left out of this: `render::week` adds " now" to the week that holds TODAY
+       (week.rs), so pinning `class="week"` made this test pass only outside the week of
+       2026-10-12 — it started failing on 2026-10-12 itself. What this test is about is the week's
+       head, so that is what it checks. `render::pinned` covers the "now" marker with a fixed clock. */
+    weeks.ok().has("data-week=\"2026-10-12\"><h2 class=\"wk\">KW 42 <span>12.10. – 18.10.</span> <b class=\"fname\">Herbstferien</b></h2>");
+    assert!(weeks.body.contains("<div class=\"week"), "a week block still carries the class it is styled by");
     assert_eq!(c.get_json("/api/weeks?start=2026-10-12&count=99").await.body.matches("<div class=\"week").count(), 16);
     // a missing parameter is axum's 400
     assert_eq!(c.get_json("/api/days").await.status, StatusCode::BAD_REQUEST);

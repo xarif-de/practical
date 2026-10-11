@@ -414,6 +414,7 @@ async fn serve() -> Result<(), String> {
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());
     crate::domain::remote::sched::spawn(state.clone());
+    crate::tasks::spawn_remote_login_reaper(state.clone());
     tasks::spawn_holiday_coverage(state.clone());
     tasks::spawn_dev_asset_watcher(state.clone());
     domain::push::spawn_reminder_loop(state.clone());

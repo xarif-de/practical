@@ -217,8 +217,12 @@ them. PractiCal never sees the account password; it receives an app password tha
 revoke per client in Nextcloud.
 
 **An app password reaches the whole account, including files** — Nextcloud has no calendar-only
-scope. A one-off import therefore keeps it in memory only and destroys it at Nextcloud when it is
-done. A sync link has to keep it, so it is stored encrypted with `PRACTICAL__REMOTE_SECRET_KEY`: a
+scope. A one-off import therefore keeps it in memory only, never in the database, and destroys it at
+Nextcloud 15 minutes after the import finished. Those 15 minutes are what lets you move several
+calendars and address books across with ONE sign-in: within them, another import or a sync setup
+for the same server reuses the credential instead of asking again. The address field also offers
+back the servers you signed in at before, which is remembered separately — an address is not a
+credential. A sync link has to keep it, so it is stored encrypted with `PRACTICAL__REMOTE_SECRET_KEY`: a
 copy of the database alone is not enough to use it. The settings page tells the user to switch
 filesystem access off for that app password.
 

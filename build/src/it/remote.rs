@@ -395,35 +395,39 @@ async fn an_existing_connection_is_offered_again() {
     let cal = crate::domain::collections::calendars_for(&s.app.state, &who, false).await.unwrap()[0].id.clone();
     let mut alice = s.app.login("alice").await;
 
-    // the fixture keeps no key, so nothing can be reused and nothing is claimed to be
+    /* Nothing to reuse is 404, not an error: the page reads it as "sign in the usual way". The
+       fixture keeps no key, so there can be no sealed credential — and an instance without a key
+       still imports, which is why a missing key is an empty answer and not a refusal. */
     let r = alice.json(Method::POST, "/settings/remote/reuse", json!({"origin": "https://example.org"})).await;
-    assert_eq!(r.status, StatusCode::BAD_REQUEST, "without a key there is no sealed credential to open");
+    assert_eq!(r.status, StatusCode::NOT_FOUND, "a missing key must read as 'nothing kept', not as an error");
 
-    // an account without a link is not reusable either: a one-off import leaves none behind
+    // an address the user never went to has nothing either, even with a link to another one
     let _ = a_link(&s.app, "alice", &cal).await;
     let r = alice.json(Method::POST, "/settings/remote/reuse", json!({"origin": "https://nowhere.example.org"})).await;
-    assert!(matches!(r.status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST), "a foreign address must not resolve to an account: {:?}", r.status);
+    assert_eq!(r.status, StatusCode::NOT_FOUND, "a foreign address must not resolve to an account");
+
+    // a malformed address is still refused here, before anything is looked up
+    let r = alice.json(Method::POST, "/settings/remote/reuse", json!({"origin": "http://10.0.0.1"})).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "reuse must not be a way around the address rules");
 }
 
-/// A borrowed credential must survive the batch that used it. `done` revokes an app password at the
-/// remote, and a reused one belongs to an account that still carries a link: revoking it would let
-/// an import quietly cost the user the sync they already had.
+/// What a page sees of the keep-window: a credential stays usable after its batch, for this user
+/// and this address only. The window's own arithmetic is tested where it lives
+/// (`domain::remote::login`, which can hand `sweep` a time).
 #[tokio::test]
-async fn an_import_does_not_revoke_a_borrowed_credential() {
+async fn a_credential_stays_usable_after_the_batch_that_fetched_it() {
     let s = seed().await;
     let logins = &s.app.state.remote_logins;
-    let secret = crate::domain::remote::dav::Secret("borrowed-pw".into());
 
-    let borrowed = logins.adopt("https://example.org", "alice", "alice", secret.clone());
-    assert!(logins.is_borrowed(&borrowed, "alice"), "a reused credential is not marked as borrowed");
-    // and it is readable as a granted login, which is what the import reads
-    let (origin, login, got) = logins.granted(&borrowed, "alice").unwrap();
-    assert_eq!((origin.as_str(), login.as_str(), got.0.as_str()), ("https://example.org", "alice", "borrowed-pw"));
+    let h = logins.adopt("https://example.org", "alice", "alice", crate::domain::remote::dav::Secret("pw".into()));
+    let (origin, login, got) = logins.granted(&h, "alice").unwrap();
+    assert_eq!((origin.as_str(), login.as_str(), got.0.as_str()), ("https://example.org", "alice", "pw"));
+    assert!(logins.granted(&h, "bob").is_err(), "a handle of alice's must say nothing to bob");
 
-    // nobody else's: a handle of alice's says nothing to bob
-    assert!(!logins.is_borrowed(&borrowed, "bob"));
-    assert!(logins.granted(&borrowed, "bob").is_err());
-
-    // an unknown handle is not borrowed, so `done` on it does not skip a revoke by accident
-    assert!(!logins.is_borrowed(&uuid::Uuid::new_v4().to_string(), "alice"));
+    // the batch ends: the credential is parked, not destroyed, and comes back for the next one
+    logins.park(&h, "alice");
+    assert!(logins.expired().is_empty(), "nothing is revoked while the window is open");
+    assert_eq!(logins.reusable("https://example.org", "alice").as_deref(), Some(h.as_str()));
+    assert!(logins.reusable("https://other.example.org", "alice").is_none(), "another server must not match");
+    assert!(logins.reusable("https://example.org", "bob").is_none(), "another user must not match");
 }

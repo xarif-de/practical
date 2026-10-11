@@ -482,7 +482,7 @@ pub async fn servers_of(state: &AppState, user: &Principal) -> AppResult<Vec<Str
 /// one-off import revokes its app password at the remote, so after one there is nothing to reuse —
 /// that is the point of revoking it.
 pub async fn account_for_origin(state: &AppState, user: &Principal, origin: &str) -> AppResult<Option<(Account, Secret)>> {
-    let key = state.config.remote_secret_key.as_deref().ok_or_else(|| AppError::bad("err-remote-no-key"))?;
+    let Some(key) = state.config.remote_secret_key.as_deref() else { return Ok(None) };
     let row = sqlx::query(
         "SELECT a.id, a.principal, a.base_url, a.login, a.secret
            FROM practical_remote_accounts a

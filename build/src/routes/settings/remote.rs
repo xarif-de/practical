@@ -156,6 +156,8 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
         q.every_min.unwrap_or(remote::DEFAULT_EVERY_MIN),
     )
     .await?;
+    // the account now keeps this credential sealed; revoking the copy in memory would kill the link
+    state.remote_logins.claim(&q.handle, &user.id);
     Ok(axum::Json(Took { id, owner: user.id, count, link_id: Some(link_id) }).into_response())
 }
 
@@ -166,15 +168,14 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
 /// after this app in its security settings, where the user can revoke it. The alternative — ending
 /// the sign-in after the first import — breaks taking two collections at once, which is worse.
 pub(super) async fn done(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<HandleQ>) -> AppResult<Response> {
-    /* A BORROWED credential is not destroyed: it came from an account that still carries a link
-       (`reuse`), and revoking it would break the sync the user already has — an import would then
-       quietly cost them their sync. Only a password this sign-in obtained is ours to revoke. */
-    if !state.remote_logins.is_borrowed(&q.handle, &user.id)
-        && let Ok((origin, login, secret)) = state.remote_logins.granted(&q.handle, &user.id)
-    {
-        remote::login::revoke(&state.remote_http, &origin, &login, &secret).await;
-    }
-    state.remote_logins.forget(&q.handle, &user.id);
+    /* The credential is PARKED, not destroyed: someone migrating their calendars has the next one
+       right behind this batch, and a sign-in per collection is what teaches a user to click
+       through a grant screen unread. It stays in memory for `KEEP_SECS` and is revoked after that
+       (`tasks::spawn_remote_login_reaper`) — or never, if it belongs to an account.
+
+       Parking also replaces forgetting: dropping the handle here would leave its password valid at
+       the remote with nothing left to revoke it with. */
+    state.remote_logins.park(&q.handle, &user.id);
     Ok(axum::Json(Polled { granted: false }).into_response())
 }
 
@@ -189,10 +190,17 @@ pub(super) async fn done(State(state): State<SharedState>, user: Principal, _: c
 /// belongs to an existing link, and destroying it would break the sync the user already has.
 pub(super) async fn reuse(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<LoginQ>) -> AppResult<Response> {
     let origin = remote::origin_of(&state, &q.origin)?;
-    let Some((account, secret)) = remote::account_for_origin(&state, &user, &origin).await? else {
-        return Err(AppError::NotFound);
+    // a credential still in its window needs nothing from the database, and works for an instance
+    // with no key at all — which is every instance that only ever imports
+    let handle = match state.remote_logins.reusable(&origin, &user.id) {
+        Some(h) => h,
+        None => {
+            let Some((account, secret)) = remote::account_for_origin(&state, &user, &origin).await? else {
+                return Err(AppError::NotFound);
+            };
+            state.remote_logins.adopt(&origin, &user.id, &account.login, secret)
+        }
     };
-    let handle = state.remote_logins.adopt(&origin, &user.id, &account.login, secret);
     remote::remember_server(&state, &user, &origin).await;
     Ok(axum::Json(LoginStarted { handle, url: String::new() }).into_response())
 }

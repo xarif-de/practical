@@ -84,6 +84,28 @@ async fn poll_changes(state: &SharedState, seen: &mut HashMap<(String, String, S
     ok
 }
 
+/// Revokes the app passwords whose keep-window ran out (`domain::remote::login::KEEP_SECS`).
+///
+/// A one-off import does not destroy its credential any more — it parks it, so the next collection
+/// from the same server needs no second sign-in. Something has to come back for it afterwards, and
+/// nothing else is guaranteed to: a user who imports one calendar and closes the tab would
+/// otherwise leave a password valid at their Nextcloud. Runs regardless of
+/// `PRACTICAL__REMOTE_SECRET_KEY`, because importing needs no key.
+pub fn spawn_remote_login_reaper(state: SharedState) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            tick.tick().await;
+            guarded("remote login reaper", async {
+                for (origin, login, secret) in state.remote_logins.expired() {
+                    crate::domain::remote::login::revoke(&state.remote_http, &origin, &login, &secret).await;
+                }
+            })
+            .await;
+        }
+    });
+}
+
 /// Final deletion of trashed groups after the retention period, the change history's,
 /// the push sent-log's and the expired sessions' housekeeping.
 pub fn spawn_trash_purger(state: SharedState) {
