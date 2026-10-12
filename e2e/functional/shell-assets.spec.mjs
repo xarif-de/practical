@@ -54,6 +54,23 @@ test('icons come from the sprite file: server-drawn and app.js-drawn ones render
   expect(w).toBeGreaterThan(0);
 });
 
+/* `window.practical` carries the shared helpers, and `window.ask`/`toast`/`tr` are globals NEXT to
+   it, not members of it. Calling `practical.ask(…)` therefore throws at the click it handles, and a
+   handler that throws leaves no trace on the page: measured on "end a sync", which became a button
+   that did nothing at all. Checked over the whole bundle, because the mistake is invisible at the
+   call site. */
+test('every practical.X() the bundle calls exists on the helper object', async ({ page }) => {
+  await page.goto('/settings');
+  const bad = await page.evaluate(async () => {
+    const srcs = [...document.querySelectorAll('script[src^="/assets/"]')].map(s => s.src);
+    const texts = await Promise.all(srcs.map(u => fetch(u).then(r => r.text())));
+    const called = [...new Set([...texts.join('\n').matchAll(/\bpractical\.([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]))];
+    return { called: called.length, missing: called.filter(n => typeof window.practical?.[n] !== 'function') };
+  });
+  expect(bad.called).toBeGreaterThan(5);
+  expect(bad.missing).toEqual([]);
+});
+
 test('app.js reads its strings from the language script', async ({ page }) => {
   await page.goto('/calendar');
   expect(await page.locator('script[src^="/assets/i18n-de.js?v="]').count()).toBe(1);

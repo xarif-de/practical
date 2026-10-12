@@ -285,8 +285,6 @@ impl Dav {
         Ok(c)
     }
 
-    /// Every href with its etag, bodies left out: the listing the periodic full reconciliation
-    /// compares against, and the only way to notice what a lying token hid.
     /// The collection's current sync-token, for a full pass to start the next incremental round
     /// from. Measured against nextcloud 35.0.1: this answers 466 bytes, while asking
     /// `sync-collection` with an empty token — which is what a full pass used to do for the token
@@ -307,6 +305,8 @@ impl Dav {
         super::xml::prop_text(&text, NS_DAV, "sync-token").ok_or_else(cut)
     }
 
+    /// Every href with its etag, bodies left out: the listing the periodic full reconciliation
+    /// compares against, and the only way to notice what a lying token hid.
     pub async fn list(&self, href: &str, kind: Kind) -> AppResult<Vec<(String, String)>> {
         let (method, body) = match kind {
             // a calendar-query with a bare VCALENDAR filter is the cheapest complete listing

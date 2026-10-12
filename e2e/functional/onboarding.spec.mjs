@@ -196,6 +196,28 @@ test('a collection offers every way at once: one arrow, one ring around them all
     expect(r.top).toBeLessThanOrEqual(b.top);
     expect(r.bottom).toBeGreaterThanOrEqual(b.bottom);
   }
+  /* And it follows the rows when they move. The ring is a body-level `fixed` box, while the
+     scroller is `.main` and not the document (frame.css) — so `scrollY` stays 0 and document
+     coordinates would not help: measured, a body-level ABSOLUTE box sat 197 px away after scrolling
+     `.main` by 197. `guide.js` re-places it with the bubble on every scroll. */
+  // a short window, so the page has somewhere to scroll at all (it is still the desktop layout)
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await settle(page);
+  const moved = await page.evaluate(async () => {
+    const main = document.querySelector('.main');
+    const row = () => document.querySelector('.onb-aim').getBoundingClientRect().top;
+    const ring = () => document.querySelector('.onb-ring').getBoundingClientRect().top;
+    const gapBefore = Math.round(ring() - row());
+    main.scrollTop = Math.min(120, main.scrollHeight - main.clientHeight);
+    // the scroll event arrives asynchronously and the handler is frame-gated
+    await new Promise(r => setTimeout(r, 250));
+    return { scrolled: Math.round(main.scrollTop), docScroll: scrollY, gapBefore, gapAfter: Math.round(ring() - row()) };
+  });
+  expect(moved.scrolled, 'the page has to scroll for this to mean anything').toBeGreaterThan(0);
+  expect(moved.docScroll, 'and it is .main that scrolls, not the document').toBe(0);
+  expect(moved.gapAfter, 'the ring keeps its distance to the rows after a scroll').toBe(moved.gapBefore);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await settle(page);
   // the rows keep their tint but lose their own ring, or there would be one ring too many
   const own = await page.$$eval('.onb-aim', els => els.map(e => getComputedStyle(e, '::after').content));
   expect(own.every(c => c === 'none'), `a grouped row still draws its own ring: ${own}`).toBe(true);

@@ -377,6 +377,6 @@
     const now = row.querySelector('.rm-now'), drop = row.querySelector('.rm-drop');
     if (now) now.addEventListener('click', async () => { now.disabled = true; const r = await post({ action: 'now' }); now.disabled = false; if (r.ok) { practical.leaving = true; location.reload(); } });
     // the shell's own confirmation: `confirm` has no focus return, no Escape handling and no style
-    if (drop) drop.addEventListener('click', async () => { if (!(await practical.ask(tr('js-rm-remove-hint')))) return; const r = await post({ action: 'remove' }); if (r.ok) { practical.leaving = true; location.hash = '#collections'; location.reload(); } });
+    if (drop) drop.addEventListener('click', async () => { if (!(await ask(tr('js-rm-remove-hint')))) return; const r = await post({ action: 'remove' }); if (r.ok) { practical.leaving = true; location.hash = '#collections'; location.reload(); } });
   });
 })();

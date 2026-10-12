@@ -162,17 +162,6 @@ fn exempt_hosts(origins: &[String]) -> Vec<String> {
     origins.iter().filter_map(|o| o.parse::<url::Url>().ok()).filter_map(|u| u.host_str().map(str::to_string)).collect()
 }
 
-/// The origin of a server address the user typed, or an error naming what is wrong with it.
-///
-/// Only the SHAPE is checked here. WHETHER it may be dialled is decided by the resolver above, at
-/// connection time, when the name's real addresses are known — a check against the name alone could
-/// not do it anyway, because DNS may answer differently a moment later.
-///
-/// - the field is required: an empty address is `err-remote-no-server`, so nothing starts without one
-/// - `https` only; `http` is refused except for localhost in a development build, because a
-///   credential and a whole calendar would otherwise travel in the clear
-/// - no userinfo, no path, no query: `https://a@b/c?d` is not a server address, and taking one would
-///   make the part that decides where we connect (the host) the part hardest to read
 /// "both" or "pull", and nothing else. Anything unknown was a typo on the way in and used to mean
 /// `both`, which is the direction that WRITES to the user's server — a default no mistake should
 /// reach.
@@ -184,6 +173,17 @@ pub fn two_way_from(direction: &str) -> AppResult<bool> {
     }
 }
 
+/// The origin of a server address the user typed, or an error naming what is wrong with it.
+///
+/// Only the SHAPE is checked here. WHETHER it may be dialled is decided by the resolver above, at
+/// connection time, when the name's real addresses are known — a check against the name alone could
+/// not do it anyway, because DNS may answer differently a moment later.
+///
+/// - the field is required: an empty address is `err-remote-no-server`, so nothing starts without one
+/// - `https` only; `http` is refused except for localhost in a development build, because a
+///   credential and a whole calendar would otherwise travel in the clear
+/// - no userinfo, no path, no query: `https://a@b/c?d` is not a server address, and taking one would
+///   make the part that decides where we connect (the host) the part hardest to read
 pub fn origin_of(state: &AppState, typed: &str) -> AppResult<String> {
     let typed = typed.trim();
     if typed.is_empty() {

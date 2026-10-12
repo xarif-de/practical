@@ -313,6 +313,11 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
                         super::map_put(state, &link.id, &Mapped { object_id: id.clone(), uid, href: m.href.clone(), etag, mine }).await?;
                         rep.conflicts += 1;
                         rep.pulled += 1;
+                    } else {
+                        // HEAD said it is there and GET gave nothing: the deletion did not happen
+                        // and nothing replaced it, so it is still owed
+                        rep.refused += 1;
+                        rep.unpushed += 1;
                     }
                 }
             },
@@ -393,7 +398,14 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
                     rep.conflicts += 1;
                     rep.pulled += 1;
                 }
-                None => super::map_del(state, &link.id, id).await?,
+                /* The href is not there, so the mapping is wrong and goes — but the local change
+                   never arrived. Counted, or the local token would advance past an edit that now
+                   has nowhere on the remote to be: the next round pushes it as a create. */
+                None => {
+                    super::map_del(state, &link.id, id).await?;
+                    rep.refused += 1;
+                    rep.unpushed += 1;
+                }
             },
             Wrote::Refused(s) => {
                 tracing::warn!("remote sync {}: put of {href} refused with {s}", link.id);

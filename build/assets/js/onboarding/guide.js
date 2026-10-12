@@ -176,18 +176,22 @@ function aim(targets) {
       ring.className = 'onb-ring';
       document.body.appendChild(ring);
     }
-    const P = 4; // air between the rows and the ring
-    // document coordinates (the box is absolute): `union` measures against the viewport
-    Object.assign(ring.style, {
-      left: `${u.left + scrollX - P}px`,
-      top: `${u.top + scrollY - P}px`,
-      width: `${u.width + 2 * P}px`,
-      height: `${u.height + 2 * P}px`,
-    });
+    ring_at(targets);
   } else {
     ring?.remove();
   }
   if (u.top < 70 || u.bottom > innerHeight - 120) targets[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+/* Where the ring sits. Called by `aim` and again by `replace` on every scroll and resize: the box is
+   `fixed`, and the rows move inside `.main`, which is the scroller. Left out of `aim`'s own
+   expensive re-aim on purpose — this is one `getBoundingClientRect` per target, and `aim` ends with
+   a smooth `scrollIntoView` whose own scroll events are what carry the ring along with it. */
+function ring_at(targets) {
+  const box = $('.onb-ring');
+  if (!box || targets.length < 2) return;
+  const u = union(targets), P = 4; // air between the rows and the ring
+  Object.assign(box.style, { left: `${u.left - P}px`, top: `${u.top - P}px`, width: `${u.width + 2 * P}px`, height: `${u.height + 2 * P}px` });
 }
 
 function clear() {
@@ -251,7 +255,9 @@ function draw() {
     const tip = $('.onb-tip'), step = ST.step(ST.cur);
     if (!tip || !step) return;
     const wp = ST.route(step), targets = wp.sel();
-    if (targets.length) place(tip, targets, wp.prefer || 'right');
+    if (!targets.length) return;
+    place(tip, targets, wp.prefer || 'right');
+    ring_at(targets);
   });
   addEventListener('resize', reaim);
   addEventListener('input', e => { if (e.target.matches?.(NAME)) reaim(); }, { capture: true });
