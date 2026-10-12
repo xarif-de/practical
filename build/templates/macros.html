@@ -75,3 +75,45 @@
 {%- macro restore(url) -%}<form method="post" action="{{ url }}/restore" class="inline">{{ csrf() }}<button class="link" type="submit">{{ ico("restore") }}<span>{{ ctx.t("restore") }}</span></button></form>{%- endmacro -%}
 {%- macro purge(url, name) -%}<form method="post" action="{{ url }}/purge" class="inline">{{ csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-purge-collection", "name", name) }}">{{ ico("trash-2") }}<span>{{ ctx.t("purge") }}</span></button></form>{%- endmacro -%}
 {%- macro trash_empty() -%}<div class="cell noic"><span class="muted">{{ ctx.t("trash-empty") }}</span></div>{%- endmacro -%}
+
+{#- One page for taking collections off a remote server. Four of these exist (calendar and address
+    book, import and sync) and differed only in their heading, their way back and the two settings a
+    LINK needs — four copies of the same 23 lines, so the address row was fixed four times over this
+    branch. The RESPONSE is unchanged: the macro expands per call, and all four pages are in the
+    document because the settings are hash-routed (measured: 88 913 bytes either way, 0 differences
+    outside the CSRF token). -#}
+{%- macro remote_page(id, back_href, back_label, title, kind, sync, go_label) %}<section class="page" id="{{ id }}">
+  {{ back(back_href, back_label) }}
+  <h1>{{ title }}</h1>
+  <form class="rm-form" data-kind="{{ kind }}" data-sync="{{ sync }}">
+    <div class="group">
+      {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
+          splitting them over two rows made the button look like a second, separate step -#}
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ ico("forward") }}</button></span></span></label>
+    </div>
+    <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
+    <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
+    <p class="foot rm-wait" hidden>{{ ctx.t("rm-waiting") }}</p>
+    {#- what the run is doing right now: the step, and the collection it is on -#}
+    <p class="foot rm-busy" hidden aria-live="polite"></p>
+    <div class="rm-picked" hidden>
+      <div class="label">{{ ctx.t("rm-pick") }}</div>
+      <div class="group rm-list"></div>
+      <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      {%- if sync %}
+      <div class="label">{{ ctx.t("rm-direction") }}</div>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-both") }}</span><span class="val"><input type="radio" name="rmdir" value="both" checked></span></label>
+        <label class="cell noic"><span>{{ ctx.t("rm-pull") }}</span><span class="val"><input type="radio" name="rmdir" value="pull"></span></label>
+      </div>
+      <p class="foot rm-dir-hint">{{ ctx.t("rm-both-hint") }}</p>
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("rm-every") }}</span><span class="val"><input type="number" class="rm-every" min="5" max="1440" step="5" value="5"> {{ ctx.t("rm-minutes") }}</span></label>
+      </div>
+      <p class="foot">{{ ctx.t("rm-every-hint") }}</p>
+      {%- endif %}
+      <div class="group sp"><button class="cell btnrow rm-take" type="submit">{{ go_label }}</button></div>
+    </div>
+  </form>
+</section>
+{%- endmacro %}
