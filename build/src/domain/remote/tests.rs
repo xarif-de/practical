@@ -261,6 +261,41 @@ fn an_object_changed_on_both_sides_is_not_pushed() {
     assert!(pushable("d", &remote_touched), "the remote knows nothing about it");
 }
 
+/// A deeply nested answer must end the pass as BROKEN, not grow the path stack with it. Reported
+/// as a cut answer, which is the one safe reading: a short list would be acted on by deleting
+/// locally. Without the limit this allocates until the pod is killed.
+#[test]
+fn a_deeply_nested_answer_is_cut_not_followed() {
+    let deep = format!(
+        "<?xml version=\"1.0\"?><d:multistatus xmlns:d=\"DAV:\">{}{}</d:multistatus>",
+        "<d:a>".repeat(500),
+        "</d:a>".repeat(500)
+    );
+    assert!(xml::collections(&deep, Kind::Cal, "/p/alice/").is_none(), "a stack deeper than the limit is a broken answer");
+    assert!(xml::etags(&deep).is_none(), "every reader stops, not just one");
+    assert!(xml::changes(&deep).is_none());
+
+    // the real answers are nowhere near the limit, so nothing legitimate is lost
+    assert!(xml::collections(HOME, Kind::Cal, "/remote.php/dav/principals/users/alice/").is_some());
+}
+
+/// A colour is free text from a foreign server and ends up in a `style` attribute. Checked where it
+/// enters, by the predicate the local collections use, so no consumer has to repeat it. The real
+/// answer with its colour swapped, so the row stays exactly as nextcloud sends it.
+#[test]
+fn a_colour_the_remote_invented_is_dropped() {
+    let own = "/remote.php/dav/principals/users/alice/";
+    let color_of = |c: &str| {
+        let answer = HOME.replace("#0082c9", c);
+        xml::collections(&answer, Kind::Cal, own).unwrap().into_iter().find(|x| x.name == "work").map(|x| x.color)
+    };
+    assert_eq!(color_of("#0082c9").as_deref(), Some("#0082c9"), "a real colour is kept");
+    assert_eq!(color_of("red;position:fixed;inset:0;z-index:99").as_deref(), Some(""), "CSS of its own is dropped");
+    assert_eq!(color_of("rebeccapurple").as_deref(), Some(""), "so is a name the local collections would not take either");
+    // the row itself survives: a collection without a colour is still offerable
+    assert!(color_of("nonsense").is_some(), "the colour is dropped, not the collection");
+}
+
 /// Our own push comes back in the next change list with the etag the server gave us. It must NOT
 /// count as a remote change: `pushable` would then refuse the next local edit of that object, and
 /// since a refused push is not a REFUSAL, the local token would advance past that edit and no later

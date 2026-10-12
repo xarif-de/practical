@@ -25,12 +25,25 @@ async fn fetch_all(dav: &Dav, kind: Kind, href: &str) -> AppResult<Vec<String>> 
     }
     let hrefs: Vec<String> = listing.into_iter().map(|(h, _)| h).collect();
     let mut out = vec![];
+    /* The same total the file import is held to, counted while fetching instead of after. Only the
+       object COUNT and each single object were checked here, and `IMPORT_MAX_BYTES` applies to the
+       joined document — which is built after every body is already in memory. A server answering
+       the per-batch maximum (`dav::MAX_RESPONSE`) for all 20 batches of 10 000 objects would reach
+       ~320 MiB here plus its copy in `as_document`, in a pod measured at 192 MiB. */
+    let mut bytes = 0usize;
     for batch in hrefs.chunks(transfer::IMPORT_CHUNK) {
         for (_, _, body) in dav.bodies(href, kind, batch).await? {
             if body.len() > transfer::IMPORT_MAX_OBJECT_BYTES {
                 return Err(AppError::BadRequest(crate::error::Msg {
                     key: "err-import-too-large",
                     args: vec![("size", body.len().to_string()), ("limit", transfer::IMPORT_MAX_OBJECT_BYTES.to_string())],
+                }));
+            }
+            bytes += body.len();
+            if bytes > transfer::IMPORT_MAX_BYTES {
+                return Err(AppError::BadRequest(crate::error::Msg {
+                    key: "err-import-too-large",
+                    args: vec![("size", bytes.to_string()), ("limit", transfer::IMPORT_MAX_BYTES.to_string())],
                 }));
             }
             out.push(body);

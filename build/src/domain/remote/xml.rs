@@ -48,6 +48,12 @@ enum Step {
     Text(String),
 }
 
+/// How deeply elements may nest. A multistatus needs six levels
+/// (multistatus > response > propstat > prop > resourcetype > element); object bodies arrive as TEXT
+/// and add none. Without a limit the path stack grows with the answer: 16 MiB of `<a>` tags
+/// (`dav::MAX_RESPONSE`) is ~5.5 million entries, and `inside()` walks the stack per event.
+const MAX_DEPTH: usize = 32;
+
 /// One streaming pass with a path stack, which is all the state any of the readers below needs.
 struct Walk<'a> {
     r: NsReader<&'a [u8]>,
@@ -71,6 +77,11 @@ impl<'a> Walk<'a> {
     fn next(&mut self) -> Option<Step> {
         loop {
             self.buf.clear();
+            // `broken`, not a silent stop: see the field's own comment
+            if self.path.len() > MAX_DEPTH {
+                self.broken = true;
+                return None;
+            }
             let (ns, ev) = match self.r.read_resolved_event_into(&mut self.buf) {
                 Ok(v) => v,
                 Err(_) => {
@@ -241,7 +252,13 @@ pub fn collections(xml: &str, kind: Kind, principal: &str) -> Option<Vec<Collect
                     out.push(Collection {
                         href: r.href.clone(),
                         name: if r.name.is_empty() { name } else { r.name.clone() },
-                        color: r.color.clone(),
+                        /* A colour is free text from a foreign server and ends up in a `style`
+                           attribute of the pick list and in the local collection. Quoting the
+                           attribute is not enough: `red;position:fixed;inset:0` carries no quote
+                           and would cover the page. Checked by the predicate the local collections
+                           use, and dropped rather than refusing the row — a collection is still
+                           offerable without a colour. */
+                        color: crate::domain::collections::valid_color(&r.color).then(|| r.color.clone()).unwrap_or_default(),
                         description: r.description.clone(),
                         timezone: tzid(&r.timezone),
                         components: vec![],

@@ -206,7 +206,10 @@ impl Dav {
             }
             buf.extend_from_slice(&chunk);
         }
-        Ok((status, headers, String::from_utf8_lossy(&buf).into_owned()))
+        // from_utf8 takes the buffer over; lossy would COPY it (Cow::Borrowed → owned), holding
+        // both at up to MAX_RESPONSE each at the peak of every request
+        let text = String::from_utf8(buf).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+        Ok((status, headers, text))
     }
 
     /// RFC 6764 discovery. Returns (calendar home, address book home).
