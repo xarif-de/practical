@@ -325,6 +325,27 @@ When you import a calendar, PractiCal takes the name, description, colour and ti
 file has them. You can change them before you import. The file can be an export from Google, Apple, Thunderbird or
 RustiCal.
 
+### Taking a calendar over from Nextcloud, once or for good
+
+PractiCal can also fetch a calendar or address book straight from another server instead of from a
+file. Nextcloud is what this is tested against; the protocol is the standard one, so other servers
+speak it too.
+
+You type the address of your server and sign in — in your own browser, at your own server, so a
+two-factor code or a single sign-on works as usual and PractiCal never sees your password. Then you
+tick the calendars and address books you want. There are two ways to take them:
+
+- **Import** copies them once. Use this when you are leaving the other application behind.
+- **Sync** keeps the connection. Changes travel in both directions, every few minutes, and you can
+  also set it to only READ from the other server and never write to it.
+
+If both sides changed the same appointment between two rounds, the other server wins — your version
+is kept in the change history, where you can bring it back.
+
+Only your OWN calendars are offered. One that somebody shared with you is left out, because the
+other server withholds the details of private appointments from anyone but their owner, and a copy
+would be quietly incomplete.
+
 ### App tokens for calendar apps
 
 Calendar apps on your phone or computer never use your login password. Instead, each device gets its own **app
