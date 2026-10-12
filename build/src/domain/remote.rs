@@ -399,9 +399,9 @@ pub async fn room_for_a_link(state: &AppState, user: &Principal, account_id: &st
     Ok(())
 }
 
+/// `owner` was checked by the route and again when its collection was created.
 #[allow(clippy::too_many_arguments)]
 pub async fn create_link(state: &AppState, user: &Principal, owner: &str, account_id: &str, kind: Kind, local_id: &str, href: &str, two_way: bool, every_min: i64) -> AppResult<String> {
-    crate::domain::collections::ensure_owner(user, owner)?;
     room_for_a_link(state, user, account_id, kind, href).await?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
@@ -457,16 +457,22 @@ async fn drop_link(state: &AppState, link: &Link) -> AppResult<()> {
     Ok(())
 }
 
-/// Whether the link's user may still write its collection. Checked before every round: a member who
-/// left the group would otherwise keep writing into it with their own Nextcloud's data. The user is
-/// read fresh, because a membership is not part of the link.
+/// Whether the link's user may still write its collection, checked before every round (the user is
+/// read fresh: a membership is not part of the link). When not — they left the group, or the group
+/// went to the bin, which lifts every membership (`groups::trash`) — the link ENDS here: its row is
+/// shown only on a collection its user can see, so a link kept "paused" could be neither seen nor
+/// stopped, and would hold its app password and a place under the link cap for good. One check
+/// covers every way out of a group, the CLI's included.
 pub async fn may_write(state: &AppState, link: &Link) -> AppResult<()> {
     use rustical_store::auth::AuthenticationProvider;
     if link.owner == link.principal {
         return Ok(());
     }
-    let user = state.principals.get_principal(&link.principal).await?.ok_or(AppError::bad("err-remote-not-member"))?;
-    if user.is_principal(&link.owner) { Ok(()) } else { Err(AppError::bad("err-remote-not-member")) }
+    if state.principals.get_principal(&link.principal).await?.is_some_and(|u| u.is_principal(&link.owner)) {
+        return Ok(());
+    }
+    drop_link(state, link).await?;
+    Err(AppError::Forbidden)
 }
 
 /// Ends the link of a collection that is being deleted, if it has one. A link lives on its
@@ -479,8 +485,8 @@ pub async fn may_write(state: &AppState, link: &Link) -> AppResult<()> {
 /// security settings can revoke it — the same case as a page closed mid-import (`login::revoke`).
 ///
 /// Found by the collection's OWNER, not by the caller: a group collection may be deleted by any
-/// member, and before migration 20 a lookup by caller and id alone could also end the link of the
-/// caller's own collection that happened to share the id.
+/// member, and the link then ends — with the app password of the member who made it, when it was
+/// that account's last link — the same as for a collection of one's own.
 pub async fn unlink_collection(state: &AppState, owner: &str, kind: dav::Kind, local_id: &str) {
     if let Ok(Some(link)) = link_for_collection(state, owner, kind, local_id).await
         && let Err(e) = drop_link(state, &link).await

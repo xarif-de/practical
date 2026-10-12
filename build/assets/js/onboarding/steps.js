@@ -71,16 +71,18 @@ const collection = (id, kind) => ({
       /* Connected: the server's collections are listed (remote.js `offer` unhides `.rm-picked`), so
          the address is done and the way on is the choice plus the button that starts it. The two
          are ONE instruction in sequence, not alternatives — `steps` keeps the "take any one" line
-         away. */
+         away. A server that offered nothing has no `.rm-pick` and a disabled button: the address
+         stays the way on. */
       const picked = $(`#${w} .rm-picked`);
-      if (picked && vis(picked)) {
+      if (picked && vis(picked) && $(`#${w} .rm-pick`)) {
         return { sel: q(`#${w} .rm-list`, `#${w} .rm-take`), lead: `js-onb-remote${k}-pick-${sh}`, body: `js-onb-remote${k}-pick-${sh}-b`, steps: true };
       }
       const addr = $(`#${w} .rm-origin`);
       /* `.rm-in`, not the field inside it: the arrow stops 5 px short of its TARGET, and with the
          field as target that tip landed on the arrow button beside it, inside the row (measured:
          tip at x=1129, field ending at 1124, wrapper at 1151). */
-      const sel = addr && !addr.value.trim() ? q(`#${w} .rm-in`) : q(`#${w} .rm-take`, `#${w} .rm-go`);
+      // `.rm-take` is not a target here: shown, it belongs to the list above or is disabled (nothing offered)
+      const sel = addr && !addr.value.trim() ? q(`#${w} .rm-in`) : q(`#${w} .rm-go`);
       return { sel, lead: `js-onb-remote${k}`, body: `js-onb-remote${k}-b` };
     }
     // the source lists: one row per place the data can come from

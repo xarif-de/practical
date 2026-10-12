@@ -295,6 +295,6 @@ function draw() {
   }, { capture: true });   // the picker's own handler empties the hash, so `where()` must be read first
   addEventListener('hashchange', refresh);
   document.addEventListener('practical:prefs-saved', refresh);
-  // connecting to a server lists its collections without a page load or a hash change (remote.js)
-  document.addEventListener('practical:remote-offered', reaim);
+  // connecting to a server shows or hides its collections without a page load or a hash change (remote.js)
+  document.addEventListener('practical:remote-list', reaim);
 })();

@@ -339,6 +339,26 @@ test('connected to a server, the hint points at the collections and the button t
   await andBack(page);
 });
 
+/* A server that offers nothing leaves a disabled button and no list to choose from: the hint must not
+   promise "all of them are ticked" there, and stays on the address. */
+test('connected to a server with nothing to offer, the hint stays on the address', async ({ page }) => {
+  await asFresh(page);
+  await page.route('**/settings/remote/reuse', r => r.fulfill({ json: { handle: 'h' } }));
+  await page.route('**/settings/remote/collections', r => r.fulfill({ json: { calendars: [], addressbooks: [] } }));
+  await hash(page, '#remote-cal');
+  await settle(page);
+  await page.locator('#remote-cal .rm-origin').fill('nextcloud.example.com');
+  await page.locator('#remote-cal .rm-go').click();
+  await expect(page.locator('#remote-cal .rm-picked')).toBeVisible();
+  await expect(page.locator('#remote-cal .rm-take')).toBeDisabled();
+  await settle(page);
+  expect(await page.$$eval('.onb-aim', els => els.map(e => e.className))).not.toContainEqual(expect.stringContaining('rm-take'));
+  await expect(page.locator('.onb-tip .onb-lead')).not.toContainText('Wähle die Kalender');
+  await page.unroute('**/settings/remote/reuse');
+  await page.unroute('**/settings/remote/collections');
+  await andBack(page);
+});
+
 test('the settings bring the hints back after they were through', async ({ page }) => {
   await page.goto('/settings');
   expect(await open(page)).toEqual([]);

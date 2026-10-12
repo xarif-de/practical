@@ -523,11 +523,35 @@ async fn a_link_can_fill_a_group_collection() {
     let own = html.split(&format!("id=\"cal-alice-{}\"", s.arbeit)).nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default();
     assert!(!own.contains("rm-drop"), "a calendar without a link shows one");
 
-    // a member may write it; after leaving the group the round refuses and says why
     crate::domain::remote::may_write(&s.app.state, &link).await.unwrap();
+}
+
+/// A link into a group ends when its user can no longer reach the group: they left it, or it went
+/// to the bin (which lifts every membership). Kept "paused" instead, its row would show on no page
+/// its user can see, so it could not be stopped and would hold its app password for good. The round
+/// refuses before it dials anything — the account here points at nothing reachable.
+#[tokio::test]
+async fn a_group_link_ends_when_its_user_cannot_reach_the_group_any_more() {
+    let s = seed().await;
+    let alice = s.app.principal("alice").await;
+    let accounts = || async { sqlx::query_scalar::<_, i64>("SELECT count(*) FROM practical_remote_accounts WHERE principal = 'alice'").fetch_one(&s.app.state.db).await.unwrap() };
+
+    // she leaves the group
+    let id = a_link_into(&s.app, "alice", "group.familie", &s.familie).await;
+    let link = crate::domain::remote::link_of(&s.app.state, &alice, &id).await.unwrap();
     crate::domain::groups::remove_member(&s.app.state, &alice, "group.familie", "alice").await.unwrap();
-    let e = crate::domain::remote::may_write(&s.app.state, &link).await.unwrap_err();
-    assert!(matches!(&e, crate::error::AppError::BadRequest(m) if m.key == "err-remote-not-member"), "{e:?}");
+    let r = s.app.state.remote_runner.run(&s.app.state, &link, false, true).await;
+    assert!(matches!(r, Err(crate::error::AppError::Forbidden)), "{r:?}");
+    assert!(crate::domain::remote::links_of(&s.app.state, &alice).await.unwrap().is_empty(), "the link outlived the membership");
+    assert_eq!(accounts().await, 0, "its account stayed with the sealed password");
+
+    // the group goes to the bin (bob is the last member now)
+    let bob = s.app.principal("bob").await;
+    let id = a_link_into(&s.app, "bob", "group.familie", &s.familie).await;
+    let link = crate::domain::remote::link_of(&s.app.state, &bob, &id).await.unwrap();
+    crate::domain::groups::trash(&s.app.state, &bob, "group.familie", None).await.unwrap();
+    assert!(crate::domain::remote::may_write(&s.app.state, &link).await.is_err());
+    assert!(crate::domain::remote::links_of(&s.app.state, &bob).await.unwrap().is_empty(), "the link outlived the group");
 }
 
 /// Choosing an owner is the same right as on "create": the user or a group they are in. The check
@@ -537,16 +561,12 @@ async fn a_link_can_fill_a_group_collection() {
 async fn an_import_or_link_into_a_foreign_group_is_refused() {
     let s = seed().await;
     let mut carol = s.app.login("carol").await;
-    for path in ["/settings/remote/import", "/settings/remote/link"] {
-        let r = carol
-            .json(Method::POST, path, json!({"handle": "nope", "kind": "cal", "href": "/remote.php/dav/calendars/c/x/", "owner": "group.familie"}))
-            .await;
-        // the link route answers "no key" first where sync is off; it must never be a success
-        assert!(r.status == StatusCode::FORBIDDEN || (path.ends_with("link") && r.status == StatusCode::BAD_REQUEST), "{path}: {}", r.status);
-        assert_ne!(r.status, StatusCode::OK);
-    }
-    let r = carol.json(Method::POST, "/settings/remote/import", json!({"handle": "nope", "kind": "cal", "href": "/x/", "owner": "group.familie"})).await;
-    assert_eq!(r.status, StatusCode::FORBIDDEN, "the owner is checked before the handle");
+    let body = json!({"handle": "nope", "kind": "cal", "href": "/remote.php/dav/calendars/c/x/", "owner": "group.familie"});
+    // 403, not the unknown handle's answer: the owner is checked first
+    assert_eq!(carol.json(Method::POST, "/settings/remote/import", body.clone()).await.status, StatusCode::FORBIDDEN);
+    // the link route answers "no key" (400) before that where sync is off
+    let r = carol.json(Method::POST, "/settings/remote/link", body).await;
+    assert!(matches!(r.status, StatusCode::FORBIDDEN | StatusCode::BAD_REQUEST), "{}", r.status);
 }
 
 /// Any member may delete a group collection, and its link has to go with it — whoever made the

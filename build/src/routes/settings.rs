@@ -189,8 +189,7 @@ impl SettingsPage {
         serde_json::to_string(&self.remote_servers).map(crate::render::script_json).unwrap_or_else(|_| "[]".into())
     }
     /// The sync link of one collection, if it has one. A collection has at most one
-    /// (`UNIQUE (owner, kind, local_id)`, migration 20), so the first match is the answer. The owner
-    /// is part of the match: a group calendar may share its id with one of the user's own.
+    /// (`UNIQUE (owner, kind, local_id)`, migration 20), so the first match is the answer.
     pub fn link_for(&self, kind: &str, owner: &str, local_id: &str) -> Option<&RemoteLinkRow> {
         self.remote_links.iter().find(|l| l.kind == kind && l.owner == owner && l.local_id == local_id)
     }

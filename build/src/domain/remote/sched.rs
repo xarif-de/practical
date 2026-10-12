@@ -78,12 +78,8 @@ impl Runner {
         let _held = lock.lock().await;
         // re-read: the link may have changed while we waited for the lock
         let link = super::link_by_id(state, &link.id).await?;
+        super::may_write(state, &link).await?;
         self.claim(state, &link).await?;
-        // recorded like any failed round, so the link's row says why it stopped
-        if let Err(e) = super::may_write(state, &link).await {
-            round::store_failure(state, &link, &e).await?;
-            return Err(e);
-        }
         let (_, dav) = super::dav_for(state, &link).await?;
         let mut out = round::run(state, &link, &dav, force_full).await;
         /* A change that landed WHILE this round ran is not in the change list it read, and the
@@ -92,6 +88,8 @@ impl Runner {
            the lock is free. */
         if out.is_ok() && std::mem::take(&mut self.links.lock().unwrap().get_mut(&link.id).map(|e| std::mem::take(&mut e.again)).unwrap_or(false)) {
             let link = super::link_by_id(state, &link.id).await?;
+            // a membership lost during the first round ends the link here, not one round later
+            super::may_write(state, &link).await?;
             out = round::run(state, &link, &dav, false).await;
         }
         match &out {

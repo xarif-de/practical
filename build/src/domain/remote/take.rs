@@ -77,11 +77,10 @@ fn as_document(kind: Kind, parts: &[String]) -> String {
     }
 }
 
-/// A one-off copy into a collection of `owner` (the user or one of their groups). Returns (local id, objects).
+/// A one-off copy into a collection of `owner` (the user or one of their groups; the route checked it
+/// before the remote was asked for anything). Returns (local id, objects).
 #[allow(clippy::too_many_arguments)]
 pub async fn import(state: &AppState, user: &Principal, owner: &str, dav: &Dav, kind: Kind, href: &str, name: &str, color: &str) -> AppResult<(String, usize)> {
-    // before the remote is asked for anything: a refusal after the download would waste it
-    collections::ensure_owner(user, owner)?;
     let m = meta(dav, kind, href).await?;
     let parts = fetch_all(dav, kind, href).await?;
     create_local(state, user, owner, kind, &m, name, color, &parts).await
@@ -103,7 +102,6 @@ pub async fn link(
 ) -> AppResult<(String, usize, String)> {
     // every refusal happens BEFORE the local collection exists: an error after that would leave an
     // empty calendar behind that the user did not ask for
-    collections::ensure_owner(user, owner)?;
     super::room_for_a_link(state, user, account_id, kind, href).await?;
     let link_id = {
         let m = meta_with(state, user, account_id, kind, href).await?;

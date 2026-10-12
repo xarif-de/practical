@@ -104,6 +104,8 @@
     const origin = q('.rm-origin'), go = q('.rm-go'), wait = q('.rm-wait'), busy = q('.rm-busy');
     const picked = q('.rm-picked'), list = q('.rm-list'), take = q('.rm-take');
     let handle = null, polling = null, chosen = null;
+    // the first-start hint follows the list in and out (onboarding/guide.js)
+    const listed = () => document.dispatchEvent(new CustomEvent('practical:remote-list'));
 
     /* The address is required and nothing starts without it. Checked here so the user is told at
        the field rather than by a failed request; the server checks it again (`origin_of`) and the
@@ -236,6 +238,8 @@
       // a second click while the first is still polling would leave the first interval running for
       // ever on a handle nobody reads, and overwrite the handle the user is granting
       stop();
+      // a new sign-in: the list of the previous one must not be taken with the new handle
+      if (!picked.hidden) { picked.hidden = true; chosen = null; take.disabled = true; listed(); }
       go.disabled = true;
       /* A credential this user already granted for the same address is used again, so a second
          import or a second link asks for no sign-in at all. 404 means there is nothing to reuse —
@@ -273,9 +277,7 @@
       if (!tell(r).ok) return;
       const items = kind === 'cal' ? r.data.calendars : r.data.addressbooks;
       picked.hidden = false;
-      // the first-start hint moves from the address to the list (onboarding/guide.js)
-      const offered = () => document.dispatchEvent(new CustomEvent('practical:remote-offered'));
-      if (!items.length) { list.innerHTML = `<div class="cell noic"><span>${escQ(T.nothing)}</span></div>`; take.disabled = true; offered(); return; }
+      if (!items.length) { list.innerHTML = `<div class="cell noic"><span>${escQ(T.nothing)}</span></div>`; take.disabled = true; listed(); return; }
       /* A toggle per row, which is how the settings ask for several things at once (the component
          set of a new calendar). Everything is on to begin with: a user who signed in to take their
          calendars over means all of them more often than one. */
@@ -293,7 +295,7 @@
       take.disabled = false;
       list.querySelectorAll('.rm-pick').forEach(c => c.addEventListener('change', pickChanged));
       pickChanged();
-      offered();
+      listed();
     }
 
     /** Which rows are ticked. */
@@ -322,6 +324,8 @@
       if (!handle || !picks.length) { say(T['need-pick']); return; }
       const direction = sync ? (form.querySelector('input[name=rmdir]:checked') || {}).value || 'both' : null;
       const every = sync ? +(q('.rm-every') || {}).value || 5 : null;
+      // read once: the batch has one owner, whatever the select shows while it runs
+      const owner = (q('.rm-owner') || {}).value || '';
 
       /* One request per collection, so the dialog can name the one that is running AND divide the
          bar by their number — no progress has to be asked of the server for that. With a single
@@ -335,7 +339,7 @@
         let last = { ok: true };
         for (const [i, c] of picks.entries()) {
           dlg.at(i, picks.length, c.name);
-          const body = { handle, kind, href: c.href, name: c.name, color: c.color || '', owner: (q('.rm-owner') || {}).value || '' };
+          const body = { handle, kind, href: c.href, name: c.name, color: c.color || '', owner };
           if (sync) {
             body.direction = direction;
             body.every_min = every;
