@@ -62,7 +62,7 @@ quick-xml = "0.42"
 # the account's FILES too (Nextcloud has no calendar-only scope), so a copy of the SQLite
 # file must not hand it over. ChaCha20-Poly1305 and not AES-GCM because `chacha20` is
 # already resolved in the graph (web-push), so no new cipher subtree.
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 web-push = { git = "https://github.com/lennart-k/rust-web-push" }
 openidconnect = "4.0"
 regex = "1.13"
