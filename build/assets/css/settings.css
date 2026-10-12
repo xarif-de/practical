@@ -178,9 +178,11 @@
 .rm-dlg { width: min(420px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--fg); box-shadow: 0 12px 40px rgba(0,0,0,.18); }
 .rm-dlg::backdrop { background: rgba(0,0,0,.35); }
 .rm-dlg h2 { margin: 0 0 14px; font-size: 17px; }
-.rm-dlg .rm-dlg-now { margin: 10px 0 0; font-size: 13px; color: var(--fg-2); min-height: 1.3em; }
-.rm-dlg .rm-dlg-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--fg-2); }
-.rm-dlg .rm-dlg-list li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+.rm-dlg .rm-dlg-now { margin: 10px 0 0; font-size: 13px; color: var(--fg-2); min-height: 1.3em; overflow-wrap: anywhere; }
+/* A collection name and a server message are foreign text of any length: without a break they
+   widen the dialog, and a long batch would grow it past the window. */
+.rm-dlg .rm-dlg-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--fg-2); max-height: 40vh; overflow-y: auto; }
+.rm-dlg .rm-dlg-list li { display: flex; gap: 8px; align-items: center; padding: 3px 0; overflow-wrap: anywhere; }
 .rm-dlg .rm-dlg-list .ico { width: 15px; height: 15px; flex: none; }
 .rm-dlg .rm-dlg-list li.bad { color: var(--today); }
 .rm-dlg .rm-dlg-foot { display: flex; justify-content: flex-end; margin-top: 14px; }

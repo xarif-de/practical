@@ -12,9 +12,12 @@
   // the form for n by the page locale's CLDR rules, the one the server would pick
   const PR = new Intl.PluralRules(LOC);
   window.plural = (s, n) => { if (typeof s === 'string' && s.startsWith('{"')) try { s = JSON.parse(s); } catch (_) { return s; } return s && typeof s === 'object' ? s[PR.select(n)] ?? s.other : s; };
-  /* Placeholders are substituted LONGEST NAME FIRST: `%n` is a prefix of `%name`, so insertion
-     order would turn "Hole %name … (%n von %of)" into "Hole 1ame … (1 von 4)". Measured. */
-  window.tr = (k, v) => { let s = S[k] ?? k; if (s && typeof s === 'object') s = plural(s, +(v || {})[s.$]); if (v) for (const [n, x] of Object.entries(v).sort((a, b) => b[0].length - a[0].length)) s = s.split('%' + n).join(x); return s; };
+  /* Placeholders are substituted in ONE pass: substituting them one after another turned
+     "Hole %name … (%n von %of)" into "Hole 1ame … (1 von 4)" (`%n` matched inside `%name`), and
+     doing the longest name first only moved the problem to the VALUES — a remote collection called
+     "%n" would have been replaced by the count on the next name's turn. `%x` with no value of that
+     name is left alone, so a literal per cent in a text survives. */
+  window.tr = (k, v) => { let s = S[k] ?? k; if (s && typeof s === 'object') s = plural(s, +(v || {})[s.$]); return v ? s.replace(/%(\w+)/g, (m, n) => (n in v ? v[n] : m)) : s; };
   window.trs = (prefix, names) => Object.fromEntries(names.map(n => [n, tr(prefix + n)]));
   // one formatter per option set: building one per call cost 65 ms for 1,700 history times, reusing it 1.1 ms (measured in node)
   const fmts = new Map(), f = o => { const k = JSON.stringify(o); let x = fmts.get(k); if (!x) fmts.set(k, x = new Intl.DateTimeFormat(LOC, o)); return x; };

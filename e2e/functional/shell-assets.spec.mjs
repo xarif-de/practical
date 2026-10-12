@@ -61,14 +61,29 @@ test('app.js reads its strings from the language script', async ({ page }) => {
   expect(t.n).toBeGreaterThan(300);
   expect(t.cancel).toBe('Abbrechen');
   expect(t.missing).toBe('js-no-such-key');
-  /* A placeholder whose name is a PREFIX of another must not eat it. Measured: with insertion
-     order, "Hole %name … (%n von %of)" came out as "Hole 1ame … (1 von 4)", because `%n` matched
-     inside `%name` first. The substitution therefore goes longest name first (core.js `tr`). */
+  /* A placeholder whose name is a PREFIX of another must not eat it. Measured: substituting one
+     after another, "Hole %name … (%n von %of)" came out as "Hole 1ame … (1 von 4)", because `%n`
+     matched inside `%name`. `tr` therefore substitutes in ONE pass (core.js). */
   const ph = await page.evaluate(() => {
     window.I18N['js-ph-probe'] = 'a %name b %n c %of d';
     return tr('js-ph-probe', { n: 1, of: 4, name: 'X' });
   });
   expect(ph).toBe('a X b 1 c 4 d');
+  /* And one pass means a VALUE is never read as a placeholder either: a remote collection may be
+     called anything, including "%n". Longest-name-first would have substituted it into the text and
+     the count would then have replaced it. */
+  const inj = await page.evaluate(() => {
+    window.I18N['js-ph-probe2'] = 'got %name of %n';
+    return [tr('js-ph-probe2', { n: 7, name: '%n' }), tr('js-ph-probe2', { n: 7, name: '%missing' })];
+  });
+  expect(inj[0]).toBe('got %n of 7');
+  expect(inj[1]).toBe('got %missing of 7');
+  // a per cent sign with no value of that name is left alone
+  const pct = await page.evaluate(() => {
+    window.I18N['js-ph-probe3'] = '50%complete and %n done';
+    return tr('js-ph-probe3', { n: 2 });
+  });
+  expect(pct).toBe('50%complete and 2 done');
 });
 
 test('"auto" scheme on a dark system is dark before the first paint', async ({ browser }) => {

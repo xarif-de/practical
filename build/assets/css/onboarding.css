@@ -74,7 +74,11 @@
    (.onb-ring, placed by guide.js over their union), because any one of the ways is enough and a
    ring per row read as a list of things to do. */
 .onb-grouped::after { content: none; }
-.onb-ring { position: fixed; z-index: 47; pointer-events: none; border-radius: 12px;
+/* ABSOLUTE, not fixed: the ring is placed once by `aim`, and only `place` runs on scroll (a re-aim
+   measures every target, which must not happen per wheel tick). Fixed, it stayed behind while the
+   rows moved — including right after `aim`'s own smooth scrollIntoView. Absolute with document
+   coordinates travels with the rows and costs nothing. */
+.onb-ring { position: absolute; z-index: 47; pointer-events: none; border-radius: 12px;
   box-shadow: 0 0 0 2px var(--accent); animation: onb-pulse 1.9s ease-in-out infinite; }
 /* A small or inline target has no room for a ring inside it: an inset ring ate into the icon of the
    navigation button and into the text of the "‹ Einstellungen" link. Those get the ring outside,

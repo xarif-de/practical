@@ -15,6 +15,12 @@
      list serves all four pages, because it is the same question each time. */
   let SERVERS = [];
   try { SERVERS = JSON.parse($('#rm-servers')?.textContent || '[]'); } catch (_) { SERVERS = []; }
+  /* Closers of the suggestion boxes, one per page that has a field. Scroll fires per wheel tick, so
+     the four pages share one listener pair instead of binding their own. */
+  const CLOSERS = [];
+  const closeAllSug = () => CLOSERS.forEach(f => f());
+  addEventListener('scroll', closeAllSug, { passive: true, capture: true });
+  addEventListener('resize', closeAllSug);
 
   const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server', 'need-pick', 'doing-title']);
   T['doing'] = T['doing-title'];
@@ -80,9 +86,15 @@
   };
   if (dlgEl) {
     dlgEl.addEventListener('cancel', e => { if (dlg.busy) e.preventDefault(); });
-    dlg.close.addEventListener('click', () => {
-      if (dlg.reloadOnClose) { practical.leaving = true; location.hash = '#collections'; location.reload(); return; }
-      dlgEl.close();
+    dlg.close.addEventListener('click', () => dlgEl.close());
+    /* On `close`, not on the button: Escape closes the dialog too, and it used to leave the page
+       behind with a collection list that no longer matched what was taken. */
+    dlgEl.addEventListener('close', () => {
+      if (!dlg.reloadOnClose) return;
+      dlg.reloadOnClose = false;
+      practical.leaving = true;
+      location.hash = '#collections';
+      location.reload();
     });
   }
 
@@ -178,9 +190,9 @@
       });
       origin.addEventListener('blur', () => setTimeout(closeSug, 120));
       // a fixed box does not travel with the page: scrolling or resizing closes it rather than
-      // leaving it beside the field it belongs to
-      addEventListener('scroll', () => { if (!sug.hidden) closeSug(); }, { passive: true, capture: true });
-      addEventListener('resize', () => { if (!sug.hidden) closeSug(); });
+      // leaving it beside the field it belongs to. One shared pair of listeners: four pages carry
+      // one of these fields each, and only one of them can be open.
+      CLOSERS.push(closeSug);
     }
 
     origin.addEventListener('keydown', e => {
@@ -221,6 +233,9 @@
 
     go.addEventListener('click', async () => {
       if (needServer()) return;
+      // a second click while the first is still polling would leave the first interval running for
+      // ever on a handle nobody reads, and overwrite the handle the user is granting
+      stop();
       go.disabled = true;
       /* A credential this user already granted for the same address is used again, so a second
          import or a second link asks for no sign-in at all. 404 means there is nothing to reuse —
@@ -237,6 +252,7 @@
       const r = await req('/settings/remote/login', { method: 'POST', json: { origin: origin.value } });
       go.disabled = false;
       if (!tell(r).ok) return;
+      stop();
       handle = r.data.handle;
       // a user gesture opened this, so the popup blocker lets it through
       window.open(r.data.url, '_blank', 'noopener');
@@ -360,6 +376,7 @@
     const post = async body => tell(await send(`/settings/remote/link/${encodeURIComponent(id)}`, 'POST', body));
     const now = row.querySelector('.rm-now'), drop = row.querySelector('.rm-drop');
     if (now) now.addEventListener('click', async () => { now.disabled = true; const r = await post({ action: 'now' }); now.disabled = false; if (r.ok) { practical.leaving = true; location.reload(); } });
-    if (drop) drop.addEventListener('click', async () => { if (!confirm(tr('js-rm-remove-hint'))) return; const r = await post({ action: 'remove' }); if (r.ok) { practical.leaving = true; location.hash = '#collections'; location.reload(); } });
+    // the shell's own confirmation: `confirm` has no focus return, no Escape handling and no style
+    if (drop) drop.addEventListener('click', async () => { if (!(await practical.ask(tr('js-rm-remove-hint')))) return; const r = await post({ action: 'remove' }); if (r.ok) { practical.leaving = true; location.hash = '#collections'; location.reload(); } });
   });
 })();

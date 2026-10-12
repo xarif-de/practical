@@ -177,7 +177,13 @@ function aim(targets) {
       document.body.appendChild(ring);
     }
     const P = 4; // air between the rows and the ring
-    Object.assign(ring.style, { left: `${u.left - P}px`, top: `${u.top - P}px`, width: `${u.width + 2 * P}px`, height: `${u.height + 2 * P}px` });
+    // document coordinates (the box is absolute): `union` measures against the viewport
+    Object.assign(ring.style, {
+      left: `${u.left + scrollX - P}px`,
+      top: `${u.top + scrollY - P}px`,
+      width: `${u.width + 2 * P}px`,
+      height: `${u.height + 2 * P}px`,
+    });
   } else {
     ring?.remove();
   }
