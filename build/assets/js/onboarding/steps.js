@@ -68,6 +68,14 @@ const collection = (id, kind) => ({
        the same reason the create page points at the name field first. */
     if (w === `remote-${sh}` || w === `remote-sync-${sh}`) {
       const k = w.startsWith('remote-sync') ? '-sync' : '';
+      /* Connected: the server's collections are listed (remote.js `offer` unhides `.rm-picked`), so
+         the address is done and the way on is the choice plus the button that starts it. The two
+         are ONE instruction in sequence, not alternatives — `steps` keeps the "take any one" line
+         away. */
+      const picked = $(`#${w} .rm-picked`);
+      if (picked && vis(picked)) {
+        return { sel: q(`#${w} .rm-list`, `#${w} .rm-take`), lead: `js-onb-remote${k}-pick-${sh}`, body: `js-onb-remote${k}-pick-${sh}-b`, steps: true };
+      }
       const addr = $(`#${w} .rm-origin`);
       /* `.rm-in`, not the field inside it: the arrow stops 5 px short of its TARGET, and with the
          field as target that tip landed on the arrow button beside it, inside the row (measured:

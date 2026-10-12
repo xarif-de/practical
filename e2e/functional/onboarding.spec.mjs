@@ -297,6 +297,48 @@ test('the create page suggests a name and hands the whole word to the first keys
 
 // alice: her language is answered by the first test, and the fixture gave her everything else, so
 // she is the user the server lets through
+/* Once connected, the address is done: the hint leaves it for the list of the server's collections
+   and the button that starts the batch. The two sync pages take the same branch (steps.js, `k`) but
+   only exist with PRACTICAL__REMOTE_SECRET_KEY, which the e2e servers do not set: a key would add
+   the sync row every collection test counts. Connecting happens without a
+   page load or a hash change, so this is also the test that the hint hears of it at all (it stayed
+   on the address before). The two targets are one instruction in sequence, so the "take any one of
+   them" line must not appear. No Nextcloud: the sign-in is reused and the list is answered here. */
+test('connected to a server, the hint points at the collections and the button that starts', async ({ page }) => {
+  await asFresh(page);
+  await page.route('**/settings/remote/reuse', r => r.fulfill({ json: { handle: 'h' } }));
+  await page.route('**/settings/remote/collections', r => r.fulfill({ json: {
+    calendars: [{ name: 'Familie', color: '#ff9500', href: '/c/1/', writable: true }, { name: 'Arbeit', href: '/c/2/', writable: true }],
+    addressbooks: [{ name: 'Kontakte', href: '/a/1/', writable: true }],
+  } }));
+  const cases = [
+    ['#remote-cal', 'Kalender', 'Einmalig importieren', 'Wähle die Kalender und starte den Import'],
+    ['#remote-ab', 'Adressbuch', 'Einmalig importieren', 'Wähle die Adressbücher und starte den Import'],
+  ];
+  for (const [page_, step, button, lead] of cases) {
+    await hash(page, page_);
+    await settle(page);
+    await expect(head(page)).toHaveText(step);
+    // before: the address is what is missing
+    expect(await page.$$eval('.onb-aim', els => els.map(e => e.className)), page_).toEqual([expect.stringContaining('rm-in')]);
+    await page.locator(`${page_} .rm-origin`).fill('nextcloud.example.com');
+    await page.locator(`${page_} .rm-go`).click();
+    await expect(page.locator(`${page_} .rm-list .rm-pick`).first()).toBeVisible();
+    await expect(page.locator(`${page_} .rm-take.onb-aim`)).toBeVisible();
+    // after: the list and the button, ringed together, under one arrow
+    const aimed = await page.$$eval('.onb-aim', els => els.map(e => (e.classList.contains('rm-list') ? 'list' : e.classList.contains('rm-take') ? e.textContent.trim() : e.className)));
+    expect(aimed, page_).toEqual(['list', button]);
+    await expect(page.locator('.onb-ring')).toBeVisible();
+    expect(await arrows(page)).toBe(1);
+    await expect(page.locator('.onb-tip .onb-lead')).toContainText(lead);
+    await expect(page.locator('.onb-tip .onb-body')).toContainText(button);
+    await expect(page.locator('.onb-tip .onb-either'), 'choose, then start: not alternatives').toHaveCount(0);
+  }
+  await page.unroute('**/settings/remote/reuse');
+  await page.unroute('**/settings/remote/collections');
+  await andBack(page);
+});
+
 test('the settings bring the hints back after they were through', async ({ page }) => {
   await page.goto('/settings');
   expect(await open(page)).toEqual([]);

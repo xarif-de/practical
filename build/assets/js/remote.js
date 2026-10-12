@@ -273,7 +273,9 @@
       if (!tell(r).ok) return;
       const items = kind === 'cal' ? r.data.calendars : r.data.addressbooks;
       picked.hidden = false;
-      if (!items.length) { list.innerHTML = `<div class="cell noic"><span>${escQ(T.nothing)}</span></div>`; take.disabled = true; return; }
+      // the first-start hint moves from the address to the list (onboarding/guide.js)
+      const offered = () => document.dispatchEvent(new CustomEvent('practical:remote-offered'));
+      if (!items.length) { list.innerHTML = `<div class="cell noic"><span>${escQ(T.nothing)}</span></div>`; take.disabled = true; offered(); return; }
       /* A toggle per row, which is how the settings ask for several things at once (the component
          set of a new calendar). Everything is on to begin with: a user who signed in to take their
          calendars over means all of them more often than one. */
@@ -291,6 +293,7 @@
       take.disabled = false;
       list.querySelectorAll('.rm-pick').forEach(c => c.addEventListener('change', pickChanged));
       pickChanged();
+      offered();
     }
 
     /** Which rows are ticked. */

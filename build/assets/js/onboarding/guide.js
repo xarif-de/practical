@@ -54,7 +54,7 @@ function guide() {
     </div>
     <p class="onb-lead">${esc(ST.say(wp.lead))}</p>
     <p class="onb-body">${esc(ST.say(wp.body))}</p>
-    ${targets.length > 1 ? `<p class="onb-either">${esc(tr('js-onb-either', { n: targets.length }))}</p>` : ''}
+    ${targets.length > 1 && !wp.steps ? `<p class="onb-either">${esc(tr('js-onb-either', { n: targets.length }))}</p>` : ''}
     ${wp.confirm ? `<p class="onb-keep"><button type="button" class="link" data-confirm="${esc(wp.confirm)}">${ico('check')}<span>${esc(tr(wp.confirmText))}</span></button></p>` : ''}`;
   // confirming what is in force: the server records the mark and writes nothing (domain::onboarding)
   const ok = $('[data-confirm]', tip);
@@ -295,4 +295,6 @@ function draw() {
   }, { capture: true });   // the picker's own handler empties the hash, so `where()` must be read first
   addEventListener('hashchange', refresh);
   document.addEventListener('practical:prefs-saved', refresh);
+  // connecting to a server lists its collections without a page load or a hash change (remote.js)
+  document.addEventListener('practical:remote-offered', reaim);
 })();
