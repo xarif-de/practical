@@ -245,3 +245,20 @@ async fn a_json_island_cannot_close_its_own_script_element() {
     }
     assert!(carried > 0, "the name reached no page: the test proves nothing");
 }
+
+/// A collection of a group the user is in closes its step too (decided 2026-10-12): "create", an
+/// import and a sync can all put the first calendar there, and a user whose first calendar is the
+/// family's has somewhere to put an appointment. Only the kind the group has counts.
+#[tokio::test]
+async fn a_group_collection_closes_the_step_of_its_kind() {
+    let s = seed().await;
+    // bob owns nothing, but group.familie has a calendar and no address book
+    let mut bob = s.app.login("bob").await;
+    assert_eq!(state(&mut bob).await["open"], json!(["lang", "tz", "regions", "school", "addressbook"]));
+
+    // carol owns nothing and is in no group, until alice adds her
+    let mut carol = s.app.login("carol").await;
+    assert!(state(&mut carol).await["open"].as_array().unwrap().contains(&json!("calendar")));
+    crate::domain::groups::add_member(&s.app.state, &s.app.principal("alice").await, "group.familie", "carol").await.unwrap();
+    assert!(!state(&mut carol).await["open"].as_array().unwrap().contains(&json!("calendar")), "the family calendar did not count");
+}

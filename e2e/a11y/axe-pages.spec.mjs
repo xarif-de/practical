@@ -54,10 +54,11 @@ a11y('history: map and list, the login page', async (page, check) => {
 
 /* First start (domain::onboarding): the fixture is through the setup, so the states have to be asked
    for — `reopen` forgets the completion and keeps the confirmations, and the fixture confirmed none.
-   bob owns no collections, no zone and no regions, so every point is open for him; alice would have
-   only the language left. */
+   carol owns no collections, is in no group and has no zone and no regions, so every point is open
+   for her; alice would have only the language left, and bob's group calendar and address book close
+   those two points for him (2026-10-12). */
 a11y('first start: the language gate, a hint and the closing word', async (page, check) => {
-  await loginAs(page, 'bob');
+  await loginAs(page, 'carol');
   await go(page, '/settings', '#settings');
   const csrf = await page.locator('meta[name=csrf]').getAttribute('content');
   const post = (path, form = {}) => page.request.post(path, { form: { csrf, ...form }, headers: { Origin: BASE } });

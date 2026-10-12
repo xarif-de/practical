@@ -4,8 +4,9 @@
 // The fixture is through the setup, so every test asks for it again — `reopen` forgets the
 // completion and keeps the confirmations. The three users differ, and the tests use that:
 //   alice  collections, named regions and a stored zone → only the language is open
-//   bob    nothing of it                                → every point is open
-//   carol  the same, used where a test has to WRITE
+//   bob    no collection of his own, but group.familie has a calendar and an address book, which
+//          count (2026-10-12) → the zone and the two holiday points are open
+//   carol  nothing of it, in no group → every point is open; the default, and the last tests WRITE
 // A spec file gets fresh fixture copies, but its tests share one DB. A preference can be written
 // back over HTTP; a confirmation cannot, so whoever confirms runs after whoever needs that point
 // open. The 24 h nap has no button any more (nothing but the hints is left), so the clock side of
@@ -38,7 +39,7 @@ const savePrefs = (page, fields) => post(page, '/settings/prefs', {
 });
 
 /** A user with everything still to do, standing on the settings page with the first hint up. */
-async function asFresh(page, who = 'bob') {
+async function asFresh(page, who = 'carol') {
   await loginAs(page, who);
   await page.goto('/settings');
   await reopen(page);
@@ -112,7 +113,7 @@ test('a hint leads click by click from the calendar to the real setting', async 
    rest of app.js with it — including these hints (found 2026-10-09). It has to be carol: bob is in
    a group and therefore SEES an address book, which fills the picker and hides the fault. */
 test('the pages of a user who owns nothing still work, hints and all', async ({ page }) => {
-  await asFresh(page, 'carol');
+  await asFresh(page);
   for (const path of ['/contacts', '/calendar', '/tasks']) {
     await page.goto(path);
     await page.locator('.onb-tip').waitFor();
@@ -222,6 +223,14 @@ test('a collection offers every way at once: one arrow, one ring around them all
   const own = await page.$$eval('.onb-aim', els => els.map(e => getComputedStyle(e, '::after').content));
   expect(own.every(c => c === 'none'), `a grouped row still draws its own ring: ${own}`).toBe(true);
   await expect(page.locator('.onb-tip .onb-either')).toBeVisible();
+  await andBack(page);
+});
+
+/* A calendar or an address book of a group the user is in closes its point, as one of their own
+   does: "create", an import and a sync can all put the first one there. */
+test('a group collection closes the point of its kind', async ({ page }) => {
+  await asFresh(page, 'bob');
+  expect(await open(page)).toEqual(['tz', 'regions', 'school']);
   await andBack(page);
 });
 

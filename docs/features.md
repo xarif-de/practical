@@ -27,7 +27,8 @@ what you are choosing; only the button ends it. The answer decides every word yo
 comes first and on its own.
 
 After that a speech bubble points at the settings button and tells you what is still missing: your time zone, the
-region for public holidays, the region for school holidays, a calendar and an address book. There is nothing else —
+region for public holidays, the region for school holidays, a calendar and an address book (one of a group you are
+in counts too). There is nothing else —
 no list to work through and no buttons in the bubble. You go where you like, in any order, and the bubble follows:
 it points at the place where that setting lives and walks you there click by click — the settings button, then the
 row, then the control. You end up having made the setting yourself, in the place you will find it again next time.

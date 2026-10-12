@@ -13,7 +13,9 @@
 //!   proposed (2026-10-09). The mark carries the other answer, "I want none of this", for which
 //!   there is no value to store.
 //! - **Derived** ([`Step::Calendar`], [`Step::Addressbook`]): the collection exists, created or
-//!   imported — no mark needed, the thing itself is the evidence.
+//!   imported — no mark needed, the thing itself is the evidence. One of a group the user is in
+//!   counts as well: it is as good a place for an entry, and "create", an import and a sync can all
+//!   put the first one there (decided 2026-10-12).
 //!
 //! Public and school holidays are two points, not one: a user may want the one and not the other,
 //! and each is set in its own row of the settings (asked for 2026-10-09).
@@ -169,13 +171,28 @@ pub async fn view(state: &crate::state::SharedState, principal: &str, rec: &Reco
     })
 }
 
-/// What the user already has, from their preferences and their collections. Takes the preferences
-/// the caller has read, so no page view reads that row twice.
+/// What the user already has, from their preferences and their collections — their own, and where
+/// they own none, their groups'. The groups are asked only then, so a user with a calendar of their
+/// own pays nothing more. Takes the preferences the caller has read, so no page view reads that row
+/// twice.
 pub async fn facts(state: &crate::state::SharedState, principal: &str, p: &crate::domain::prefs::Prefs) -> Facts {
-    use rustical_store::{AddressbookReadStore, CalendarReadStore};
+    use rustical_store::{AddressbookReadStore, CalendarReadStore, auth::AuthenticationProvider};
+    let mut calendars = state.calendars.get_calendars(principal).await.map_or(0, |v| v.len());
+    let mut addressbooks = state.addressbooks.get_addressbooks(principal).await.map_or(0, |v| v.len());
+    if calendars == 0 || addressbooks == 0 {
+        let user = state.principals.get_principal(principal).await.ok().flatten();
+        for g in user.iter().flat_map(|u| u.memberships_without_self()).filter(|g| *g != principal) {
+            if calendars == 0 {
+                calendars = state.calendars.get_calendars(g).await.map_or(0, |v| v.len());
+            }
+            if addressbooks == 0 {
+                addressbooks = state.addressbooks.get_addressbooks(g).await.map_or(0, |v| v.len());
+            }
+        }
+    }
     Facts {
-        calendars: state.calendars.get_calendars(principal).await.map_or(0, |v| v.len()),
-        addressbooks: state.addressbooks.get_addressbooks(principal).await.map_or(0, |v| v.len()),
+        calendars,
+        addressbooks,
         tz_set: p.timezone.as_deref().is_some_and(|z| !z.trim().is_empty()),
         regions: p.regions(false).len(),
         school: p.regions(true).len(),
