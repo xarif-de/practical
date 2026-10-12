@@ -79,6 +79,11 @@ impl Runner {
         // re-read: the link may have changed while we waited for the lock
         let link = super::link_by_id(state, &link.id).await?;
         self.claim(state, &link).await?;
+        // recorded like any failed round, so the link's row says why it stopped
+        if let Err(e) = super::may_write(state, &link).await {
+            round::store_failure(state, &link, &e).await?;
+            return Err(e);
+        }
         let (_, dav) = super::dav_for(state, &link).await?;
         let mut out = round::run(state, &link, &dav, force_full).await;
         /* A change that landed WHILE this round ran is not in the change list it read, and the
@@ -144,8 +149,8 @@ impl Runner {
 async fn current_token(state: &AppState, link: &Link) -> AppResult<i64> {
     use rustical_store::{AddressbookReadStore, CalendarReadStore};
     Ok(match link.kind {
-        super::dav::Kind::Cal => state.calendars.get_calendar(&link.principal, &link.local_id, false).await?.synctoken,
-        super::dav::Kind::Ab => state.addressbooks.get_addressbook(&link.principal, &link.local_id, false).await?.synctoken,
+        super::dav::Kind::Cal => state.calendars.get_calendar(&link.owner, &link.local_id, false).await?.synctoken,
+        super::dav::Kind::Ab => state.addressbooks.get_addressbook(&link.owner, &link.local_id, false).await?.synctoken,
     })
 }
 

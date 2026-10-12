@@ -12,6 +12,11 @@ use serde_json::json;
 /// A link of alice's, written straight into the tables: the routes that create one need a granted
 /// login, which a test cannot have without a browser.
 async fn a_link(app: &crate::testkit::TestApp, principal: &str, local_id: &str) -> String {
+    a_link_into(app, principal, principal, local_id).await
+}
+
+/// A link of `principal`'s whose local collection belongs to `owner` (one of their groups).
+async fn a_link_into(app: &crate::testkit::TestApp, principal: &str, owner: &str, local_id: &str) -> String {
     let (account, link) = (uuid::Uuid::new_v4().to_string(), uuid::Uuid::new_v4().to_string());
     sqlx::query("INSERT INTO practical_remote_accounts (id, principal, base_url, login, secret) VALUES (?, ?, 'https://example.org', ?, X'00')")
         .bind(&account)
@@ -21,12 +26,13 @@ async fn a_link(app: &crate::testkit::TestApp, principal: &str, local_id: &str) 
         .await
         .unwrap();
     sqlx::query(
-        "INSERT INTO practical_remote_links (id, account_id, principal, kind, local_id, href, direction, every_min, local_token)
-           VALUES (?, ?, ?, 'cal', ?, '/remote.php/dav/calendars/x/y/', 'both', 5, 0)",
+        "INSERT INTO practical_remote_links (id, account_id, principal, owner, kind, local_id, href, direction, every_min, local_token)
+           VALUES (?, ?, ?, ?, 'cal', ?, '/remote.php/dav/calendars/x/y/', 'both', 5, 0)",
     )
     .bind(&link)
     .bind(&account)
     .bind(principal)
+    .bind(owner)
     .bind(local_id)
     .execute(&app.state.db)
     .await
@@ -490,4 +496,69 @@ async fn a_credential_stays_usable_after_the_batch_that_fetched_it() {
     assert_eq!(logins.reusable("https://example.org", "alice").as_deref(), Some(h.as_str()));
     assert!(logins.reusable("https://other.example.org", "alice").is_none(), "another server must not match");
     assert!(logins.reusable("https://example.org", "bob").is_none(), "another user must not match");
+}
+
+/// A link may fill a GROUP collection (migration 20): the account stays the user's, the collection
+/// is the group's. Rounds address the collection as its owner, the settings show the link on the
+/// group calendar, and the push path finds it from a change event, which names the owner.
+#[tokio::test]
+async fn a_link_can_fill_a_group_collection() {
+    let s = seed().await;
+    let alice = s.app.principal("alice").await;
+    let link_id = a_link_into(&s.app, "alice", "group.familie", &s.familie).await;
+    let link = crate::domain::remote::link_of(&s.app.state, &alice, &link_id).await.unwrap();
+    assert_eq!((link.principal.as_str(), link.owner.as_str()), ("alice", "group.familie"));
+
+    // what a change event carries is the collection's owner and id
+    let found = crate::domain::remote::link_for_collection(&s.app.state, "group.familie", crate::domain::remote::dav::Kind::Cal, &s.familie).await.unwrap();
+    assert_eq!(found.map(|l| l.id), Some(link_id.clone()), "the push path cannot find a group collection's link");
+    let mine = crate::domain::remote::link_for_collection(&s.app.state, "alice", crate::domain::remote::dav::Kind::Cal, &s.familie).await.unwrap();
+    assert!(mine.is_none(), "the owner is part of the key, the caller is not");
+
+    // the settings page puts it on the group calendar's page, not on any of alice's own
+    let mut web = s.app.login("alice").await;
+    let html = String::from_utf8_lossy(&web.get("/settings").await.ok().bytes).to_string();
+    let page = html.split(&format!("id=\"cal-group.familie-{}\"", s.familie)).nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default();
+    assert!(page.contains(&format!("data-rm-id=\"{link_id}\"")), "the group calendar does not show its link");
+    let own = html.split(&format!("id=\"cal-alice-{}\"", s.arbeit)).nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default();
+    assert!(!own.contains("rm-drop"), "a calendar without a link shows one");
+
+    // a member may write it; after leaving the group the round refuses and says why
+    crate::domain::remote::may_write(&s.app.state, &link).await.unwrap();
+    crate::domain::groups::remove_member(&s.app.state, &alice, "group.familie", "alice").await.unwrap();
+    let e = crate::domain::remote::may_write(&s.app.state, &link).await.unwrap_err();
+    assert!(matches!(&e, crate::error::AppError::BadRequest(m) if m.key == "err-remote-not-member"), "{e:?}");
+}
+
+/// Choosing an owner is the same right as on "create": the user or a group they are in. The check
+/// comes before the sign-in handle is even looked at, so a refused owner costs no request to the
+/// remote and leaves nothing behind.
+#[tokio::test]
+async fn an_import_or_link_into_a_foreign_group_is_refused() {
+    let s = seed().await;
+    let mut carol = s.app.login("carol").await;
+    for path in ["/settings/remote/import", "/settings/remote/link"] {
+        let r = carol
+            .json(Method::POST, path, json!({"handle": "nope", "kind": "cal", "href": "/remote.php/dav/calendars/c/x/", "owner": "group.familie"}))
+            .await;
+        // the link route answers "no key" first where sync is off; it must never be a success
+        assert!(r.status == StatusCode::FORBIDDEN || (path.ends_with("link") && r.status == StatusCode::BAD_REQUEST), "{path}: {}", r.status);
+        assert_ne!(r.status, StatusCode::OK);
+    }
+    let r = carol.json(Method::POST, "/settings/remote/import", json!({"handle": "nope", "kind": "cal", "href": "/x/", "owner": "group.familie"})).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN, "the owner is checked before the handle");
+}
+
+/// Any member may delete a group collection, and its link has to go with it — whoever made the
+/// link. Before migration 20 the lookup went by the CALLER, so bob's delete left alice's link
+/// running against a calendar in the bin.
+#[tokio::test]
+async fn deleting_a_group_collection_ends_the_link_another_member_made() {
+    let s = seed().await;
+    let alice = s.app.principal("alice").await;
+    let bob = s.app.principal("bob").await;
+    a_link_into(&s.app, "alice", "group.familie", &s.familie).await;
+    crate::domain::collections::delete_calendar(&s.app.state, &bob, "group.familie", &s.familie, false).await.unwrap();
+    let left = crate::domain::remote::links_of(&s.app.state, &alice).await.unwrap();
+    assert!(left.is_empty(), "alice's link outlived the group calendar bob deleted: {left:?}");
 }

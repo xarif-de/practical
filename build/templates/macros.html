@@ -100,6 +100,11 @@
       <div class="label">{{ ctx.t("rm-pick") }}</div>
       <div class="group rm-list"></div>
       <p class="foot">{{ ctx.t("rm-pick-hint") }}</p>
+      {#- one owner for the whole batch, offered like on "create" (coll_fields): the user or a group -#}
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val"><select class="rm-owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
+      </div>
+      <p class="foot">{{ ctx.t("rm-owner-hint") }}</p>
       {%- if sync %}
       <div class="label">{{ ctx.t("rm-direction") }}</div>
       <div class="group">

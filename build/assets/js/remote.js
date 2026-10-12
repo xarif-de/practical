@@ -335,7 +335,7 @@
         let last = { ok: true };
         for (const [i, c] of picks.entries()) {
           dlg.at(i, picks.length, c.name);
-          const body = { handle, kind, href: c.href, name: c.name, color: c.color || '' };
+          const body = { handle, kind, href: c.href, name: c.name, color: c.color || '', owner: (q('.rm-owner') || {}).value || '' };
           if (sync) {
             body.direction = direction;
             body.every_min = every;

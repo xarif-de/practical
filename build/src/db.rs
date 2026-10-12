@@ -327,6 +327,20 @@ CREATE TABLE practical_holidays (
            PRIMARY KEY (principal, origin)
          );",
     ),
+    (
+        20,
+        /* Whose the LOCAL collection of a link is. Until now that was always the user who made the
+           link (`principal`), so one column served both: the account and its sealed password belong
+           to the user, the collection may now belong to a group the user is in. Rounds read and
+           write the collection as `owner`; account, rights and listing stay with `principal`.
+
+           The old UNIQUE (principal, kind, local_id) stays (SQLite cannot drop a table constraint
+           without a rebuild); the one that matters now is per owner, because two members' links on
+           one group collection would push each other's writes around. */
+        "ALTER TABLE practical_remote_links ADD COLUMN owner TEXT NOT NULL DEFAULT '';
+         UPDATE practical_remote_links SET owner = principal;
+         CREATE UNIQUE INDEX practical_remote_links_owner ON practical_remote_links (owner, kind, local_id);",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

@@ -77,11 +77,14 @@ fn as_document(kind: Kind, parts: &[String]) -> String {
     }
 }
 
-/// A one-off copy. Returns (local id, objects).
-pub async fn import(state: &AppState, user: &Principal, dav: &Dav, kind: Kind, href: &str, name: &str, color: &str) -> AppResult<(String, usize)> {
+/// A one-off copy into a collection of `owner` (the user or one of their groups). Returns (local id, objects).
+#[allow(clippy::too_many_arguments)]
+pub async fn import(state: &AppState, user: &Principal, owner: &str, dav: &Dav, kind: Kind, href: &str, name: &str, color: &str) -> AppResult<(String, usize)> {
+    // before the remote is asked for anything: a refusal after the download would waste it
+    collections::ensure_owner(user, owner)?;
     let m = meta(dav, kind, href).await?;
     let parts = fetch_all(dav, kind, href).await?;
-    create_local(state, user, kind, &m, name, color, &parts).await
+    create_local(state, user, owner, kind, &m, name, color, &parts).await
 }
 
 /// Creates the local collection and the link, then runs the first round so the mapping is complete
@@ -89,6 +92,7 @@ pub async fn import(state: &AppState, user: &Principal, dav: &Dav, kind: Kind, h
 pub async fn link(
     state: &AppState,
     user: &Principal,
+    owner: &str,
     account_id: &str,
     kind: Kind,
     href: &str,
@@ -99,13 +103,14 @@ pub async fn link(
 ) -> AppResult<(String, usize, String)> {
     // every refusal happens BEFORE the local collection exists: an error after that would leave an
     // empty calendar behind that the user did not ask for
+    collections::ensure_owner(user, owner)?;
     super::room_for_a_link(state, user, account_id, kind, href).await?;
     let link_id = {
         let m = meta_with(state, user, account_id, kind, href).await?;
         // a collection we may not write to can only ever be pulled
         let two_way = two_way && m.writable;
-        let (local_id, _) = create_local(state, user, kind, &m, name, color, &[]).await?;
-        super::create_link(state, user, account_id, kind, &local_id, href, two_way, every_min).await?
+        let (local_id, _) = create_local(state, user, owner, kind, &m, name, color, &[]).await?;
+        super::create_link(state, user, owner, account_id, kind, &local_id, href, two_way, every_min).await?
     };
     let link = super::link_of(state, user, &link_id).await?;
     /* Through the runner, not round::run directly: it takes the link's lease and records the token
@@ -121,6 +126,7 @@ async fn meta_with(state: &AppState, user: &Principal, account_id: &str, kind: K
             id: String::new(),
             account_id: account_id.to_string(),
             principal: user.id.clone(),
+            owner: user.id.clone(),
             kind,
             local_id: String::new(),
             href: href.to_string(),
@@ -144,14 +150,15 @@ async fn meta_with(state: &AppState, user: &Principal, account_id: &str, kind: K
 
 /// The local collection, through the existing importer. An empty object list means "create it
 /// empty", which is what a link does before its first round.
-async fn create_local(state: &AppState, user: &Principal, kind: Kind, m: &super::dav::Collection, name: &str, color: &str, parts: &[String]) -> AppResult<(String, usize)> {
+#[allow(clippy::too_many_arguments)]
+async fn create_local(state: &AppState, user: &Principal, owner: &str, kind: Kind, m: &super::dav::Collection, name: &str, color: &str, parts: &[String]) -> AppResult<(String, usize)> {
     let name = if name.trim().is_empty() { m.name.clone() } else { name.trim().to_string() };
     let color = if color.trim().is_empty() { m.color.clone() } else { color.trim().to_string() };
     let color = if collections::valid_color(&color) { color } else { collections::PALETTE[0].to_string() };
     match kind {
         Kind::Cal => {
             let n = collections::NewCalendar {
-                owner: user.id.clone(),
+                owner: owner.to_string(),
                 name,
                 color,
                 description: m.description.clone(),
@@ -167,10 +174,10 @@ async fn create_local(state: &AppState, user: &Principal, kind: Kind, m: &super:
         }
         Kind::Ab => {
             if parts.is_empty() {
-                let id = collections::create_addressbook(state, user, &user.id, &name, &color, &m.description).await?;
+                let id = collections::create_addressbook(state, user, owner, &name, &color, &m.description).await?;
                 Ok((id, 0))
             } else {
-                transfer::import_new_addressbook(state, user, &user.id, &name, &color, &m.description, as_document(kind, parts).as_bytes()).await
+                transfer::import_new_addressbook(state, user, owner, &name, &color, &m.description, as_document(kind, parts).as_bytes()).await
             }
         }
     }

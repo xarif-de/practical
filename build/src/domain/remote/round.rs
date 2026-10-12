@@ -66,13 +66,13 @@ async fn local_changes(state: &AppState, link: &Link) -> AppResult<LocalChanges>
     match link.kind {
         Kind::Cal => {
             // the token first, for the reason in this module's header
-            let before = state.calendars.get_calendar(&link.principal, &link.local_id, false).await?.synctoken;
-            let (changed, gone, _) = state.calendars.sync_changes(&link.principal, &link.local_id, link.local_token).await?;
+            let before = state.calendars.get_calendar(&link.owner, &link.local_id, false).await?.synctoken;
+            let (changed, gone, _) = state.calendars.sync_changes(&link.owner, &link.local_id, link.local_token).await?;
             Ok((changed.into_iter().map(|(id, o)| (id, o.get_ics().to_string())).collect(), gone, before))
         }
         Kind::Ab => {
-            let before = state.addressbooks.get_addressbook(&link.principal, &link.local_id, false).await?.synctoken;
-            let (changed, gone, _) = AddressbookReadStore::sync_changes(&*state.addressbooks, &link.principal, &link.local_id, link.local_token).await?;
+            let before = state.addressbooks.get_addressbook(&link.owner, &link.local_id, false).await?.synctoken;
+            let (changed, gone, _) = AddressbookReadStore::sync_changes(&*state.addressbooks, &link.owner, &link.local_id, link.local_token).await?;
             Ok((changed.into_iter().map(|(id, o)| (id, o.get_vcf().to_string())).collect(), gone, before))
         }
     }
@@ -82,8 +82,8 @@ async fn local_changes(state: &AppState, link: &Link) -> AppResult<LocalChanges>
 /// check of step 4: if this differs from the recorded `mine`, the object changed during the round.
 async fn stored(state: &AppState, link: &Link, object_id: &str) -> Option<String> {
     match link.kind {
-        Kind::Cal => state.calendars.get_object(&link.principal, &link.local_id, object_id, false).await.ok().map(|o| o.get_ics().to_string()),
-        Kind::Ab => AddressbookReadStore::get_object(&*state.addressbooks, &link.principal, &link.local_id, object_id, false).await.ok().map(|o| o.get_vcf().to_string()),
+        Kind::Cal => state.calendars.get_object(&link.owner, &link.local_id, object_id, false).await.ok().map(|o| o.get_ics().to_string()),
+        Kind::Ab => AddressbookReadStore::get_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, false).await.ok().map(|o| o.get_vcf().to_string()),
     }
 }
 
@@ -91,20 +91,20 @@ async fn stored(state: &AppState, link: &Link, object_id: &str) -> Option<String
 /// alone, so no network wait ever holds the global lock.
 async fn put_local(state: &AppState, link: &Link, object_id: &str, text: &str) -> AppResult<String> {
     let mut g = history::begin(state, history::Actor::sync(&link.principal)).await;
-    g.object(store_of(link.kind), &link.principal, &link.local_id, object_id);
+    g.object(store_of(link.kind), &link.owner, &link.local_id, object_id);
     let fp = match link.kind {
         Kind::Cal => {
             let normalised = crate::domain::transfer::complete_ics(text);
             let o = rustical_ical::CalendarObject::import(&normalised, Some(super::parser_options()))?;
             let fp = o.get_etag();
-            state.calendars.put_object(&link.principal, &link.local_id, object_id, o, true).await?;
+            state.calendars.put_object(&link.owner, &link.local_id, object_id, o, true).await?;
             fp
         }
         Kind::Ab => {
             let normalised = crate::domain::contacts::bare_params_as_type(text);
             let o = rustical_ical::AddressObject::from_vcf(normalised.into_owned())?;
             let fp = o.get_etag();
-            AddressbookWriteStore::put_object(&*state.addressbooks, &link.principal, &link.local_id, object_id, o, true).await?;
+            AddressbookWriteStore::put_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, o, true).await?;
             fp
         }
     };
@@ -114,11 +114,11 @@ async fn put_local(state: &AppState, link: &Link, object_id: &str, text: &str) -
 
 async fn del_local(state: &AppState, link: &Link, object_id: &str) -> AppResult<()> {
     let mut g = history::begin(state, history::Actor::sync(&link.principal)).await;
-    g.object(store_of(link.kind), &link.principal, &link.local_id, object_id);
+    g.object(store_of(link.kind), &link.owner, &link.local_id, object_id);
     // use_trashbin = true: a remote deletion stays recoverable through the change history's undo
     match link.kind {
-        Kind::Cal => state.calendars.delete_object(&link.principal, &link.local_id, object_id, true).await?,
-        Kind::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, &link.principal, &link.local_id, object_id, true).await?,
+        Kind::Cal => state.calendars.delete_object(&link.owner, &link.local_id, object_id, true).await?,
+        Kind::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, true).await?,
     }
     g.commit().await;
     Ok(())

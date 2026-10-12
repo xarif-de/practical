@@ -516,6 +516,31 @@ test('the remote address row: own suggestion list, Enter connects, the arrow is 
   await page.unroute('**/settings/remote/**');
 });
 
+/* The owner of what is taken over is chosen once for the batch, like on "create": the user or one
+   of their groups. Every collection request of the batch carries it. No Nextcloud: the sign-in is
+   reused and the list is answered here, and the import itself is answered too, so nothing is made. */
+test('the remote batch takes an owner, and every request of it carries the one chosen', async ({ page }) => {
+  await reloadAt(page, '#remote-cal');
+  const bodies = [];
+  await page.route('**/settings/remote/reuse', r => r.fulfill({ json: { handle: 'h' } }));
+  await page.route('**/settings/remote/collections', r => r.fulfill({ json: {
+    calendars: [{ name: 'Eins', href: '/c/1/', writable: true }, { name: 'Zwei', href: '/c/2/', writable: true }], addressbooks: [],
+  } }));
+  await page.route('**/settings/remote/import', r => { bodies.push(r.request().postDataJSON()); r.fulfill({ status: 500, contentType: 'text/plain', body: 'stop' }); });
+  await page.route('**/settings/remote/done', r => r.fulfill({ json: {} }));
+  await page.locator('#remote-cal .rm-origin').fill('nextcloud.example.com');
+  await page.locator('#remote-cal .rm-go').click();
+  const owner = page.locator('#remote-cal .rm-owner');
+  await expect(owner).toBeVisible();
+  // the user first, as on "create", then the groups
+  expect(await owner.inputValue()).toBe('alice');
+  await owner.selectOption('group.familie');
+  await page.locator('#remote-cal .rm-take').click();
+  await expect.poll(() => bodies.length).toBe(2);
+  expect(bodies.map(b => b.owner)).toEqual(['group.familie', 'group.familie']);
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 /* The suggestion list itself, with addresses put in by hand: it opens on focus, narrows as letters
    are typed, and ↑/↓ plus Enter take one. It has to be `fixed` and placed from script — the
    settings group around the field is `overflow: hidden` for its rounded corners, which clipped an

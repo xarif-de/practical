@@ -102,6 +102,8 @@ pub struct SettingsPage {
 pub struct RemoteLinkRow {
     pub id: String,
     pub kind: String,
+    /// whose the collection is (the user or a group): ids are unique per owner only
+    pub owner: String,
     pub local_id: String,
     pub two_way: bool,
     pub ran_at: String,
@@ -187,9 +189,10 @@ impl SettingsPage {
         serde_json::to_string(&self.remote_servers).map(crate::render::script_json).unwrap_or_else(|_| "[]".into())
     }
     /// The sync link of one collection, if it has one. A collection has at most one
-    /// (`UNIQUE (principal, kind, local_id)` in migration 18), so the first match is the answer.
-    pub fn link_for(&self, kind: &str, local_id: &str) -> Option<&RemoteLinkRow> {
-        self.remote_links.iter().find(|l| l.kind == kind && l.local_id == local_id)
+    /// (`UNIQUE (owner, kind, local_id)`, migration 20), so the first match is the answer. The owner
+    /// is part of the match: a group calendar may share its id with one of the user's own.
+    pub fn link_for(&self, kind: &str, owner: &str, local_id: &str) -> Option<&RemoteLinkRow> {
+        self.remote_links.iter().find(|l| l.kind == kind && l.owner == owner && l.local_id == local_id)
     }
     /// VEVENT/VTODO/VJOURNAL as words ("Termine, Aufgaben")
     pub fn comps(&self, c: &[String]) -> String {
@@ -210,6 +213,7 @@ async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<Rem
         out.push(RemoteLinkRow {
             id: l.id,
             kind: kind.to_string(),
+            owner: l.owner,
             local_id: l.local_id,
             two_way: l.two_way,
             // the stored value is RFC 3339 with microseconds; shown like every other timestamp in

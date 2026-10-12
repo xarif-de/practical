@@ -59,7 +59,10 @@ pub struct Account {
 pub struct Link {
     pub id: String,
     pub account_id: String,
+    /// the user who made the link: account, credential, rights and the settings rows are theirs
     pub principal: String,
+    /// whose the local collection is: `principal` itself or a group they are in (migration 20)
+    pub owner: String,
     pub kind: Kind,
     pub local_id: String,
     pub href: String,
@@ -81,6 +84,7 @@ fn row_to_link(r: &sqlx::sqlite::SqliteRow) -> AppResult<Link> {
         id: r.get("id"),
         account_id: r.get("account_id"),
         principal: r.get("principal"),
+        owner: r.get("owner"),
         kind: Kind::parse(r.get("kind"))?,
         local_id: r.get("local_id"),
         href: r.get("href"),
@@ -364,9 +368,9 @@ pub async fn link_of(state: &AppState, user: &Principal, id: &str) -> AppResult<
 /// and a third-party CalDAV client talking to RustiCal could not be stopped anyway. A local edit in
 /// a `pull` collection is simply overwritten the next time that object changes remotely, and the
 /// link row in the settings says the direction is one-way.
-pub async fn link_for_collection(state: &AppState, principal: &str, kind: Kind, local_id: &str) -> AppResult<Option<Link>> {
-    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE principal = ? AND kind = ? AND local_id = ?")
-        .bind(principal)
+pub async fn link_for_collection(state: &AppState, owner: &str, kind: Kind, local_id: &str) -> AppResult<Option<Link>> {
+    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE owner = ? AND kind = ? AND local_id = ?")
+        .bind(owner)
         .bind(kind.as_str())
         .bind(local_id)
         .fetch_optional(&state.db)
@@ -395,16 +399,19 @@ pub async fn room_for_a_link(state: &AppState, user: &Principal, account_id: &st
     Ok(())
 }
 
-pub async fn create_link(state: &AppState, user: &Principal, account_id: &str, kind: Kind, local_id: &str, href: &str, two_way: bool, every_min: i64) -> AppResult<String> {
+#[allow(clippy::too_many_arguments)]
+pub async fn create_link(state: &AppState, user: &Principal, owner: &str, account_id: &str, kind: Kind, local_id: &str, href: &str, two_way: bool, every_min: i64) -> AppResult<String> {
+    crate::domain::collections::ensure_owner(user, owner)?;
     room_for_a_link(state, user, account_id, kind, href).await?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO practical_remote_links (id, account_id, principal, kind, local_id, href, direction, every_min, local_token)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        "INSERT INTO practical_remote_links (id, account_id, principal, owner, kind, local_id, href, direction, every_min, local_token)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
     )
     .bind(&id)
     .bind(account_id)
     .bind(&user.id)
+    .bind(owner)
     .bind(kind.as_str())
     .bind(local_id)
     .bind(href)
@@ -432,16 +439,34 @@ pub async fn set_link(state: &AppState, user: &Principal, id: &str, two_way: Opt
 /// sibling link would stop working.
 pub async fn delete_link(state: &AppState, user: &Principal, id: &str) -> AppResult<()> {
     let link = link_of(state, user, id).await?;
-    let creds = account_of(state, &link).await.ok();
-    sqlx::query("DELETE FROM practical_remote_links WHERE id = ? AND principal = ?").bind(id).bind(&user.id).execute(&state.db).await?;
+    drop_link(state, &link).await
+}
+
+/// [`delete_link`] without the caller check, for a link that has to go whoever asks: its collection
+/// is being deleted, and on a group collection that may be any member, not the one who made it.
+async fn drop_link(state: &AppState, link: &Link) -> AppResult<()> {
+    let creds = account_of(state, link).await.ok();
+    sqlx::query("DELETE FROM practical_remote_links WHERE id = ? AND principal = ?").bind(&link.id).bind(&link.principal).execute(&state.db).await?;
     let left: i64 = sqlx::query_scalar("SELECT count(*) FROM practical_remote_links WHERE account_id = ?").bind(&link.account_id).fetch_one(&state.db).await?;
     if left == 0 {
         if let Some((a, s)) = creds {
             login::revoke(&state.remote_http, &a.base_url, &a.login, &s).await;
         }
-        sqlx::query("DELETE FROM practical_remote_accounts WHERE id = ? AND principal = ?").bind(&link.account_id).bind(&user.id).execute(&state.db).await?;
+        sqlx::query("DELETE FROM practical_remote_accounts WHERE id = ? AND principal = ?").bind(&link.account_id).bind(&link.principal).execute(&state.db).await?;
     }
     Ok(())
+}
+
+/// Whether the link's user may still write its collection. Checked before every round: a member who
+/// left the group would otherwise keep writing into it with their own Nextcloud's data. The user is
+/// read fresh, because a membership is not part of the link.
+pub async fn may_write(state: &AppState, link: &Link) -> AppResult<()> {
+    use rustical_store::auth::AuthenticationProvider;
+    if link.owner == link.principal {
+        return Ok(());
+    }
+    let user = state.principals.get_principal(&link.principal).await?.ok_or(AppError::bad("err-remote-not-member"))?;
+    if user.is_principal(&link.owner) { Ok(()) } else { Err(AppError::bad("err-remote-not-member")) }
 }
 
 /// Ends the link of a collection that is being deleted, if it has one. A link lives on its
@@ -452,19 +477,15 @@ pub async fn delete_link(state: &AppState, user: &Principal, id: &str) -> AppRes
 /// Never fails the deletion it accompanies: a remote that cannot be reached must not keep a user
 /// from throwing a collection away. The app password is then left at the remote, where its own
 /// security settings can revoke it — the same case as a page closed mid-import (`login::revoke`).
-pub async fn unlink_collection(state: &AppState, user: &Principal, kind: dav::Kind, local_id: &str) {
-    let id: Option<String> =
-        sqlx::query_scalar("SELECT id FROM practical_remote_links WHERE principal = ? AND kind = ? AND local_id = ?")
-            .bind(&user.id)
-            .bind(kind.as_str())
-            .bind(local_id)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None);
-    if let Some(id) = id
-        && let Err(e) = delete_link(state, user, &id).await
+///
+/// Found by the collection's OWNER, not by the caller: a group collection may be deleted by any
+/// member, and before migration 20 a lookup by caller and id alone could also end the link of the
+/// caller's own collection that happened to share the id.
+pub async fn unlink_collection(state: &AppState, owner: &str, kind: dav::Kind, local_id: &str) {
+    if let Ok(Some(link)) = link_for_collection(state, owner, kind, local_id).await
+        && let Err(e) = drop_link(state, &link).await
     {
-        tracing::warn!(link = %id, error = %e, "could not end the link of a deleted collection");
+        tracing::warn!(link = %link.id, error = %e, "could not end the link of a deleted collection");
     }
 }
 

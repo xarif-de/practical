@@ -133,7 +133,7 @@
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
     {% for c in calendars %}
-    {%- if let Some(l) = self.link_for("cal", c.id.as_str()) %}
+    {%- if let Some(l) = self.link_for("cal", c.principal.as_str(), c.id.as_str()) %}
     {{ m::coll_row("cal", "calendar", c, self.comps(c.components), l.id.as_str()) }}
     {%- else %}
     <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}">{{ m::ico("calendar") }}</span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
@@ -148,7 +148,7 @@
   <div class="label">{{ ctx.t("addressbooks") }}</div>
   <div class="group">
     {% for a in addressbooks %}
-    {%- if let Some(l) = self.link_for("ab", a.id.as_str()) %}
+    {%- if let Some(l) = self.link_for("ab", a.principal.as_str(), a.id.as_str()) %}
     {{ m::coll_row("ab", "contacts", a, "", l.id.as_str()) }}
     {%- else %}
     <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}" data-cpk-swatch="addressbook:{{ a.principal }}/{{ a.id }}">{{ m::ico("contacts") }}</span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
@@ -163,13 +163,13 @@
 </section>
 
 {% for c in calendars %}
-{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.id.as_str())) %}
+{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str())) %}
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
     {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}{% endcall %}
 {% endfor %}
 
 {% for a in addressbooks %}
-{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.id.as_str())) %}{% endcall %}
+{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str())) %}{% endcall %}
 {% endfor %}
 
 <section class="page" id="new-calendar">

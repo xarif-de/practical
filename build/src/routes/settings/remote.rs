@@ -109,6 +109,15 @@ pub(super) struct TakeQ {
     direction: String,
     #[serde(default)]
     every_min: Option<i64>,
+    /// whose the new collection is: the user (empty) or one of their groups, as on "create"
+    #[serde(default)]
+    owner: String,
+}
+
+impl TakeQ {
+    fn owner_or(&self, user: &Principal) -> String {
+        if self.owner.trim().is_empty() { user.id.clone() } else { self.owner.trim().to_string() }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -123,15 +132,17 @@ pub(super) struct Took {
 /// importer, and stores no credential at all.
 pub(super) async fn import(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(q): crate::extract::Json<TakeQ>) -> AppResult<Response> {
     let kind = Kind::parse(&q.kind)?;
+    let owner = q.owner_or(&user);
+    crate::domain::collections::ensure_owner(&user, &owner)?;
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
     let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = remote::dav::Dav::new(state.remote_http.clone(), base, login.clone(), secret.clone());
-    let (id, count) = remote::take::import(&state, &user, &dav, kind, &q.href, &q.name, &q.color).await?;
+    let (id, count) = remote::take::import(&state, &user, &owner, &dav, kind, &q.href, &q.name, &q.color).await?;
     /* The credential is NOT destroyed here: a user may take several collections from one sign-in,
        and each one is its own request. Doing it per import left the second request without a
        password (measured: picking two calendars imported one). `/settings/remote/done` is what
        ends the sign-in, and the handle expires on its own if the page is simply left. */
-    Ok(axum::Json(Took { id, owner: user.id, count, link_id: None }).into_response())
+    Ok(axum::Json(Took { id, owner, count, link_id: None }).into_response())
 }
 
 /// Creates the local collection AND the link, then runs the first round at once so the user sees
@@ -141,6 +152,9 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
         return Err(AppError::bad("err-remote-no-key"));
     }
     let kind = Kind::parse(&q.kind)?;
+    let owner = q.owner_or(&user);
+    // before the account row: a refused owner must not leave a sealed credential behind
+    crate::domain::collections::ensure_owner(&user, &owner)?;
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
 
     let account = remote::upsert_account(&state, &user, &origin, &login, &secret).await?;
@@ -152,6 +166,7 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
     let (id, count, link_id) = remote::take::link(
         &state,
         &user,
+        &owner,
         &account,
         kind,
         &q.href,
@@ -161,7 +176,7 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
         q.every_min.unwrap_or(remote::DEFAULT_EVERY_MIN),
     )
     .await?;
-    Ok(axum::Json(Took { id, owner: user.id, count, link_id: Some(link_id) }).into_response())
+    Ok(axum::Json(Took { id, owner, count, link_id: Some(link_id) }).into_response())
 }
 
 /// Ends a sign-in: forgets the handle and destroys the app password at the remote. Called once the
