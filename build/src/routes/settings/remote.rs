@@ -144,6 +144,11 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
 
     let account = remote::upsert_account(&state, &user, &origin, &login, &secret).await?;
+    /* Claimed here, not after the round: the account row now holds this credential sealed, so the
+       copy in memory must never be revoked. Claiming afterwards left a window in which a failing
+       first round (a network error) returned with the link already created and the credential still
+       unclaimed — `done` then parked it and the reaper revoked a password the link needed. */
+    state.remote_logins.claim(&q.handle, &user.id);
     let (id, count, link_id) = remote::take::link(
         &state,
         &user,
@@ -152,12 +157,10 @@ pub(super) async fn link(State(state): State<SharedState>, user: Principal, _: c
         &q.href,
         &q.name,
         &q.color,
-        q.direction != "pull",
+        remote::two_way_from(&q.direction)?,
         q.every_min.unwrap_or(remote::DEFAULT_EVERY_MIN),
     )
     .await?;
-    // the account now keeps this credential sealed; revoking the copy in memory would kill the link
-    state.remote_logins.claim(&q.handle, &user.id);
     Ok(axum::Json(Took { id, owner: user.id, count, link_id: Some(link_id) }).into_response())
 }
 
@@ -253,7 +256,8 @@ pub(super) async fn edit(State(state): State<SharedState>, user: Principal, Path
         }
         _ => {}
     }
-    remote::set_link(&state, &user, &id, q.direction.as_deref().map(|d| d != "pull"), q.every_min).await?;
+    let dir = q.direction.as_deref().map(remote::two_way_from).transpose()?;
+    remote::set_link(&state, &user, &id, dir, q.every_min).await?;
     let after = remote::link_of(&state, &user, &id).await?;
     Ok(axum::Json(LinkState { ran_at: after.ran_at, err: after.err, pulled: 0, pushed: 0, conflicts: 0 }).into_response())
 }

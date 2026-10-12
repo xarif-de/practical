@@ -222,6 +222,42 @@ async fn the_ways_in_are_nested_under_import_and_sync() {
 }
 
 /// An IP literal never reaches the resolver: reqwest connects to an address directly, so
+/// An exemption names an ORIGIN, and the resolver can only ever match a NAME: DNS carries no port.
+/// So the port is compared where it is known, or `PRACTICAL__REMOTE_PRIVATE_ORIGINS=https://host`
+/// would exempt every port of that host from the public-address rule.
+#[tokio::test]
+async fn an_exemption_covers_one_origin_and_not_every_port_of_its_host() {
+    let app = crate::testkit::TestApp::with(|c| c.remote_private_origins = vec!["https://my.example.org".into()]).await;
+    let o = |t: &str| crate::domain::remote::origin_of(&app.state, t);
+    assert_eq!(o("https://my.example.org").unwrap(), "https://my.example.org", "the configured origin");
+    assert_eq!(o("my.example.org").unwrap(), "https://my.example.org", "typed without a scheme");
+    for other in ["https://my.example.org:6443", "https://my.example.org:8443"] {
+        let r = o(other);
+        assert!(
+            matches!(&r, Err(crate::error::AppError::BadRequest(m)) if m.key == "err-remote-private"),
+            "{other} is not the exempt origin and must fall under the public rule: {r:?}"
+        );
+    }
+    // a host nobody exempted is left to the resolver, port or no port
+    assert_eq!(o("https://cloud.example.org:8443").unwrap(), "https://cloud.example.org:8443");
+}
+
+/// A direction that is neither "both" nor "pull" used to mean `both`, and that is the direction
+/// which WRITES to the user's own server. A typo must not pick it.
+#[test]
+fn an_unknown_direction_is_refused_rather_than_taken_for_writing() {
+    use crate::domain::remote::two_way_from;
+    assert_eq!(two_way_from("both").unwrap(), true);
+    assert_eq!(two_way_from("pull").unwrap(), false);
+    for bad in ["pul", "Both", "", "push", "both ", "BOTH"] {
+        let r = two_way_from(bad);
+        assert!(
+            matches!(&r, Err(crate::error::AppError::BadRequest(m)) if m.key == "err-remote-bad-direction"),
+            "{bad:?} was taken for a direction: {r:?}"
+        );
+    }
+}
+
 /// `PublicOrAllowed` is not consulted at all. Measured during development — `https://10.43.0.1`
 /// answered "timeout", which in a cluster is the difference between "refused" and "connected".
 /// The same rule therefore applies where the address is already known.

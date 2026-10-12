@@ -1681,6 +1681,7 @@ js-rm-entry-count = { $n ->
 js-rm-need-server = Please enter the address of your Nextcloud.
 err-remote-no-server = A server address is needed.
 err-remote-bad-server = That is not a server address. Something like nextcloud.example.com is expected.
+err-remote-bad-direction = That is not a direction.
 err-remote-https = The address must be reachable over https:// — otherwise the password and your events would travel in the clear.
 err-remote-private = That address is not on the open internet. For safety the server only reaches public addresses; an internal server has to be allowed by the operator.
 js-rm-need-pick = Please pick at least one.

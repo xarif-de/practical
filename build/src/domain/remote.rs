@@ -170,6 +170,17 @@ fn exempt_hosts(origins: &[String]) -> Vec<String> {
 ///   credential and a whole calendar would otherwise travel in the clear
 /// - no userinfo, no path, no query: `https://a@b/c?d` is not a server address, and taking one would
 ///   make the part that decides where we connect (the host) the part hardest to read
+/// "both" or "pull", and nothing else. Anything unknown was a typo on the way in and used to mean
+/// `both`, which is the direction that WRITES to the user's server — a default no mistake should
+/// reach.
+pub fn two_way_from(direction: &str) -> AppResult<bool> {
+    match direction {
+        "both" => Ok(true),
+        "pull" => Ok(false),
+        _ => Err(AppError::bad("err-remote-bad-direction")),
+    }
+}
+
 pub fn origin_of(state: &AppState, typed: &str) -> AppResult<String> {
     let typed = typed.trim();
     if typed.is_empty() {
@@ -196,11 +207,19 @@ pub fn origin_of(state: &AppState, typed: &str) -> AppResult<String> {
        nothing happened to listen there. So the same rule is applied here, where the address is
        already known, and the exemption list is honoured so an operator can still name one.
        `url::Host` is what parsed the host, so this costs no second parse of untrusted text. */
+    let exempt = &state.config.remote_private_origins;
     if let url::Host::Ipv4(_) | url::Host::Ipv6(_) = u.host().ok_or_else(|| AppError::bad("err-remote-bad-server"))? {
         let ip: std::net::IpAddr = host.trim_matches(['[', ']']).parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
-        if !crate::domain::push::public_ip(ip) && !exempt_hosts(&state.config.remote_private_origins).iter().any(|h| h == host) {
+        if !crate::domain::push::public_ip(ip) && !exempt.contains(&origin) {
             return Err(AppError::bad("err-remote-private"));
         }
+    }
+    /* The resolver can only match a NAME — DNS carries no port — so an exemption would otherwise
+       cover every port of that host, and the configuration says `scheme://host[:port]`. Here the
+       port is known, so an address whose host is exempt must be the exempt ORIGIN itself.
+       `config::remote_private_origins` normalises to the very format built above. */
+    if exempt_hosts(exempt).iter().any(|h| h == host) && !exempt.contains(&origin) {
+        return Err(AppError::bad("err-remote-private"));
     }
     Ok(origin)
 }
