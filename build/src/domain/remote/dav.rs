@@ -3,7 +3,8 @@
 //! MKCALENDAR, never a PROPPATCH, so a remote collection's own settings are untouched.
 //!
 //! Everything here was measured against nextcloud 35.0.1 (`e2e/nextcloud-dev.sh`), the version
-//! plan.xarif.de runs; `PLAN.md` records each measurement next to the decision it drove.
+//! plan.xarif.de runs, and each measurement is stated where it decided something — the four items
+//! below, and `tests.rs`, whose fixtures are answers from that server rather than hand-written.
 //!
 //! - [`Dav::discover`] walks `.well-known` → `current-user-principal` → the two home sets. The
 //!   `.well-known` hop is a 301 and is the ONLY redirect this client follows (one hop, same origin).
@@ -522,8 +523,9 @@ fn props_for(kind: Kind) -> String {
     propfind(&p)
 }
 
-/// Five conditions, every one of which must hold. Measured against nextcloud 35.0.1; `PLAN.md` §4
-/// carries the table this came from.
+/// Five conditions, every one of which must hold. Each was measured against nextcloud 35.0.1, and
+/// the reason is stated with the condition; `tests::only_the_users_own_real_collections_are_offered` runs them
+/// against that server's real answer to a home listing.
 ///
 /// 1. the collection's own resourcetype — drops a webcal subscription (`cs:subscribed` WITHOUT
 ///    `cal:calendar`), the scheduling inbox/outbox and the trash bin;

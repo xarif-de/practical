@@ -14,7 +14,10 @@
 //! reach the pod's neighbours. A deployment's own Nextcloud may resolve privately from inside the
 //! cluster, which is what `PRACTICAL__REMOTE_PRIVATE_ORIGINS` exempts — configuration, not input.
 //!
-//! `PLAN.md` carries the measurements behind every protocol decision.
+//! Every protocol decision here was measured against nextcloud 35.0.1 (`e2e/nextcloud-dev.sh`), and
+//! each measurement sits next to the thing it decided: in [`dav::offerable`] for which collections
+//! may be offered, in [`round`] for the order of a round and the two echoes, in [`seal`] for why a
+//! stored credential is encrypted, and in `tests.rs`, whose fixtures are real answers.
 
 pub mod dav;
 pub mod login;
