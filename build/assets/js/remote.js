@@ -272,8 +272,12 @@
 
     async function offer() {
       say(T.waiting);
+      const asked = handle;
       const r = await req('/settings/remote/collections', { method: 'POST', json: { handle } });
       say('');
+      // a newer sign-in started while this list was on its way: it would pair this server's
+      // collections with that sign-in's handle
+      if (asked !== handle) return;
       if (!tell(r).ok) return;
       const items = kind === 'cal' ? r.data.calendars : r.data.addressbooks;
       picked.hidden = false;

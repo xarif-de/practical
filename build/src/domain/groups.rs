@@ -194,11 +194,16 @@ pub async fn trash(state: &AppState, user: &Principal, gid: &str, typed_name: Op
     let members = state.principals.list_members(gid).await?;
     let cal_ids: Vec<String> = state.calendars.get_calendars(gid).await?.into_iter().map(|c| c.id).collect();
     let ab_ids: Vec<String> = state.addressbooks.get_addressbooks(gid).await?.into_iter().map(|a| a.id).collect();
+    use crate::domain::remote::{dav::Kind, unlink_collection};
+    // the links end here, as with any collection put in the bin; left to `may_write`, whether one
+    // survived a quick restore would depend on whether a round ran in between
     for id in &cal_ids {
         state.calendars.delete_calendar(gid, id, true).await?;
+        unlink_collection(state, gid, Kind::Cal, id).await;
     }
     for id in &ab_ids {
         state.addressbooks.delete_addressbook(gid, id, true).await?;
+        unlink_collection(state, gid, Kind::Ab, id).await;
     }
     for m in &members {
         state.principals.remove_membership(m, gid).await?;

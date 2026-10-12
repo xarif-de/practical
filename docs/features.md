@@ -341,7 +341,7 @@ tick the calendars and address books you want. There are two ways to take them:
 
 You also choose who owns what you take over: you, or one of your groups. A group's calendar is
 shared with all its members, as if it had been created there. A sync into a group calendar runs on
-your sign-in, so it stops when you leave the group.
+your sign-in, so it ends when you leave the group or the group goes to the trash.
 
 If both sides changed the same appointment between two rounds, the other server wins — your version
 is kept in the change history, where you can bring it back.

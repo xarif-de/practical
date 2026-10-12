@@ -545,12 +545,11 @@ async fn a_group_link_ends_when_its_user_cannot_reach_the_group_any_more() {
     assert!(crate::domain::remote::links_of(&s.app.state, &alice).await.unwrap().is_empty(), "the link outlived the membership");
     assert_eq!(accounts().await, 0, "its account stayed with the sealed password");
 
-    // the group goes to the bin (bob is the last member now)
+    // the group goes to the bin (bob is the last member now): the link ends at once, not at the
+    // next round, so a quick restore does not decide whether it survives
     let bob = s.app.principal("bob").await;
-    let id = a_link_into(&s.app, "bob", "group.familie", &s.familie).await;
-    let link = crate::domain::remote::link_of(&s.app.state, &bob, &id).await.unwrap();
+    a_link_into(&s.app, "bob", "group.familie", &s.familie).await;
     crate::domain::groups::trash(&s.app.state, &bob, "group.familie", None).await.unwrap();
-    assert!(crate::domain::remote::may_write(&s.app.state, &link).await.is_err());
     assert!(crate::domain::remote::links_of(&s.app.state, &bob).await.unwrap().is_empty(), "the link outlived the group");
 }
 
