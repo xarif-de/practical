@@ -261,6 +261,49 @@ fn an_object_changed_on_both_sides_is_not_pushed() {
     assert!(pushable("d", &remote_touched), "the remote knows nothing about it");
 }
 
+/// Our own push comes back in the next change list with the etag the server gave us. It must NOT
+/// count as a remote change: `pushable` would then refuse the next local edit of that object, and
+/// since a refused push is not a REFUSAL, the local token would advance past that edit and no later
+/// round would report it again. Exercises the production function, so building the set without the
+/// echo filter fails here.
+#[test]
+fn a_push_echo_is_not_a_remote_change() {
+    use super::Mapped;
+    use super::round::touched_remotely;
+    let m = |id: &str, href: &str, etag: &str| Mapped {
+        object_id: id.to_string(),
+        uid: id.to_string(),
+        href: href.to_string(),
+        etag: etag.to_string(),
+        mine: "fp".to_string(),
+    };
+    let map = [m("ours", "/c/ours.ics", "\"e1\""), m("theirs", "/c/theirs.ics", "\"e7\""), m("dropped", "/c/dropped.ics", "\"e9\"")];
+    let by_href: std::collections::HashMap<&str, &Mapped> = map.iter().map(|x| (x.href.as_str(), x)).collect();
+    let known = |h: &str| by_href.get(h).copied();
+
+    let changed = [
+        // what we wrote last round: same etag, so the remote did not touch it
+        ("/c/ours.ics".to_string(), "\"e1\"".to_string()),
+        // someone else wrote this one: a new etag
+        ("/c/theirs.ics".to_string(), "\"e8\"".to_string()),
+        // an href we have no record of, and one without an etag: neither is comparable
+        ("/c/new.ics".to_string(), "\"e2\"".to_string()),
+    ];
+    let gone = ["/c/dropped.ics".to_string()];
+    let touched = touched_remotely(&changed, &gone, &known);
+
+    assert!(!touched.contains("ours"), "our own echo must leave the object pushable");
+    assert!(touched.contains("theirs"), "a different etag is a real remote change");
+    assert!(touched.contains("dropped"), "a remote deletion blocks a local push");
+    assert_eq!(touched.len(), 2, "nothing else is touched: {touched:?}");
+
+    // the predicate itself, at its edges
+    use super::round::remote_echo;
+    assert!(remote_echo("\"e1\"", known("/c/ours.ics")), "the etag we recorded");
+    assert!(!remote_echo("", known("/c/ours.ics")), "no etag is never an echo");
+    assert!(!remote_echo("\"e1\"", None), "nothing recorded for this href");
+}
+
 /// A sabre token whose counter went BACKWARDS means the remote was restored or recreated. Detected
 /// in the same answer, with no extra request — measured: sending `…/sync/9999` to a collection at
 /// `…/sync/17` answers 207, zero responses, and the token `…/sync/17`, with no error at all.

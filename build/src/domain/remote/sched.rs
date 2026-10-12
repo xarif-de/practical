@@ -41,13 +41,22 @@ impl Runner {
     ///
     /// A second caller for the same link waits rather than running in parallel: both would read the
     /// same tokens, both would write them last, and one round's progress would be discarded.
-    pub async fn run(&self, state: &AppState, link: &Link, force_full: bool) -> AppResult<round::Report> {
+    ///
+    /// `wait` is what a triggered round does NOT do. Marking `again` and returning is the whole
+    /// value of that flag: applying a pull of N objects raises N change events of our own, and each
+    /// one waiting here would run a further round with its own request to the remote — measured as
+    /// one round per event behind a long one, where a single repeat covers them all. Only a caller
+    /// that reports a result to the user (the "sync now" button) waits.
+    pub async fn run(&self, state: &AppState, link: &Link, force_full: bool, wait: bool) -> AppResult<round::Report> {
         let lock = {
             let mut m = self.links.lock().unwrap();
             let e = m.entry(link.id.clone()).or_default();
             if e.lock.try_lock().is_err() {
                 // a round is in flight: ask it to repeat instead of queueing a second one
                 e.again = true;
+                if !wait {
+                    return Ok(round::Report::default());
+                }
             }
             e.lock.clone()
         };
@@ -166,7 +175,7 @@ pub fn spawn(state: SharedState) {
                 for link in links {
                     // sequential on purpose: a parallel fan-out would hit one server with N
                     // requests at once, and the whole point of the interval is to be gentle
-                    let _ = state.remote_runner.run(&state, &link, false).await;
+                    let _ = state.remote_runner.run(&state, &link, false, true).await;
                 }
             })
             .await;
@@ -200,7 +209,7 @@ pub fn spawn(state: SharedState) {
             let state = pusher.clone();
             tokio::spawn(async move {
                 crate::tasks::guarded("remote push", async {
-                    let _ = state.remote_runner.run(&state, &link, false).await;
+                    let _ = state.remote_runner.run(&state, &link, false, true).await;
                 })
                 .await;
             });

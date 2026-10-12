@@ -166,16 +166,26 @@ async fn a_failed_push_does_not_advance_the_local_token() {
     let link = crate::domain::remote::link_of(&s.app.state, &user, &id).await.unwrap();
     assert_eq!(link.local_token, 0);
 
-    // a round that skipped an object: the remote token moves on (replaying a body the server will
+    // a round whose PUSH was refused: the remote token moves on (replaying a body the server will
     // not take would stall everything), the local one does not, and the row says so
-    crate::domain::remote::round::store_tokens(&s.app.state, &link, "http://sabre.io/ns/sync/7", 42, false, 1).await.unwrap();
+    crate::domain::remote::round::store_tokens(&s.app.state, &link, "http://sabre.io/ns/sync/7", 42, false, 1, 1).await.unwrap();
     let after = crate::domain::remote::link_of(&s.app.state, &user, &id).await.unwrap();
     assert_eq!(after.local_token, 0, "a skipped push must be reported again next round");
     assert_eq!(after.sync_token.as_deref(), Some("http://sabre.io/ns/sync/7"));
     assert_eq!(after.err.as_deref(), Some("err-remote-skipped"));
 
+    /* A round that skipped a REMOTE object the local side cannot store owes nobody anything, so the
+       local token moves on. Held back, it would freeze on an object that is refused every round,
+       and every later round would re-read and re-parse the whole collection to suppress echoes. The
+       message still appears, and the full-pass stamp is still withheld. */
+    crate::domain::remote::round::store_tokens(&s.app.state, &after, "http://sabre.io/ns/sync/7b", 41, true, 1, 0).await.unwrap();
+    let after = crate::domain::remote::link_of(&s.app.state, &user, &id).await.unwrap();
+    assert_eq!(after.local_token, 41, "an unreadable remote object must not freeze the local token");
+    assert_eq!(after.err.as_deref(), Some("err-remote-skipped"));
+    assert!(after.full_at.is_none(), "a pass that skipped something is not a clean full pass");
+
     // a clean round moves both and clears the message
-    crate::domain::remote::round::store_tokens(&s.app.state, &after, "http://sabre.io/ns/sync/8", 42, true, 0).await.unwrap();
+    crate::domain::remote::round::store_tokens(&s.app.state, &after, "http://sabre.io/ns/sync/8", 42, true, 0, 0).await.unwrap();
     let after = crate::domain::remote::link_of(&s.app.state, &user, &id).await.unwrap();
     assert_eq!((after.local_token, after.err.as_deref()), (42, None));
     assert!(after.full_at.is_some(), "a clean full pass is recorded, so the next one is a day away");

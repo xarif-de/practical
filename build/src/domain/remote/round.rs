@@ -46,6 +46,9 @@ pub struct Report {
     pub conflicts: usize,
     /// objects one side refused; counted and skipped, never retried in a loop
     pub refused: usize,
+    /// of those, the LOCAL changes that did not reach the remote — the only reason to hold the
+    /// local token back, because only they are still owed to the other side
+    pub unpushed: usize,
     /// the remote counter was reset, so this round reconciled fully
     pub full: bool,
 }
@@ -152,6 +155,35 @@ pub fn pushable(object_id: &str, remote_touched: &impl Fn(&str) -> bool) -> bool
     !remote_touched(object_id)
 }
 
+/// Is this entry of the remote change list our OWN last write coming back? A push bumps the remote
+/// sync-token, so the next incremental round lists what we wrote, carrying the very etag the server
+/// gave us for it. An etag we never recorded, or none at all, is not comparable and never an echo.
+pub fn remote_echo(etag: &str, known: Option<&Mapped>) -> bool {
+    !etag.is_empty() && known.is_some_and(|m| m.etag == etag)
+}
+
+/// The object ids the REMOTE side really changed or removed this round, which are the ones a local
+/// change must not overwrite ([`pushable`]).
+///
+/// Our own echo is excluded, and that exclusion is the whole point: counted as a remote change, a
+/// pushed object would block the NEXT local edit of itself, and because a skipped push is not a
+/// refusal, `store_tokens` would advance the local token past that edit and no later round would
+/// ever report it again. Measured as a silent loss of the second of two edits made within one
+/// round's distance; for a local DELETE there is not even a later round that could repair it.
+pub fn touched_remotely<'a>(
+    changed: &[(String, String)],
+    gone: &[String],
+    known: &impl Fn(&str) -> Option<&'a Mapped>,
+) -> HashSet<String> {
+    changed
+        .iter()
+        .filter(|(h, e)| !remote_echo(e, known(h)))
+        .filter_map(|(h, _)| known(h))
+        .chain(gone.iter().filter_map(|h| known(h)))
+        .map(|m| m.object_id.clone())
+        .collect()
+}
+
 /// One round. The caller holds the link's lease.
 pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> AppResult<Report> {
     let mut rep = Report::default();
@@ -196,8 +228,8 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
     }
 
     // --- 3. resolve: remote wins, so a UID on both sides drops out of the local set
-    let changed_remote_ids: HashSet<String> = remote.changed.iter().filter_map(|(h, _)| by_href.get(h.as_str()).map(|m| m.object_id.clone())).collect();
-    let gone_remote_ids: HashSet<String> = remote.gone.iter().filter_map(|h| by_href.get(h.as_str()).map(|m| m.object_id.clone())).collect();
+    let known = |h: &str| by_href.get(h).copied();
+    let remote_ids = touched_remotely(&remote.changed, &remote.gone, &known);
 
     // --- 4. apply remote → local. Deletions first.
     for href in &remote.gone {
@@ -217,12 +249,7 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
        it before any body is fetched — measured during development, where a pushed event was
        downloaded and rewritten locally on the following round, costing a request and a history
        entry for nothing. An etag the server did not give us (empty) is always fetched. */
-    let hrefs: Vec<String> = remote
-        .changed
-        .iter()
-        .filter(|(h, e)| e.is_empty() || by_href.get(h.as_str()).is_none_or(|m| &m.etag != e))
-        .map(|(h, _)| h.clone())
-        .collect();
+    let hrefs: Vec<String> = remote.changed.iter().filter(|(h, e)| !remote_echo(e, known(h))).map(|(h, _)| h.clone()).collect();
     for batch in hrefs.chunks(crate::domain::transfer::IMPORT_CHUNK) {
         for (href, etag, body) in dav.bodies(&link.href, link.kind, batch).await? {
             let Some(uid) = uid_of(link.kind, &body) else {
@@ -257,12 +284,12 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
     }
 
     if !link.two_way {
-        store_tokens(state, link, &remote.token, local_token, full, rep.refused).await?;
+        store_tokens(state, link, &remote.token, local_token, full, rep.refused, rep.unpushed).await?;
         return Ok(rep);
     }
 
     // --- 5. push local → remote
-    let remote_touched = |id: &str| changed_remote_ids.contains(id) || gone_remote_ids.contains(id);
+    let remote_touched = |id: &str| remote_ids.contains(id);
     for id in &local_gone {
         if !pushable(id, &remote_touched) {
             // agreed, or resurrected by step 4: either way nothing to push
@@ -292,6 +319,7 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
             Wrote::Refused(s) => {
                 tracing::warn!("remote sync {}: delete of {} refused with {s}", link.id, m.href);
                 rep.refused += 1;
+                rep.unpushed += 1;
             }
         }
     }
@@ -345,10 +373,16 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
                             rep.pulled += 1;
                         }
                         // it moved again between the 409 and this read: next round, with a fresh listing
-                        None => rep.refused += 1,
+                        None => {
+                            rep.refused += 1;
+                            rep.unpushed += 1;
+                        }
                     },
                     // the server named no href and we know none: nothing can be adopted
-                    None => rep.refused += 1,
+                    None => {
+                        rep.refused += 1;
+                        rep.unpushed += 1;
+                    }
                 }
             }
             // 412 on a put: either a real conflict or an href that is not there
@@ -364,12 +398,13 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
             Wrote::Refused(s) => {
                 tracing::warn!("remote sync {}: put of {href} refused with {s}", link.id);
                 rep.refused += 1;
+                rep.unpushed += 1;
             }
         }
     }
 
     // --- 6. tokens
-    store_tokens(state, link, &remote.token, local_token, full, rep.refused).await?;
+    store_tokens(state, link, &remote.token, local_token, full, rep.refused, rep.unpushed).await?;
     Ok(rep)
 }
 
@@ -387,12 +422,21 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
 ///   reconciliation brings it back, because that one rebuilds the REMOTE side. The user's change
 ///   would be lost silently. Keeping the old value re-reports the whole batch next round, which
 ///   costs a few requests that echo suppression then drops.
-pub async fn store_tokens(state: &AppState, link: &Link, remote: &str, local: i64, full: bool, refused: usize) -> AppResult<()> {
+/// Writes what the round learned. `refused` is every skipped object and decides the message and the
+/// full-pass stamp; `unpushed` is only the LOCAL changes that did not arrive, and only they hold the
+/// local token back.
+///
+/// The two are separate because one unreadable REMOTE object would otherwise freeze the local token
+/// for good: it is refused on every round, and a frozen token makes every round re-read and re-parse
+/// the collection's whole change list to suppress echoes — for an object the local side never owed
+/// anybody.
+pub async fn store_tokens(state: &AppState, link: &Link, remote: &str, local: i64, full: bool, refused: usize, unpushed: usize) -> AppResult<()> {
     let now = crate::clock::now().to_rfc3339();
     let clean = refused == 0;
+    let owed = unpushed > 0;
     sqlx::query(
         "UPDATE practical_remote_links
-           SET sync_token = ?, local_token = CASE WHEN ? THEN ? ELSE local_token END, ran_at = ?,
+           SET sync_token = ?, local_token = CASE WHEN ? THEN local_token ELSE ? END, ran_at = ?,
                full_at = CASE WHEN ? AND ? THEN ? ELSE full_at END,
                ran_full_at = CASE WHEN ? THEN ? ELSE ran_full_at END,
                err = CASE WHEN ? THEN NULL ELSE 'err-remote-skipped' END,
@@ -400,7 +444,7 @@ pub async fn store_tokens(state: &AppState, link: &Link, remote: &str, local: i6
          WHERE id = ?",
     )
     .bind(if remote.is_empty() { None } else { Some(remote) })
-    .bind(clean)
+    .bind(owed)
     .bind(local)
     .bind(&now)
     .bind(full)

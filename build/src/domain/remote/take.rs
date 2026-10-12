@@ -7,7 +7,6 @@
 //! quietly delete a user's data on one of the two sides.
 
 use super::dav::{Dav, Kind};
-use super::round;
 use crate::domain::{collections, transfer};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -96,9 +95,10 @@ pub async fn link(
         super::create_link(state, user, account_id, kind, &local_id, href, two_way, every_min).await?
     };
     let link = super::link_of(state, user, &link_id).await?;
-    let (_, dav) = super::dav_for(state, &link).await?;
-    // the first round is a full one by definition: there is no token yet
-    let rep = round::run(state, &link, &dav, true).await?;
+    /* Through the runner, not round::run directly: it takes the link's lease and records the token
+       the round produced. Without it the pull's own change events looked foreign, and each one
+       spawned a parallel round for a link no lease protected. */
+    let rep = state.remote_runner.run(state, &link, true, true).await?;
     Ok((link.local_id, rep.pulled, link_id))
 }
 

@@ -242,7 +242,7 @@ pub(super) async fn edit(State(state): State<SharedState>, user: Principal, Path
                and a timeout is a slow server, not a reason to leave half a collection behind. So
                only the waiting ends — the round finishes and its result shows up in the link row. */
             let (st, l) = (state.clone(), link.clone());
-            let job = tokio::spawn(async move { st.remote_runner.run(&st, &l, false).await });
+            let job = tokio::spawn(async move { st.remote_runner.run(&st, &l, false, true).await });
             let rep = match tokio::time::timeout(std::time::Duration::from_secs(90), job).await {
                 Ok(Ok(r)) => r?,
                 // the task panicked (logged by its own guard) or is still running
