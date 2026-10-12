@@ -393,6 +393,21 @@ pub fn changes(xml: &str) -> Option<Changes> {
     (!w.broken).then_some(c)
 }
 
+/// The text of one property, wherever in the answer it sits. For the collection's own sync-token
+/// out of a `Depth: 0` PROPFIND, whose answer is one response.
+pub fn prop_text(xml: &str, ns: &str, prop: &str) -> Option<String> {
+    let mut w = Walk::new(xml);
+    let mut out = String::new();
+    while let Some(s) = w.next() {
+        if let Step::Text(t) = &s {
+            if w.parent_is(ns, prop) {
+                out.push_str(t.trim());
+            }
+        }
+    }
+    (!w.broken).then_some(out)
+}
+
 /// (href, etag) of every response that has an etag — the collection itself has none, so it drops
 /// out without a special case.
 pub fn etags(xml: &str) -> Option<Vec<(String, String)>> {

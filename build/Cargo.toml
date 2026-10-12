@@ -50,7 +50,7 @@ rand = "0.10"
 # "stream" is what lets domain::remote::dav cap an answer WHILE reading it: a DAV answer
 # declares no length, and a truncated multistatus reads as a shorter list, which a full
 # reconciliation answers by deleting locally.
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "http2", "json", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "http2", "json", "stream", "gzip"] }
 url = "2.5"
 futures-util = "0.3"
 base64ct = { version = "1.8", features = ["alloc"] }

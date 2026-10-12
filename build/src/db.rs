@@ -303,10 +303,11 @@ CREATE TABLE practical_holidays (
            href      TEXT NOT NULL,
            etag      TEXT NOT NULL,
            mine      TEXT NOT NULL,
+           -- every statement on this table reads or writes by (link_id) or (link_id, object_id),
+           -- which the primary key already covers; an index on uid or href would be two more
+           -- B-tree writes per object with no read to serve
            PRIMARY KEY (link_id, object_id)
-         );
-         CREATE INDEX practical_remote_objects_uid  ON practical_remote_objects (link_id, uid);
-         CREATE INDEX practical_remote_objects_href ON practical_remote_objects (link_id, href);",
+         );",
     ),
     (
         19,

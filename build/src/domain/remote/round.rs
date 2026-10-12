@@ -221,7 +221,7 @@ pub async fn run(state: &AppState, link: &Link, dav: &Dav, force_full: bool) -> 
             changed: listing.iter().filter(|(h, e)| by_href.get(h.as_str()).is_none_or(|m| &m.etag != e)).cloned().collect(),
             gone: map.iter().filter(|m| !seen.contains(m.href.as_str())).map(|m| m.href.clone()).collect(),
             // a full pass learns the collection's current token for the next incremental round
-            token: dav.changes(&link.href, "").await.map(|c| c.token).unwrap_or_default(),
+            token: dav.sync_token(&link.href).await.unwrap_or_default(),
             reset: false,
         };
         rep.full = true;

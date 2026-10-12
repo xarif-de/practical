@@ -296,6 +296,22 @@ fn a_colour_the_remote_invented_is_dropped() {
     assert!(color_of("nonsense").is_some(), "the colour is dropped, not the collection");
 }
 
+/// A full pass needs the collection's token and nothing else. Measured against nextcloud 35.0.1:
+/// this is the `Depth: 0` answer, 466 bytes, where asking `sync-collection` with an empty token
+/// repeats the whole listing.
+#[test]
+fn the_token_of_a_collection_is_read_from_a_small_propfind() {
+    let answer = r#"<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:cal="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:response><d:href>/remote.php/dav/calendars/alice/work/</d:href><d:propstat><d:prop><d:sync-token>http://sabre.io/ns/sync/22</d:sync-token></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#;
+    assert_eq!(xml::prop_text(answer, "DAV:", "sync-token").as_deref(), Some("http://sabre.io/ns/sync/22"));
+    // a server that does not answer the property leaves an empty token, which makes the next round
+    // a full one again rather than trusting a token nobody gave us
+    let without = answer.replace("<d:sync-token>http://sabre.io/ns/sync/22</d:sync-token>", "");
+    assert_eq!(xml::prop_text(&without, "DAV:", "sync-token").as_deref(), Some(""));
+    // and a cut answer stays an error, like every other reader
+    assert!(xml::prop_text(&answer[..answer.len() - 40], "DAV:", "sync-token").is_none());
+}
+
 /// Our own push comes back in the next change list with the etag the server gave us. It must NOT
 /// count as a remote change: `pushable` would then refuse the next local edit of that object, and
 /// since a refused push is not a REFUSAL, the local token would advance past that edit and no later

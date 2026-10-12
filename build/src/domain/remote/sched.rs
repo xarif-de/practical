@@ -27,6 +27,25 @@ struct LinkState {
     again: bool,
 }
 
+impl LinkState {
+    /// Does this caller get the turn? A link with a round in flight is asked to repeat, and a
+    /// caller that reports no result to anybody then LEAVES — marking `again` is the whole value of
+    /// that flag. Applying a pull of N objects raises N change events of our own, and each one
+    /// waiting here would run a further round with its own request to the remote.
+    ///
+    /// `wait` belongs to the one caller whose result a user is looking at (the "sync now" button).
+    fn take_turn(&mut self, wait: bool) -> bool {
+        if self.lock.try_lock().is_err() {
+            self.again = true;
+            return wait;
+        }
+        true
+    }
+}
+
+/// How many triggered rounds may run at once, across all links. See the acquire site.
+static ROUNDS: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> = std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(4)));
+
 /// A plain mutex over a small map: a handful of links, and every critical section is three field
 /// accesses, so nothing here needs a concurrent map.
 #[derive(Default)]
@@ -51,12 +70,8 @@ impl Runner {
         let lock = {
             let mut m = self.links.lock().unwrap();
             let e = m.entry(link.id.clone()).or_default();
-            if e.lock.try_lock().is_err() {
-                // a round is in flight: ask it to repeat instead of queueing a second one
-                e.again = true;
-                if !wait {
-                    return Ok(round::Report::default());
-                }
+            if !e.take_turn(wait) {
+                return Ok(round::Report::default());
             }
             e.lock.clone()
         };
@@ -206,13 +221,42 @@ pub fn spawn(state: SharedState) {
             if !pusher.remote_runner.foreign(&link.id, synctoken) {
                 continue;
             }
+            /* The interval is sequential on purpose; this path spawns, so it needs its own ceiling.
+               Every round in flight holds its answer buffer (up to `dav::MAX_RESPONSE`), and
+               `MAX_LINKS_TOTAL` of them at once is more than the pod has. Four is past any real
+               fan-out and still bounded. */
+            let Ok(permit) = ROUNDS.clone().acquire_owned().await else { break };
             let state = pusher.clone();
             tokio::spawn(async move {
+                let _permit = permit;
                 crate::tasks::guarded("remote push", async {
-                    let _ = state.remote_runner.run(&state, &link, false, true).await;
+                    // nobody is looking at this result: a busy link is asked to repeat instead
+                    let _ = state.remote_runner.run(&state, &link, false, false).await;
                 })
                 .await;
             });
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LinkState;
+
+    /// The rule that keeps a pull's own change events from each running a round of their own.
+    #[test]
+    fn a_busy_link_is_asked_to_repeat_and_the_caller_leaves() {
+        let mut e = LinkState::default();
+        assert!(e.take_turn(false), "a free link runs at once");
+        assert!(!e.again, "and has nothing to repeat");
+
+        let held = e.lock.clone();
+        let _guard = held.try_lock().expect("the lock is free in this test");
+        assert!(!e.take_turn(false), "a triggered round leaves while one is in flight");
+        assert!(e.again, "and asks the running one to repeat");
+
+        e.again = false;
+        assert!(e.take_turn(true), "the button waits for its result");
+        assert!(e.again, "and still asks for the repeat, so nothing is lost either way");
+    }
 }
