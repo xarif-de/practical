@@ -207,6 +207,7 @@ view-vacation = Vacation planner
 view-countdown = Countdown wall
 view-numbers = Year in numbers
 ed-dayline = Toggle the day line
+ed-dayline-region = Day line
 ed-title = Title
 ed-location = Location
 ed-calendar = Calendar

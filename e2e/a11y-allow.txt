@@ -26,6 +26,7 @@ color-contrast	light #6e6e75 on #facece	P1 light --fg-3 #6e6e75 (4.5:1 on every 
 scrollable-region-focusable	.calscroll	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
 scrollable-region-focusable	.tl	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
 target-size	.cancelled	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
+target-size	.dmore	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.cur	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.day > .mid	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.end	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout

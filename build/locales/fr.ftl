@@ -207,6 +207,7 @@ view-vacation = Planning des congés
 view-countdown = Mur des comptes à rebours
 view-numbers = L'année en chiffres
 ed-dayline = Afficher/masquer la ligne du jour
+ed-dayline-region = Ligne du jour
 ed-title = Titre
 ed-location = Lieu
 ed-calendar = Calendrier

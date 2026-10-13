@@ -207,6 +207,7 @@ view-vacation = Urlaubsplaner
 view-countdown = Countdown-Wand
 view-numbers = Jahr in Zahlen
 ed-dayline = Tagesleiste ein-/ausklappen
+ed-dayline-region = Tagesleiste
 ed-title = Titel
 ed-location = Ort
 ed-calendar = Kalender

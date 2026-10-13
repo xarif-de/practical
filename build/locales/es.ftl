@@ -207,6 +207,7 @@ view-vacation = Planificador de vacaciones
 view-countdown = Muro de cuenta atrás
 view-numbers = El año en cifras
 ed-dayline = Mostrar u ocultar la línea del día
+ed-dayline-region = Línea del día
 ed-title = Título
 ed-location = Ubicación
 ed-calendar = Calendario
