@@ -328,15 +328,17 @@ test('a starred filter row is a quick switch left of the filter: it hides and sh
   await expect(pins).toHaveCount(1);
   const pin = pins.first();
   await expect(pin).toHaveAttribute('aria-label', 'Arbeit');
-  // the eye stands out on the row's colour: black or white, whichever has the higher WCAG contrast (chrome.css `.qs`)
-  const { bg, fg } = await pin.evaluate(b => ({ bg: getComputedStyle(b).backgroundColor, fg: getComputedStyle(b).color }));
-  const lum = c => { const v = c.match(/[\d.]+/g).slice(0, 3).map(x => x / 255).map(x => x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
-  expect(fg).toBe(lum(bg) > 0.179 ? 'oklch(0 0 0)' : 'oklch(1 0 0)');
   await page.keyboard.press('Escape');
+  await page.mouse.move(0, 400);
+  // a ribbon in the row's colour hanging from the top bar's upper edge; long while shown, rolled up while hidden (chrome.css `.qs`)
+  const ribbon = () => pin.evaluate(b => { const r = getComputedStyle(b, '::before'), top = b.closest('.topbar').getBoundingClientRect().top; return { c: r.backgroundColor, h: r.height, at: b.getBoundingClientRect().top - top }; });
+  const swatch = await f.locator('.frow', { hasText: 'Arbeit' }).locator('.sw').evaluate(e => getComputedStyle(e).backgroundColor);
+  await expect.poll(ribbon).toEqual({ c: swatch, h: '34px', at: 0 });
   await pin.click();
   await expect(chip(page, 'Projekt-Review')).toHaveCount(0);
   await expect(pin).toHaveAttribute('aria-pressed', 'false');
-  await expect(pin.locator('.eye.no')).toBeVisible();
+  await page.mouse.move(0, 400); // away from the ribbon: hovered, it reaches out further
+  await expect.poll(async () => (await ribbon()).h).toBe('14px');
   await expect(f.locator('label', { hasText: 'Arbeit' }).locator('input')).not.toBeChecked();
   // the row's own box moves the switch too, and "all" does without a change event
   await f.locator('> button').click();

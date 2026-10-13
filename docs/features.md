@@ -107,8 +107,9 @@ weekends.
 The filter button at the top right shows or hides each calendar, the public holidays and the school holidays; the
 contacts page does the same for address books. A blue eye means shown, a grey struck-through eye means hidden.
 
-Star a row to get a quick switch for it: a round button in the row's color, left of the filter button. One click
-on it shows or hides that calendar without opening the filter. Your stars are saved with your account and show up
+Star a row to get a quick switch for it: a bookmark ribbon in the row's color that hangs from the top edge, left of
+the filter button. One click on it shows or hides that calendar without opening the filter; a hidden calendar's
+ribbon is rolled up. Your stars are saved with your account and show up
 on every device.
 
 ### Holidays

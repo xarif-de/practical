@@ -67,11 +67,15 @@
 .frow { display: flex; align-items: center; } .frow > label { flex: 1; min-width: 0; } .filter .pop:has(.frow) { width: 290px; } /* + the star: 260px wrapped the owner of a group calendar */
 .pinstar { all: unset; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; color: var(--fg-3); } .pinstar .ico { width: 16px; height: 16px; }
 .pinstar:hover { color: var(--fg-2); } .pinstar[aria-pressed=true] { color: var(--accent); --ico-fill: currentColor; } .pinstar:focus-visible { outline: 2px solid var(--accent); } /* i-star-h fills through --ico-fill */
-/* quick switches (macros.html `pin_btn`, js/filter-pins.js; `.pin` is the tables' sticky name column): the row's colour; its eye black or white, whichever stands out
-   more: WCAG contrast is equal on a luminance of 0.179, OKLCH lightness ≈ ∛0.179 = 0.564 (#fff where relative colours are unknown) */
-.qsbar { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 4px; margin: -4px; } .qsbar:empty { display: none; } /* shrinks and scrolls sideways before the top bar would run off a phone; the padding keeps the focus ring */
-.qs { all: unset; box-sizing: border-box; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; background: var(--c); color: #fff; color: oklch(from var(--c) clamp(0, (0.564 - l) * 1000, 1) 0 0); }
-.qs .eye { width: 16px; height: 16px; } .qs[aria-pressed=true] .eye.no, .qs[aria-pressed=false] .eye:not(.no) { display: none; } .qs:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* quick switches (macros.html `pin_btn`, js/filter-pins.js; `.pin` is the tables' sticky name column): bookmark ribbons in the
+   row's colour, hanging from the top bar's upper edge (the bar's 10px padding is undone); shown = long, hidden = rolled up
+   (short, faded), longer under the pointer. The button is 24px wide (WCAG 2.5.8), the ribbon 14px of it; the name is its
+   title and label, aria-pressed its state. The bar shrinks and scrolls sideways before the top bar would run off a phone. */
+.qsbar { display: flex; align-self: stretch; margin: -10px 0; flex: 0 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; } .qsbar:empty { display: none; }
+.qs { all: unset; box-sizing: border-box; flex: none; position: relative; width: 24px; cursor: pointer; }
+.qs::before { content: ""; position: absolute; top: 0; left: 5px; width: 14px; height: 34px; background: var(--c); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); transition: height .2s, opacity .2s; }
+.qs:hover::before { height: 40px; } .qs[aria-pressed=false]::before { height: 14px; opacity: .55; } .qs[aria-pressed=false]:hover::before { height: 18px; }
+.qs:focus-visible::after { content: ""; position: absolute; left: 3px; right: 3px; bottom: 3px; height: 2px; border-radius: 1px; background: var(--accent); } /* the ribbon's clip-path would cut an outline */
 .filter .row { display: flex; gap: 12px; padding: 8px 6px 2px; font-size: 12px; color: var(--accent); }
 @media (max-width: 720px) { .usearch { max-width: none; } .usearch input { padding-left: 30px; } .filter .pop { right: -60px; } .filter.user .pop { right: 0; } } /* the user menu sits at the right edge: shifted like the others it ran 44px past a 390px screen, and even hidden (visibility) it widened every page by that much (app.js fitPop then keeps every popover on screen) */
 
