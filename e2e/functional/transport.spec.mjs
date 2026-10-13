@@ -31,3 +31,19 @@ test('week entries name their date once, on the day block; a click still opens t
   }
   await opened('2026-11-03', 'T9 Messe', '2026-11-03');
 });
+
+test.describe('phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  // grid.css hides `.ev` below 720px for the month's dots; the week list showed bare times until chrome.css named it
+  test('the week list shows its entries on a phone, a long title cut inside the screen', async ({ page }) => {
+    await page.goto('/calendar?view=week&date=2026-11-25');
+    await createApi(page, { summary: 'T9 Handy mit einem sehr langen Titel, der nie in eine Zeile eines Telefons passt', start: '2026-11-25T09:00:00', end: '2026-11-25T10:00:00' });
+    await page.goto('/calendar?view=week&date=2026-11-25');
+    await settle(page);
+    const ev = page.locator('#viewroot .stream .dayblock[data-date="2026-11-25"] .ev', { hasText: 'T9 Handy' });
+    await expect(ev).toBeVisible();
+    const box = await ev.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(await page.locator('#viewroot .cal').evaluate(e => e.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+  });
+});
