@@ -48,8 +48,10 @@ fn month_grid_golden() {
     // the picked day is the selection only when it is not today
     let same = month_grid(2026, 10, date("2026-10-14"), &v, &lang("de"), 3, date("2026-10-14"), &hol);
     assert!(!same.contains(" sel\"") && same.contains("class=\"day today fer\""));
-    // "+N": three slots, the bar lanes count against them
-    assert!(html.contains("<div class=\"more\" data-date=\"2026-10-19\">+2 weitere</div>"), "{html}");
+    // "+N": three slots, the bar lanes count against them; the other singles are there, hidden in .xts (no link to the day view)
+    let d19 = html.split("data-date=\"2026-10-19\">").nth(1).and_then(|r| r.split("<div class=\"day").next()).unwrap_or_default();
+    assert!(d19.contains("<div class=\"xts\">") && d19.ends_with("</div><button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+2 weitere</button></div>"), "{d19}");
+    assert_eq!(d19.matches("<div class=\"ev").count(), 5, "{d19}");
     let en = month_grid(2026, 10, date("2026-10-14"), &v, &lang("en"), 3, date("2026-10-16"), &hol);
     assert!(en.contains("+2 more") && en.contains("<div class=\"dow\">Mon</div>"));
 }

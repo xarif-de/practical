@@ -152,13 +152,17 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                     shown += 1;
                 }
             }
+            // the singles that fit, then the rest hidden in `.xts`: hovering the tile, focus in it or a click on the "+N" unfolds it (calendar.js dayOpen)
             let singles: Vec<&&Instance> = evs.iter().filter(|i| !i.multi_day()).collect();
             let room = ev_limit.saturating_sub(shown);
-            for i in singles.iter().take(room) {
+            for (n, i) in singles.iter().enumerate() {
+                if n == room {
+                    out.push_str("<div class=\"xts\">");
+                }
                 ev_html(&mut out, i, None);
             }
             if singles.len() > room {
-                let _ = write!(out, "<div class=\"more\" data-date=\"{d}\">+{} {}</div>", singles.len() - room, l.t("v-more"));
+                let _ = write!(out, "</div><button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+{} {}</button>", singles.len() - room, l.t("v-more"));
             }
             out.push_str("</div>");
         }

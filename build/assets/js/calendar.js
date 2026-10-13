@@ -375,13 +375,47 @@
   // Enter/Space on an entry (a Tab stop, wireItems) acts as its click; one listener instead of one per entry (the week stream holds hundreds)
   root.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.key && e.target.tabIndex === 0) { e.preventDefault(); e.target.click(); } });
   root.addEventListener('keydown', e => { const r = e.target.closest && e.target.closest('.ledger .lrow'); if (!r || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return; const n = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling; if (!n || !n.matches('.lrow')) return; e.preventDefault(); r.tabIndex = -1; n.tabIndex = 0; n.focus(); });
+  /* a month tile with more singles than fit (the "+N" .dmore, month.rs) unfolds over its neighbours while hovered, focused
+     inside or after a click on the "+N": downwards while the grid and the window have room, else upwards too; then the
+     earliest singles move above the multi-day bars (flex order) by whole rows, so each bar keeps its place in its band
+     across the week. Negative margins keep the grid row as it was; too many for the whole grid: the tile scrolls. */
+  const shows = d => { const x = $(':scope > .ev', d); return !!x && x.getClientRects().length > 0; };
+  function dayOpen(el) {
+    if (!el || el.classList.contains('open') || !shows(el)) return;
+    const h0 = el.offsetHeight; el.style.height = h0 + 'px'; el.classList.add('open'); $('.dmore', el).setAttribute('aria-expanded', 'true');
+    const r = el.getBoundingClientRect(), pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    const singles = $$(':scope > .ev:not(.span):not(.spacer), :scope > .xts > .ev', el), bars = $$(':scope > .ev.span, :scope > .ev.spacer', el);
+    const last = singles[singles.length - 1], H = last ? last.getBoundingClientRect().bottom - r.top + pb : h0;
+    const days = $$(':scope > .day', el.parentNode), lo = Math.min(days[days.length - 1].getBoundingClientRect().bottom, innerHeight - 8), hi = Math.max(days[0].getBoundingClientRect().top, 8);
+    const below = lo - r.top, room = Math.max(0, r.top - hi);
+    let up = 0;
+    if (H > below) {
+      if (bars.length) { const step = singles.length > 1 ? singles[1].getBoundingClientRect().top - singles[0].getBoundingClientRect().top : singles[0].offsetHeight + 2;
+        const k = Math.min(singles.length, Math.ceil((H - below) / step), Math.floor(room / step)); up = k * step;
+        singles.forEach((x, i) => x.style.order = i < k ? 1 : 3); bars.forEach(x => x.style.order = 2); $('.dmore', el).style.order = 4; }
+      else up = Math.min(H - below, room);
+    }
+    const h = Math.max(Math.min(H, below + up), h0 + up); if (h < H) el.style.overflowY = 'auto'; // whole rows up can be more than needed: never end above the cell
+    el.style.height = h + 'px'; el.style.marginTop = -up + 'px'; el.style.marginBottom = -(h - up - h0) + 'px';
+  }
+  function dayClose(el) {
+    el.classList.remove('open'); $('.dmore', el).setAttribute('aria-expanded', 'false'); el.scrollTop = 0;
+    for (const p of ['height', 'marginTop', 'marginBottom', 'overflowY']) el.style[p] = '';
+    $$(':scope > *, :scope > .xts > *', el).forEach(x => x.style.order = '');
+  }
+  const unfoldable = t => { const d = t && t.closest && t.closest('.v-month .day'); return d && $('.dmore', d) ? d : null; };
+  root.addEventListener('pointerover', e => { if (e.pointerType === 'mouse') dayOpen(unfoldable(e.target)); });
+  root.addEventListener('pointerout', e => { const d = e.pointerType === 'mouse' && e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.contains(document.activeElement)) dayClose(d); });
+  root.addEventListener('focusin', e => dayOpen(unfoldable(e.target)));
+  root.addEventListener('focusout', e => { const d = e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.matches(':hover')) dayClose(d); });
+  document.addEventListener('pointerdown', e => $$('.day.open', root).forEach(d => { if (!d.contains(e.target)) dayClose(d); }));
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
     $$('.heat i[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
     $$('.planner .c[data-date]', scope).forEach(el => el.onclick = () => { if (el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the year planner picks the day; the view stays
     $$('.lrow[data-date]', scope).forEach(el => { el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }; el.tabIndex = -1; const a = $('.add', el); if (a) a.tabIndex = -1; }); // picking in the ledger leaves it exactly where it is
     ledgerStop();
-    $$('.more[data-date]', scope).forEach(el => el.onclick = e => { e.stopPropagation(); go('day', el.closest('[data-date]').dataset.date); });
-    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev, .more') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
+    $$('.dmore', scope).forEach(b => b.onclick = e => { e.stopPropagation(); const d = b.closest('.day'); if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); }); // a touch has no hover; the phone grid (dots, no chips) picks the day: its agenda lists them all
+    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
     $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();
     $$('[data-key]', scope).forEach(el => {

@@ -161,7 +161,7 @@ html[data-scheme=dark] .dayblock { --la: 30%; }
 .lpanel .list { border: 0; background: transparent; } .lpanel .list li { background: var(--bg); border: 0; border-radius: 10px; margin-bottom: 4px; }
 
 
-/* "Mehr" dropdown in the view switcher */ .seg > .more { font-size: inherit; color: inherit; padding-left: 0; } /* not the month cell's "+N" .more (11px, grey, indented) */
+/* "Mehr" dropdown in the view switcher */ .seg > .more { font-size: inherit; color: inherit; padding-left: 0; } /* not grid.css' .more (11px, grey, indented; the month cell's "+N" is .dmore now) */
 .more .pop { display: grid; position: absolute; right: 0; top: 36px; min-width: 200px; padding: 6px; z-index: 30; }
 .more .pop a { padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--fg); }
 .more .pop a:hover { background: var(--tile); } .more .pop a[aria-pressed=true] { background: var(--tile); font-weight: 600; }

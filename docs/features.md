@@ -67,6 +67,11 @@ through the days it lasts.
 
 The month view shows all your calendars at once, together with holidays and events that last several days.
 
+When a day has more events than fit, it says "+N more". Point at the day, or move the keyboard focus to it, and the
+day opens over its neighbours to show all of them. It grows downwards. Near the bottom of the month it grows
+upwards too, and then lists its events from the top in order of time. Bars of events that last several days keep
+their place, so they stay unbroken.
+
 <img src="images/04-year-planner.webp" alt="The whole year on one page: public and school holidays, vacations and the first event of every day." width="100%">
 
 The year planner fits the whole year on one page. It shows public and school holidays, vacations and the first

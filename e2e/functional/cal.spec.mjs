@@ -126,10 +126,12 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
   await day.click({ position: { x: bb.width / 2, y: bb.height - 6 } });
   await expect(page.locator('.v-month .day[data-date="2026-10-16"]')).toHaveClass(/\bsel\b/);
   expect(qp(page, 'date')).toBe('2026-10-16');
-  // "+N weitere" opens the day view of that day
-  await page.locator('.v-month .day[data-date="2026-10-19"] .more').click();
+  // "+N weitere" no longer leads to the day view: it unfolds the tile (next test)
+  await page.locator('.v-month .day[data-date="2026-10-19"] .dmore').dispatchEvent('click');
+  await expect(page.locator('.v-month .day[data-date="2026-10-19"]')).toHaveClass(/\bopen\b/);
+  expect(qp(page, 'view')).toBe('month');
+  await open(page, cal('day', '2026-10-19'));
   await expect(page.locator('.doc[data-date="2026-10-19"]')).toBeVisible();
-  expect(qp(page, 'view')).toBe('day');
   await expect(page.locator('.doc[data-date="2026-10-19"]')).toContainText('Termin 5');
   // a ledger row picks its day, the ledger stays
   await page.locator('.lrow[data-date="2026-10-15"]').click();
@@ -152,6 +154,59 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
   await expect(block).toHaveClass(/\bsel\b/);
   expect(await block.evaluate(e => getComputedStyle(e).boxShadow)).toMatch(/inset$/);
   expect(await block.locator('.dl').evaluate(e => getComputedStyle(e).boxShadow)).toBe('none');
+});
+
+test('a month tile with more than fits unfolds in place: down where there is room, else up with the bars kept', async ({ page }) => {
+  await open(page, cal('month'));
+  const t = page.locator('.v-month .day[data-date="2026-10-19"]'), next = page.locator('.v-month .day[data-date="2026-10-26"]');
+  const cell = await t.boundingBox(), below = await next.boundingBox();
+  await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
+  await t.hover({ position: { x: 30, y: 8 } });
+  await expect(t).toHaveClass(/\bopen\b/);
+  await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeVisible();
+  await expect(t.locator('.dmore')).toHaveAttribute('aria-expanded', 'true');
+  const o = await t.boundingBox();
+  expect(Math.abs(o.y - cell.y)).toBeLessThan(0.5); // room below: it only grows downwards
+  expect(o.height).toBeGreaterThan(cell.height);
+  expect(await next.boundingBox()).toEqual(below); // over its neighbours: the grid keeps its rows
+  await page.mouse.move(2, 2);
+  await expect(t).not.toHaveClass(/\bopen\b/);
+  await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
+
+  // the bottom row (Dec 28 - Jan 3) with a bar across it: no room below, so up; the singles run in time order from the
+  // top, the bar keeps its place (the row's band stays unbroken)
+  const [principal, cal_id] = 'alice/5eed0000-0000-4000-8000-000000000002'.split('/');
+  const mk = (summary, start, end, all_day = false) => api(page, 'POST', '/api/events', { principal, cal_id, summary, start, end, all_day, rrule: null, categories: [], color: '', alarms: [], location: '' });
+  await mk('U-Bar', '2026-12-28T00:00:00', '2027-01-01T00:00:00', true);
+  const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
+  for (const [i, h] of times.entries()) await mk(`U${i + 1}`, `2026-12-30T${h}:00`, `2026-12-30T${h.slice(0, 2)}:30:00`);
+  await open(page, '/calendar?view=month&date=2026-12-14');
+  const u = page.locator('.v-month .day[data-date="2026-12-30"]');
+  const c0 = await u.boundingBox(), bar0 = await u.locator('.ev.span').boundingBox();
+  await u.hover({ position: { x: 30, y: 8 } });
+  await expect(u).toHaveClass(/\bopen\b/);
+  const c1 = await u.boundingBox(), bar1 = await u.locator('.ev.span').boundingBox();
+  expect(c1.y).toBeLessThan(c0.y - 1);
+  expect(c1.y + c1.height).toBeLessThanOrEqual(c0.y + c0.height + 0.5);
+  expect(Math.abs(bar1.y - bar0.y), 'the bar stays where it was').toBeLessThan(0.5);
+  const seen = await u.locator('.ev').evaluateAll(l => l.filter(e => e.getClientRects().length).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).map(e => e.classList.contains('span') ? '|' : e.textContent.split(' ')[0]));
+  expect(seen.filter(x => x !== '|')).toEqual(['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7']);
+  expect(seen.indexOf('|'), JSON.stringify(seen)).toBeGreaterThan(0); // some above the bar
+  // the keyboard unfolds it too (focus on the "+N"), and leaving closes it
+  await page.mouse.move(2, 2);
+  await expect(u).not.toHaveClass(/\bopen\b/);
+  await u.locator('.dmore').focus();
+  await expect(u).toHaveClass(/\bopen\b/);
+  await page.locator('.toolbar [data-nav="today"]').focus();
+  await expect(u).not.toHaveClass(/\bopen\b/);
+  // the phone grid shows dots, not chips: there the "+N" picks the day (its agenda lists them all) and unfolds nothing
+  await page.setViewportSize({ width: 390, height: 800 });
+  await open(page, cal('month'));
+  const p = page.locator('.v-month .day[data-date="2026-10-19"]');
+  await p.locator('.dmore').click();
+  await expect(p).toHaveClass(/\bsel\b/);
+  await expect(p).not.toHaveClass(/\bopen\b/);
+  await expect(page.locator('.agenda')).toContainText('Termin 5');
 });
 
 test('orbit picker: years, months, day; prev/next/reset; close by button, Esc and backdrop', async ({ page }) => {
