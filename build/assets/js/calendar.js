@@ -376,18 +376,21 @@
   root.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.key && e.target.tabIndex === 0) { e.preventDefault(); e.target.click(); } });
   root.addEventListener('keydown', e => { const r = e.target.closest && e.target.closest('.ledger .lrow'); if (!r || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return; const n = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling; if (!n || !n.matches('.lrow')) return; e.preventDefault(); r.tabIndex = -1; n.tabIndex = 0; n.focus(); });
   /* how many singles each month tile shows (month.rs renders all, its "+N" is a guess from a fixed count): as many as
-     its height holds; when not all fit, the "+N" takes the last slot (so never "+1"; a lone single with no slot at all is shown). All tiles go back to bars only
+     its height holds; when not all fit, as many as leave room below them for the smaller "+N" line, which may reach into
+     the bottom padding (so "+1" when only the last one is missing). All tiles go back to bars only
      first (the grid rows then have their own height, not the one the chips gave them), then every tile is measured,
      then written: two layouts per call, not one per tile. The phone grid (dots, no chips) keeps the guess. */
   function dayFit(scope) {
     const grid = $('.v-month > .month', scope); if (!grid) return;
     const tiles = $$(':scope > .day', grid).filter(d => !d.classList.contains('open')), all = tiles.map(d => $$(':scope > .ev:not(.span):not(.spacer)', d));
     const sample = $(':scope > .day > .ev:not(.xt)', grid), h = sample ? sample.offsetHeight : 0; if (!h) return;
+    const probe = $(':scope > .day > .dmore:not([hidden])', grid), mh = probe ? probe.offsetHeight : h; // the "+N" line (smaller than a chip)
     tiles.forEach((d, i) => { all[i].forEach(x => x.classList.add('xt')); const b = $('.dmore', d); if (b) b.hidden = true; });
     const cs = getComputedStyle(tiles[0] || grid), gap = parseFloat(cs.rowGap) || 0, pb = parseFloat(cs.paddingBottom) || 0, step = h + gap;
     const keep = tiles.map((d, i) => { if (!all[i].length) return -1; const bars = $$(':scope > .ev.span, :scope > .ev.spacer', d);
-      const top = (bars.length ? bars[bars.length - 1] : d.firstElementChild).getBoundingClientRect().bottom + gap, n = Math.max(0, Math.floor((d.getBoundingClientRect().bottom - pb - top + gap) / step)), c = all[i].length;
-      return c <= n || c - Math.max(0, n - 1) < 2 ? c : Math.max(0, n - 1); }); // never "+1": a lone single without any room is shown
+      const top = (bars.length ? bars[bars.length - 1] : d.firstElementChild).getBoundingClientRect().bottom + gap, bottom = d.getBoundingClientRect().bottom, c = all[i].length;
+      if (Math.floor((bottom - pb - top + gap) / step) >= c) return c;
+      return Math.max(0, Math.floor((bottom - 2 - top - mh) / step)); }); // as many chips as leave room for the "+N" below them (it may use the padding)
     tiles.forEach((d, i) => { const k = keep[i], c = all[i].length; if (k < 0) return; all[i].forEach((x, j) => x.classList.toggle('xt', j >= k));
       let b = $('.dmore', d); if (k === c) { if (b) b.remove(); return; }
       if (!b) { b = document.createElement('button'); b.className = 'dmore'; b.type = 'button'; b.setAttribute('aria-expanded', 'false'); b.onclick = moreClick; d.append(b); }

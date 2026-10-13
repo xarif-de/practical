@@ -159,9 +159,10 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
 test('a month tile with more than fits unfolds in place: down where there is room, else up with the bars kept', async ({ page }) => {
   await open(page, cal('month'));
   const t = page.locator('.v-month .day[data-date="2026-10-19"]'), next = page.locator('.v-month .day[data-date="2026-10-26"]');
-  // as many chips as the tile's height holds; a "+N" only when not all fit, and it takes the last slot: never "+1"
-  const fitOk = () => page.evaluate(() => [...document.querySelectorAll('.v-month .day')].every(d => { const r = d.getBoundingClientRect(), b = d.querySelector('.dmore');
-    return [...d.children].every(c => !c.getClientRects().length || getComputedStyle(c).position === 'absolute' || c.getBoundingClientRect().bottom <= r.bottom + 0.5) && (!b || b.hidden || /^\+([2-9]|\d\d)/.test(b.textContent)); }));
+  // as many chips as the tile's height holds; when not all fit, as many as leave room for the "+N" line below them;
+  // nothing past the tile's edge
+  const fitOk = () => page.evaluate(() => [...document.querySelectorAll('.v-month .day')].every(d => { const r = d.getBoundingClientRect();
+    return [...d.children].every(c => !c.getClientRects().length || getComputedStyle(c).position === 'absolute' || c.getBoundingClientRect().bottom <= r.bottom + 0.5); }));
   expect(await fitOk()).toBe(true);
   const vp = page.viewportSize(), shown = () => t.locator(':scope > .ev:visible').count(), n0 = await shown();
   await page.setViewportSize({ width: vp.width, height: vp.height + 400 });
