@@ -197,6 +197,20 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   await page.mouse.move(2, 2);
   await expect(t).not.toHaveClass(/\bopen\b/);
   await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
+  // a click on an event folds the tile; the focus the editor hands back on closing does not unfold it, hovering again does
+  // (an event that stays visible when folded: the editor hands the focus back to it)
+  await t.hover({ position: { x: 30, y: 8 } });
+  await t.locator(':scope > .ev:not(.xt):not(.span)').first().click();
+  await expect(page.locator('#ed')).toBeVisible();
+  await expect(t).not.toHaveClass(/\bopen\b/);
+  await page.locator('#ed-close').click();
+  await expect(page.locator('#ed')).toBeHidden();
+  await page.evaluate(() => new Promise(r => setTimeout(r, 200)));
+  await expect(t).not.toHaveClass(/\bopen\b/);
+  await page.mouse.move(2, 2);
+  await t.hover({ position: { x: 30, y: 8 } });
+  await expect(t).toHaveClass(/\bopen\b/);
+  await page.mouse.move(2, 2);
 
   // the bottom row (Dec 28 - Jan 3) with a bar across it: no room below, so up; the singles run in time order from the
   // top, the bar keeps its place (the row's band stays unbroken)

@@ -429,9 +429,12 @@
     $$(':scope > *', el).forEach(x => x.style.order = '');
   }
   const unfoldable = t => { const d = t && t.closest && t.closest('.v-month .day'); return d && $('.dmore', d) ? d : null; };
-  root.addEventListener('pointerover', e => { if (e.pointerType === 'mouse') dayOpen(unfoldable(e.target)); });
+  // a click on an event folds the tile and keeps it folded until the mouse moves over it again: the editor hands the
+  // focus back to the event on closing, and that focus alone would unfold it at once (data-quiet)
+  root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'); if (!d || !e.target.closest('[data-key]')) return; d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
+  root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const d = unfoldable(e.target); if (d) { delete d.dataset.quiet; dayOpen(d); } });
   root.addEventListener('pointerout', e => { const d = e.pointerType === 'mouse' && e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.contains(document.activeElement)) dayClose(d); });
-  root.addEventListener('focusin', e => dayOpen(unfoldable(e.target)));
+  root.addEventListener('focusin', e => { const d = unfoldable(e.target); if (d && !d.dataset.quiet) dayOpen(d); });
   root.addEventListener('focusout', e => { const d = e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.matches(':hover')) dayClose(d); });
   document.addEventListener('pointerdown', e => $$('.day.open', root).forEach(d => { if (!d.contains(e.target)) dayClose(d); }));
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
