@@ -93,3 +93,47 @@ fn month_names_a_school_block_on_its_first_day_that_is_no_public_holiday() {
     assert!(!tile(27).contains("fname"));
     assert!(html.contains("day hol fer\" data-date=\"2026-12-25"), "a public holiday that is also a school-holiday day is both, `hol` wins in the CSS");
 }
+
+/// The week's multi-day lanes, as sketched for the feature: two bars on Monday (the longer one outermost), a third
+/// on Wednesday left of both lines, a fourth on Saturday back in the free outer lane; it runs on into the next week,
+/// whose Monday shows its bar again. Every multi-day bar stands once per week; the days its line passes carry it.
+#[test]
+fn week_draws_each_multi_day_bar_once_and_lines_in_lanes() {
+    let day = |d: u32| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
+    let ev = |s: &str, from: NaiveDate, to: NaiveDate, all_day: bool| Instance {
+        principal: "p".into(), cal_id: "c".into(), cal_name: "".into(), color: "#112233".into(), object_id: format!("{s}.ics"), uid: s.into(),
+        summary: s.into(), location: "".into(), description: "".into(), start: from.and_hms_opt(if all_day { 0 } else { 10 }, 0, 0).unwrap(),
+        end: if all_day { to.and_hms_opt(0, 0, 0).unwrap() } else { to.and_hms_opt(11, 0, 0).unwrap() }, all_day, recurring: false, categories: vec![],
+        alarm_minutes: None, alarms: vec![], is_group: false, cancelled: false,
+    };
+    let insts = [ev("M1", day(9), day(13), true), ev("M2", day(9), day(12), true), ev("A", day(9), day(9), false), ev("M3", day(11), day(14), true), ev("C", day(11), day(11), false), ev("M4", day(14), day(18), true)];
+    let l = L::new("de", crate::i18n::I18n::load());
+    let html = week_blocks(day(9), 2, day(1), &insts, &l, &HashMap::new());
+    let block = |d: u32| {
+        let at = html.find(&format!("data-date=\"2026-11-{d:02}\"")).unwrap();
+        let s = &html[html[..at].rfind("<section").unwrap()..];
+        s[..s.find("</section>").unwrap()].to_string()
+    };
+    for (s, n) in [("M1", 1), ("M2", 1), ("M3", 1), ("M4", 2)] {
+        assert_eq!(html.matches(&format!(">{s}</span>")).count(), n, "{s}");
+    }
+    let bar = |d: u32, s: &str, k: usize| assert!(block(d).contains(&format!("<li class=\"lane run\" style=\"--k:{k}\"><time>")) && block(d).contains(&format!(">{s}</span>")), "{s} on {d}: {}", block(d));
+    bar(9, "M1", 0);
+    bar(9, "M2", 1);
+    bar(11, "M3", 2);
+    bar(14, "M4", 0);
+    bar(16, "M4", 0);
+    let lines = |d: u32| block(d).match_indices("<i class=\"ln").map(|(at, _)| block(d)[at..].split("\"></i>").next().unwrap().to_string()).collect::<Vec<_>>();
+    let ln = |cls: &str, k: usize| format!("<i class=\"{cls}\" style=\"--k:{k};--c:#112233");
+    assert_eq!(lines(9), Vec::<String>::new());
+    assert_eq!(lines(10), [ln("ln", 0), ln("ln", 1)]);
+    assert_eq!(lines(11), [ln("ln", 0), ln("ln end", 1)]);
+    assert_eq!(lines(12), [ln("ln end", 0), ln("ln", 2)]);
+    assert_eq!(lines(13), [ln("ln end", 2)]);
+    assert_eq!(lines(15), [ln("ln end", 0)]);
+    assert_eq!(lines(17), [ln("ln end", 0)]);
+    // the day's other entries keep the lanes clear whose lines pass it
+    for (d, n) in [(9, 2), (10, 2), (11, 3), (12, 3), (13, 3), (14, 1), (18, 0)] {
+        assert_eq!(block(d).contains(&format!("style=\"--ln:{n}\"")), n > 0, "{d}: {}", block(d));
+    }
+}

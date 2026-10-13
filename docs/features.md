@@ -60,6 +60,8 @@ The day view shows today's agenda, a timeline of the day and the month at a glan
 <img src="images/02-week.webp" alt="A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side." width="100%">
 
 The week view puts overlapping meetings, repeating events and the calendars of the whole family side by side.
+An event that lasts several days shows its bar on its first day of the week; a thin line in its color runs down
+through the days it lasts.
 
 <img src="images/03-month.webp" alt="October at a glance: work, personal, sports and the shared family calendar, holidays and an all-day trip." width="100%">
 

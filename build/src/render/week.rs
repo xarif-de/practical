@@ -8,6 +8,14 @@ use super::*;
 pub const WEEK_BACK: i64 = 4;
 pub const WEEK_AHEAD: i64 = 5;
 
+/// A multi-day event's stretch within one week of `week_blocks`: day indexes 0-6 and its lane.
+struct Run<'a> {
+    ev: &'a Instance,
+    first: usize,
+    last: usize,
+    lane: usize,
+}
+
 pub fn monday_of(d: NaiveDate) -> NaiveDate {
     d - Duration::days(i64::from(d.weekday().num_days_from_monday()))
 }
@@ -38,12 +46,31 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
         }
         let fer: String = joined(blocks.into_iter()).iter().map(|n| format!(" <b class=\"fname\">{}</b>", e(n))).collect();
         let _ = write!(out, "<div class=\"week{}\" data-week=\"{w0}\"><h2 class=\"wk\">{} <span>{} – {}</span>{fer}</h2>", if w0 == today_mon { " now" } else { "" }, l.week_short(w0.iso_week().week()), l.dm(w0), l.dm(w6));
-        for i in 0..7 {
-            let d = w0 + Duration::days(i);
-            let evs = idx.get(&d).cloned().unwrap_or_default();
+        let days: Vec<Vec<&Instance>> = (0..7).map(|i| idx.get(&(w0 + Duration::days(i))).cloned().unwrap_or_default()).collect();
+        // a multi-day event's bar stands on its first day of the week only; a line (chrome.css `.ln`) runs down from
+        // the bar's right end through its last day of the week. A bar takes lane 1 + the highest lane whose line
+        // passes its row, and ends that many lane steps short of the right edge: no line ever crosses a bar.
+        let mut runs: Vec<Run> = vec![];
+        for (di, evs) in days.iter().enumerate() {
+            let d = w0 + Duration::days(di as i64);
             let mut items = String::new();
-            for i in &evs {
-                let _ = write!(items, "<li><time>");
+            for i in evs {
+                let mut lane = None;
+                if i.multi_day() {
+                    if runs.iter().any(|r| std::ptr::eq(r.ev, *i)) {
+                        continue;
+                    }
+                    let last = (di..7).take_while(|&j| days[j].iter().any(|x| std::ptr::eq(*x, *i))).last().unwrap_or(di);
+                    let k = runs.iter().filter(|r| r.last > di || (r.first < di && r.last == di)).map(|r| r.lane + 1).max().unwrap_or(0);
+                    runs.push(Run { ev: i, first: di, last, lane: k });
+                    lane = Some((k, last > di));
+                }
+                match lane {
+                    Some((k, line)) => {
+                        let _ = write!(items, "<li class=\"lane{}\" style=\"--k:{k}\"><time>", if line { " run" } else { "" });
+                    }
+                    None => items.push_str("<li><time>"),
+                }
                 if i.all_day {
                     items.push_str(&all_day);
                 } else {
@@ -64,7 +91,17 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
             if !marks.is_empty() {
                 items = format!("<li class=\"hols\"><time></time><span>{marks}</span></li>{items}");
             }
-            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{add}</section>", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d), d.day(), l.dow(d));
+            // the lines passing the whole day, and the lanes the day's other entries keep clear (--ln)
+            let mut lines = String::new();
+            for r in runs.iter().filter(|r| r.first < di && r.last >= di) {
+                let _ = write!(lines, "<i class=\"ln{}\" style=\"--k:{};--c:{}\"></i>", if r.last == di { " end" } else { "" }, r.lane, E(&r.ev.color));
+            }
+            let ln = runs.iter().filter(|r| r.first <= di && r.last >= di && r.last > r.first).map(|r| r.lane + 1).max().unwrap_or(0);
+            let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d));
+            if ln > 0 {
+                let _ = write!(out, " style=\"--ln:{ln}\"");
+            }
+            let _ = write!(out, "><div class=\"dl\"><b>{}</b><span>{}</span></div><ul>{items}</ul>{lines}{add}</section>", d.day(), l.dow(d));
         }
         out.push_str("</div>");
     }
