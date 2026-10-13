@@ -64,7 +64,7 @@
 .filter .eye { width: 18px; height: 18px; flex: none; color: var(--accent); pointer-events: none; } .filter .eye.no { color: var(--fg-3); }
 .filter input.eyed:checked ~ .eye.no, .filter input.eyed:not(:checked) ~ .eye:not(.no) { display: none; } .filter input.eyed:focus-visible ~ .eye { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; } .filter label small { margin-left: auto; color: var(--fg-3); }
 /* a filter row with its star (macros.html `pin_star`): blue = pinned as a quick switch left of the filter button */
-.frow { display: flex; align-items: center; } .frow > label { flex: 1; min-width: 0; } .filter .pop:has(.frow) { width: 290px; } /* + the star: 260px wrapped the owner of a group calendar */
+.frow { display: flex; align-items: center; } .frow > label { flex: 1; min-width: 0; } .filter .pop:has(.frow) { width: max-content; min-width: 260px; max-width: calc(100vw - 24px); } .frow small { padding-left: 12px; } /* as wide as its longest row (name, owner, eye, star on one line); wraps only where the screen ends */
 .pinstar { all: unset; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; color: var(--fg-3); } .pinstar .ico { width: 16px; height: 16px; }
 .pinstar:hover { color: var(--fg-2); } .pinstar[aria-pressed=true] { color: var(--accent); --ico-fill: currentColor; } .pinstar:focus-visible { outline: 2px solid var(--accent); } /* i-star-h fills through --ico-fill */
 /* quick switches (macros.html `pin_btn`, js/filter-pins.js; `.pin` is the tables' sticky name column): bookmark ribbons in the

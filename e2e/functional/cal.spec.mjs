@@ -291,6 +291,11 @@ test('calendar filter: one off, none, mine, all — kept in localStorage', async
   await f.locator('> button').click();
   await f.locator('label', { hasText: 'Arbeit' }).locator('input').uncheck();
   await expect(chip(page, 'Projekt-Review')).toHaveCount(0);
+  // the popover is as wide as its longest row: name, owner, eye and star stay on one line (chrome.css `.frow`) — a long
+  // name of a group calendar, as real ones are, set here in place (the fixture's names fit any width)
+  await f.locator('.frow', { hasText: 'Familienkalender' }).locator('label').evaluate(l => { [...l.childNodes].find(n => n.nodeType === 3 && n.textContent.includes('Familienkalender')).textContent = 'Familienkalender der ganzen Verwandtschaft'; });
+  const heights = await f.locator('#calfilter .frow').evaluateAll(rows => rows.map(r => Math.round(r.getBoundingClientRect().height)));
+  expect(new Set(heights).size, `${heights}`).toBe(1);
   // the box is invisible: a grey struck eye says hidden, a blue eye shown (chrome.css `.eye`)
   const eye = (name, off) => f.locator('label', { hasText: name }).locator(off ? '.eye.no' : '.eye:not(.no)');
   await expect(eye('Arbeit', true)).toBeVisible();
