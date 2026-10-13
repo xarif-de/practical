@@ -215,18 +215,31 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   await expect(page.locator('#ed')).toBeHidden();
   await page.mouse.move(2, 2);
   // (an event that stays visible when folded: the editor hands the focus back to it)
+  const vis = t.locator(':scope > .ev:not(.xt):not(.span)').first();
   await t.hover({ position: { x: 30, y: 8 } });
-  await t.locator(':scope > .ev:not(.xt):not(.span)').first().click();
+  await vis.click({ position: { x: 12, y: 6 } });
   await expect(page.locator('#ed')).toBeVisible();
   await expect(t).not.toHaveClass(/\bopen\b/);
   await page.locator('#ed-close').click();
   await expect(page.locator('#ed')).toBeHidden();
-  await page.evaluate(() => new Promise(r => setTimeout(r, 200)));
+  await expect(vis).toBeFocused(); // the hand-back happened, and it did not unfold the tile
   await expect(t).not.toHaveClass(/\bopen\b/);
   await page.mouse.move(2, 2);
   await t.hover({ position: { x: 30, y: 8 } });
   await expect(t).toHaveClass(/\bopen\b/);
   await page.mouse.move(2, 2);
+  // the keyboard: Enter on an event that only unfolding shows; on closing, the focus is back on the "+N", the tile open
+  await t.locator('.ev', { hasText: 'Termin 5' }).focus();
+  await expect(t).toHaveClass(/\bopen\b/);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#edh')).toHaveValue('Termin 5');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ed')).toBeHidden();
+  await expect(t.locator('.dmore')).toBeFocused();
+  await expect(t).toHaveClass(/\bopen\b/);
+  await page.keyboard.press('Enter'); // the "+N" folds it again
+  await expect(t).not.toHaveClass(/\bopen\b/);
+  await page.locator('.toolbar [data-nav="today"]').focus();
 
   // the bottom row (Dec 28 - Jan 3) with a bar across it: no room below, so up; the singles run in time order from the
   // top, the bar keeps its place (the row's band stays unbroken)
@@ -536,7 +549,7 @@ test('holiday switches are saved for the user and redraw the view', async ({ pag
 
 test('events open in view mode from month chip, week item, day document and agenda', async ({ page }) => {
   await open(page, cal('month'));
-  await chip(page, 'Projekt-Review').click();
+  await chip(page, 'Projekt-Review').click({ position: { x: 12, y: 6 } }); // on its text (the rest of the row picks the day)
   await expectEditor(page, 'Projekt-Review');
   await open(page, cal('week'));
   await page.locator('.stream [data-key]', { hasText: 'Kundentermin' }).first().click();

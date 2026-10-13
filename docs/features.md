@@ -67,10 +67,13 @@ through the days it lasts.
 
 The month view shows all your calendars at once, together with holidays and events that last several days.
 
-When a day has more events than fit, it says "+N more". Point at the day, or move the keyboard focus to it, and the
-day opens over its neighbours to show all of them. It grows downwards. Near the bottom of the month it grows
-upwards too, and then lists its events from the top in order of time. Bars of events that last several days keep
-their place, so they stay unbroken.
+When a day has more events than fit, it says "+N more". Point at the day, move the keyboard focus to it, or tap
+"+N more", and the day opens over its neighbours to show all of them. It grows downwards. Near the bottom of the month
+it grows upwards too, and then lists its events from the top in order of time. Bars of events that last several days
+keep their place, so they stay unbroken. On a phone, "+N more" picks the day, and the list below shows all of them.
+
+A click on an event's title opens it. A click on the empty space after the title picks the day, so a full day is
+still easy to pick. Bars of events that last several days open wherever you click them.
 
 <img src="images/04-year-planner.webp" alt="The whole year on one page: public and school holidays, vacations and the first event of every day." width="100%">
 
@@ -136,10 +139,10 @@ Events and tasks open in the same editor. It opens in **view mode**, so you cann
 edit, select the lock button.
 
 Beside an event, the editor shows its whole day as a small metro map that you can scroll, from midnight to
-midnight. It opens with the event in the middle. Each timed event of the day is a
-line in its calendar's colour, from its start to its end. Events at the same time get their own lines. Each title
-stands at its start, in the event's colour, and no title covers another. The event you have open is in blue. Calendars
-that you hide in the filter are left out. The button at the top left hides the day.
+midnight. It opens with the event in the middle. Each timed event of the day is a line in its calendar's colour, from
+its start to its end. Events at the same time get their own lines. Each title stands at its start, in the event's
+colour, and no title covers another. The event you have open is in the accent colour. Calendars that you hide in the
+filter are left out, except the calendar of the event you have open. The button at the top left hides the day.
 
 <img src="images/17-event-view.webp" alt="An event opened read-only: time, location, attendees, video call, reminders and the agenda." width="100%">
 

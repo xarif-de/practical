@@ -98,7 +98,7 @@
   // exactly one page, however far it goes and however long its momentum runs (practical.wheelPages). The planner
   // leaves the wheel to .main where that scrolls (a narrow or short window: its lower days); a sideways touch belongs to the view switch below
   const SLIDE = ['day', 'week', 'month', 'planner']; // the views of the switch, in its order: a change between them slides (load)
-  const monthWheel = practical.wheelPages(shift);
+  const monthWheel = practical.wheelPages(shift, e => { const d = e.target.closest && e.target.closest('.day.open'); return !!d && d.scrollHeight > d.clientHeight + 1; }); // an unfolded tile that scrolls keeps the wheel
   const yearWheel = practical.wheelPages(shift, () => { const m = $('.main'); return m.scrollHeight > m.clientHeight + 1; }); // .main scrolls, never the document (frame.css)
   // a sideways swipe steps through day | week | month | year (practical.swipeViews), not into or out of the "more" views
   practical.swipeViews($('.main'), () => $$('.toolbar .seg > button[data-view]', root), bs => bs.findIndex(b => b.dataset.view === state.view));
@@ -380,42 +380,46 @@
      the bottom padding (so "+1" when only the last one is missing). All tiles go back to bars only
      first (the grid rows then have their own height, not the one the chips gave them), then every tile is measured,
      then written: two layouts per call, not one per tile. The phone grid (dots, no chips) keeps the guess. */
+  const SINGLES = ':scope > .ev:not(.span):not(.spacer)', BARS = ':scope > .ev.span, :scope > .ev.spacer'; // a tile's chips and its bar lanes
   function dayFit(scope) {
     const grid = $('.v-month > .month', scope); if (!grid) return;
-    const tiles = $$(':scope > .day', grid).filter(d => !d.classList.contains('open')), all = tiles.map(d => $$(':scope > .ev:not(.span):not(.spacer)', d));
-    const sample = $(':scope > .day > .ev:not(.xt)', grid), h = sample ? sample.offsetHeight : 0; if (!h) return;
-    const probe = $(':scope > .day > .dmore:not([hidden])', grid), mh = probe ? probe.offsetHeight : h; // the "+N" line (smaller than a chip)
+    const tiles = $$(':scope > .day', grid).filter(d => !d.classList.contains('open')), all = tiles.map(d => $$(SINGLES, d));
+    // unrounded heights (offsetHeight's 19 for an 18.9 px chip lost a chip at some heights); the "+N" line from grid.css,
+    // not from a "+N" on the page (there may be none yet)
+    const sample = $(':scope > .day > .ev:not(.xt)', grid), h = sample ? sample.getBoundingClientRect().height : 0; if (!h) return;
+    const mh = parseFloat(getComputedStyle(grid).getPropertyValue('--dmore-h')) || h;
     tiles.forEach((d, i) => { all[i].forEach(x => x.classList.add('xt')); const b = $('.dmore', d); if (b) b.hidden = true; });
     const cs = getComputedStyle(tiles[0] || grid), gap = parseFloat(cs.rowGap) || 0, pb = parseFloat(cs.paddingBottom) || 0, step = h + gap;
-    const keep = tiles.map((d, i) => { if (!all[i].length) return -1; const bars = $$(':scope > .ev.span, :scope > .ev.spacer', d);
+    const keep = tiles.map((d, i) => { if (!all[i].length) return -1; const bars = $$(BARS, d);
       const top = (bars.length ? bars[bars.length - 1] : d.firstElementChild).getBoundingClientRect().bottom + gap, bottom = d.getBoundingClientRect().bottom, c = all[i].length;
       if (Math.floor((bottom - pb - top + gap) / step) >= c) return c;
       return Math.max(0, Math.floor((bottom - 2 - top - mh) / step)); }); // as many chips as leave room for the "+N" below them (it may use the padding)
     tiles.forEach((d, i) => { const k = keep[i], c = all[i].length; if (k < 0) return; all[i].forEach((x, j) => x.classList.toggle('xt', j >= k));
       let b = $('.dmore', d); if (k === c) { if (b) b.remove(); return; }
-      if (!b) { b = document.createElement('button'); b.className = 'dmore'; b.type = 'button'; b.setAttribute('aria-expanded', 'false'); b.onclick = moreClick; d.append(b); }
+      if (!b) { b = document.createElement('button'); b.className = 'dmore'; b.type = 'button'; b.setAttribute('aria-expanded', 'false'); d.append(b); }
       b.hidden = false; b.textContent = `+${c - k} ${grid.dataset.plus}`; });
   }
-  let fitQ = 0; addEventListener('resize', () => { if (!fitQ) fitQ = requestAnimationFrame(() => { fitQ = 0; dayFit(root); }); });
+  let fitQ = 0; addEventListener('resize', () => { if (!fitQ) fitQ = requestAnimationFrame(() => { fitQ = 0; $$('.day.open', root).forEach(dayClose); dayFit(root); }); }); // an open tile (focus keeps it) would keep its old size
   /* a month tile with more singles than fit (the "+N" .dmore, month.rs) unfolds over its neighbours while hovered, focused
      inside or after a click on the "+N": downwards while the grid and the window have room, else upwards too; then the
      earliest singles move above the multi-day bars (flex order) by whole rows, so each bar keeps its place in its band
      across the week. Negative margins keep the grid row as it was; too many for the whole grid: the tile scrolls. */
-  // the "+N": a touch has no hover; the phone grid (dots, no chips) picks the day instead, its agenda lists them all
-  function moreClick(e) { e.stopPropagation(); const d = this.closest('.day'); if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); }
-  const shows = d => { const x = $(':scope > .ev', d); return !!x && x.getClientRects().length > 0; };
+  // the "+N" (Enter, a touch: no hover) folds and unfolds; the phone grid (dots, no chips) picks the day instead, its agenda lists them all
+  root.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.v-month .dmore'); if (!b) return; const d = b.closest('.day');
+    if (d.classList.contains('open')) dayClose(d); else if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); });
+  const shows = d => { const x = $(':scope > .ev:not(.xt)', d); return !!x && x.getClientRects().length > 0; };
   function dayOpen(el) {
     if (!el || el.classList.contains('open') || !shows(el)) return;
     // h0 unrounded: offsetHeight's whole pixels grew a 133.5 px row (and so the whole grid)
     const h0 = el.getBoundingClientRect().height; el.style.height = h0 + 'px'; el.classList.add('open'); $('.dmore', el).setAttribute('aria-expanded', 'true');
     const r = el.getBoundingClientRect(), pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-    const singles = $$(':scope > .ev:not(.span):not(.spacer)', el), bars = $$(':scope > .ev.span, :scope > .ev.spacer', el);
+    const singles = $$(SINGLES, el), bars = $$(BARS, el);
     const last = singles[singles.length - 1], H = last ? last.getBoundingClientRect().bottom - r.top + pb : h0;
     const days = $$(':scope > .day', el.parentNode), lo = Math.min(days[days.length - 1].getBoundingClientRect().bottom, innerHeight - 8), hi = Math.max(days[0].getBoundingClientRect().top, 8);
     const below = lo - r.top, room = Math.max(0, r.top - hi);
     let up = 0;
     if (H > below) {
-      if (bars.length) { const step = singles.length > 1 ? singles[1].getBoundingClientRect().top - singles[0].getBoundingClientRect().top : singles[0].offsetHeight + 2;
+      if (bars.length) { const step = singles.length > 1 ? singles[1].getBoundingClientRect().top - singles[0].getBoundingClientRect().top : singles[0].getBoundingClientRect().height + (parseFloat(getComputedStyle(el).rowGap) || 0);
         const k = Math.min(singles.length, Math.ceil((H - below) / step), Math.floor(room / step)); up = k * step;
         singles.forEach((x, i) => x.style.order = i < k ? 1 : 3); bars.forEach(x => x.style.order = 2); $('.dmore', el).style.order = 4; }
       else up = Math.min(H - below, room);
@@ -435,8 +439,12 @@
      tile's hidden event folds the tile first (below), then reaches the chip */
   const offText = (el, e) => { if (!e.detail || !el.getClientRects().length || !el.matches('.v-month .day > .ev:not(.span)')) return false; const r = document.createRange(); r.selectNodeContents(el); return e.clientX > r.getBoundingClientRect().right + 2; };
   // a click on an event folds the tile and keeps it folded until the mouse moves over it again: the editor hands the
-  // focus back to the event on closing, and that focus alone would unfold it at once (data-quiet)
-  root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'), k = d && e.target.closest('[data-key]'); if (!k || offText(k, e)) return; d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
+  // focus back to the event on closing, and that focus alone would unfold it at once (data-quiet). The keyboard (Enter,
+  // detail 0) stays in the tile: from a chip that only unfolding shows, the focus goes to the "+N" first, so the editor
+  // hands it back there (the chip is hidden again by then) and the tile unfolds where the user was
+  root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'), k = d && e.target.closest('[data-key]'); if (!k || offText(k, e)) return;
+    if (!e.detail) { if (k.classList.contains('xt')) $('.dmore', d).focus(); return; }
+    d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
   root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const d = unfoldable(e.target); if (d) { delete d.dataset.quiet; dayOpen(d); } });
   root.addEventListener('pointerout', e => { const d = e.pointerType === 'mouse' && e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.contains(document.activeElement)) dayClose(d); });
   root.addEventListener('focusin', e => { const d = unfoldable(e.target); if (d && !d.dataset.quiet) dayOpen(d); });
@@ -447,7 +455,7 @@
     $$('.planner .c[data-date]', scope).forEach(el => el.onclick = () => { if (el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the year planner picks the day; the view stays
     $$('.lrow[data-date]', scope).forEach(el => { el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }; el.tabIndex = -1; const a = $('.add', el); if (a) a.tabIndex = -1; }); // picking in the ledger leaves it exactly where it is
     ledgerStop();
-    dayFit(scope); $$('.dmore', scope).forEach(b => b.onclick = moreClick);
+    dayFit(scope);
     $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
     $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();

@@ -58,6 +58,27 @@ fn month_grid_golden() {
     assert!(en.contains("+3 more") && en.contains("<div class=\"dow\">Mon</div>"));
 }
 
+/// The "+N" guess with no room left by three bar lanes: a lone single is shown (a "+1" would stand in for nothing),
+/// two give "+2" with both hidden.
+#[test]
+fn month_grid_plus_guess_without_room() {
+    let mut v = vec![
+        instance("a", "b1", "Bar 1", "2026-10-05", "2026-10-08"),
+        instance("a", "b2", "Bar 2", "2026-10-05", "2026-10-08"),
+        instance("a", "b3", "Bar 3", "2026-10-05", "2026-10-08"),
+        instance("a", "one", "Einzeln", "2026-10-06T09:00", "2026-10-06T10:00"),
+    ];
+    let tile = |html: &str, d: &str| html.split(&format!("data-date=\"{d}\">")).nth(1).and_then(|r| r.split("<div class=\"day").next()).unwrap_or_default().to_string();
+    let html = month_grid(2026, 10, date("2026-10-14"), &v, &lang("de"), 3, date("2026-10-14"), &marks(&[]));
+    let d6 = tile(&html, "2026-10-06");
+    assert!(d6.contains("title=\"Einzeln\"") && !d6.contains(" xt") && !d6.contains("dmore"), "{d6}");
+    v.push(instance("a", "two", "Zweitens", "2026-10-06T11:00", "2026-10-06T12:00"));
+    let html = month_grid(2026, 10, date("2026-10-14"), &v, &lang("de"), 3, date("2026-10-14"), &marks(&[]));
+    let d6 = tile(&html, "2026-10-06");
+    assert_eq!(d6.matches("<div class=\"ev xt\"").count(), 2, "{d6}");
+    assert!(d6.contains(">+2 weitere</button>"), "{d6}");
+}
+
 #[test]
 fn month_view_and_agenda_golden() {
     let (v, hol) = october();

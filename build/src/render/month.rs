@@ -66,7 +66,8 @@ pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
 pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate, hol: &Hols) -> String {
     let weeks = month_weeks(year, month);
     let idx = by_day(instances, weeks[0][0], weeks[weeks.len() - 1][6] + Duration::days(1));
-    let mut out = format!("<div class=\"month\" data-plus=\"{}\">", e(&l.t("v-more"))); // the word after "+N" (calendar.js dayFit)
+    let more = e(&l.t("v-more")); // the word after "+N", here and for calendar.js dayFit
+    let mut out = format!("<div class=\"month\" data-plus=\"{more}\">");
     let add = add_btn(l);
     for d in 0..7 {
         let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
@@ -154,7 +155,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             }
             // every single is here; the "+N" (N ≥ 2) takes the last slot when they do not all fit, the singles past it
             // are hidden (`.xt`). This guess counts `ev_limit` slots; calendar.js dayFit redoes it from the tile's real
-            // height, and hovering the tile, focus in it or a click on the "+N" unfolds it (dayOpen)
+            // height (its "+N" line is smaller than a chip, so it may say "+1"), and hovering the tile, focus in it or a click on the "+N" unfolds it (dayOpen)
             let singles: Vec<&&Instance> = evs.iter().filter(|i| !i.multi_day()).collect();
             let room = ev_limit.saturating_sub(shown);
             // (no room at all for a lone single: it is shown, there is nothing its "+1" would stand in for)
@@ -167,7 +168,7 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                 }
             }
             if fit < singles.len() {
-                let _ = write!(out, "<button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+{} {}</button>", singles.len() - fit, l.t("v-more"));
+                let _ = write!(out, "<button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+{} {more}</button>", singles.len() - fit);
             }
             out.push_str("</div>");
         }

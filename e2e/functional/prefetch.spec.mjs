@@ -137,6 +137,6 @@ test('hovering an entry prefetches what its editor shows; the click opens it fro
   await chip.hover({ position: { x: 2, y: 2 } });
   await pre2;
   expect(await page.evaluate(([u, e]) => practical.send(u, 'PUT', { ...e, summary: 'F6 Umbenannt' }).then(r => r.ok), [url, ev])).toBe(true);
-  await page.locator(`.v-month .ev[data-key="${key}"]`, { hasText: 'F6 Umbenannt' }).first().click();
+  await page.locator(`.v-month .ev[data-key="${key}"]`, { hasText: 'F6 Umbenannt' }).first().click({ position: { x: 12, y: 6 } }); // on its text
   await expect(page.locator('#ed:not([hidden]) #edh')).toHaveValue('F6 Umbenannt');
 });

@@ -11,7 +11,7 @@
   $x('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); paintColor(); }
   const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
-  tl.onclick = () => setTl(ed.classList.contains('no-tl')); setTl(localStorage.edtl !== '0');
+  tl.onclick = () => { setTl(ed.classList.contains('no-tl')); dayline(); }; setTl(localStorage.edtl !== '0'); // shown again: drawn and centred (hidden, it was not)
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode && ruleLeave()) return; /* back on the event or task it was opened over (or leaving the page): not closed */ soloEnd(); const back = opener; opener = null; const a = document.activeElement; if (back && back.isConnected && (!a || a === document.body || ed.contains(a))) back.focus(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };

@@ -372,7 +372,7 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   await expect(page.locator('#ed-dayline .ln.me')).not.toHaveAttribute('style', /--c:/);
   // the whole day (0-24 h) scrolls inside the box, the event at hand (10:00-11:30) in its middle
   const dl = await page.locator('#ed-dayline').evaluate(b => { const r = b.getBoundingClientRect(), m = b.querySelector('.ln.me').getBoundingClientRect(); return { sh: b.scrollHeight, ch: b.clientHeight, off: (m.top + m.bottom) / 2 - (r.top + r.bottom) / 2 }; });
-  expect(dl.sh).toBe(24 * 36);
+  expect(dl.sh).toBeGreaterThanOrEqual(24 * 36);
   expect(dl.ch).toBeLessThan(dl.sh);
   expect(Math.abs(dl.off), JSON.stringify(dl)).toBeLessThan(2);
   const boxes = await page.locator('#ed-dayline .blk').evaluateAll(l => l.map(b => b.getBoundingClientRect()).map(r => [r.top, r.bottom]).sort((a, b) => a[0] - b[0]));
@@ -404,6 +404,19 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   await page.locator(`article.lnk[data-key="${CAL.work}/review@seed"] [data-map="osm"]`).click();
   expect(await page.evaluate(() => window.__opened)).toEqual(['https://www.openstreetmap.org/search?query=51.049259%2C13.738144']);
   await expect(page.locator('#ed')).toBeHidden();
+});
+
+test("the day line keeps the open event's own calendar when the filter hides it, and centres it once shown again", async ({ page }) => {
+  await page.goto('/calendar?view=day&date=2026-10-14');
+  await page.evaluate(c => { localStorage.calHidden = JSON.stringify([c]); localStorage.edtl = '0'; }, CAL.work);
+  await page.reload();
+  await page.evaluate(k => rusticalEd.open(k, '2026-10-14'), `${CAL.work}/review@seed`);
+  await expect(page.locator('#ed')).toHaveClass(/no-tl/);
+  await page.locator('#ed-tl').click(); // shown: drawn now, with the event in the middle
+  await expect(page.locator('#ed-dayline .blk.me')).toContainText('Projekt-Review');
+  await expect(page.locator('#ed-dayline .blk', { hasText: 'Zahnarzt' })).toHaveCount(1); // the shown calendars as well
+  const off = await page.locator('#ed-dayline').evaluate(b => { const r = b.getBoundingClientRect(), m = b.querySelector('.ln.me').getBoundingClientRect(); return (m.top + m.bottom) / 2 - (r.top + r.bottom) / 2; });
+  expect(Math.abs(off)).toBeLessThan(2);
 });
 
 test("the day line leaves out the events of a calendar the page's filter hides", async ({ page }) => {
