@@ -53,13 +53,13 @@ To walk through the hints again later: **Settings › First steps**.
 The calendar has four main views: **Day**, **Week**, **Month** and **Year**. The year view is a planner for the
 whole year. Public and school holidays appear in every view.
 
-<img src="images/01-day.webp" alt="The day view: today's agenda with overlapping meetings, a timeline of the day and the month at a glance." width="100%">
+<img src="images/01-day.webp" alt="The day view: today's agenda, a timeline of the day and the month at a glance." width="100%">
 
 The day view shows today's agenda, a timeline of the day and the month at a glance.
 
-<img src="images/02-week.webp" alt="A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side." width="100%">
+<img src="images/02-week.webp" alt="A week with work, personal, sports and family events side by side." width="100%">
 
-The week view puts overlapping meetings, repeating events and the calendars of the whole family side by side.
+The week view puts repeating events and the calendars of the whole family side by side.
 An event that lasts several days shows its bar on its first day of the week; a thin line in its color runs down
 through the days it lasts.
 
@@ -144,10 +144,10 @@ its start to its end. Events at the same time get their own lines. Each title st
 colour, and no title covers another. The event you have open is in the accent colour. Calendars that you hide in the
 filter are left out, except the calendar of the event you have open. The button at the top left hides the day.
 
-<img src="images/17-event-view.webp" alt="An event opened read-only: time, location, attendees, video call, reminders and the agenda." width="100%">
+<img src="images/17-event-view.webp" alt="An event opened read-only: its day beside it, time, location, people, a reminder and a note." width="100%">
 
-In view mode, the editor shows only the cards that have data. This event has a time, a location, attendees, a video
-call, reminders and an agenda in its notes.
+In view mode, the editor shows only the cards that have data. This event has a time, a location, people, a reminder
+and a note.
 
 <img src="images/18-event-edit.webp" alt="The same event in edit mode: every property as an editable card." width="100%">
 
@@ -215,7 +215,7 @@ template.
 
 Tasks have six views. All of them share one sort order and one time range.
 
-<img src="images/09-tasks-list.webp" alt="Tasks grouped by due date, with priorities, progress, categories and the task editor docked beside the list." width="100%">
+<img src="images/09-tasks-list.webp" alt="Tasks grouped by due date, with progress and categories and the task editor docked beside the list." width="100%">
 
 **Groups** sorts tasks by due date: overdue, today, this week, later and so on. The task editor opens beside the
 list.
@@ -243,9 +243,9 @@ list.
 A task can have a priority, progress, a start and a due date, a status, categories, a location and links. Tasks open
 in the same editor as events.
 
-<img src="images/19-task-view.webp" alt="A task opened read-only: due date, progress, priority, categories, notes and its link to an event." width="100%">
+<img src="images/19-task-view.webp" alt="A task opened read-only: start and due date, progress, a category and a note." width="100%">
 
-This task is in view mode. It shows its due date, progress, priority, categories, notes and a link to an event.
+This task is in view mode. It shows its start and due date, progress, a category and a note.
 
 <img src="images/20-task-edit.webp" alt="The same task in edit mode." width="100%">
 
@@ -268,7 +268,7 @@ Contacts open in an editor with a view mode and an edit mode, like events. A con
 addresses, postal addresses, dates, an organisation, messengers, relationships and notes. PractiCal keeps every
 vCard property that it does not show.
 
-<img src="images/21-contact-view.webp" alt="A contact opened read-only: phones, emails, messenger, organisation, birthday and relationships." width="100%">
+<img src="images/21-contact-view.webp" alt="A contact opened read-only: phone, email, address, organisation, birthday and a note." width="100%">
 
 <img src="images/22-contact-edit.webp" alt="The same contact in edit mode." width="100%">
 

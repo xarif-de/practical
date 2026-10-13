@@ -173,9 +173,9 @@ const IMPORT_ICS = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Example School/
   'END:VCALENDAR', ''].join('\r\n');
 
 const SHOTS = [
-  ['day', 'Day view', 'The day view: today\'s agenda with overlapping meetings, a timeline of the day and the month at a glance.', async p => {
+  ['day', 'Day view', 'The day view: today\'s agenda, a timeline of the day and the month at a glance.', async p => {
     await calView(p, 'day'); await p.locator(`.doc[data-date="${D}"]`).waitFor(); }],
-  ['week', 'Week view', 'A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side.', async p => {
+  ['week', 'Week view', 'A week with work, personal, sports and family events side by side.', async p => {
     await calView(p, 'week'); await p.locator('.stream .week.focus').waitFor(); }],
   ['month', 'Month view', 'October at a glance: work, personal, sports and the shared family calendar, holidays and an all-day trip.', async p => {
     await calView(p, 'month'); }],
@@ -189,7 +189,7 @@ const SHOTS = [
     await calView(p, 'countdown'); }],
   ['year-in-numbers', 'Year in numbers', 'Statistics of the year: events per calendar, load per week, busy evenings and weekends.', async p => {
     await calView(p, 'numbers'); }],
-  ['tasks-list', 'Task list', 'Tasks grouped by due date, with priorities, progress, categories and the task editor docked beside the list.', async p => {
+  ['tasks-list', 'Task list', 'Tasks grouped by due date, with progress and categories and the task editor docked beside the list.', async p => {
     await openTask(p, "Organise Lily's birthday party"); }],
   ['tasks-table', 'Task table', 'All tasks as a sortable table with configurable columns.', async p => {
     await tkView(p, 'table', 'month'); }],
@@ -207,17 +207,17 @@ const SHOTS = [
   ['contacts-table', 'Contacts table', 'The address book as a table with phone, email, categories and birthdays.', async p => {
     await ctList(p);
     await p.click('[data-ctview=table]'); await p.locator('#contacts.view-table').waitFor(); }],
-  ['event-view', 'Event (view mode)', 'An event opened read-only: time, location, attendees, video call, reminders and the agenda.', async p => {
+  ['event-view', 'Event (view mode)', 'An event opened read-only: its day beside it, time, location, people, a reminder and a note.', async p => {
     await openEvent(p, 'Q4 roadmap workshop', D); }],
   ['event-edit', 'Event (edit mode)', 'The same event in edit mode: every property as an editable card.', async p => {
     await openEvent(p, 'Q4 roadmap workshop', D);
     await p.locator('#ed-lock').click(); await p.locator('#edform.mode-edit').waitFor(); await p.locator('#edh').blur(); }],
-  ['task-view', 'Task (view mode)', 'A task opened read-only: due date, progress, priority, categories, notes and its link to an event.', async p => {
+  ['task-view', 'Task (view mode)', 'A task opened read-only: start and due date, progress, a category and a note.', async p => {
     await openTask(p, 'Prepare Q4 roadmap slides'); }],
   ['task-edit', 'Task (edit mode)', 'The same task in edit mode.', async p => {
     await openTask(p, 'Prepare Q4 roadmap slides');
     await p.click('#ed-lock'); await p.locator('#edform.mode-edit').waitFor(); await p.locator('#edh').blur(); }],
-  ['contact-view', 'Contact (view mode)', 'A contact opened read-only: phones, emails, messenger, organisation, birthday and relationships.', async p => {
+  ['contact-view', 'Contact (view mode)', 'A contact opened read-only: phone, email, address, organisation, birthday and a note.', async p => {
     await openContact(p, 'c-priya@demo', 'Priya Sharma'); await letterTop(p, 'P'); }],
   ['contact-edit', 'Contact (edit mode)', 'The same contact in edit mode.', async p => {
     await openContact(p, 'c-priya@demo', 'Priya Sharma'); await letterTop(p, 'P');

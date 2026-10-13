@@ -2,13 +2,13 @@
   {
     "file": "01-day.webp",
     "title": "Day view",
-    "caption": "The day view: today's agenda with overlapping meetings, a timeline of the day and the month at a glance.",
+    "caption": "The day view: today's agenda, a timeline of the day and the month at a glance.",
     "group": "Calendar"
   },
   {
     "file": "02-week.webp",
     "title": "Week view",
-    "caption": "A busy week with overlapping meetings, recurring stand-ups, sports and family events side by side.",
+    "caption": "A week with work, personal, sports and family events side by side.",
     "group": "Calendar"
   },
   {
@@ -50,7 +50,7 @@
   {
     "file": "09-tasks-list.webp",
     "title": "Task list",
-    "caption": "Tasks grouped by due date, with priorities, progress, categories and the task editor docked beside the list.",
+    "caption": "Tasks grouped by due date, with progress and categories and the task editor docked beside the list.",
     "group": "Tasks"
   },
   {
@@ -98,7 +98,7 @@
   {
     "file": "17-event-view.webp",
     "title": "Event (view mode)",
-    "caption": "An event opened read-only: time, location, attendees, video call, reminders and the agenda.",
+    "caption": "An event opened read-only: its day beside it, time, location, people, a reminder and a note.",
     "group": "Editors"
   },
   {
@@ -110,7 +110,7 @@
   {
     "file": "19-task-view.webp",
     "title": "Task (view mode)",
-    "caption": "A task opened read-only: due date, progress, priority, categories, notes and its link to an event.",
+    "caption": "A task opened read-only: start and due date, progress, a category and a note.",
     "group": "Editors"
   },
   {
@@ -122,7 +122,7 @@
   {
     "file": "21-contact-view.webp",
     "title": "Contact (view mode)",
-    "caption": "A contact opened read-only: phones, emails, messenger, organisation, birthday and relationships.",
+    "caption": "A contact opened read-only: phone, email, address, organisation, birthday and a note.",
     "group": "Editors"
   },
   {
