@@ -406,7 +406,8 @@
   const shows = d => { const x = $(':scope > .ev', d); return !!x && x.getClientRects().length > 0; };
   function dayOpen(el) {
     if (!el || el.classList.contains('open') || !shows(el)) return;
-    const h0 = el.offsetHeight; el.style.height = h0 + 'px'; el.classList.add('open'); $('.dmore', el).setAttribute('aria-expanded', 'true');
+    // h0 unrounded: offsetHeight's whole pixels grew a 133.5 px row (and so the whole grid)
+    const h0 = el.getBoundingClientRect().height; el.style.height = h0 + 'px'; el.classList.add('open'); $('.dmore', el).setAttribute('aria-expanded', 'true');
     const r = el.getBoundingClientRect(), pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
     const singles = $$(':scope > .ev:not(.span):not(.spacer)', el), bars = $$(':scope > .ev.span, :scope > .ev.spacer', el);
     const last = singles[singles.length - 1], H = last ? last.getBoundingClientRect().bottom - r.top + pb : h0;

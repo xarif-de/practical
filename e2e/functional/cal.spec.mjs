@@ -164,7 +164,19 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   const fitOk = () => page.evaluate(() => [...document.querySelectorAll('.v-month .day')].every(d => { const r = d.getBoundingClientRect();
     return [...d.children].every(c => !c.getClientRects().length || getComputedStyle(c).position === 'absolute' || c.getBoundingClientRect().bottom <= r.bottom + 0.5); }));
   expect(await fitOk()).toBe(true);
-  const vp = page.viewportSize(), shown = () => t.locator(':scope > .ev:visible').count(), n0 = await shown();
+  // the fitted chips and the "+N" never make a row taller: the grid is as high as with bars only
+  const gridH = () => page.locator('.v-month .month').evaluate(g => g.getBoundingClientRect().height);
+  const vp = page.viewportSize(), bare = '.v-month .day > .ev:not(.span):not(.spacer), .v-month .dmore { display: none !important; }';
+  for (let hh = 640; hh <= 1000; hh += 24) { // several heights: the "+N" reaches into the bottom padding at some of them
+    await page.setViewportSize({ width: vp.width, height: hh });
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const fitted = await gridH(), tag = await page.addStyleTag({ content: bare });
+    expect(Math.abs((await gridH()) - fitted), `rows grew from the chips at ${hh}px`).toBeLessThan(0.1);
+    await tag.evaluate(x => x.remove());
+  }
+  await page.setViewportSize(vp);
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const h0 = await gridH(), shown = () => t.locator(':scope > .ev:visible').count(), n0 = await shown();
   await page.setViewportSize({ width: vp.width, height: vp.height + 400 });
   await expect.poll(shown).toBeGreaterThan(n0);
   expect(await fitOk()).toBe(true);
@@ -179,7 +191,9 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   const o = await t.boundingBox();
   expect(Math.abs(o.y - cell.y)).toBeLessThan(0.5); // room below: it only grows downwards
   expect(o.height).toBeGreaterThan(cell.height);
-  expect(await next.boundingBox()).toEqual(below); // over its neighbours: the grid keeps its rows
+  const nb = await next.boundingBox(); // over its neighbours: the grid keeps its rows (to the sub-pixel)
+  for (const k of ['x', 'y', 'width', 'height']) expect(Math.abs(nb[k] - below[k]), k).toBeLessThan(0.1);
+  expect(Math.abs((await gridH()) - h0)).toBeLessThan(0.1);
   await page.mouse.move(2, 2);
   await expect(t).not.toHaveClass(/\bopen\b/);
   await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
