@@ -429,9 +429,13 @@
     $$(':scope > *', el).forEach(x => x.style.order = '');
   }
   const unfoldable = t => { const d = t && t.closest && t.closest('.v-month .day'); return d && $('.dmore', d) ? d : null; };
+  /* a month chip opens its event from its text only: the empty rest of its row (it looks like the tile) picks the day,
+     so a day full of events is still easy to pick. A bar is filled and keeps its whole length; a keyboard "click"
+     (detail 0) has no position */
+  const offText = (el, e) => { if (!e.detail || !el.matches('.v-month .day > .ev:not(.span)')) return false; const r = document.createRange(); r.selectNodeContents(el); return e.clientX > r.getBoundingClientRect().right + 2; };
   // a click on an event folds the tile and keeps it folded until the mouse moves over it again: the editor hands the
   // focus back to the event on closing, and that focus alone would unfold it at once (data-quiet)
-  root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'); if (!d || !e.target.closest('[data-key]')) return; d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
+  root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'), k = d && e.target.closest('[data-key]'); if (!k || offText(k, e)) return; d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
   root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const d = unfoldable(e.target); if (d) { delete d.dataset.quiet; dayOpen(d); } });
   root.addEventListener('pointerout', e => { const d = e.pointerType === 'mouse' && e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.contains(document.activeElement)) dayClose(d); });
   root.addEventListener('focusin', e => { const d = unfoldable(e.target); if (d && !d.dataset.quiet) dayOpen(d); });
@@ -447,7 +451,7 @@
     $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();
     $$('[data-key]', scope).forEach(el => {
-      el.onclick = e => { e.stopPropagation(); edOpen(el.dataset.key, (el.closest('[data-date]') || el).dataset.date); }; // a week entry on its start day: the day block's date
+      el.onclick = e => { e.stopPropagation(); if (offText(el, e)) { const d = el.closest('.day'); if (d.dataset.date !== state.date) pickDay(d.dataset.date); return; } edOpen(el.dataset.key, (el.closest('[data-date]') || el).dataset.date); }; // a week entry on its start day: the day block's date
       el.tabIndex = 0; if (el.tagName !== 'ARTICLE') el.setAttribute('role', 'button'); // the keyboard opens it too: Enter/Space below (an article holds links: no button role)
     });
     // the day document's details sit inside the clickable entry, so each of them stops the click

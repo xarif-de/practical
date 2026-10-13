@@ -126,6 +126,15 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
   await day.click({ position: { x: bb.width / 2, y: bb.height - 6 } });
   await expect(page.locator('.v-month .day[data-date="2026-10-16"]')).toHaveClass(/\bsel\b/);
   expect(qp(page, 'date')).toBe('2026-10-16');
+  // an event chip opens the editor from its text only; the empty rest of its row picks the day
+  const rt = page.locator('.v-month .day[data-date="2026-10-24"] .ev', { hasText: 'Radtour' }), rb = await rt.boundingBox();
+  await page.mouse.click(rb.x + rb.width - 4, rb.y + rb.height / 2);
+  await expect(page.locator('.v-month .day[data-date="2026-10-24"]')).toHaveClass(/\bsel\b/);
+  await expect(page.locator('#ed')).toBeHidden();
+  await page.mouse.click(rb.x + 20, rb.y + rb.height / 2);
+  await expect(page.locator('#edh')).toHaveValue('Radtour');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ed')).toBeHidden();
   // "+N weitere" no longer leads to the day view: it unfolds the tile (next test)
   await page.locator('.v-month .day[data-date="2026-10-19"] .dmore').dispatchEvent('click');
   await expect(page.locator('.v-month .day[data-date="2026-10-19"]')).toHaveClass(/\bopen\b/);
