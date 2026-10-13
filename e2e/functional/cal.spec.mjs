@@ -207,6 +207,13 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   await expect(t).not.toHaveClass(/\bopen\b/);
   await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
   // a click on an event folds the tile; the focus the editor hands back on closing does not unfold it, hovering again does
+  // an event that only the unfolding shows opens from its text too
+  await t.hover({ position: { x: 30, y: 8 } });
+  await t.locator('.ev', { hasText: 'Termin 5' }).click({ position: { x: 20, y: 6 } });
+  await expect(page.locator('#edh')).toHaveValue('Termin 5');
+  await page.locator('#ed-close').click();
+  await expect(page.locator('#ed')).toBeHidden();
+  await page.mouse.move(2, 2);
   // (an event that stays visible when folded: the editor hands the focus back to it)
   await t.hover({ position: { x: 30, y: 8 } });
   await t.locator(':scope > .ev:not(.xt):not(.span)').first().click();

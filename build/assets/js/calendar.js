@@ -431,8 +431,9 @@
   const unfoldable = t => { const d = t && t.closest && t.closest('.v-month .day'); return d && $('.dmore', d) ? d : null; };
   /* a month chip opens its event from its text only: the empty rest of its row (it looks like the tile) picks the day,
      so a day full of events is still easy to pick. A bar is filled and keeps its whole length; a keyboard "click"
-     (detail 0) has no position */
-  const offText = (el, e) => { if (!e.detail || !el.matches('.v-month .day > .ev:not(.span)')) return false; const r = document.createRange(); r.selectNodeContents(el); return e.clientX > r.getBoundingClientRect().right + 2; };
+     (detail 0) has no position. A chip that is no longer drawn was judged while it was: the click on an unfolded
+     tile's hidden event folds the tile first (below), then reaches the chip */
+  const offText = (el, e) => { if (!e.detail || !el.getClientRects().length || !el.matches('.v-month .day > .ev:not(.span)')) return false; const r = document.createRange(); r.selectNodeContents(el); return e.clientX > r.getBoundingClientRect().right + 2; };
   // a click on an event folds the tile and keeps it folded until the mouse moves over it again: the editor hands the
   // focus back to the event on closing, and that focus alone would unfold it at once (data-quiet)
   root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'), k = d && e.target.closest('[data-key]'); if (!k || offText(k, e)) return; d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
