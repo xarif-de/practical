@@ -66,7 +66,7 @@ pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
 pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance], l: &L, ev_limit: usize, view_date: NaiveDate, hol: &Hols) -> String {
     let weeks = month_weeks(year, month);
     let idx = by_day(instances, weeks[0][0], weeks[weeks.len() - 1][6] + Duration::days(1));
-    let mut out = String::from("<div class=\"month\">");
+    let mut out = format!("<div class=\"month\" data-plus=\"{}\">", e(&l.t("v-more"))); // the word after "+N" (calendar.js dayFit)
     let add = add_btn(l);
     for d in 0..7 {
         let _ = write!(out, "<div class=\"dow\">{}</div>", l.dow_i(d));
@@ -152,17 +152,22 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                     shown += 1;
                 }
             }
-            // the singles that fit, then the rest hidden in `.xts`: hovering the tile, focus in it or a click on the "+N" unfolds it (calendar.js dayOpen)
+            // every single is here; the "+N" (N ≥ 2) takes the last slot when they do not all fit, the singles past it
+            // are hidden (`.xt`). This guess counts `ev_limit` slots; calendar.js dayFit redoes it from the tile's real
+            // height, and hovering the tile, focus in it or a click on the "+N" unfolds it (dayOpen)
             let singles: Vec<&&Instance> = evs.iter().filter(|i| !i.multi_day()).collect();
             let room = ev_limit.saturating_sub(shown);
+            // (no room at all for a lone single: it is shown, there is nothing its "+1" would stand in for)
+            let fit = if singles.len() > room && singles.len() - room.saturating_sub(1) > 1 { room.saturating_sub(1) } else { singles.len() };
             for (n, i) in singles.iter().enumerate() {
-                if n == room {
-                    out.push_str("<div class=\"xts\">");
-                }
+                let at = out.len();
                 ev_html(&mut out, i, None);
+                if n >= fit {
+                    out.insert_str(at + "<div class=\"ev".len(), " xt");
+                }
             }
-            if singles.len() > room {
-                let _ = write!(out, "</div><button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+{} {}</button>", singles.len() - room, l.t("v-more"));
+            if fit < singles.len() {
+                let _ = write!(out, "<button class=\"dmore\" type=\"button\" aria-expanded=\"false\">+{} {}</button>", singles.len() - fit, l.t("v-more"));
             }
             out.push_str("</div>");
         }

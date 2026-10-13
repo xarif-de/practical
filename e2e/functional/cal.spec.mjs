@@ -159,6 +159,16 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
 test('a month tile with more than fits unfolds in place: down where there is room, else up with the bars kept', async ({ page }) => {
   await open(page, cal('month'));
   const t = page.locator('.v-month .day[data-date="2026-10-19"]'), next = page.locator('.v-month .day[data-date="2026-10-26"]');
+  // as many chips as the tile's height holds; a "+N" only when not all fit, and it takes the last slot: never "+1"
+  const fitOk = () => page.evaluate(() => [...document.querySelectorAll('.v-month .day')].every(d => { const r = d.getBoundingClientRect(), b = d.querySelector('.dmore');
+    return [...d.children].every(c => !c.getClientRects().length || getComputedStyle(c).position === 'absolute' || c.getBoundingClientRect().bottom <= r.bottom + 0.5) && (!b || b.hidden || /^\+([2-9]|\d\d)/.test(b.textContent)); }));
+  expect(await fitOk()).toBe(true);
+  const vp = page.viewportSize(), shown = () => t.locator(':scope > .ev:visible').count(), n0 = await shown();
+  await page.setViewportSize({ width: vp.width, height: vp.height + 400 });
+  await expect.poll(shown).toBeGreaterThan(n0);
+  expect(await fitOk()).toBe(true);
+  await page.setViewportSize(vp);
+  await expect.poll(shown).toBe(n0);
   const cell = await t.boundingBox(), below = await next.boundingBox();
   await expect(t.locator('.ev', { hasText: 'Termin 5' })).toBeHidden();
   await t.hover({ position: { x: 30, y: 8 } });
@@ -178,9 +188,14 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   const [principal, cal_id] = 'alice/5eed0000-0000-4000-8000-000000000002'.split('/');
   const mk = (summary, start, end, all_day = false) => api(page, 'POST', '/api/events', { principal, cal_id, summary, start, end, all_day, rrule: null, categories: [], color: '', alarms: [], location: '' });
   await mk('U-Bar', '2026-12-28T00:00:00', '2027-01-01T00:00:00', true);
+  // a bar in the second lane stays in it on the days after the first lane's bar ended (the empty lane keeps a chip's height)
+  await mk('L-Eins', '2026-12-07T00:00:00', '2026-12-09T00:00:00', true);
+  await mk('L-Zwei', '2026-12-08T00:00:00', '2026-12-11T00:00:00', true); // starts while L-Eins runs: the second lane
   const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
   for (const [i, h] of times.entries()) await mk(`U${i + 1}`, `2026-12-30T${h}:00`, `2026-12-30T${h.slice(0, 2)}:30:00`);
   await open(page, '/calendar?view=month&date=2026-12-14');
+  const y8 = (await page.locator('.v-month .day[data-date="2026-12-08"] .ev.span[title="L-Zwei"]').boundingBox()).y;
+  for (const d of ['2026-12-09', '2026-12-10']) expect(Math.abs((await page.locator(`.v-month .day[data-date="${d}"] .ev.span[title="L-Zwei"]`).boundingBox()).y - y8), d).toBeLessThan(0.5);
   const u = page.locator('.v-month .day[data-date="2026-12-30"]');
   const c0 = await u.boundingBox(), bar0 = await u.locator('.ev.span').boundingBox();
   await u.hover({ position: { x: 30, y: 8 } });

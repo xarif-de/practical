@@ -375,16 +375,37 @@
   // Enter/Space on an entry (a Tab stop, wireItems) acts as its click; one listener instead of one per entry (the week stream holds hundreds)
   root.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.key && e.target.tabIndex === 0) { e.preventDefault(); e.target.click(); } });
   root.addEventListener('keydown', e => { const r = e.target.closest && e.target.closest('.ledger .lrow'); if (!r || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return; const n = e.key === 'ArrowDown' ? r.nextElementSibling : r.previousElementSibling; if (!n || !n.matches('.lrow')) return; e.preventDefault(); r.tabIndex = -1; n.tabIndex = 0; n.focus(); });
+  /* how many singles each month tile shows (month.rs renders all, its "+N" is a guess from a fixed count): as many as
+     its height holds; when not all fit, the "+N" takes the last slot (so never "+1"; a lone single with no slot at all is shown). All tiles go back to bars only
+     first (the grid rows then have their own height, not the one the chips gave them), then every tile is measured,
+     then written: two layouts per call, not one per tile. The phone grid (dots, no chips) keeps the guess. */
+  function dayFit(scope) {
+    const grid = $('.v-month > .month', scope); if (!grid) return;
+    const tiles = $$(':scope > .day', grid).filter(d => !d.classList.contains('open')), all = tiles.map(d => $$(':scope > .ev:not(.span):not(.spacer)', d));
+    const sample = $(':scope > .day > .ev:not(.xt)', grid), h = sample ? sample.offsetHeight : 0; if (!h) return;
+    tiles.forEach((d, i) => { all[i].forEach(x => x.classList.add('xt')); const b = $('.dmore', d); if (b) b.hidden = true; });
+    const cs = getComputedStyle(tiles[0] || grid), gap = parseFloat(cs.rowGap) || 0, pb = parseFloat(cs.paddingBottom) || 0, step = h + gap;
+    const keep = tiles.map((d, i) => { if (!all[i].length) return -1; const bars = $$(':scope > .ev.span, :scope > .ev.spacer', d);
+      const top = (bars.length ? bars[bars.length - 1] : d.firstElementChild).getBoundingClientRect().bottom + gap, n = Math.max(0, Math.floor((d.getBoundingClientRect().bottom - pb - top + gap) / step)), c = all[i].length;
+      return c <= n || c - Math.max(0, n - 1) < 2 ? c : Math.max(0, n - 1); }); // never "+1": a lone single without any room is shown
+    tiles.forEach((d, i) => { const k = keep[i], c = all[i].length; if (k < 0) return; all[i].forEach((x, j) => x.classList.toggle('xt', j >= k));
+      let b = $('.dmore', d); if (k === c) { if (b) b.remove(); return; }
+      if (!b) { b = document.createElement('button'); b.className = 'dmore'; b.type = 'button'; b.setAttribute('aria-expanded', 'false'); b.onclick = moreClick; d.append(b); }
+      b.hidden = false; b.textContent = `+${c - k} ${grid.dataset.plus}`; });
+  }
+  let fitQ = 0; addEventListener('resize', () => { if (!fitQ) fitQ = requestAnimationFrame(() => { fitQ = 0; dayFit(root); }); });
   /* a month tile with more singles than fit (the "+N" .dmore, month.rs) unfolds over its neighbours while hovered, focused
      inside or after a click on the "+N": downwards while the grid and the window have room, else upwards too; then the
      earliest singles move above the multi-day bars (flex order) by whole rows, so each bar keeps its place in its band
      across the week. Negative margins keep the grid row as it was; too many for the whole grid: the tile scrolls. */
+  // the "+N": a touch has no hover; the phone grid (dots, no chips) picks the day instead, its agenda lists them all
+  function moreClick(e) { e.stopPropagation(); const d = this.closest('.day'); if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); }
   const shows = d => { const x = $(':scope > .ev', d); return !!x && x.getClientRects().length > 0; };
   function dayOpen(el) {
     if (!el || el.classList.contains('open') || !shows(el)) return;
     const h0 = el.offsetHeight; el.style.height = h0 + 'px'; el.classList.add('open'); $('.dmore', el).setAttribute('aria-expanded', 'true');
     const r = el.getBoundingClientRect(), pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-    const singles = $$(':scope > .ev:not(.span):not(.spacer), :scope > .xts > .ev', el), bars = $$(':scope > .ev.span, :scope > .ev.spacer', el);
+    const singles = $$(':scope > .ev:not(.span):not(.spacer)', el), bars = $$(':scope > .ev.span, :scope > .ev.spacer', el);
     const last = singles[singles.length - 1], H = last ? last.getBoundingClientRect().bottom - r.top + pb : h0;
     const days = $$(':scope > .day', el.parentNode), lo = Math.min(days[days.length - 1].getBoundingClientRect().bottom, innerHeight - 8), hi = Math.max(days[0].getBoundingClientRect().top, 8);
     const below = lo - r.top, room = Math.max(0, r.top - hi);
@@ -401,7 +422,7 @@
   function dayClose(el) {
     el.classList.remove('open'); $('.dmore', el).setAttribute('aria-expanded', 'false'); el.scrollTop = 0;
     for (const p of ['height', 'marginTop', 'marginBottom', 'overflowY']) el.style[p] = '';
-    $$(':scope > *, :scope > .xts > *', el).forEach(x => x.style.order = '');
+    $$(':scope > *', el).forEach(x => x.style.order = '');
   }
   const unfoldable = t => { const d = t && t.closest && t.closest('.v-month .day'); return d && $('.dmore', d) ? d : null; };
   root.addEventListener('pointerover', e => { if (e.pointerType === 'mouse') dayOpen(unfoldable(e.target)); });
@@ -414,7 +435,7 @@
     $$('.planner .c[data-date]', scope).forEach(el => el.onclick = () => { if (el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the year planner picks the day; the view stays
     $$('.lrow[data-date]', scope).forEach(el => { el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }; el.tabIndex = -1; const a = $('.add', el); if (a) a.tabIndex = -1; }); // picking in the ledger leaves it exactly where it is
     ledgerStop();
-    $$('.dmore', scope).forEach(b => b.onclick = e => { e.stopPropagation(); const d = b.closest('.day'); if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); }); // a touch has no hover; the phone grid (dots, no chips) picks the day: its agenda lists them all
+    dayFit(scope); $$('.dmore', scope).forEach(b => b.onclick = moreClick);
     $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
     $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();
