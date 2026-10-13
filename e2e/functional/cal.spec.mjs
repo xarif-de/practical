@@ -342,10 +342,11 @@ test('a starred filter row is a quick switch left of the filter: it hides and sh
   await expect(pin).toHaveAttribute('aria-label', 'Arbeit');
   await page.keyboard.press('Escape');
   await page.mouse.move(0, 400);
-  // a ribbon in the row's colour hanging from the top bar's upper edge; long while shown, rolled up while hidden (chrome.css `.qs`)
+  // a ribbon in the row's (softened) colour hanging from the top bar's upper edge; long while shown, rolled up while hidden (chrome.css `.qs`)
   const ribbon = () => pin.evaluate(b => { const r = getComputedStyle(b, '::before'), top = b.closest('.topbar').getBoundingClientRect().top; return { c: r.backgroundColor, h: r.height, at: b.getBoundingClientRect().top - top }; });
-  const swatch = await f.locator('.frow', { hasText: 'Arbeit' }).locator('.sw').evaluate(e => getComputedStyle(e).backgroundColor);
-  await expect.poll(ribbon).toEqual({ c: swatch, h: '34px', at: 0 });
+  // its tint: the row's swatch colour mixed 55 % into the bar's background (computed by the browser on a probe)
+  const tint = await pin.evaluate(b => { const sw = document.querySelector(`#calfilter .frow:has(.pinstar[data-pin="${b.dataset.pin}"]) .sw`), p = document.createElement('i'); p.style.cssText = `position:absolute;background:color-mix(in srgb, ${getComputedStyle(sw).backgroundColor} 55%, ${getComputedStyle(document.querySelector('.topbar')).backgroundColor})`; document.body.append(p); const c = getComputedStyle(p).backgroundColor; p.remove(); return c; });
+  await expect.poll(ribbon).toEqual({ c: tint, h: '30px', at: 0 });
   await pin.click();
   await expect(chip(page, 'Projekt-Review')).toHaveCount(0);
   await expect(pin).toHaveAttribute('aria-pressed', 'false');
