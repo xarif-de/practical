@@ -227,7 +227,12 @@ async fn html_fragments_for_the_endless_lists() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;
     let days = c.get_json("/api/days?start=2026-10-13&count=3").await;
-    days.ok().has("<a class=\"lrow fer\" href=\"/calendar?view=day&date=2026-10-14\" data-date=\"2026-10-14\"><b>14</b><span>Mi</span><i style=\"--n:3\"></i><em>Standup, Quartalsreview, Abendessen</em>");
+    // the row's classes without " today": the real clock marks 2026-10-14 on that day (the test failed there)
+    let row = "\" href=\"/calendar?view=day&date=2026-10-14\" data-date=\"2026-10-14\"><b>14</b><span>Mi</span><i style=\"--n:3\"></i><em>Standup, Quartalsreview, Abendessen</em>";
+    days.ok().has(row);
+    let at = days.body.find(row).unwrap_or_default();
+    let open = &days.body[days.body[..at].rfind("<a class=\"").unwrap_or_default()..at];
+    assert!(open.starts_with("<a class=\"lrow ") && open.ends_with(" fer"), "{open}");
     assert_eq!(days.body.matches("class=\"lrow").count(), 3);
     // count is clamped to 1..=120
     assert_eq!(c.get_json("/api/days?start=2026-10-13&count=0").await.body.matches("class=\"lrow").count(), 1);
