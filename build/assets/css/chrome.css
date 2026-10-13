@@ -116,8 +116,8 @@
 .heat .hm { text-transform: none; letter-spacing: 0; color: var(--fg-2); }
 .wk { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); margin: 10px 0 4px; } .wk span { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8px; }
 .dayblock { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 8px 30px 8px 0; border-top: 1px solid var(--line); cursor: pointer; } /* 30px: the 22px "+" (right 6px) keeps the 24px target circle of WCAG 2.5.8 off the entries (axe target-size, phone) */
-.dayblock.empty .dl b { font-size: 16px; color: var(--fg-3); } /* an empty day keeps the full 8px padding: the date label's bar stays 4px off the lines */
-.dayblock .dl { display: grid; justify-items: center; align-content: start; align-self: start; padding: 4px 0; margin: -4px 0; border-radius: 3px; } .dayblock.sel .dl { box-shadow: inset 3px 0 0 var(--accent); } .dayblock:not(.sel):hover .dl { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 28%, transparent); } /* the picked day (app.js `pickDay`): a bar left of the date label like an event's; a shadow, so the label does not shift */
+.dayblock.empty .dl b { font-size: 16px; color: var(--fg-3); }
+.dayblock .dl { display: grid; justify-items: center; align-content: start; align-self: start; } .dayblock.sel { box-shadow: inset 3px 0 0 var(--accent); } .dayblock:not(.sel):hover { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 28%, transparent); } /* the picked day (app.js `pickDay`): a bar down the day's whole row at its left edge, like an event's; a shadow, so nothing shifts */
  .dayblock .dl b { font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; } .dayblock .dl span { font-size: 11px; color: var(--fg-3); text-transform: uppercase; }
 .dayblock.today .dl b { color: var(--today); }
 .dayblock ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; } .dayblock li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: center; } .dayblock li.none span { color: var(--fg-3); }

@@ -145,6 +145,13 @@ test('picking a day: month cell, planner cell, ledger row, "+N more", today butt
   await expect(page.locator('.planner .c.sel[data-date="2026-03-03"]')).toHaveCount(1);
   expect(qp(page, 'date')).toBe('2026-03-03');
   expect(qp(page, 'view')).toBe('planner');
+  // week list: the picked day's bar runs down its whole row, not only beside the date label (chrome.css `.dayblock.sel`)
+  await open(page, cal('week'));
+  const block = page.locator('#viewroot .stream .dayblock[data-date="2026-10-15"]');
+  await block.locator('.dl').click();
+  await expect(block).toHaveClass(/\bsel\b/);
+  expect(await block.evaluate(e => getComputedStyle(e).boxShadow)).toMatch(/inset$/);
+  expect(await block.locator('.dl').evaluate(e => getComputedStyle(e).boxShadow)).toBe('none');
 });
 
 test('orbit picker: years, months, day; prev/next/reset; close by button, Esc and backdrop', async ({ page }) => {
