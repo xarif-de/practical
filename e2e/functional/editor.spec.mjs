@@ -358,10 +358,20 @@ test('unsaved changes: back keeps editing, discard drops; Esc closes a clean dia
 
 test('view mode of seeded events: day line, people, attachment download, copy', async ({ page }) => {
   await openEdit(page, `${CAL.work}/review@seed`, '2026-10-14', { edit: false });
-  // the day line lists the day's timed events (GET /api/events)
-  await expect(page.locator('#ed-dayline .blk.me')).toHaveText('Projekt-Review');
+  // the day line lists the day's timed events (GET /api/events) as a metro map: a title with its start time per event
+  await expect(page.locator('#ed-dayline .blk.me')).toHaveText('10:00 Projekt-Review');
   // (other spec files may add events on this day: the seeded ones must be there)
   for (const t of ['Team-Standup', 'Kundentermin', 'Mittagessen mit Bob', 'Zahnarzt Dr. Weiß']) await expect(page.locator('#ed-dayline .blk', { hasText: t })).toHaveCount(1);
+  // overlapping events (review 10:00-11:30, Kundentermin 10:30-12:15) run on their own tracks; the lines carry the
+  // event's colour (Zahnarzt: COLOR:tomato), the event at hand keeps the accent; no title covers another
+  const lines = page.locator('#ed-dayline .ln');
+  const lefts = await lines.evaluateAll(l => l.map(i => [i.classList.contains('me'), i.style.top, i.style.left]));
+  const me = lefts.find(x => x[0]), kunde = lefts.find(x => !x[0] && Math.abs(parseFloat(x[1]) - (10.5 - 7) / 14 * 100) < 0.1);
+  expect(me && kunde && me[2] !== kunde[2], JSON.stringify(lefts)).toBe(true);
+  await expect(page.locator('#ed-dayline .ln[style*="--c:tomato"]')).toHaveCount(1);
+  await expect(page.locator('#ed-dayline .ln.me')).not.toHaveAttribute('style', /--c:/);
+  const boxes = await page.locator('#ed-dayline .blk').evaluateAll(l => l.map(b => b.getBoundingClientRect()).map(r => [r.top, r.bottom]).sort((a, b) => a[0] - b[0]));
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i][0], 'titles do not overlap').toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
   await expect(page.locator('#ed-people .pchip')).toHaveCount(4);
   await page.locator('#ed-people .pchip', { hasText: 'Dora Dahl' }).click();
   await expect(page.locator('#ed-people-detail .pdetail')).toContainText('dora@example.org');
@@ -389,6 +399,15 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   await page.locator(`article.lnk[data-key="${CAL.work}/review@seed"] [data-map="osm"]`).click();
   expect(await page.evaluate(() => window.__opened)).toEqual(['https://www.openstreetmap.org/search?query=51.049259%2C13.738144']);
   await expect(page.locator('#ed')).toBeHidden();
+});
+
+test("the day line leaves out the events of a calendar the page's filter hides", async ({ page }) => {
+  await page.goto('/calendar?view=day&date=2026-10-14');
+  await page.evaluate(c => { localStorage.calHidden = JSON.stringify([c]); }, CAL.privat);
+  await openEdit(page, `${CAL.work}/review@seed`, '2026-10-14', { edit: false });
+  await expect(page.locator('#ed-dayline .blk.me')).toContainText('Projekt-Review');
+  await expect(page.locator('#ed-dayline .blk', { hasText: 'Kundentermin' })).toHaveCount(1);
+  await expect(page.locator('#ed-dayline .blk', { hasText: 'Zahnarzt' })).toHaveCount(0);
 });
 
 test('note text → HTML: a URL holding an e-mail address or #tag stays one link; every piece escaped once', async ({ page }) => {

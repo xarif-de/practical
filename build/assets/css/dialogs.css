@@ -23,9 +23,18 @@
 /* the day line beside the cards */
 .ed .dayline { position: relative; background: var(--tile); border-radius: 12px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(100%/14 - 1px), var(--line) calc(100%/14 - 1px), var(--line) calc(100%/14)); min-height: 380px; align-self: stretch; }
 .ed .dayline .h { position: absolute; left: 6px; font-size: 10px; color: var(--fg-3); transform: translateY(-50%); }
-.ed .dayline .blk { position: absolute; left: 34px; right: 8px; border-radius: 6px; background: color-mix(in srgb, var(--c1) 22%, transparent); border-left: 3px solid var(--c1); font-size: 12px; padding: 4px 6px; cursor: pointer; }
-.ed .dayline .blk.me { background: color-mix(in srgb, var(--accent) 30%, transparent); border-left-color: var(--accent); cursor: grab; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
-.ed .dayline .blk.me::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; }
+/* the day line as a metro map (editor/wiring.js dayline): .ln = an event's line with its start (::before) and end (::after)
+   station, .blk = its title at the start station in the event's colour: light caps its OKLCH lightness at .54 (≥ 4.5:1
+   on the tile for any calendar colour; older browsers: mixed with black), dark lifts it to ≥ .62 (the palette is above); .me = the event at hand, in
+   the accent colour */
+.ed .dayline .ln { position: absolute; width: 4px; background: var(--c, var(--c1)); }
+.ed .dayline .ln::before, .ed .dayline .ln::after { content: ""; position: absolute; left: -3px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--tile); border: 2.5px solid var(--c, var(--c1)); box-sizing: border-box; }
+.ed .dayline .ln::after { top: auto; bottom: -4px; left: -2px; width: 8px; height: 8px; border-width: 2px; }
+.ed .dayline .ln.me { --c: var(--accent); } .ed .dayline .ln.me::before { left: -4.5px; top: -6.5px; width: 13px; height: 13px; background: var(--accent); }
+.ed .dayline .blk { position: absolute; right: 4px; font-size: 11px; line-height: 14px; color: color-mix(in srgb, var(--c, var(--c1)) 60%, #000); color: oklch(from var(--c, var(--c1)) min(l, .54) c h); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-scheme=dark] .ed .dayline .blk { color: var(--c, var(--c1)); color: oklch(from var(--c, var(--c1)) max(l, .62) c h); }
+.ed .dayline .blk time { color: var(--fg-3); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ed .dayline .blk.me { --c: var(--accent); font-weight: 700; }
 @media (max-width: 720px) { .ed .box { border-radius: 14px; } }
 /* contacts editor additions */
 .detail .field select { font: inherit; border: 0; background: transparent; color: var(--fg); width: 100%; }

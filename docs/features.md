@@ -135,6 +135,11 @@ seconds. You do not need to reload the page.
 Events and tasks open in the same editor. It opens in **view mode**, so you cannot change anything by accident. To
 edit, select the lock button.
 
+Beside an event, the editor shows its day as a small metro map, from 7:00 to 21:00. Each timed event of the day is a
+line in its calendar's colour, from its start to its end. Events at the same time get their own lines. Each title
+stands at its start, in the event's colour, and no title covers another. The event you have open is in blue. Calendars
+that you hide in the filter are left out. The button at the top left hides the day.
+
 <img src="images/17-event-view.webp" alt="An event opened read-only: time, location, attendees, video call, reminders and the agenda." width="100%">
 
 In view mode, the editor shows only the cards that have data. This event has a time, a location, attendees, a video
