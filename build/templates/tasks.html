@@ -3,6 +3,7 @@
 {% import "macros.html" as m %}
 {% block title %}{{ ctx.t("nav-tasks") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
+<div class="qsbar">{{ m::cal_pins() }}</div>
 {{ m::cal_filter() }}</div></div>
 {% endblock %}
 {% block content %}

@@ -12,6 +12,7 @@ filter = Filter
 filter-calendars = Kalender
 filter-addressbooks = Adressbücher
 filter-all = Alle
+filter-pin = Schnellwahl neben dem Filter
 filter-none = Keine
 login-title = Anmelden
 login-with = Anmelden mit { $name }

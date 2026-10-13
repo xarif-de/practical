@@ -12,6 +12,7 @@ filter = Filter
 filter-calendars = Calendars
 filter-addressbooks = Address books
 filter-all = All
+filter-pin = Quick switch next to the filter
 filter-none = None
 login-title = Sign in
 login-with = Sign in with { $name }

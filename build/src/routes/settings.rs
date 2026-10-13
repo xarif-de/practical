@@ -432,6 +432,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/columns", post(columns_save))
         .route("/settings/list-fields", post(list_fields_save))
         .route("/settings/task-columns", post(task_columns_save))
+        .route("/settings/filter-pin", post(filter_pin_save))
         .route("/settings/export/calendars/{owner}/{id}", get(export_calendar))
         .route("/settings/export/addressbooks/{owner}/{id}", get(export_addressbook))
         .route("/settings/import/calendars", post(import_new_calendar).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))

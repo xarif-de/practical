@@ -59,6 +59,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("js/tasks.js"),
         File("js/settings.js"),
         File("js/remote.js"),
+        File("js/filter-pins.js"),
         // first start: the overview and the hints that lead to each setting (one function scope)
         Wrap(IIFE, &[File("js/onboarding/steps.js"), File("js/onboarding/guide.js")], END),
     ]),

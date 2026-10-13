@@ -3,8 +3,9 @@
 {% import "macros.html" as m %}
 {% block title %}{{ ctx.t("nav-contacts") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
+<div class="qsbar">{% for a in addressbooks %}{{ m::pin_btn("ab", a.principal, a.id, a.color, a.displayname) }}{% endfor %}</div>
 <div class="filter click">{{ m::pop_btn("filter", ctx.t("filter")) }}<div class="pop" id="abfilter"><h2>{{ ctx.t("filter-addressbooks") }}</h2>
-{% for a in addressbooks %}<label><input class="eyed" type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}">{{ m::eye() }}<span class="sw" style="background:{{ a.color }}"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{% endfor %}
+{% for a in addressbooks %}<div class="frow"><label><input class="eyed" type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}">{{ m::eye() }}<span class="sw" style="--c:{{ a.color }}"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{{ m::pin_star("ab", a.principal, a.id) }}</div>{% endfor %}
 {{ m::filter_row() }}
 {% if !categories.is_empty() %}<h2>{{ ctx.t("filter-categories") }}</h2>{% for c in categories %}<label><input class="eyed" type="checkbox" checked data-cat="{{ c }}">{{ m::eye() }}{{ c }}</label>{% endfor %}{% endif %}
 </div></div>

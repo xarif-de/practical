@@ -97,9 +97,15 @@ pub struct TasksPage {
     pub category_rules_json: String,
     /// the table view's visible columns
     pub columns: Vec<String>,
+    /// the filter rows pinned as quick switches (`Prefs::pins`)
+    pub pins: Vec<String>,
 }
 
 impl TasksPage {
+    /// a filter row is pinned as a quick switch (`Prefs::filter_pins_json`): `kind` cal | ab | hol
+    pub fn pinned(&self, kind: &str, owner: &str, id: &str) -> bool {
+        crate::domain::prefs::pinned(&self.pins, kind, owner, id)
+    }
     /// a group calendar is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
         self.calendars.iter().any(|c| c.is_group)
@@ -180,6 +186,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         alarm_snaps_json: isl.alarm_snaps_json,
         alarm_presets_json: isl.alarm_presets_json,
         category_rules_json: isl.category_rules_json,
+        pins: p.pins(),
         columns: p.task_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| DEFAULT_COLUMNS.iter().map(|s| s.to_string()).collect()),
     })
 }

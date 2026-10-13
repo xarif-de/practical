@@ -49,9 +49,15 @@ pub struct ContactsPage {
     pub columns: Vec<String>,
     /// fields shown per entry in the list view
     pub list_fields: Vec<String>,
+    /// the filter rows pinned as quick switches (`Prefs::pins`)
+    pub pins: Vec<String>,
 }
 
 impl ContactsPage {
+    /// a filter row is pinned as a quick switch (`Prefs::filter_pins_json`): `kind` cal | ab | hol
+    pub fn pinned(&self, kind: &str, owner: &str, id: &str) -> bool {
+        crate::domain::prefs::pinned(&self.pins, kind, owner, id)
+    }
     /// a group address book is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
         self.addressbooks.iter().any(|a| a.is_group)
@@ -97,6 +103,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
     categories.dedup();
     let table = table_view(&q, &headers);
     let p = prefs::get(&state.db, &user.id).await?;
+    let pins = p.pins();
     let columns: Vec<String> = p.contact_columns_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_COLUMNS.iter().take(5).map(|s| s.to_string()).collect());
     let list_fields: Vec<String> = p.contact_list_fields_json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_else(|| ALL_LIST_FIELDS.iter().take(6).map(|s| s.to_string()).collect());
     Ok(ContactsPage {
@@ -109,6 +116,7 @@ async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, h
         keys: table,
         columns,
         list_fields,
+        pins,
     })
 }
 

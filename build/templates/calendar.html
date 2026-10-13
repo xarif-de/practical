@@ -3,10 +3,11 @@
 {% import "macros.html" as m %}
 {% block title %}{{ title }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
+<div class="qsbar">{{ m::cal_pins() }}{{ m::pin_btn("hol", "", "public", "var(--hol)", ctx.t("filter-public")) }}{% if has_school %}{{ m::pin_btn("hol", "", "school", "var(--fer)", ctx.t("filter-school")) }}{% endif %}</div>
 {{ m::cal_filter() }}
 <h2>{{ ctx.t("filter-holidays") }}</h2>
-<label><input class="eyed" type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>
-{% if has_school %}<label><input class="eyed" type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{% endif %}
+<div class="frow"><label><input class="eyed" type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>{{ m::pin_star("hol", "", "public") }}</div>
+{% if has_school %}<div class="frow"><label><input class="eyed" type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{{ m::pin_star("hol", "", "school") }}</div>{% endif %}
 </div></div>
 {% endblock %}
 {% block head %}{% if !holiday_css.is_empty() %}<style>{{ holiday_css|safe }}</style>{% endif %}{% endblock %}

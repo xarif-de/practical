@@ -191,6 +191,46 @@ pub(super) async fn task_columns_save(State(state): State<SharedState>, user: Pr
     Ok(axum::Json(cols))
 }
 
+/// One filter row pinned (`on`) or unpinned as a quick switch (js/filter-pins.js); the other rows' pins stay,
+/// so the calendar page and the contacts page (each knows only its own rows) cannot drop each other's.
+#[derive(Deserialize)]
+pub(super) struct FilterPin {
+    key: String,
+    on: bool,
+}
+
+/// Keys a filter row can have (macros.html `pin_star`): a calendar or an address book `<principal>/<id>`, or the
+/// public / school holidays. Pins of rows that no longer exist stay harmless: a page draws only its own rows' pins.
+fn pin_key_ok(k: &str) -> bool {
+    match k.split_once(':') {
+        Some(("cal" | "ab", id)) => id.len() <= 300 && id.split_once('/').is_some_and(|(p, c)| !p.is_empty() && !c.is_empty()),
+        Some(("hol", h)) => h == "public" || h == "school",
+        _ => false,
+    }
+}
+
+/// At most this many pins per user: a row is pinned by a click, so a longer list is no person's.
+const MAX_PINS: usize = 64;
+
+pub(super) async fn filter_pin_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(pin): crate::extract::Json<FilterPin>) -> AppResult<axum::Json<Vec<String>>> {
+    if !pin_key_ok(&pin.key) {
+        return Err(AppError::bad("err-input-body"));
+    }
+    let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
+    let mut p = prefs::get(&state.db, &user.id).await?;
+    let mut pins = p.pins();
+    pins.retain(|k| *k != pin.key);
+    if pin.on {
+        if pins.len() >= MAX_PINS {
+            return Err(AppError::bad("err-input-body"));
+        }
+        pins.push(pin.key);
+    }
+    p.filter_pins_json = Some(serde_json::to_string(&pins).unwrap());
+    prefs::set(&state.db, &user.id, &p).await?;
+    Ok(axum::Json(pins))
+}
+
 /// Contact list-view field choice (JSON array from app.js), stored per user.
 pub(super) async fn list_fields_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(fields): crate::extract::Json<Vec<String>>) -> AppResult<axum::Json<Vec<String>>> {
     let fields: Vec<String> = fields.into_iter().filter(|c| crate::routes::contacts::ALL_LIST_FIELDS.contains(&c.as_str())).collect();

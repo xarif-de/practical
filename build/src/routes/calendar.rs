@@ -80,9 +80,15 @@ pub struct CalendarPage {
     pub has_school: bool,
     /// `:root { --hol; --fer }` from the user's holiday colours
     pub holiday_css: String,
+    /// the filter rows pinned as quick switches (`Prefs::pins`)
+    pub pins: Vec<String>,
 }
 
 impl CalendarPage {
+    /// a filter row is pinned as a quick switch (`Prefs::filter_pins_json`): `kind` cal | ab | hol
+    pub fn pinned(&self, kind: &str, owner: &str, id: &str) -> bool {
+        crate::domain::prefs::pinned(&self.pins, kind, owner, id)
+    }
     /// a group calendar is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
         self.calendars.iter().any(|c| c.is_group)
@@ -238,6 +244,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         school_on: p.school_holidays_enabled,
         has_school,
         holiday_css: p.holiday_css(),
+        pins: p.pins(),
         editor_kind: "event",
         ctx,
         calendars: all_cals, // = routes::editor::calendars(&all_cals, "event"), without the copy

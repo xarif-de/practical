@@ -341,6 +341,11 @@ CREATE TABLE practical_holidays (
          UPDATE practical_remote_links SET owner = principal;
          CREATE UNIQUE INDEX practical_remote_links_owner ON practical_remote_links (owner, kind, local_id);",
     ),
+    (
+        21,
+        // the filter rows pinned as quick switches left of the filter button (`prefs::Prefs::filter_pins_json`)
+        "ALTER TABLE practical_user_settings ADD COLUMN filter_pins_json TEXT;",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

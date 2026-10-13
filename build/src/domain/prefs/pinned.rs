@@ -50,6 +50,7 @@ async fn stored_round_trip() {
         holiday_country: Some("AT".into()), holiday_subdivision: Some("AT-9".into()), public_regions: Some("AT-9".into()), school_regions: Some(String::new()),
         holiday_color: Some("#111111".into()), school_color: None, vacation_days: Some(25), vacation_rule_json: Some("{}".into()), contact_columns_json: Some("[]".into()),
         contact_list_fields_json: Some("[\"note\"]".into()), alarm_presets_json: Some("[]".into()), alarm_snaps_json: None, task_columns_json: Some("[\"due\"]".into()), search_history_days: Some(-1),
+        filter_pins_json: Some("[\"hol:public\"]".into()),
     };
     set(&app.state.db, "u", &p).await.unwrap();
     assert_eq!(serde_json::to_value(get(&app.state.db, "u").await.unwrap()).unwrap(), serde_json::to_value(&p).unwrap());

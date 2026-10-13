@@ -295,7 +295,7 @@ async fn the_csrf_token_is_checked_after_the_path_and_before_the_body() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;
     let good = c.csrf.clone();
-    for (method, path) in [(Method::PUT, "/api/alarm-presets"), (Method::POST, "/settings/task-columns")] {
+    for (method, path) in [(Method::PUT, "/api/alarm-presets"), (Method::POST, "/settings/task-columns"), (Method::POST, "/settings/filter-pin")] {
         assert_eq!(status(&mut c, "wrong", method.clone(), path, "{not json").await, StatusCode::FORBIDDEN, "{path}: bad token and bad body");
         assert_eq!(status(&mut c, &good, method, path, "{not json").await, StatusCode::BAD_REQUEST, "{path}: bad body");
     }

@@ -102,6 +102,15 @@ come from your contacts.
 **Year in numbers** shows statistics of the year: events per calendar, the load per week, and busy evenings and
 weekends.
 
+### Show and hide calendars
+
+The filter button at the top right shows or hides each calendar, the public holidays and the school holidays; the
+contacts page does the same for address books. A blue eye means shown, a grey struck-through eye means hidden.
+
+Star a row to get a quick switch for it: a round button in the row's color, left of the filter button. One click
+on it shows or hides that calendar without opening the filter. Your stars are saved with your account and show up
+on every device.
+
 ### Holidays
 
 PractiCal shows public and school holidays for the regions you pick in the settings. You can pick more than one

@@ -317,6 +317,45 @@ test('calendar filter: one off, none, mine, all — kept in localStorage', async
   expect(JSON.parse(await page.evaluate(() => localStorage.calHidden))).toEqual([]);
 });
 
+test('a starred filter row is a quick switch left of the filter: it hides and shows like the row, kept per user', async ({ page }) => {
+  await open(page, cal('month'));
+  const f = pageFilter(page), pins = page.locator('header .qsbar .qs');
+  const star = name => f.locator('.frow', { hasText: name }).locator('.pinstar');
+  await expect(pins).toHaveCount(0);
+  await f.locator('> button').click();
+  await star('Arbeit').click();
+  await expect(star('Arbeit')).toHaveAttribute('aria-pressed', 'true');
+  await expect(pins).toHaveCount(1);
+  const pin = pins.first();
+  await expect(pin).toHaveAttribute('aria-label', 'Arbeit');
+  // the eye stands out on the row's colour: black or white, whichever has the higher WCAG contrast (chrome.css `.qs`)
+  const { bg, fg } = await pin.evaluate(b => ({ bg: getComputedStyle(b).backgroundColor, fg: getComputedStyle(b).color }));
+  const lum = c => { const v = c.match(/[\d.]+/g).slice(0, 3).map(x => x / 255).map(x => x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  expect(fg).toBe(lum(bg) > 0.179 ? 'oklch(0 0 0)' : 'oklch(1 0 0)');
+  await page.keyboard.press('Escape');
+  await pin.click();
+  await expect(chip(page, 'Projekt-Review')).toHaveCount(0);
+  await expect(pin).toHaveAttribute('aria-pressed', 'false');
+  await expect(pin.locator('.eye.no')).toBeVisible();
+  await expect(f.locator('label', { hasText: 'Arbeit' }).locator('input')).not.toBeChecked();
+  // the row's own box moves the switch too, and "all" does without a change event
+  await f.locator('> button').click();
+  await f.locator('[data-filter="all"]').click();
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  await expect(chip(page, 'Projekt-Review')).toHaveCount(1);
+  // stored for the user: the next page brings it, the tasks page (same calendars) too
+  await page.reload();
+  await expect(pins).toHaveCount(1);
+  await page.goto('/tasks');
+  await expect(page.locator('header .qsbar .qs')).toHaveAttribute('aria-label', 'Arbeit');
+  await open(page, cal('month'));
+  await f.locator('> button').click();
+  await star('Arbeit').click();
+  await expect(pins).toHaveCount(0);
+  await page.reload();
+  await expect(pins).toHaveCount(0);
+});
+
 test('holiday switches are saved for the user and redraw the view', async ({ page }) => {
   await open(page, cal('month'));
   const f = pageFilter(page);

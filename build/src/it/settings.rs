@@ -321,3 +321,30 @@ impl PrincipalOpt for rustical_store_sqlite::SqlitePrincipalStore {
         self.get_principal(id).await.unwrap().is_some()
     }
 }
+
+/// A filter row's star pins it as a quick switch next to the filter button: one key per save, so the calendar page and
+/// the contacts page (each knows only its own rows) keep each other's pins; a key no filter row can have is refused.
+#[tokio::test]
+async fn filter_pins_are_saved_one_key_at_a_time_and_drawn_on_their_page() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let (cal, ab) = (format!("cal:alice/{}", s.arbeit), format!("ab:alice/{}", s.freunde));
+    for key in [&cal, &ab, &"hol:school".to_string()] {
+        c.json(Method::POST, "/settings/filter-pin", json!({ "key": key, "on": true })).await.ok();
+    }
+    assert_eq!(c.json(Method::POST, "/settings/filter-pin", json!({ "key": "hol:school", "on": false })).await.ok().json(), json!([cal, ab]));
+    for bad in ["cal:alice", "cal:/x", "hol:other", "x:alice/y", ""] {
+        assert_eq!(c.json(Method::POST, "/settings/filter-pin", json!({ "key": bad, "on": true })).await.status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().pins(), [cal.clone(), ab.clone()]);
+    // each page draws its own rows' switches and stars, nothing of the other page's
+    let page = c.get("/calendar").await;
+    page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{cal}\" style=\"--c:#0a84ff\" aria-pressed=\"true\" title=\"Arbeit\" aria-label=\"Arbeit\">"));
+    page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"{cal}\" aria-pressed=\"true\""));
+    page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"cal:alice/{}\" aria-pressed=\"false\"", s.privat));
+    assert!(!page.body.contains(&ab) && page.body.matches("<button class=\"qs\" ").count() == 1, "{}", page.body);
+    let page = c.get("/contacts").await;
+    page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{ab}\" style=\"--c:#ff2d55\""));
+    assert!(!page.body.contains(&cal));
+    c.get("/tasks").await.ok().has(&format!("data-pin=\"{cal}\" style=\"--c:#0a84ff\""));
+}
