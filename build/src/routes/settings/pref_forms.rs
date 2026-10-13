@@ -221,7 +221,7 @@ pub(super) async fn filter_pin_save(State(state): State<SharedState>, user: Prin
     let mut pins = p.pins();
     pins.retain(|k| *k != pin.key);
     if pin.on {
-        if pins.len() >= MAX_PINS {
+        while pins.len() >= MAX_PINS {
             pins.remove(0);
         }
         pins.push(pin.key);

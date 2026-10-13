@@ -268,6 +268,15 @@ test('week stream loads more weeks at both ends; title follows the focus week', 
   await open(page, cal('week'));
   await page.locator('.heat i[data-date="2026-10-28"]').click();
   await expect(page.locator('#title')).toHaveText(/KW 44 2026/);
+  // the panel the client redraws for a month counts as the server's did: holidays are no entry, a multi-day event's
+  // later days are (calendar.js `heatSync`, render/week.rs)
+  const counts = () => page.locator('.heat i[data-date]').evaluateAll(c => c.map(i => `${i.dataset.date}:${i.style.getPropertyValue('--n')}`));
+  const server = await counts();
+  await page.locator('.week[data-week="2026-11-16"]').evaluate(w => w.scrollIntoView({ block: 'start' }));
+  await expect(page.locator('.heat')).toHaveAttribute('data-month', '2026-11');
+  await page.locator('.heat i[data-date="2026-10-26"]').click();
+  await expect(page.locator('.heat')).toHaveAttribute('data-month', '2026-10');
+  expect(await counts()).toEqual(server);
 });
 
 test('day ledger loads more days when scrolled', async ({ page }) => {

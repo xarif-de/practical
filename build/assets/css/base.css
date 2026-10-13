@@ -28,6 +28,6 @@ html, body { margin: 0; height: 100%; }
 html { overscroll-behavior-x: none; } /* no browser back/forward swipe: a sideways swipe switches views (core.js swipeViews), a page never */
 body { font: 15px/1.45 var(--font); color: var(--fg); background: var(--bg); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
-.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* visually hidden: a name for screen readers only (the contacts table's open column) */
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* visually hidden: a name for screen readers only (the contacts table's open column, a multi-day event's later days in the week list) */
 button, .btn { font: inherit; color: var(--fg); border: 1px solid var(--line); padding: 6px 12px; cursor: pointer; border-radius: 8px; background: var(--bg-2); }
 .icon-btn { padding: 6px 8px; min-width: 34px; }

@@ -278,7 +278,7 @@
         if (cells.some(x => !dayOf(fmt(x)))) return; // a day of that month is not loaded: leave the panel alone rather than show a wrong count
         heat.dataset.month = key; const hm = $('.hm', heat); if (hm) hm.textContent = `${MON[m]} ${y}`;
         $('.grid', heat).innerHTML = Array.from({ length: cells.length / 7 }, (_, r) => { const w = cells.slice(r * 7, r * 7 + 7);
-          return `<div class="hw" data-week="${fmt(w[0])}"><b>${isoWeek(w[0])}</b>` + w.map(x => { const n = Math.min(4, $$('li', dayOf(fmt(x))).filter(li => !li.classList.contains('none')).length);
+          return `<div class="hw" data-week="${fmt(w[0])}"><b>${isoWeek(w[0])}</b>` + w.map(x => { const n = Math.min(4, $$('li', dayOf(fmt(x))).filter(li => !li.matches('.none, .hols')).length);
             return `<i class="${x.getMonth() !== m ? 'o' : ''}${fmt(x) === today ? ' t' : ''}" style="--n:${n}" data-date="${fmt(x)}" title="${esc(dm(x))}"></i>`; }).join('') + '</div>'; }).join('');
         wireItems(heat);
       }
