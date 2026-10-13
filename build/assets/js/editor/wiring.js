@@ -25,8 +25,8 @@
      nothing; showing it draws it. Only the newest call draws (dlSeq): a date typed digit by digit asks once per digit */
   const DL_H = 36; let dlSeq = 0;
   async function dayline() {
-    const box = $('#ed-dayline'); const day = f.date ? f.date.value : ''; if (!box || !day || ed.classList.contains('no-tl')) return;
-    const seq = ++dlSeq, py = m => Math.min(24 * DL_H, Math.max(0, m / 60 * DL_H)), hm = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+    const seq = ++dlSeq, box = $('#ed-dayline'), day = f.date ? f.date.value : ''; if (!box || !day || ed.classList.contains('no-tl')) return; // (counted first: an older call still in flight must not draw either)
+    const py = m => Math.min(24 * DL_H, Math.max(0, m / 60 * DL_H)), hm = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
     let h = ''; for (let i = 1; i < 24; i++) h += `<span class="h" style="top:${i * DL_H}px">${i}:00</span>`;
     let mid = !(f.all_day && f.all_day.checked) && /^\d\d:\d\d/.test(f.from ? f.from.value : '') ? hm(f.from.value) : 8 * 60, low = 24 * DL_H;
     try {
@@ -42,7 +42,7 @@
       for (const x of L) {
         const c = x.ev.color && !x.me && CSS.supports('color', x.ev.color) ? `--c:${esc(x.ev.color)}` : '', y = Math.max(0, py(x.s) - 7, last + 14), tip = `${x.ev.start.slice(11, 16)}–${x.ev.end.slice(11, 16)} ${x.ev.summary}`; last = y;
         if (x.me) mid = (x.s + x.e) / 2; low = Math.max(low, y + 14);
-        h += `<i class="ln${x.me ? ' me' : ''}" style="top:${py(x.s)}px;height:${py(x.e) - py(x.s)}px;left:${38 + x.col * 11}px;${c}"></i><div class="blk${x.me ? ' me' : ''}" style="top:${y}px;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`;
+        h += `<i class="ln${x.me ? ' me' : ''}" style="top:${py(x.s)}px;height:${py(x.e) - py(x.s)}px;left:${38 + x.col * 11}px;${c}"></i><div class="blk${x.me ? ' me' : ''}" style="top:${y}px;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(0, 10) < day ? '←' : ''}${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`; // ← from the night before, drawn from 0:00
       }
     } catch (_) {}
     box.innerHTML = `<div class="dl-in" style="height:${low}px">${h}</div>`; // (titles pushed past 24:00 still inside)

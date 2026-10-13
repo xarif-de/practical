@@ -372,7 +372,8 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   await expect(page.locator('#ed-dayline .ln.me')).not.toHaveAttribute('style', /--c:/);
   // the whole day (0-24 h) scrolls inside the box, the event at hand (10:00-11:30) in its middle
   const dl = await page.locator('#ed-dayline').evaluate(b => { const r = b.getBoundingClientRect(), m = b.querySelector('.ln.me').getBoundingClientRect(); return { sh: b.scrollHeight, ch: b.clientHeight, off: (m.top + m.bottom) / 2 - (r.top + r.bottom) / 2 }; });
-  expect(dl.sh).toBeGreaterThanOrEqual(24 * 36);
+  expect(dl.sh).toBeGreaterThanOrEqual(24 * 36); // more only for titles pushed past 24:00
+  expect(dl.sh).toBeLessThanOrEqual(24 * 36 + 14 * await page.locator('#ed-dayline .blk').count());
   expect(dl.ch).toBeLessThan(dl.sh);
   expect(Math.abs(dl.off), JSON.stringify(dl)).toBeLessThan(2);
   const boxes = await page.locator('#ed-dayline .blk').evaluateAll(l => l.map(b => b.getBoundingClientRect()).map(r => [r.top, r.bottom]).sort((a, b) => a[0] - b[0]));
