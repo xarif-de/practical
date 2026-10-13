@@ -58,7 +58,11 @@
 .filter:not(.click):hover .pop, .filter:not(.click):focus-within .pop, .filter.open .pop, .more:hover .pop, .more:focus-within .pop, .more.open .pop { visibility: visible; opacity: 1; transition: opacity .12s 0s, visibility 0s 0s; }
 .filter h2 { margin: 8px 4px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
 .filter label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 14px; }
-.filter label:hover { background: var(--tile); } .filter label small { margin-left: auto; color: var(--fg-3); }
+.filter label:hover { background: var(--tile); }
+/* show/hide switches (macros.html `eye`): the checkbox stays for keyboard, screen readers and the scripts, invisible right under its eye (a click on the eye is one on the box); a blue eye = shown, a grey struck eye = hidden */
+.filter label:has(> input.eyed) { position: relative; } .filter input.eyed { position: absolute; left: 6px; top: calc(50% - 9px); width: 18px; height: 18px; margin: 0; opacity: 0; cursor: pointer; }
+.filter .eye { width: 18px; height: 18px; flex: none; color: var(--accent); pointer-events: none; } .filter .eye.no { color: var(--fg-3); }
+.filter input.eyed:checked ~ .eye.no, .filter input.eyed:not(:checked) ~ .eye:not(.no) { display: none; } .filter input.eyed:focus-visible ~ .eye { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; } .filter label small { margin-left: auto; color: var(--fg-3); }
 .filter .row { display: flex; gap: 12px; padding: 8px 6px 2px; font-size: 12px; color: var(--accent); }
 @media (max-width: 720px) { .usearch { max-width: none; } .usearch input { padding-left: 30px; } .filter .pop { right: -60px; } .filter.user .pop { right: 0; } } /* the user menu sits at the right edge: shifted like the others it ran 44px past a 390px screen, and even hidden (visibility) it widened every page by that much (app.js fitPop then keeps every popover on screen) */
 

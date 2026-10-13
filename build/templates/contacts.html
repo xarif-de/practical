@@ -4,9 +4,9 @@
 {% block title %}{{ ctx.t("nav-contacts") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block filter %}
 <div class="filter click">{{ m::pop_btn("filter", ctx.t("filter")) }}<div class="pop" id="abfilter"><h2>{{ ctx.t("filter-addressbooks") }}</h2>
-{% for a in addressbooks %}<label><input type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}"><span class="sw" style="background:{{ a.color }}"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{% endfor %}
+{% for a in addressbooks %}<label><input class="eyed" type="checkbox" checked data-ab="{{ a.principal }}/{{ a.id }}">{{ m::eye() }}<span class="sw" style="background:{{ a.color }}"></span>{{ a.displayname }}{% if a.is_group %} <small>{{ a.owner_label }}</small>{% endif %}</label>{% endfor %}
 {{ m::filter_row() }}
-{% if !categories.is_empty() %}<h2>{{ ctx.t("filter-categories") }}</h2>{% for c in categories %}<label><input type="checkbox" checked data-cat="{{ c }}">{{ c }}</label>{% endfor %}{% endif %}
+{% if !categories.is_empty() %}<h2>{{ ctx.t("filter-categories") }}</h2>{% for c in categories %}<label><input class="eyed" type="checkbox" checked data-cat="{{ c }}">{{ m::eye() }}{{ c }}</label>{% endfor %}{% endif %}
 </div></div>
 {% endblock %}
 {% block content %}

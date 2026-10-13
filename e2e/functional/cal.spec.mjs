@@ -284,6 +284,12 @@ test('calendar filter: one off, none, mine, all — kept in localStorage', async
   await f.locator('> button').click();
   await f.locator('label', { hasText: 'Arbeit' }).locator('input').uncheck();
   await expect(chip(page, 'Projekt-Review')).toHaveCount(0);
+  // the box is invisible: a grey struck eye says hidden, a blue eye shown (chrome.css `.eye`)
+  const eye = (name, off) => f.locator('label', { hasText: name }).locator(off ? '.eye.no' : '.eye:not(.no)');
+  await expect(eye('Arbeit', true)).toBeVisible();
+  await expect(eye('Arbeit', false)).toBeHidden();
+  await expect(eye('Familienkalender', false)).toBeVisible();
+  await expect(eye('Familienkalender', true)).toBeHidden();
   await expect(chip(page, 'Zahnarzt')).toHaveCount(1);
   expect(JSON.parse(await page.evaluate(() => localStorage.calHidden))).toEqual(['alice/5eed0000-0000-4000-8000-000000000001']);
   expect(qp(page, 'cals')).toContain('alice/5eed0000-0000-4000-8000-000000000002');
@@ -299,6 +305,14 @@ test('calendar filter: one off, none, mine, all — kept in localStorage', async
   await expect(chip(page, 'Projekt-Review')).toHaveCount(1);
   await expect(f.locator('label', { hasText: 'Familienkalender' }).locator('input')).not.toBeChecked();
   await f.locator('[data-filter="all"]').click();
+  await expect(chip(page, 'Familienfest')).toHaveCount(1);
+  expect(JSON.parse(await page.evaluate(() => localStorage.calHidden))).toEqual([]);
+  // a click on the eye is one on its box (the box lies right under it)
+  const at = await eye('Familienkalender', false).boundingBox();
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+  await expect(f.locator('label', { hasText: 'Familienkalender' }).locator('input')).not.toBeChecked();
+  await expect(chip(page, 'Familienfest')).toHaveCount(0);
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
   await expect(chip(page, 'Familienfest')).toHaveCount(1);
   expect(JSON.parse(await page.evaluate(() => localStorage.calHidden))).toEqual([]);
 });

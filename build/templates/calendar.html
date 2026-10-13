@@ -5,8 +5,8 @@
 {% block filter %}
 {{ m::cal_filter() }}
 <h2>{{ ctx.t("filter-holidays") }}</h2>
-<label><input type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}><span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>
-{% if has_school %}<label><input type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}><span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{% endif %}
+<label><input class="eyed" type="checkbox" data-hol="public"{% if holidays_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--hol)"></span>{{ ctx.t("filter-public") }}</label>
+{% if has_school %}<label><input class="eyed" type="checkbox" data-hol="school"{% if school_on %} checked{% endif %}>{{ m::eye() }}<span class="sw" style="--c:var(--fer)"></span>{{ ctx.t("filter-school") }}</label>{% endif %}
 </div></div>
 {% endblock %}
 {% block head %}{% if !holiday_css.is_empty() %}<style>{{ holiday_css|safe }}</style>{% endif %}{% endblock %}
