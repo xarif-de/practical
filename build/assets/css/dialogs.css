@@ -21,7 +21,10 @@
 .ed .toggle i { width: 34px; height: 20px; border-radius: 10px; background: var(--line); position: relative; } .ed .toggle i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
 .ed .toggle.on i { background: var(--accent); } .ed .toggle.on i::after { left: 16px; }
 /* the day line beside the cards */
-.ed .dayline { position: relative; background: var(--tile); border-radius: 12px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(100%/14 - 1px), var(--line) calc(100%/14 - 1px), var(--line) calc(100%/14)); min-height: 380px; align-self: stretch; }
+/* the box keeps the row's height (min 380px) and scrolls the whole day (.dl-in, absolutely placed, so its 864px never
+   grow the row); the hour lines belong to the day, so they scroll with it */
+.ed .dayline { position: relative; background: var(--tile); border-radius: 12px; min-height: 380px; align-self: stretch; overflow-y: auto; overscroll-behavior: contain; }
+.ed .dayline .dl-in { position: absolute; left: 0; right: 0; top: 0; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, var(--line) 35px, var(--line) 36px); }
 .ed .dayline .h { position: absolute; left: 6px; font-size: 10px; color: var(--fg-3); transform: translateY(-50%); }
 /* the day line as a metro map (editor/wiring.js dayline): .ln = an event's line with its start (::before) and end (::after)
    station, .blk = its title at the start station in the event's colour: light caps its OKLCH lightness at .54 (≥ 4.5:1

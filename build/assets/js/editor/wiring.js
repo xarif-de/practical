@@ -18,27 +18,35 @@
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
   $('#ed-reset').onclick = () => { if (ruleMode) openRuleEditor(ruleMode); else fill(current, openDate); };
   /* the day line, drawn like a metro map: each timed event of the day is a line in its calendar's colour from its start
-     to its end station (.ln, 7-21 h = 0-100 %); events at the same time take their own track (greedy, at most 5); the
-     titles (.blk, in the event's colour) stand at their start station, pushed down so none covers another */
+     to its end station (.ln); events at the same time take their own track (greedy, at most 5); the titles (.blk, in
+     the event's colour) stand at their start station, pushed down so none covers another. The whole day, 0-24 h at
+     DL_H px an hour, scrolls inside the box (.dl-in); opening puts the event at hand (else the form's start) in the middle */
+  const DL_H = 36;
   async function dayline() {
     const box = $('#ed-dayline'); const day = f.date ? f.date.value : ''; if (!box || !day) return;
-    let h = ''; for (let i = 0; i < 7; i++) h += `<span class="h" style="top:${(i * 14.3).toFixed(1)}%">${7 + i * 2}:00</span>`;
+    const py = m => Math.min(24 * DL_H, Math.max(0, m / 60 * DL_H));
+    let h = ''; for (let i = 1; i < 24; i++) h += `<span class="h" style="top:${i * DL_H}px">${i}:00</span>`;
+    let mid = /^\d\d:\d\d/.test(f.from ? f.from.value : '') ? +f.from.value.slice(0, 2) * 60 + +f.from.value.slice(3, 5) : 8 * 60;
     try {
       const nd = parse(day); nd.setDate(nd.getDate() + 1); const end = `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}`;
       // the page's calendar filter (state.cals: '' = all, '-' = none), plus the calendar of the event at hand
       const own = f.key.value.split('/').slice(0, 2).join('/'), cs = state.cals && own && !state.cals.split(',').includes(own) ? (state.cals === '-' ? own : state.cals + ',' + own) : state.cals;
       const r = await practical.req(`/api/events?start=${day}&end=${end}${cs ? '&cals=' + encodeURIComponent(cs) : ''}`); const evs = r.ok ? r.data : [];
-      const min = t => +t.slice(11, 13) * 60 + +t.slice(14, 16), Y = m => Math.min(100, Math.max(0, (m / 60 - 7) / 14 * 100));
+      const min = t => +t.slice(11, 13) * 60 + +t.slice(14, 16);
       const L = evs.filter(ev => !ev.all_day && ev.start.slice(0, 10) === day).map(ev => { const s = min(ev.start); return { ev, s, e: ev.end.slice(0, 10) > day ? 1440 : Math.max(s, min(ev.end)), me: f.key.value === `${ev.principal}/${ev.cal_id}/${ev.object_id}` }; }).sort((a, b) => a.s - b.s || b.e - a.e);
       let run = [], until = -1; // the cluster of events that overlap one another, and where it ends
       for (const x of L) { if (x.s >= until) run = []; const used = run.filter(o => o.e > x.s).map(o => o.col); let c = 0; while (used.includes(c) && c < 4) c++; x.col = c; run.push(x); until = Math.max(until, x.e); }
-      const tracks = Math.max(1, ...L.map(x => x.col + 1)), lx = 40 + tracks * 11; let last = -9;
+      const tracks = Math.max(1, ...L.map(x => x.col + 1)), lx = 40 + tracks * 11; let last = -99;
       for (const x of L) {
-        const c = x.ev.color && !x.me ? `--c:${esc(x.ev.color)}` : '', y = Math.max(0, Y(x.s) - 1.8, last + 3.7), tip = `${x.ev.start.slice(11, 16)}–${x.ev.end.slice(11, 16)} ${x.ev.summary}`; last = y;
-        h += `<i class="ln${x.me ? ' me' : ''}" style="top:${Y(x.s).toFixed(1)}%;height:${(Y(x.e) - Y(x.s)).toFixed(1)}%;left:${38 + x.col * 11}px;${c}"></i><div class="blk${x.me ? ' me' : ''}" style="top:${y.toFixed(1)}%;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`;
+        const c = x.ev.color && !x.me ? `--c:${esc(x.ev.color)}` : '', y = Math.max(0, py(x.s) - 7, last + 14), tip = `${x.ev.start.slice(11, 16)}–${x.ev.end.slice(11, 16)} ${x.ev.summary}`; last = y;
+        if (x.me) mid = (x.s + x.e) / 2;
+        h += `<i class="ln${x.me ? ' me' : ''}" style="top:${py(x.s)}px;height:${py(x.e) - py(x.s)}px;left:${38 + x.col * 11}px;${c}"></i><div class="blk${x.me ? ' me' : ''}" style="top:${y}px;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`;
       }
     } catch (_) {}
-    box.innerHTML = h;
+    box.innerHTML = `<div class="dl-in" style="height:${24 * DL_H}px">${h}</div>`;
+    // centred once laid out (a dialog that is still hidden has no height yet)
+    const centre = () => { box.scrollTop = py(mid) - box.clientHeight / 2; };
+    if (box.clientHeight) centre(); else requestAnimationFrame(centre);
   }
   // the save request of the dialog as it is now (also the conflict's "overwrite", with the ETag it fetched)
   async function put() {

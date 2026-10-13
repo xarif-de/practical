@@ -366,10 +366,15 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   // event's colour (Zahnarzt: COLOR:tomato), the event at hand keeps the accent; no title covers another
   const lines = page.locator('#ed-dayline .ln');
   const lefts = await lines.evaluateAll(l => l.map(i => [i.classList.contains('me'), i.style.top, i.style.left]));
-  const me = lefts.find(x => x[0]), kunde = lefts.find(x => !x[0] && Math.abs(parseFloat(x[1]) - (10.5 - 7) / 14 * 100) < 0.1);
+  const me = lefts.find(x => x[0]), kunde = lefts.find(x => !x[0] && Math.abs(parseFloat(x[1]) - 10.5 * 36) < 0.5); // 36 px an hour from 0:00
   expect(me && kunde && me[2] !== kunde[2], JSON.stringify(lefts)).toBe(true);
   await expect(page.locator('#ed-dayline .ln[style*="--c:tomato"]')).toHaveCount(1);
   await expect(page.locator('#ed-dayline .ln.me')).not.toHaveAttribute('style', /--c:/);
+  // the whole day (0-24 h) scrolls inside the box, the event at hand (10:00-11:30) in its middle
+  const dl = await page.locator('#ed-dayline').evaluate(b => { const r = b.getBoundingClientRect(), m = b.querySelector('.ln.me').getBoundingClientRect(); return { sh: b.scrollHeight, ch: b.clientHeight, off: (m.top + m.bottom) / 2 - (r.top + r.bottom) / 2 }; });
+  expect(dl.sh).toBe(24 * 36);
+  expect(dl.ch).toBeLessThan(dl.sh);
+  expect(Math.abs(dl.off), JSON.stringify(dl)).toBeLessThan(2);
   const boxes = await page.locator('#ed-dayline .blk').evaluateAll(l => l.map(b => b.getBoundingClientRect()).map(r => [r.top, r.bottom]).sort((a, b) => a[0] - b[0]));
   for (let i = 1; i < boxes.length; i++) expect(boxes[i][0], 'titles do not overlap').toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
   await expect(page.locator('#ed-people .pchip')).toHaveCount(4);
