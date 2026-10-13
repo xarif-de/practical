@@ -333,6 +333,19 @@ async fn filter_pins_are_saved_one_key_at_a_time_and_drawn_on_their_page() {
         c.json(Method::POST, "/settings/filter-pin", json!({ "key": key, "on": true })).await.ok();
     }
     assert_eq!(c.json(Method::POST, "/settings/filter-pin", json!({ "key": "hol:school", "on": false })).await.ok().json(), json!([cal, ab]));
+    // past MAX_PINS the oldest pin goes (stale pins of deleted collections must not block new ones)
+    for n in 0..64 {
+        c.json(Method::POST, "/settings/filter-pin", json!({ "key": format!("cal:alice/old{n}"), "on": true })).await.ok();
+    }
+    let full = c.json(Method::POST, "/settings/filter-pin", json!({ "key": "hol:school", "on": true })).await.ok().json();
+    assert_eq!((full.as_array().unwrap().len(), full[0].as_str(), full[63].as_str()), (64, Some("cal:alice/old1"), Some("hol:school")), "{full}");
+    for n in 1..64 {
+        c.json(Method::POST, "/settings/filter-pin", json!({ "key": format!("cal:alice/old{n}"), "on": false })).await.ok();
+    }
+    c.json(Method::POST, "/settings/filter-pin", json!({ "key": "hol:school", "on": false })).await.ok();
+    for key in [&cal, &ab] {
+        c.json(Method::POST, "/settings/filter-pin", json!({ "key": key, "on": true })).await.ok();
+    }
     for bad in ["cal:alice", "cal:/x", "hol:other", "x:alice/y", ""] {
         assert_eq!(c.json(Method::POST, "/settings/filter-pin", json!({ "key": bad, "on": true })).await.status, StatusCode::BAD_REQUEST, "{bad}");
     }
@@ -342,7 +355,9 @@ async fn filter_pins_are_saved_one_key_at_a_time_and_drawn_on_their_page() {
     page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{cal}\" style=\"--c:#0a84ff\" aria-pressed=\"true\" title=\"Arbeit\" aria-label=\"Arbeit\">"));
     page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"{cal}\" aria-pressed=\"true\""));
     page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"cal:alice/{}\" aria-pressed=\"false\"", s.privat));
-    assert!(!page.body.contains(&ab) && page.body.matches("<button class=\"qs\" ").count() == 1, "{}", page.body);
+    // every row has its switch, hidden unless pinned (the star shows or hides it in place)
+    assert!(!page.body.contains(&ab) && page.body.matches("<button class=\"qs\" ").count() == page.body.matches("\" hidden title=").count() + 1, "{}", page.body);
+    page.has(&format!("data-pin=\"cal:alice/{}\" style=\"--c:#30b46c\" aria-pressed=\"true\" hidden title=\"Privat\"", s.privat));
     let page = c.get("/contacts").await;
     page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{ab}\" style=\"--c:#ff2d55\""));
     assert!(!page.body.contains(&cal));

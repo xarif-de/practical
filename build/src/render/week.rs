@@ -8,6 +8,9 @@ use super::*;
 pub const WEEK_BACK: i64 = 4;
 pub const WEEK_AHEAD: i64 = 5;
 
+/// The outermost lane a multi-day bar takes in `week_blocks` (chrome.css `--ls` 16px each: 4 lanes = 64px).
+const MAX_LANE: usize = 3;
+
 /// A multi-day event's stretch within one week of `week_blocks`: day indexes 0-6 and its lane.
 struct Run<'a> {
     ev: &'a Instance,
@@ -49,34 +52,31 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
         let days: Vec<Vec<&Instance>> = (0..7).map(|i| idx.get(&(w0 + Duration::days(i))).cloned().unwrap_or_default()).collect();
         // a multi-day event's bar stands on its first day of the week only; a line (chrome.css `.ln`) runs down from
         // the bar's right end through its last day of the week. A bar takes lane 1 + the highest lane whose line
-        // passes its row, and ends that many lane steps short of the right edge: no line ever crosses a bar.
+        // passes its row, and ends that many lane steps short of the right edge: no line ever crosses a bar (up to
+        // MAX_LANE; past it lanes are shared, so a crowded week keeps its bars readable). Its later days name it for
+        // screen readers only (`.vh`), which also keeps the density panel's count (calendar.js `heatSync`, one per `li`).
         let mut runs: Vec<Run> = vec![];
         for (di, evs) in days.iter().enumerate() {
             let d = w0 + Duration::days(di as i64);
             let mut items = String::new();
             for i in evs {
-                let mut lane = None;
-                if i.multi_day() {
-                    if runs.iter().any(|r| std::ptr::eq(r.ev, *i)) {
-                        continue;
-                    }
+                if !i.multi_day() {
+                    items.push_str("<li><time>");
+                } else if runs.iter().any(|r| std::ptr::eq(r.ev, *i)) {
+                    let _ = write!(items, "<li class=\"vh\">{}</li>", E(&i.summary));
+                    continue;
+                } else {
                     let last = (di..7).take_while(|&j| days[j].iter().any(|x| std::ptr::eq(*x, *i))).last().unwrap_or(di);
-                    let k = runs.iter().filter(|r| r.last > di || (r.first < di && r.last == di)).map(|r| r.lane + 1).max().unwrap_or(0);
+                    let k = runs.iter().filter(|r| r.last > di || (r.first < di && r.last == di)).map(|r| r.lane + 1).max().unwrap_or(0).min(MAX_LANE);
                     runs.push(Run { ev: i, first: di, last, lane: k });
-                    lane = Some((k, last > di));
-                }
-                match lane {
-                    Some((k, line)) => {
-                        let _ = write!(items, "<li class=\"lane{}\" style=\"--k:{k}\"><time>", if line { " run" } else { "" });
-                    }
-                    None => items.push_str("<li><time>"),
+                    let _ = write!(items, "<li class=\"mday{}\" style=\"--k:{k}\"><time>", if last > di { " run" } else { "" });
                 }
                 if i.all_day {
                     items.push_str(&all_day);
                 } else {
                     let _ = write!(items, "{}", i.start.format("%H:%M"));
                 }
-                // the start date only where it is not the day's own (a multi-day event's later days): app.js
+                // the start date only where it is not the day's own (a multi-day bar again on a later week's Monday): app.js
                 // reads the nearest data-date, the day block's (−18 % of the week's gzip bytes)
                 let _ = write!(items, "</time><span class=\"ev{}{}\" style=\"--c:{}\" data-key=\"{}\"", if i.all_day || i.multi_day() { " allday" } else { "" }, if i.cancelled { " cancelled" } else { "" }, E(&i.color), EKey(i));
                 if i.start_date() != d {
@@ -94,7 +94,7 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
             // the lines passing the whole day, and the lanes the day's other entries keep clear (--ln)
             let mut lines = String::new();
             for r in runs.iter().filter(|r| r.first < di && r.last >= di) {
-                let _ = write!(lines, "<i class=\"ln{}\" style=\"--k:{};--c:{}\"></i>", if r.last == di { " end" } else { "" }, r.lane, E(&r.ev.color));
+                let _ = write!(lines, "<i class=\"ln{}{}\" style=\"--k:{};--c:{}\"></i>", if r.last == di { " end" } else { "" }, if r.ev.cancelled { " cancelled" } else { "" }, r.lane, E(&r.ev.color));
             }
             let ln = runs.iter().filter(|r| r.first <= di && r.last >= di && r.last > r.first).map(|r| r.lane + 1).max().unwrap_or(0);
             let _ = write!(out, "<section class=\"dayblock{}{}{}\" data-date=\"{d}\"", if d == today { " today" } else { "" }, if evs.is_empty() && marks.is_empty() { " empty" } else { "" }, &hol_class(hol, d));

@@ -391,3 +391,27 @@ test('calendar filter hides a calendar\'s tasks (shared with the calendar page)'
   await page.click('#calfilter [data-filter=all]');
   await expect(mine).toBeVisible();
 });
+
+// js/filter-pins.js changes a star's aria-pressed inside #calfilter; tasks.js `fixedOf` compared that markup and sent
+// every later write through a full page load
+test('a pinned filter star keeps the next task write in place (no page load)', async ({ page }) => {
+  const key = await seedTask(page, 'F3 Stern bleibt', { due: '2026-10-17' });
+  await view(page, 'groups');
+  await page.evaluate(() => { window.__stay = 1; });
+  const f = page.locator('header .filter:not(.user):not(.shelp)'), star = f.locator('.frow', { hasText: 'Aufgaben' }).locator('.pinstar');
+  await f.locator('> button').click();
+  const pin = waitFor(page, 'POST', /^\/settings\/filter-pin$/);
+  await star.click();
+  expect((await pin).ok()).toBe(true);
+  await page.keyboard.press('Escape');
+  const put = waitFor(page, 'PUT', /^\/api\/tasks\//);
+  await item(page, key).locator('.tcb').click();
+  await yes(page);
+  expect((await put).ok()).toBe(true);
+  await expect(item(page, key)).toHaveClass(/\boff\b/);
+  expect(await page.evaluate(() => window.__stay)).toBe(1);
+  await f.locator('> button').click();
+  const unpin = waitFor(page, 'POST', /^\/settings\/filter-pin$/);
+  await star.click();
+  expect((await unpin).ok()).toBe(true);
+});

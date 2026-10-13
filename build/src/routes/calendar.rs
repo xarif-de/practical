@@ -85,10 +85,6 @@ pub struct CalendarPage {
 }
 
 impl CalendarPage {
-    /// a filter row is pinned as a quick switch (`Prefs::filter_pins_json`): `kind` cal | ab | hol
-    pub fn pinned(&self, kind: &str, owner: &str, id: &str) -> bool {
-        crate::domain::prefs::pinned(&self.pins, kind, owner, id)
-    }
     /// a group calendar is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
         self.calendars.iter().any(|c| c.is_group)

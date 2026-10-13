@@ -446,8 +446,9 @@
   /* after a write: the page as a navigation to url() would show it, without the navigation. The server's
      render of that address brings the data, the counter and the finished total; the parts of the page this
      does not carry over (filter, columns, rules, presets, snaps, calendars) must be unchanged, else it
-     navigates after all. Then the page starts again as after a load (nothing picked, first deck card). */
-  const fixedOf = d => ['#calfilter', '#tk-colpop', '#edform select[name=calendar]'].map(x => (d.querySelector(x) || {}).innerHTML).concat(['category-rules-data', 'alarm-presets-data', 'alarm-snaps-data'].map(x => (d.getElementById(x) || {}).textContent)).join('\u0001');
+     navigates after all (a star's aria-pressed is no part of it: js/filter-pins.js changes it in place). Then the page
+     starts again as after a load (nothing picked, first deck card). */
+  const fixedOf = d => ['#calfilter', '#tk-colpop', '#edform select[name=calendar]'].map(x => ((d.querySelector(x) || {}).innerHTML || '').replace(/ aria-pressed="\w+"/g, '')).concat(['category-rules-data', 'alarm-presets-data', 'alarm-snaps-data'].map(x => (d.getElementById(x) || {}).textContent)).join('\u0001');
   const FIXED = fixedOf(document);
   let reloads = 0;
   async function reload(hash = '') {

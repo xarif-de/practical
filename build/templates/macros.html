@@ -10,10 +10,11 @@
 {%- macro eye() -%}{{ ico_c("eye", "eye") }}{{ ico_c("eye-off", "eye no") }}{%- endmacro -%}
 
 {#- a filter row's key (cal | ab: `<principal>/<id>`; hol: `public` | `school`), its star that pins it as a quick switch next
-    to the filter button, and that quick switch: a ribbon in the row's colour (aria-pressed = shown); js/filter-pins.js -#}
+    to the filter button, and that quick switch: a ribbon in the row's colour (aria-pressed = shown; drawn for every row,
+    `hidden` while not pinned, so a star only shows or hides it); js/filter-pins.js -#}
 {%- macro pin_key(kind, owner, id) -%}{{ kind }}:{% if !owner.is_empty() %}{{ owner }}/{% endif %}{{ id }}{%- endmacro -%}
-{%- macro pin_star(kind, owner, id) -%}<button class="pinstar" type="button" data-pin="{{ pin_key(kind, owner, id) }}" aria-pressed="{{ self.pinned(kind, owner, id) }}" title="{{ ctx.t("filter-pin") }}" aria-label="{{ ctx.t("filter-pin") }}">{{ ico("star-h") }}</button>{%- endmacro -%}
-{%- macro pin_btn(kind, owner, id, color, name) -%}{% if self.pinned(kind, owner, id) %}<button class="qs" type="button" data-pin="{{ pin_key(kind, owner, id) }}" style="--c:{{ color }}" aria-pressed="true" title="{{ name }}" aria-label="{{ name }}"></button>{% endif %}{%- endmacro -%}
+{%- macro pin_star(kind, owner, id) -%}<button class="pinstar" type="button" data-pin="{{ pin_key(kind, owner, id) }}" aria-pressed="{{ crate::domain::prefs::pinned(pins, kind, owner, id) }}" title="{{ ctx.t("filter-pin") }}" aria-label="{{ ctx.t("filter-pin") }}">{{ ico("star-h") }}</button>{%- endmacro -%}
+{%- macro pin_btn(kind, owner, id, color, name) -%}<button class="qs" type="button" data-pin="{{ pin_key(kind, owner, id) }}" style="--c:{{ color }}" aria-pressed="true"{% if !crate::domain::prefs::pinned(pins, kind, owner, id) %} hidden{% endif %} title="{{ name }}" aria-label="{{ name }}"></button>{%- endmacro -%}
 {%- macro cal_pins() -%}{% for c in calendars %}{{ pin_btn("cal", c.principal, c.id, c.color, c.displayname) }}{% endfor %}{%- endmacro -%}
 
 {%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}

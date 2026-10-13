@@ -209,7 +209,7 @@ fn pin_key_ok(k: &str) -> bool {
     }
 }
 
-/// At most this many pins per user: a row is pinned by a click, so a longer list is no person's.
+/// At most this many pins per user; a new one past it drops the oldest (pins of deleted collections are never cleared).
 const MAX_PINS: usize = 64;
 
 pub(super) async fn filter_pin_save(State(state): State<SharedState>, user: Principal, _: csrf::Token, crate::extract::Json(pin): crate::extract::Json<FilterPin>) -> AppResult<axum::Json<Vec<String>>> {
@@ -222,7 +222,7 @@ pub(super) async fn filter_pin_save(State(state): State<SharedState>, user: Prin
     pins.retain(|k| *k != pin.key);
     if pin.on {
         if pins.len() >= MAX_PINS {
-            return Err(AppError::bad("err-input-body"));
+            pins.remove(0);
         }
         pins.push(pin.key);
     }

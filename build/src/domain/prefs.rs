@@ -101,7 +101,8 @@ impl Prefs {
 
 /// Whether the filter row `kind:owner/id` (`kind:id` without an owner: the holidays) is among `pins`.
 pub fn pinned(pins: &[String], kind: &str, owner: &str, id: &str) -> bool {
-    pins.iter().any(|k| k.strip_prefix(kind).and_then(|r| r.strip_prefix(':')).is_some_and(|r| if owner.is_empty() { r == id } else { r.strip_prefix(owner).and_then(|r| r.strip_prefix('/')) == Some(id) }))
+    let key = if owner.is_empty() { format!("{kind}:{id}") } else { format!("{kind}:{owner}/{id}") };
+    pins.contains(&key)
 }
 
 /// The columns are named, never `*`: sqlx keeps a prepared statement's column list per connection,

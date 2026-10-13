@@ -1,7 +1,7 @@
 /* css/frame.css — the app grid (topbar, nav, main, tab bar) and the toolbar */
 /* App frame */
 .app { display: grid; min-height: 100dvh; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr; height: 100dvh; }
-.topbar { display: flex; align-items: center; padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); gap: 10px; min-width: 0; } /* min-width: a grid item, it widened .app past a phone instead of letting .pins shrink */
+.topbar { display: flex; align-items: center; padding: 10px var(--pad); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); gap: 10px; min-width: 0; } /* min-width: a grid item, it widened .app past a phone instead of letting .qsbar shrink */
 html[data-busy] .topbar { border-bottom-color: var(--accent); } [data-busy], [aria-busy="true"] { cursor: progress; } /* a navigation or a write that takes longer than 300 ms (practical.progress) */
 .brand { display: flex; flex: none; } .brand img { display: block; height: 14px; width: auto; }
 .nav { display: none; gap: 4px; margin-left: 8px; }

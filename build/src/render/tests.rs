@@ -117,7 +117,7 @@ fn week_draws_each_multi_day_bar_once_and_lines_in_lanes() {
     for (s, n) in [("M1", 1), ("M2", 1), ("M3", 1), ("M4", 2)] {
         assert_eq!(html.matches(&format!(">{s}</span>")).count(), n, "{s}");
     }
-    let bar = |d: u32, s: &str, k: usize| assert!(block(d).contains(&format!("<li class=\"lane run\" style=\"--k:{k}\"><time>")) && block(d).contains(&format!(">{s}</span>")), "{s} on {d}: {}", block(d));
+    let bar = |d: u32, s: &str, k: usize| assert!(block(d).contains(&format!("<li class=\"mday run\" style=\"--k:{k}\"><time>")) && block(d).contains(&format!(">{s}</span>")), "{s} on {d}: {}", block(d));
     bar(9, "M1", 0);
     bar(9, "M2", 1);
     bar(11, "M3", 2);
@@ -132,8 +132,26 @@ fn week_draws_each_multi_day_bar_once_and_lines_in_lanes() {
     assert_eq!(lines(13), [ln("ln end", 2)]);
     assert_eq!(lines(15), [ln("ln end", 0)]);
     assert_eq!(lines(17), [ln("ln end", 0)]);
+    // later days name the event for screen readers only (and the density panel counts it): no "–" beside a line
+    assert!(block(10).contains("<li class=\"vh\">M1</li><li class=\"vh\">M2</li>") && block(12).contains("<li class=\"vh\">M3</li>"), "{}", block(10));
+    assert!(!block(12).contains("class=\"none\""));
     // the day's other entries keep the lanes clear whose lines pass it
     for (d, n) in [(9, 2), (10, 2), (11, 3), (12, 3), (13, 3), (14, 1), (18, 0)] {
         assert_eq!(block(d).contains(&format!("style=\"--ln:{n}\"")), n > 0, "{d}: {}", block(d));
     }
+}
+
+/// A week crowded with overlapping multi-day events shares the outermost lane instead of squeezing its bars to nothing.
+#[test]
+fn week_lanes_stop_at_max_lane() {
+    let day = |d: u32| NaiveDate::from_ymd_opt(2026, 11, d).unwrap();
+    let ev = |n: usize| Instance {
+        principal: "p".into(), cal_id: "c".into(), cal_name: "".into(), color: "#112233".into(), object_id: format!("e{n}.ics"), uid: format!("e{n}"),
+        summary: format!("E{n}").into(), location: "".into(), description: "".into(), start: day(9).and_hms_opt(0, 0, 0).unwrap(), end: day(13).and_hms_opt(0, 0, 0).unwrap(),
+        all_day: true, recurring: false, categories: vec![], alarm_minutes: None, alarms: vec![], is_group: false, cancelled: false,
+    };
+    let insts: Vec<Instance> = (0..8).map(ev).collect();
+    let html = week_blocks(day(9), 1, day(1), &insts, &L::new("de", crate::i18n::I18n::load()), &HashMap::new());
+    assert_eq!((0..=3).map(|k| html.matches(&format!("<li class=\"mday run\" style=\"--k:{k}\">")).count()).collect::<Vec<_>>(), [1, 1, 1, 5], "{html}");
+    assert!(html.contains("style=\"--ln:4\"") && !html.contains("--ln:5"), "{html}");
 }

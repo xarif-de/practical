@@ -331,7 +331,7 @@ test('calendar filter: one off, none, mine, all — kept in localStorage', async
 
 test('a starred filter row is a quick switch left of the filter: it hides and shows like the row, kept per user', async ({ page }) => {
   await open(page, cal('month'));
-  const f = pageFilter(page), pins = page.locator('header .qsbar .qs');
+  const f = pageFilter(page), pins = page.locator('header .qsbar .qs:not([hidden])');
   const star = name => f.locator('.frow', { hasText: name }).locator('.pinstar');
   await expect(pins).toHaveCount(0);
   await f.locator('> button').click();
@@ -362,13 +362,22 @@ test('a starred filter row is a quick switch left of the filter: it hides and sh
   await page.reload();
   await expect(pins).toHaveCount(1);
   await page.goto('/tasks');
-  await expect(page.locator('header .qsbar .qs')).toHaveAttribute('aria-label', 'Arbeit');
+  await expect(page.locator('header .qsbar .qs:not([hidden])')).toHaveAttribute('aria-label', 'Arbeit');
   await open(page, cal('month'));
   await f.locator('> button').click();
   await star('Arbeit').click();
   await expect(pins).toHaveCount(0);
   await page.reload();
   await expect(pins).toHaveCount(0);
+  // a double click saves twice, one after the other: star, switch and server agree afterwards (unpinned again)
+  await f.locator('> button').click();
+  const saves = [];
+  page.on('response', r => { if (/\/settings\/filter-pin$/.test(r.url())) saves.push(r); });
+  await star('Arbeit').dblclick();
+  await expect.poll(() => saves.length).toBe(2);
+  await expect(star('Arbeit')).toHaveAttribute('aria-pressed', 'false');
+  await expect(pins).toHaveCount(0);
+  expect(await saves[1].json()).toEqual([]);
 });
 
 test('holiday switches are saved for the user and redraw the view', async ({ page }) => {

@@ -96,7 +96,7 @@ fn cal_info(c: Calendar, owner: &Owner) -> CalInfo {
 
 fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
     AbInfo {
-        color: color.unwrap_or_else(|| default_color(&a.id)),
+        color: color.filter(|c| valid_color(c)).unwrap_or_else(|| default_color(&a.id)), // as cal_info: a style attribute takes it
         principal: a.principal,
         owner_label: owner.label.clone(),
         is_group: owner.is_group,
