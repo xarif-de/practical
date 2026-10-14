@@ -140,7 +140,8 @@ def edits(work, mixed, ab):
         body = dict(e[2], summary=e[2]["summary"] + "+", location=f"Ort {n % 13}")
         if n % 3 == 0:
             body["categories"] = [R.choice(WORDS), R.choice(WORDS)]
-        req("PUT", f"/api/events/alice/{e[0]}/{e[1]}", body); e[2] = body
+        path = f"/api/events/alice/{e[0]}/{e[1]}"
+        req("PUT", path, dict(body, etag=req("GET", path)["etag"])); e[2] = body  # a write names the version it is based on (428 without)
     for _ in range(40):
         e = R.choice(evs)
         if e[1] is not None:
@@ -153,7 +154,8 @@ def edits(work, mixed, ab):
         cts.append(req("POST", "/api/contacts", body)["id"])
     for n in range(50):
         i = R.randrange(len(cts))
-        req("PUT", f"/api/contacts/alice/{ab}/{cts[i]}", {"principal": "alice", "ab_id": ab, "given": "Ed", "family": f"Hist{i}x{n}", "emails": [{"kind": "work", "value": f"w{n}@example.org"}]})
+        path = f"/api/contacts/alice/{ab}/{cts[i]}"
+        req("PUT", path, {"principal": "alice", "ab_id": ab, "given": "Ed", "family": f"Hist{i}x{n}", "emails": [{"kind": "work", "value": f"w{n}@example.org"}], "etag": req("GET", path)["etag"]})
 
 
 def history_caught_up():

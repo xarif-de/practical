@@ -21,10 +21,11 @@ async function quiet(page) {
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 
-async function rawClick(page, sel) {
+// `left`: near the left end (a month chip opens from its title only; its middle, past a short title, picks the day)
+async function rawClick(page, sel, left) {
   const b = await page.locator(sel).first().boundingBox({ timeout: 10000 });
   if (!b) throw new Error('no box for ' + sel);
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.click(left ? b.x + Math.min(12, b.width / 2) : b.x + b.width / 2, b.y + b.height / 2);
 }
 
 /** t0 = the input event's timeStamp; t1 = when `done(arg)` first holds after a DOM change (a MutationObserver checks
@@ -45,15 +46,16 @@ async function arm(page, done, arg) {
 const INTERACTIONS = [
   {
     name: 'editor-open',
-    prep: async (s, i) => { await s.month(); },
-    act: async s => rawClick(s.page, `#viewroot .ev[data-key$="/${s.ev}"]`),
+    // the pointer on the chip first: its full day unfolds under it and re-sorts (calendar.js dayOpen), the click then finds it in place
+    prep: async (s, i) => { await s.month(); await s.page.locator(`#viewroot .ev[data-key$="/${s.ev}"]`).first().hover(); },
+    act: async s => rawClick(s.page, `#viewroot .ev[data-key$="/${s.ev}"]`, true),
     done: () => { const e = document.querySelector('#ed'); return !!e && !e.hidden && /^Bench /.test(document.querySelector('#edh')?.value || ''); },
   },
   {
     name: 'editor-save',
     prep: async (s, i) => {
       await s.month();
-      await s.page.locator(`#viewroot .ev[data-key$="/${s.ev}"]`).first().click();
+      await s.page.locator(`#viewroot .ev[data-key$="/${s.ev}"]`).first().hover(); await rawClick(s.page, `#viewroot .ev[data-key$="/${s.ev}"]`, true); // as editor-open
       await s.page.locator('#edh').waitFor();
       await s.page.click('#ed-lock');
       await s.page.fill('#edh', `Bench S${s.saves}`);
@@ -178,7 +180,7 @@ export async function runClient(sides, samples, log) {
             const t0 = performance.now();
             try {
               await it.act(s);
-              await s.page.waitForFunction(() => window.__bcheck(), null, { polling: 'raf', timeout: 20000 });
+              await s.page.waitForFunction(() => window.__bcheck(), null, { polling: 'raf', timeout: 20000 }).catch(e => { throw new Error(`${it.name}${mode} on ${s.name}: ${e.message}`); });
             } finally {
               if (mode) await s.cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
             }
