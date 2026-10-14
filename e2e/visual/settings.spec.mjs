@@ -152,7 +152,8 @@ shot('settings account', async (page, snap) => {
   await page.goto('/settings#account');
   await snap('set-account');
   await keepToasts(page);
-  await page.locator('#account button[data-copy="#dav-cal"]').click();
+  await page.goto('/settings#manual');
+  await page.locator('#manual button[data-copy="#dav-cal"]').click();
   await page.locator('.toast').waitFor();
   await snap('set-account-copied-toast', { segments: 0 });
 });

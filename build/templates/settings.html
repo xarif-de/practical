@@ -327,26 +327,125 @@
 <section class="page" id="account">
   {{ m::back("#", ctx.t("nav-settings")) }}
   <h1>{{ ctx.t("tab-account") }}</h1>
+  {# the way to "add a device"; the scene is drawn by CSS (connect.css) #}
+  <div class="dev-hero">
+    <div><h2>{{ ctx.t("connect-hero-title") }}</h2><p>{{ ctx.t("connect-hero-text") }}</p><a class="btn btn-primary" href="#add">{{ m::ico("plus") }}<span>{{ ctx.t("connect-add") }}</span></a></div>
+    <div class="dev-scene" aria-hidden="true"><div class="lap"><i></i><i></i><i></i></div><div class="tab"><i></i><i></i></div><div class="pho"><i></i><i></i></div></div>
+  </div>
+  <div class="label">{{ ctx.t("devices-title") }}</div>
+  <div class="group" id="devices">
+    {% for t in tokens %}
+    <div class="cell"><span class="swatch" style="background:var(--c{{ loop.index0 % 6 + 1 }})">{{ m::ico(self.device_icon(t.name)) }}</span><span>{{ t.name }}{% if let Some(c) = t.created_at %}<span class="sub">{{ ctx.t1("devices-since", "date", c.format("%Y-%m-%d").to_string().as_str()) }}</span>{% endif %}</span><span class="val"><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-disconnect", "name", t.name) }}">{{ ctx.t("device-disconnect") }}</button></form></span></div>
+    {% endfor %}
+    {% if tokens.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("devices-none") }}</span></div>{% endif %}
+  </div>
+  <p class="foot">{{ ctx.t("devices-foot") }}</p>
+  <div class="label">{{ ctx.t("set-account") }}</div>
+  <div class="group">
+    <div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ ctx.user_id() }}<span class="sub">{{ self.dav_host() }}</span></span></div>
+  </div>
+</section>
+
+{# "add a device": one page per step, wizard frame of connect.css. Two paths: on the Android device itself
+   (`.oa`) and on another one (`.od`, with QR codes); js/shell/settings-connect.js sets data-android on
+   #settings and fills the codes and the live state. Without JS the other-device path shows. Placeholders
+   for clients to come (iPhone/iPad, macOS, Thunderbird) belong next to the Android tile in #add. #}
+<section class="page wiz" id="add">
+  {{ m::back("#account", ctx.t("tab-account")) }}
+  <div class="od">{{ m::wiz_bars(1, 4) }}</div><div class="oa">{{ m::wiz_bars(1, 3) }}</div>
+  <div class="wz">
+    <h1>{{ ctx.t("wiz-choose-title") }}</h1><p class="lead">{{ ctx.t("wiz-choose-text") }}</p>
+    <div class="wiz-tiles">
+      <a class="od" href="#add-android"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
+      <a class="oa" href="#add-android-install"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
+      <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
+    </div>
+  </div>
+  <div class="acts"><a class="muted" href="#account">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+<section class="page wiz" id="add-android">
+  {{ m::back("#add", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(2, 4) }}
+  <div class="wz">
+    <div class="ic">{{ m::ico("android") }}</div>
+    <h1>{{ ctx.t("wiz-device-title") }}</h1><p class="lead">{{ ctx.t("wiz-device-text") }}</p>
+    <div class="wiz-two"><span class="qr" data-code="install" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><ol class="mini"><li>{{ ctx.t("wiz-device-s1") }}</li><li>{{ ctx.t("wiz-device-s2") }}</li><li>{{ ctx.t("wiz-device-s3") }}</li></ol></div>
+    <div class="live ok" data-live="opened" hidden><span class="dot"></span><span>{{ ctx.t("wiz-device-opened") }}</span></div>
+    <p class="hint">{{ ctx.t1("wiz-device-alt", "host", plan_host) }} {{ ctx.t("nav-settings") }} → {{ ctx.t("tab-account") }} → {{ ctx.t("connect-add") }}</p>
+    <div class="or">{{ ctx.t("wiz-or") }}</div>
+    <a class="btn" href="#add-android-install">{{ ctx.t("wiz-here") }}</a>
+  </div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+<section class="page wiz" id="add-android-install">
+  <span class="od">{{ m::back("#add-android", ctx.t("wiz-back")) }}</span><span class="oa">{{ m::back("#add", ctx.t("wiz-back")) }}</span>
+  <div class="od">{{ m::wiz_bars(3, 4) }}</div><div class="oa">{{ m::wiz_bars(2, 3) }}</div>
+  <div class="wz">
+    <div class="ic"><img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="" width="56" height="56"></div>
+    <h1>{{ ctx.t("wiz-install-title") }}</h1><p class="lead">{{ ctx.t("wiz-install-text") }}</p>
+    <div class="wiz-stores">
+      <div class="group">{% for s in stores %}
+        <a class="cell link{% if loop.first %} sel{% endif %}" href="{{ s.url }}" target="_blank" rel="noopener" data-store="{{ s.key }}"><span class="swatch store-sw">{{ m::ico(s.icon) }}</span><span>{{ s.name }}</span><span class="val"><span class="tag{% if !s.free %} soft{% endif %}">{% if s.key == "gh" %}{{ ctx.t("wiz-free-apk") }}{% else if s.free %}{{ ctx.t("wiz-free") }}{% else %}{{ ctx.t("wiz-fee") }}{% endif %}</span><span class="chev">›</span></span></a>{% endfor %}
+      </div>
+      <div class="od wiz-storeqr">{% for s in stores %}<div data-store-qr="{{ s.key }}"{% if !loop.first %} hidden{% endif %}><span class="qr" data-code="store-{{ s.key }}" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><a class="short" href="{{ s.url }}" target="_blank" rel="noopener">{{ s.short }}</a><span class="hint">{{ ctx.t1("wiz-store-scan", "store", s.name) }}</span></div>{% endfor %}</div>
+    </div>
+  </div>
+  <div class="acts"><a class="muted od" href="#add-android">‹ {{ ctx.t("wiz-back") }}</a><a class="muted oa" href="#add">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-android-connect">{{ ctx.t("wiz-installed") }} ›</a></div>
+</section>
+
+<section class="page wiz" id="add-android-connect">
+  {{ m::back("#add-android-install", ctx.t("wiz-back")) }}
+  <div class="od">{{ m::wiz_bars(4, 4) }}</div><div class="oa">{{ m::wiz_bars(3, 3) }}</div>
+  <div class="wz">
+    <h1>{{ ctx.t("wiz-connect-title") }}</h1>
+    <div class="oa"><a class="btn btn-primary big" href="{{ davx5_intent }}">{{ m::ico("android") }}<span>{{ ctx.t("wiz-connect-title") }}</span></a><p class="lead after">{{ ctx.t("wiz-connect-tap") }}</p></div>
+    <div class="od"><span class="qr" data-code="connect" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="lead after">{{ ctx.t("wiz-connect-qr") }}</p></div>
+    <div class="wiz-screens" aria-hidden="true">
+      <div><div class="ph"><small>DAVx⁵</small><i></i><i></i><span class="davx">{{ ctx.t("wiz-scr-1") }}</span></div><span class="cap">1. {{ ctx.t("wiz-scr-1") }}</span></div>
+      <div><div class="ph"><small>{{ ctx.t("wiz-scr-browser") }}</small><i></i><i></i><span>{{ ctx.t("connect-ok") }}</span></div><span class="cap">2. {{ ctx.t("connect-ok") }}</span></div>
+      <div><div class="ph"><small>DAVx⁵</small><i></i><i></i><span class="davx">{{ ctx.t("wiz-scr-3") }}</span></div><span class="cap">3. {{ ctx.t("wiz-scr-3") }}</span></div>
+    </div>
+    <p class="sr">1. {{ ctx.t("wiz-scr-1") }} · 2. {{ ctx.t("connect-ok") }} · 3. {{ ctx.t("wiz-scr-3") }}</p>
+    <div class="live" data-live="waiting"><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
+  </div>
+  <div class="acts"><a class="muted" href="#add-android-install">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+<section class="page wiz" id="add-done">
+  {{ m::back("#account", ctx.t("tab-account")) }}
+  <div class="wz">
+    <div class="ok-dot">{{ m::ico("check") }}</div>
+    <h1>{{ ctx.t("wiz-done-title") }}</h1>
+    <div class="group"><div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("smartphone") }}</span><span><span data-device>{{ ctx.t("connect-name-android") }}</span><span class="sub">{{ ctx.t("wiz-done-just") }}</span></span><span class="val"><span class="tag">{{ ctx.t("wiz-new") }}</span></span></div></div>
+    <a class="another" href="#add">＋ {{ ctx.t("wiz-another") }}</a>
+  </div>
+  <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>
+</section>
+
+<section class="page" id="manual">
+  {{ m::back("#add", ctx.t("wiz-back")) }}
+  <h1>{{ ctx.t("manual-title") }}</h1>
   {% if let Some(t) = new_token %}
   <div class="flash ok token-reveal">
     <p>{{ ctx.t("token-new-hint") }}</p>
     <code id="new-token">{{ t }}</code> <button class="btn" type="button" data-copy="#new-token">{{ ctx.t("copy") }}</button>
   </div>
   {% endif %}
+  <div class="label">{{ ctx.t("manual-server") }}</div>
   <div class="group">
-    <div class="cell noic"><span>{{ ctx.t("profile-user") }}</span><span class="val"><code id="dav-user">{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-user" title="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
-    <div class="cell noic"><span>CalDAV</span><span class="val"><code id="dav-cal">{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-cal" title="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
-    <div class="cell noic"><span>CardDAV</span><span class="val"><code id="dav-card">{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code><button class="btn icon-btn" type="button" data-copy="#dav-card" title="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
+    <div class="cell noic stack"><span><span class="k">{{ ctx.t("manual-server-addr") }}</span><code id="dav-url">{{ ctx.public_dav_url }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#dav-url" title="{{ ctx.t("copy") }}" aria-label="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
+    <div class="cell noic stack"><span><span class="k">{{ ctx.t("manual-user") }}</span><code id="dav-user">{{ ctx.user_id() }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#dav-user" title="{{ ctx.t("copy") }}" aria-label="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
+    <div class="cell noic stack"><span><span class="k">{{ ctx.t("manual-caldav") }}</span><code id="dav-cal">{{ ctx.public_dav_url }}/caldav/principal/{{ ctx.user_id() }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#dav-cal" title="{{ ctx.t("copy") }}" aria-label="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
+    <div class="cell noic stack"><span><span class="k">{{ ctx.t("manual-carddav") }}</span><code id="dav-card">{{ ctx.public_dav_url }}/carddav/principal/{{ ctx.user_id() }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#dav-card" title="{{ ctx.t("copy") }}" aria-label="{{ ctx.t("copy") }}">{{ m::ico("copy") }}</button></span></div>
   </div>
-  <p class="foot">{{ ctx.t("profile-hint") }}</p>
-  <div class="label">{{ ctx.t("tab-tokens") }}</div>
+  <p class="foot">{{ ctx.t("manual-server-foot") }}</p>
+  <div class="label">{{ ctx.t("manual-pw-label") }}</div>
   <div class="group">
-    {% for t in tokens %}
-    <div class="cell"><span class="swatch" style="background:var(--fg-3)">{{ m::ico("lock") }}</span><span>{{ t.name }}{% if let Some(c) = t.created_at %}<span class="sub">{{ ctx.t("col-created") }} {{ c.format("%Y-%m-%d %H:%M") }}</span>{% endif %}</span><span class="val"><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-delete-token", "name", t.name) }}">{{ ctx.t("delete") }}</button></form></span></div>
-    {% endfor %}
-    <form class="cell noic" method="post" action="/settings/tokens">{{ m::csrf() }}<input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("token-name-placeholder") }}"><button class="btn" type="submit">{{ m::ico("key") }}<span>{{ ctx.t("token-create") }}</span></button></form>
+    <form class="cell noic" method="post" action="/settings/tokens">{{ m::csrf() }}<input type="text" name="name" required maxlength="60" placeholder="{{ ctx.t("manual-pw-placeholder") }}" aria-label="{{ ctx.t("manual-pw-placeholder") }}"><button class="btn" type="submit">{{ m::ico("key") }}<span>{{ ctx.t("manual-pw-create") }}</span></button></form>
   </div>
-  <p class="foot">{{ ctx.t("tokens-intro") }}</p>
+  <p class="foot">{{ ctx.t("manual-pw-foot") }}</p>
 </section>
 
 <section class="page" id="trash">

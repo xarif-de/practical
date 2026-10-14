@@ -181,8 +181,8 @@
   },
   {
     "file": "31-app-tokens.webp",
-    "title": "Account and app tokens",
-    "caption": "The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device.",
+    "title": "Connected devices",
+    "caption": "The account page: add a device, and every connected device with its own password.",
     "group": "Settings and more"
   },
   {

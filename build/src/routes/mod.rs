@@ -3,6 +3,7 @@
 pub mod api;
 pub mod assets;
 pub mod calendar;
+pub mod connect;
 pub mod contacts;
 pub mod dev;
 pub mod editor;

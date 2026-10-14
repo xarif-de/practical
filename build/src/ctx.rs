@@ -10,7 +10,7 @@ use crate::i18n::negotiate;
 use crate::state::SharedState;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use fluent_bundle::FluentValue;
+use fluent_bundle::{FluentArgs, FluentValue};
 use rustical_store::auth::Principal;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -72,6 +72,13 @@ impl PageCtx {
     /// A plural message for a data attribute app.js formats (`I18n::plural_json`: its forms, the number as `{n}`).
     pub fn tp(&self, key: &str) -> String {
         self.i18n.plural_json(&self.lang, key)
+    }
+    /// "Step 2 of 4" (the "add a device" wizard, macros.html `wiz_bars`)
+    pub fn step(&self, n: &i64, of: &i64) -> String {
+        let mut a = FluentArgs::new();
+        a.set("n", *n);
+        a.set("of", *of);
+        self.i18n.t_args(&self.lang, "wiz-step", Some(&a))
     }
     pub fn tn<V: std::borrow::Borrow<i64>>(&self, key: &str, name: &str, value: V) -> String {
         self.i18n.t1(&self.lang, key, name, FluentValue::from(*value.borrow()))

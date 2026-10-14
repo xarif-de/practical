@@ -19,7 +19,14 @@ tag the UI shows (and `rustical --version` prints).
 - **Icons** (`build/assets/icons.svg`, one `<symbol id="i-…">` sprite used via `<use>`): own drawings plus single SVGs
   copied unchanged from Lucide (ISC), Tabler (MIT), Phosphor (MIT), Heroicons (MIT), Iconoir (MIT), Bootstrap Icons
   (MIT), Material Design Icons (Apache-2.0) and Material Symbols (Apache-2.0); `i-al-*` are drawn from Lucide
-  `log-in`/`log-out`.
+  `log-in`/`log-out`. The store and platform marks `i-android`, `i-googleplay`, `i-fdroid`, `i-appgallery` and
+  `i-github` come from [Simple Icons](https://simpleicons.org/) (CC0-1.0); the marks stay their owners' trademarks
+  and only name where an app is found. The Android robot is reproduced from work created and shared by Google and
+  used according to the terms of the Creative Commons 3.0 Attribution License.
+- **DAVx⁵ app icon** (`build/assets/davx5.svg`, shown in "Add a device" to name the app to install): drawn from
+  DAVx⁵'s launcher icon (`ic_launcher_foreground.xml` on its `primaryColor`) in
+  [davx5-ose](https://github.com/bitfireAT/davx5-ose) (GPL-3.0). DAVx⁵ is a trademark of bitfire web
+  engineering GmbH; PractiCal is not affiliated with it.
 - **Logo lettering** (`build/assets/logo.svg`, `lettering.svg`): outlines of Inter Display ExtraBold from
   [Inter](https://github.com/rsms/inter) 4.1 (SIL Open Font License 1.1); no font file is shipped. The design:
   [brand/README.md](../brand/README.md).

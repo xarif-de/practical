@@ -167,6 +167,7 @@ async fn push_with_vapid() {
     let state = std::sync::Arc::new(crate::state::AppState {
         remote_http: crate::domain::remote::client(&[]),
         remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
+        connect: Default::default(),
         remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
         config: app.state.config.clone(),
         db: app.state.db.clone(),

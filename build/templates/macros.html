@@ -35,6 +35,8 @@
 {%- macro add_btn(list, label) -%}<button class="add edits" type="button" data-add="{{ list }}">{{ ico("plus") }} {{ label }}</button>{%- endmacro -%}
 
 {#- settings: the back link of a drill-in page, and a home/collection row that opens one -#}
+{#- the "add a device" wizard's progress: step `n` of `of` as bars and words (settings.html, connect.css .dots) -#}
+{%- macro wiz_bars(n, of) -%}<div class="dots" role="img" aria-label="{{ ctx.step(n, of) }}">{% for i in 1..=of %}<i{% if i <= n %} class="on"{% endif %}></i>{% endfor %}<span aria-hidden="true">{{ ctx.step(n, of) }}</span></div>{%- endmacro -%}
 {%- macro back(href, label) -%}<a class="back" href="{{ href }}">‹ {{ label }}</a>{%- endmacro -%}
 {%- macro nav_cell(href, bg, icon) -%}<a class="cell link" href="{{ href }}"><span class="swatch" style="background:{{ bg }}">{{ ico(icon) }}</span>{{ caller() }}<span class="chev">›</span></span></a>{%- endmacro -%}
 

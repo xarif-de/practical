@@ -6,6 +6,7 @@ mod api_more;
 mod assets;
 mod auth;
 mod caches;
+mod connect;
 mod history;
 mod http;
 mod onboarding;

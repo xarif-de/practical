@@ -3,7 +3,8 @@
 use super::*;
 
 pub(super) async fn token_create(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<NameForm>) -> Response {
-    form(&state, &session, &ctx, &f.csrf, "account", async {
+    // the new password shows once, on the page that made it ("add a device" › manual)
+    form(&state, &session, &ctx, &f.csrf, "manual", async {
         let t = tokens::create(&state, &user, &f.name).await?;
         session.insert(SESSION_NEW_TOKEN, t).await?;
         Ok(None)

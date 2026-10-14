@@ -395,16 +395,21 @@ Only your OWN calendars are offered. One that somebody shared with you is left o
 other server withholds the details of private appointments from anyone but their owner, and a copy
 would be quietly incomplete.
 
-### App tokens for calendar apps
+### Connect your phone and other devices
 
-Calendar apps on your phone or computer never use your login password. Instead, each device gets its own **app
-token**: a password for that one app only. The account page also shows the CalDAV and CardDAV addresses that you
-enter in the app.
+Calendar apps on your phone or computer never use your login password. Each device gets its own password, made for
+that device only. **Settings → Account & apps → Add a device** walks you through it:
 
-<img src="images/31-app-tokens.webp" alt="The account page: the CalDAV and CardDAV addresses for calendar apps, and one app token per device." width="100%">
+- **Android:** the assistant recommends the app DAVx⁵ and links every place to get it: Google Play, F-Droid (free),
+  Galaxy Store, AppGallery and GitHub. On the phone, one tap on **Connect with DAVx⁵** opens DAVx⁵ with this server
+  filled in. You confirm in the browser, and DAVx⁵ receives its password by itself: nothing to type or copy. On a
+  computer, QR codes take you to the same step on the phone, and the page shows when the phone is connected.
+- **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
+  that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 
-PractiCal shows a new token exactly once, so copy it into the app right away. To lock out a lost device, delete its
-token.
+<img src="images/31-app-tokens.webp" alt="The account page: add a device, and every connected device with its own password." width="100%">
+
+Every device is listed under **My connected devices**. To lock out a lost device, disconnect it there.
 
 ### Trash
 

@@ -20,11 +20,12 @@
 //!    session layer ([`sessions::DbStore`]) → [`sessions::activity`] (extends the expiry) → RustiCal's
 //!    `AuthenticationLayer` (the principal from the session or an HTTP Basic app token) →
 //!    [`csrf::origin_guard`] → the router.
-//! 4. The router: [`auth::router`] (`/login`, `/login/oidc*`, `/logout`), [`routes::dev`] (`/dev/reload`,
+//! 4. The router: [`auth::router`] (`/login`, `/login/oidc*`, `/logout`), [`routes::connect::public_router`] (an
+//!    app's Login Flow v2 start and poll, the only POSTs the origin guard lets through without browser metadata), [`routes::dev`] (`/dev/reload`,
 //!    development only), `/` → `/calendar` ([`routes::pages`]), and the protected part:
 //!    [`auth::require_user`] → [`ctx::localize_errors`] → [`error::catch_panic`] → the page and API routers
 //!    [`routes::calendar`], [`routes::contacts`], [`routes::tasks`], [`routes::history`],
-//!    [`routes::settings`], [`routes::editor`], [`routes::api`] (each module's `router()` is merged here).
+//!    [`routes::settings`], [`routes::connect`], [`routes::editor`], [`routes::api`] (each module's `router()` is merged here).
 //!
 //! Inside a handler:
 //!
@@ -310,6 +311,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .merge(routes::editor::router())
         .merge(routes::history::router())
         .merge(routes::settings::router())
+        .merge(routes::connect::router())
         .merge(routes::api::router())
         .route_layer(axum::middleware::from_fn(error::catch_panic))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), ctx::localize_errors))
@@ -318,6 +320,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
     Ok(Router::new()
         .route("/", get(routes::pages::root))
         .merge(auth::router(state)?)
+        .merge(routes::connect::public_router())
         .merge(routes::dev::router(state.config.dev_assets_dir.is_some()))
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))
@@ -398,6 +401,7 @@ async fn serve() -> Result<(), String> {
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
         remote_http: crate::domain::remote::client(&config.remote_private_origins),
         remote_logins: Arc::new(crate::domain::remote::login::Logins::default()),
+        connect: Default::default(),
         remote_runner: Arc::new(crate::domain::remote::sched::Runner::default()),
         geo: Default::default(),
         search_index: Default::default(),

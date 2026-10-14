@@ -94,6 +94,18 @@ pub struct SettingsPage {
     pub remote_links: Vec<RemoteLinkRow>,
     /// addresses the user signed in at before, newest first, for the address field to offer back
     pub remote_servers: Vec<String>,
+    /// "add a device" › Android: the link that opens DAVx⁵ in its login for this server (`domain::connect`)
+    pub davx5_intent: String,
+    /// this server's host as a user types it on the other device ("plan.example.org")
+    pub plan_host: String,
+    pub stores: &'static [crate::domain::connect::Store],
+}
+
+#[derive(Deserialize)]
+struct PageQuery {
+    /// the wizard was opened through another device's QR code (`domain::connect::Pairs`)
+    #[serde(default)]
+    pair: String,
 }
 
 /// One sync link, as the collection's row and its own page read it. `kind`/`local_id` are what
@@ -181,6 +193,14 @@ impl SettingsPage {
             None => self.ctx.t1("set-tz-default", "tz", &self.default_timezone),
         }
     }
+    /// the symbol of a connected device's row
+    pub fn device_icon(&self, name: &str) -> &'static str {
+        crate::domain::connect::device_icon(name)
+    }
+    /// the host the DAV apps reach (the manual page's first row)
+    pub fn dav_host(&self) -> &str {
+        self.ctx.public_dav_url.trim_start_matches("https://").trim_start_matches("http://")
+    }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }
@@ -229,7 +249,10 @@ async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<Rem
     Ok(out)
 }
 
-async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx) -> AppResult<SettingsPage> {
+async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<PageQuery>) -> AppResult<SettingsPage> {
+    if !q.pair.is_empty() {
+        state.connect.pairs.open(&q.pair, &user.id);
+    }
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let p = prefs::get(&state.db, &user.id).await?;
     let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
@@ -253,6 +276,9 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_servers: crate::domain::remote::servers_of(&state, &user).await?,
         remote_links,
+        davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url, &format!("{}/settings#add-android-install", state.config.public_url)),
+        stores: &crate::domain::connect::STORES,
+        plan_host: url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default(),
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
         alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),

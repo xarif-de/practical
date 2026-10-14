@@ -4,7 +4,7 @@
 //! cookie session involved: `token_authenticated`); (2) a per-session token in every HTML form and in the
 //! `X-CSRF-Token` header of fetch() calls, checked by the handlers.
 //!
-//! Layer 1 is [`origin_guard`]. Layer 2: the extractors [`Token`] (session token required) and
+//! Layer 1 is [`origin_guard`]; it lets an app's Login Flow v2 start and poll through ([`crate::routes::connect::is_app_endpoint`]). Layer 2: the extractors [`Token`] (session token required) and
 //! [`TokenOrBasic`] (token, or an HTTP Basic app token), and [`check`] for a form field. Handlers extract
 //! them after the path and before the body: a bad token with a bad body answers 403, not 400.
 
@@ -24,6 +24,10 @@ pub async fn origin_guard(State(state): State<SharedState>, request: Request, ne
         return next.run(request).await;
     }
     if token_authenticated(&request).await {
+        return next.run(request).await;
+    }
+    // an app's Login Flow v2 start and poll: no browser, no session authority (routes::connect)
+    if crate::routes::connect::is_app_endpoint(m, request.uri().path()) {
         return next.run(request).await;
     }
     let fetch_site = request.headers().get("sec-fetch-site").and_then(|v| v.to_str().ok());

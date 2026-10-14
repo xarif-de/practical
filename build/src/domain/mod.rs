@@ -10,6 +10,7 @@
 pub mod catrules;
 pub mod collections;
 pub mod colors;
+pub mod connect;
 pub mod contacts;
 pub mod events;
 pub mod geo;

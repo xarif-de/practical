@@ -103,7 +103,7 @@ async fn the_same_requests_extend_the_session_as_before() {
 async fn a_flash_is_removed_by_the_page_that_shows_it_and_never_by_a_prefetch() {
     let (app, mut c, id) = alice().await;
     let r = c.post_form("/settings/tokens", &[("name", " ")]).await;
-    assert_eq!(r.location().as_deref(), Some("/settings#account"));
+    assert_eq!(r.location().as_deref(), Some("/settings#manual"));
     assert!(app.sessions.data(&id).unwrap().contains_key("flash"));
     for p in ["/calendar?fragment=1", "/settings", "/tasks"] {
         let r = prefetch(&mut c, Method::GET, p).await;

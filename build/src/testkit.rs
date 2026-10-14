@@ -273,6 +273,7 @@ impl TestApp {
             // a test dials only what it starts itself; no proxy, so a stub on 127.0.0.1 is reachable
             remote_http: crate::domain::remote::client(&[]),
             remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
+            connect: Default::default(),
             remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
             geo: Default::default(),
             search_index: Default::default(),

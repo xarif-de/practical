@@ -39,20 +39,20 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 | tools/gen_regions.py → src/data/regions.json | CLDR region names and tree; its `LANGS` must list every UI language |
 | tests/fixtures, tests/snapshots | goldens (`UPDATE_SNAPSHOTS=1 mise run test` rewrites); recurrence-real.json (60 anonymised real series × 60 instances by python-dateutil); demo-event-full.ics (every VEVENT property) |
 | locales/{de,en,fr,es}.ftl | Fluent; every string in all four. Prefixes: `ed-` editor, `ct-` contacts, `tk-`/`task-` tasks, `hx-`/`hxj-` history, `v-`/`view-` views, `err-` AppError, `set-` settings, `js-search-f-*`, `hx-a-*` (dynamic). `js-`/`hxj-` ship to the browser |
-| templates/ | askama. layout.html (head: theme.js, i18n-<lang>.js, app.js `defer blocking="render"`; top bar, nav, toast) · macros.html (`m::ico`, `pop_btn`, `card_h`, `act`, `add_btn`, `coll_page`, `restore`/`purge`/`trash_empty` …) · calendar.html + calendar_fragment.html (`?fragment=1`) · editor.html (one dialog: event, task, category rule) + editor_islands.html (JSON islands) + editor_fragment.html (/editor) · contacts*, tasks, settings (drill-in per hash), history, login |
+| templates/ | askama. layout.html (head: theme.js, i18n-<lang>.js, app.js `defer blocking="render"`; top bar, nav, toast) · macros.html (`m::ico`, `pop_btn`, `card_h`, `act`, `add_btn`, `coll_page`, `restore`/`purge`/`trash_empty` …) · calendar.html + calendar_fragment.html (`?fragment=1`) · editor.html (one dialog: event, task, category rule) + editor_islands.html (JSON islands) + editor_fragment.html (/editor) · contacts*, tasks, settings (drill-in per hash; #account, the "add a device" wizard #add… and #manual), connect (the Login Flow v2 confirmation an app opens), history, login |
 
 ### build/assets
 - `js/**`, `css/**` = parts of app.js / style.css, order = src/bundle.rs `BUNDLES` (a new part must be listed there).
-  app.js: core.js, prefetch.js, req.js, IIFE(shell/base, settings-pages, popovers-stream), IIFE(colors/picker,
+  app.js: core.js, prefetch.js, req.js, IIFE(shell/base, settings-pages, settings-connect, popovers-stream), IIFE(colors/picker,
   fields, optimise), calendar.js, `practical.editorInit = function` (editor/setup … wiring, 18 parts; runs at load
   and again after GET /editor), search.js, contacts.js, tasks.js, settings.js, IIFE(onboarding/steps, guide).
   style.css: base, frame, grid, chrome, dialogs, generic, views, icon-buttons, card-form, reminders, recurrence,
-  editor-cards, links-location, tasks, settings, onboarding, color-picker, color-optimiser. A Wrap part is a
+  editor-cards, links-location, tasks, settings, connect, onboarding, color-picker, color-optimiser. A Wrap part is a
   fragment of one function scope (no script alone): `onboarding/guide.js` uses `ST` and the helpers that
   `onboarding/steps.js` declares, and declaring either twice breaks the join.
 - Others: history.js/.css (/history only, after app.js) · sw.js (service worker, Web Push) · theme.js (colour
   scheme before first paint) · icons.svg (sprite `<symbol id="i-…">`; `i-sort` dims an arrow via
-  `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · icon.svg (favicon) + lettering.svg (top bar) + logo.svg (README, site; all generated, brand/) · leaflet.* (vendored 1.9.4, BSD-2,
+  `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · davx5.svg (DAVx⁵'s app icon, docs/licensing.md) · icon.svg (favicon) + lettering.svg (top bar) + logo.svg (README, site; all generated, brand/) · leaflet.* (vendored 1.9.4, BSD-2,
   loaded on first map use). No inline script anywhere (CSP `script-src 'self'`).
 - Client contract: `window.practical` (core.js: `$ $$ csrf esc escN escQ pad ymd parseYmd sprite ico keepCals send
   placeUnder noteRe noteHtml wheelTouch wheelAxis wheelPages swipeViews slide`; req.js: `req tell progress online

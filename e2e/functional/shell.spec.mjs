@@ -44,8 +44,8 @@ test('avatar menu: user, versions, no settings link (the nav has it)', async ({ 
 });
 
 test('copy buttons put the value on the clipboard and say so; the toast closes on ×', async ({ page }) => {
-  await page.goto('/settings#account');
-  await page.locator('#account button[data-copy="#dav-cal"]').click();
+  await page.goto('/settings#manual');
+  await page.locator('#manual button[data-copy="#dav-cal"]').click();
   await expect(page.locator('.toast')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://dav.example.org/caldav/principal/alice');
   await page.locator('.toast .toast-x').click();

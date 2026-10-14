@@ -91,6 +91,9 @@ flate2 = "1.1"
 # to it); the same crate and version build.rs compresses the assets with. tower-http's compression-br streams
 # with brotli's default 4 MiB window: +80-100 MB RSS after the bench burst (2026-10-07, 2 runs).
 brotli = "9"
+# QR codes of the "add a device" wizard (domain::connect `qr_svg`): Project Nayuki's reference implementation,
+# no dependencies; the SVG is drawn by hand (the crate's own `to_svg_string` is only in its examples).
+qrcodegen = "1.8"
 # Global allocator (main.rs): musl's malloc is slow under allocation-heavy work. Measured 2026-10-06 (arm64 musl,
 # 1 CPU / 192 MiB like prod, 3,920-object DB): CPU per request −23…30 % (/calendar 109.5 → 78 ms); RSS 41.0 → 37.7 MB
 # only with the Dockerfile's MIMALLOC_* (defaults held 66-103 MB). libmimalloc-sys builds with cc (bundled SQLite needs it too).

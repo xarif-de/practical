@@ -135,9 +135,10 @@ test('scheme segment in settings saves the scheme', async ({ page }) => {
 });
 
 test('app token: created, shown once, works for Basic auth, revoked', async ({ page }) => {
-  await reloadAt(page, '#account');
-  await page.locator('#account form[action="/settings/tokens"] input[name=name]').fill('F4 Token');
-  await Promise.all([page.waitForURL(/\/settings#account$/), page.locator('#account form[action="/settings/tokens"] button[type=submit]').click()]);
+  // made on "add a device" › manual, listed and disconnected under "my connected devices"
+  await reloadAt(page, '#manual');
+  await page.locator('#manual form[action="/settings/tokens"] input[name=name]').fill('F4 Token');
+  await Promise.all([page.waitForURL(/\/settings#manual$/), page.locator('#manual form[action="/settings/tokens"] button[type=submit]').click()]);
   const token = (await page.locator('#new-token').textContent()).trim();
   expect(token).toMatch(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
   const ok = await basic('alice', token);
@@ -576,4 +577,77 @@ test('the address suggestions open, filter and can be taken with the keyboard', 
   await expect(list).not.toBeVisible();
   await expect(field).toHaveAttribute('aria-expanded', 'false');
   await page.unroute('**/settings');
+});
+
+// "add a device" (routes::connect): the wizard on another device, the app's Login Flow v2, the live jump to the end
+const UA_DAVX5 = 'DAVx5/4.5.20-ose (at.bitfire.davdroid)';
+test('add a device: QR codes on another device, DAVx⁵ connects through the confirmation, the wizard follows live', async ({ page }) => {
+  await reloadAt(page, '#account');
+  await page.locator('#account .dev-hero a[href="#add"]').click();
+  await page.locator('#add a.od[href="#add-android"]').click();
+  await expect(page.locator('#add-android [data-code="install"] svg')).toBeVisible(); // the pairing's code arrived
+  await page.locator('#add-android a[href="#add-android-install"]').click();
+  // a store row picks its code and its short link instead of leaving the page
+  await page.locator('#add-android-install [data-store="fd"]').click();
+  await expect(page).toHaveURL(/#add-android-install$/);
+  await expect(page.locator('[data-store-qr="fd"] .short')).toHaveText('f-droid.org/packages/at.bitfire.davdroid');
+  await expect(page.locator('[data-store-qr="fd"] [data-code="store-fd"] svg')).toBeVisible();
+  await expect(page.locator('[data-store-qr="gp"]')).toBeHidden();
+  await page.locator('#add-android-install a[href="#add-android-connect"]').click();
+  await expect(page.locator('#add-android-connect [data-code="connect"] svg')).toBeVisible();
+  await expect(page.locator('#add-android-connect [data-live="waiting"]')).toBeVisible();
+  // the app: no browser metadata, no session
+  const app = await fetch(BASE + '/index.php/login/v2', { method: 'POST', headers: { 'User-Agent': UA_DAVX5 } }); // Node's fetch: no cookie, no Origin
+  expect(app.status).toBe(200);
+  const start = await app.json();
+  const path = u => new URL(u).pathname;
+  // the user confirms in a browser tab of the same session
+  const tab = await page.context().newPage();
+  await tab.goto(path(start.login));
+  await expect(tab.locator('.connect-page h1')).toHaveText('DAVx⁵ verbinden?');
+  await tab.locator('.connect-page input[name=name]').fill('F4 Pixel');
+  await tab.locator('.connect-page button[type=submit]').click();
+  await expect(tab.locator('.connect-page h1')).toHaveText('Verbunden');
+  await tab.close();
+  // the wizard notices by itself
+  await expect(page).toHaveURL(/#add-done$/, { timeout: 10000 });
+  await expect(page.locator('#add-done [data-device]')).toHaveText('F4 Pixel');
+  // the app fetches its credentials once
+  const poll = () => fetch(BASE + path(start.poll.endpoint), { method: 'POST', body: new URLSearchParams({ token: start.poll.token }) });
+  const g = await poll();
+  expect(g.status).toBe(200);
+  const cred = await g.json();
+  expect(cred.loginName).toBe('alice');
+  expect((await poll()).status).toBe(404);
+  const ok = await basic('alice', cred.appPassword);
+  expect((await ok.get('/api/history')).status()).toBe(200);
+  await ok.dispose();
+  // "done" reloads the list: the device is there, and goes again
+  await page.locator('#add-done a.btn-primary').click();
+  const row = page.locator('#devices .cell', { hasText: 'F4 Pixel' });
+  await expect(row).toBeVisible();
+  await row.locator('button[data-confirm]').click();
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'F4 Pixel' })).toHaveCount(0);
+});
+
+test('add a device: on the Android device itself the wizard skips the QR step and offers DAVx⁵ directly', async ({ browser }) => {
+  const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await loginAs(page, 'alice');
+  await page.goto('/settings#add'); // a page of its own context: settle() knows only the fixture's pages
+  await expect(page.locator('#settings')).toHaveAttribute('data-android', '1');
+  await expect(page.locator('#add .oa .dots span')).toHaveText('Schritt 1 von 3');
+  await expect(page.locator('#add .od .dots')).toBeHidden();
+  await page.locator('#add a.oa[href="#add-android-install"]').click();
+  await expect(page.locator('#add-android-install .wiz-storeqr')).toBeHidden(); // no codes on the device itself
+  await expect(page.locator('#add-android-install [data-store="gp"]')).toHaveAttribute('href', /play\.google\.com/);
+  await page.locator('#add-android-install a[href="#add-android-connect"]').click();
+  const btn = page.locator('#add-android-connect .oa a.btn-primary');
+  await expect(btn).toBeVisible();
+  await expect(btn).toHaveAttribute('href', /^intent:\/\/[^#]+#Intent;scheme=davx5;package=at\.bitfire\.davdroid;S\.loginFlow=1;S\.browser_fallback_url=.+;end$/);
+  // the step meant for another device sends the device itself on
+  await page.goto('/settings#add-android');
+  await expect(page).toHaveURL(/#add-android-install$/);
+  await ctx.close();
 });

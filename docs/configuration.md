@@ -34,8 +34,8 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | `BIND` | `[::]:4001` | The address and port that PractiCal listens on. |
 | `DB_PATH` | `/var/lib/rustical/db.sqlite3` | RustiCal's SQLite file. PractiCal reads and writes it. |
 | `RUSTICAL_URL` | `http://127.0.0.1:4000` | RustiCal's HTTP address. At start, PractiCal waits until RustiCal answers on `/ping`. An empty value means "do not wait" (for development only). |
-| `PUBLIC_URL` | `http://localhost:4001` | The public address of the web UI. With `https://`, the session cookie is `Secure`. It is also the host for the OIDC callback and the page that users return to after logout. |
-| `PUBLIC_DAV_URL` | `https://dav.example.org` | RustiCal's public address. PractiCal shows it to users so that they can set up their calendar apps. |
+| `PUBLIC_URL` | `http://localhost:4001` | The public address of the web UI. With `https://`, the session cookie is `Secure`. It is also the host for the OIDC callback, the page that users return to after logout, and the address DAVx⁵ signs in at when a phone is connected (Nextcloud Login Flow v2 under `/index.php/login/v2`; DAVx⁵ always uses `https://`). |
+| `PUBLIC_DAV_URL` | `https://dav.example.org` | RustiCal's public address. PractiCal shows it to users so that they can set up their calendar apps, and hands it to DAVx⁵ as the server to sync with. |
 
 ### Login and sessions
 
@@ -88,7 +88,8 @@ Users sign in to PractiCal in one of two ways: with a password, or with single s
 offer both.
 
 In both cases, a user is a RustiCal **principal**. A principal is RustiCal's word for a user or a group. Calendar
-apps never use the login password: each device gets its own app token in PractiCal's settings.
+apps never use the login password: each device gets its own app token in PractiCal's settings (**Account & apps →
+Add a device**).
 
 ### Password login
 

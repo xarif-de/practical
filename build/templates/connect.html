@@ -1,0 +1,31 @@
+{#- /index.php/login/v2/flow/{id}: an app (DAVx⁵) asks for access; the user confirms and names the device (routes::connect) -#}
+{% extends "layout.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ ctx.t("connect-page-title") }} · {{ ctx.t("app-name") }}{% endblock %}
+{% block content %}
+<div class="connect-page">
+  {% if state == "ask" %}
+  <div class="pair-icons" aria-hidden="true"><img src="{{ ctx.asset("icon.svg") }}" alt="" width="52" height="52"><span>⇄</span>{% if app == "DAVx⁵" %}<img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="" width="52" height="52">{% else %}<span class="app-ico generic">{{ m::ico("smartphone") }}</span>{% endif %}</div>
+  <h1>{{ ctx.t1("connect-title", "app", app) }}</h1>
+  <p class="lead">{{ ctx.t1("connect-text", "user", ctx.user_id()) }}</p>
+  <form method="post" action="/index.php/login/v2/flow/{{ id }}">
+    {{ m::csrf() }}
+    <input type="hidden" name="app" value="{{ app }}">
+    <label class="field">{{ ctx.t("connect-name") }}<input type="text" name="name" value="{{ name }}" maxlength="60" required autocomplete="off"></label>
+    <p class="hint">{{ ctx.t("connect-name-hint") }}</p>
+    <p class="warn">{{ ctx.t("connect-warn") }}</p>
+    <button type="submit" class="btn btn-primary big wide">{{ ctx.t("connect-ok") }}</button>
+  </form>
+  <a class="btn wide" href="/settings#account">{{ ctx.t("cancel") }}</a>
+  {% else if state == "done" %}
+  <div class="ok-dot">{{ m::ico("check") }}</div>
+  <h1>{{ ctx.t("connect-done-title") }}</h1>
+  <p class="lead">{{ ctx.t1("connect-done-text", "app", app) }}</p>
+  {% else %}
+  <div class="ok-dot gone">{{ m::ico("clock") }}</div>
+  <h1>{{ ctx.t("connect-gone-title") }}</h1>
+  <p class="lead">{{ ctx.t("connect-gone-text") }}</p>
+  <a class="btn wide" href="/settings#account">{{ ctx.t("tab-account") }}</a>
+  {% endif %}
+</div>
+{% endblock %}

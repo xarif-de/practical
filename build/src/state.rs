@@ -36,6 +36,8 @@ pub struct AppState {
     /// Logins a user started but has not finished. In process on purpose: an app password reaches
     /// the whole Nextcloud account, so a one-off import must not put one at rest.
     pub remote_logins: Arc<crate::domain::remote::login::Logins>,
+    /// Connecting a device: pending Login Flow v2 flows and the wizard's pairings (`domain::connect`).
+    pub connect: crate::domain::connect::Connect,
     /// Per-link round locks and the echo filter of the sync loop.
     pub remote_runner: Arc<crate::domain::remote::sched::Runner>,
     /// geocoder proxy: throttle + cache (`domain::geo`)

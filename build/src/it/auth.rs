@@ -240,7 +240,7 @@ async fn basic_auth_with_an_app_token() {
     // user$group acts as the group: its calendars only
     let mut alice = s.app.login("alice").await;
     let tok = alice.post_form("/settings/tokens", &[("name", "dav")]).await;
-    assert_eq!(tok.location().as_deref(), Some("/settings#account"));
+    assert_eq!(tok.location().as_deref(), Some("/settings#manual"));
     let shown = alice.get("/settings").await;
     let token = shown.body.split("<code id=\"new-token\">").nth(1).map(|r| r[..r.find('<').unwrap()].to_string());
     if let Some(token) = token.filter(|t| t.contains('_')) {
