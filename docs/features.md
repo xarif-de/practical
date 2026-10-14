@@ -80,6 +80,21 @@ still easy to pick. Bars of events that last several days open wherever you clic
 The year planner fits the whole year on one page. It shows public and school holidays, vacations and the first
 event of every day.
 
+### Move an event to another day
+
+In the week and month views, drag an event to another day with the mouse. The time stays the same, only the day
+changes. For an event that lasts several days, the day you hold it by goes to the day you drop it on, and the other
+days move with it. While you drag, every day the event will cover is marked.
+
+- To reach a day that is not on screen, hold the event near the top or bottom edge. The week view scrolls; the month
+  view turns to the previous or next month, and keeps turning while you stay there.
+- To jump further, rest on a week or month in the timeline on the right.
+- Press Escape to stop dragging without moving anything.
+
+When you drop the event, PractiCal asks before it moves it. For a repeating event, you choose whether to move only
+this event or the whole series. When the whole series moves, its pattern follows: a weekly event on Wednesdays moved
+by a day happens on Thursdays.
+
 ### Move through time with a swipe
 
 On a trackpad or a touch screen, one swipe moves one month in the month view and one year in the year view. A

@@ -82,6 +82,7 @@ pub fn week_blocks(start: NaiveDate, count: usize, today: NaiveDate, instances: 
                 if i.start_date() != d {
                     let _ = write!(items, " data-date=\"{}\"", i.start_date());
                 }
+                drag_attrs(&mut items, i);
                 let _ = write!(items, ">{}</span></li>", E(&i.summary));
             }
             let marks = hol_labels(hol, d, "span", false);

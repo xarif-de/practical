@@ -31,19 +31,25 @@
      back to the editing). "Yes" has the focus, so Enter confirms.
      `modal`: the backdrop does not answer — a question whose "no" still changes something (a stray click
      must not decide it); Escape stays the explicit "no". */
-  window.askYesNo = (text, yes, no, modal) => new Promise(done => {
+  window.askYesNo = (text, yes, no, modal) => {
+    const b = (a, t, cls, ico) => `<button class="btn${cls} icon-btn" type="button" data-a="${a}" title="${practical.esc(t)}" aria-label="${practical.esc(t)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#i-${ico}"/></svg></button>`;
+    return askBox(text, b('0', no, '', 'x') + b('1', yes, ' btn-primary', 'check'), modal).then(v => v === null ? null : v === '1');
+  };
+  /* the same box with a choice of named answers ([[value, label]…], the first one has the focus) and a cancel (×):
+     resolves the chosen value, null for cancel, Escape and (unless `modal`) the backdrop */
+  window.askChoice = (text, choices, cancel, modal) => askBox(text, `<button class="btn icon-btn" type="button" data-a="" title="${practical.esc(cancel)}" aria-label="${practical.esc(cancel)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#i-x"/></svg></button>` + choices.map(([v, t], i) => `<button class="btn${i ? '' : ' btn-primary'}" type="button" data-a="${practical.esc(v)}">${practical.esc(t)}</button>`).join(''), modal).then(v => v || null);
+  const askBox = (text, acts, modal) => new Promise(done => {
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
-    d.innerHTML = '<div class="ask-box"><p></p><div class="ask-acts"><button class="btn icon-btn" type="button" data-a="0"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-x"/></svg></button><button class="btn btn-primary icon-btn" type="button" data-a="1"><svg class="ico" aria-hidden="true"><use href="' + practical.sprite + '#i-check"/></svg></button></div></div>';
+    d.innerHTML = `<div class="ask-box"><p></p><div class="ask-acts">${acts}</div></div>`;
     d.querySelector('p').textContent = text; d.setAttribute('aria-label', text); // the question names the dialog
-    for (const [a, t] of [['0', no], ['1', yes]]) { const b = d.querySelector(`[data-a="${a}"]`); b.title = t; b.setAttribute('aria-label', t); }
     const prev = document.activeElement;
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
     const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(null); } };
     addEventListener('keydown', key, true);
-    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a === '1'); else if (e.target === d && !modal) end(null); });
+    d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) end(b.dataset.a); else if (e.target === d && !modal) end(null); });
     document.body.appendChild(d);
-    d.querySelector('[data-a="1"]').focus();
+    d.querySelector('.btn-primary').focus();
   });
 
   // the app's own question instead of confirm(): same look everywhere, and a browser that

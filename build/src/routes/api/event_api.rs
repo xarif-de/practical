@@ -119,6 +119,26 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
     Ok(Json(Created { id }))
 }
 
+#[derive(Deserialize)]
+pub(super) struct EventMove {
+    /// whole days later (earlier when negative)
+    days: i64,
+    /// the local start of the one occurrence of a series to move; absent: the whole event
+    #[serde(default)]
+    at: Option<chrono::NaiveDateTime>,
+    #[serde(default)]
+    etag: Option<String>,
+}
+
+/// The views' drag and drop: the event (or one occurrence of its series) `days` later, its times kept (`events::move_event`).
+pub(super) async fn move_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic, Json(m): Json<EventMove>) -> AppResult<Json<Created>> {
+    let mut g = history::begin(&state, Actor::ui(&user)).await;
+    g.object(Store::Cal, &p, &c, &id);
+    events::move_event(&state, &user, &p, &c, &id, m.days, m.at, m.etag.as_deref(), vc.tz).await?;
+    g.commit().await;
+    Ok(Json(Created { id }))
+}
+
 pub(super) async fn delete_event(State(state): State<SharedState>, user: Principal, Path((p, c, id)): Path<(String, String, String)>, _: csrf::TokenOrBasic) -> AppResult<Json<Created>> {
     delete_object(&state, &user, Store::Cal, &p, &c, id).await
 }

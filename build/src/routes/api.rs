@@ -121,6 +121,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/changes", get(changes))
         .route("/api/events/suggest", get(event_suggest))
         .route("/api/events/{p}/{c}/{id}", get(get_event).put(update_event).delete(delete_event))
+        .route("/api/events/{p}/{c}/{id}/move", post(move_event))
         .route("/api/events/{p}/{c}/{id}/attach/{n}", get(event_attachment))
         .route("/api/contacts", post(create_contact))
         .route("/api/contacts/{p}/{a}/{id}", get(get_contact).put(update_contact).delete(delete_contact))

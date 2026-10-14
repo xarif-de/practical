@@ -35,11 +35,13 @@ mod detail;
 mod props;
 mod alarms;
 mod ics;
+mod shift;
 mod write;
 pub use detail::*;
 pub use props::*;
 pub use alarms::*;
 pub use ics::*;
+pub use shift::*;
 pub use write::*;
 
 /// Text an instance shares with every other instance of its series: one allocation per expanded object, not one

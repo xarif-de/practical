@@ -1,5 +1,5 @@
-//! The event API the editor uses: create, read, update (ETag), move, delete, attachments, and the
-//! read-only JSON the calendar page fetches.
+//! The event API the editor uses: create, read, update (ETag), move, delete, attachments, the views' move by days
+//! (drag and drop), and the read-only JSON the calendar page fetches.
 
 use super::seed::seed;
 use axum::http::{Method, StatusCode};
@@ -287,4 +287,40 @@ async fn mentions_index_shape() {
     let tasks: Vec<&str> = m["tasks"].as_array().unwrap().iter().map(|t| t["summary"].as_str().unwrap()).collect();
     assert_eq!(tasks.len(), 2, "open tasks only: {tasks:?}");
     assert!(m["events"].is_array());
+}
+
+/// `POST …/move` (the views' drag and drop): whole days, times kept; one occurrence or the whole series; the group's
+/// calendar as the user's own; refusals.
+#[tokio::test]
+async fn event_move_by_days() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    let starts = |w: &serde_json::Value, id: &str| -> Vec<String> { w.as_array().unwrap().iter().filter(|i| i["object_id"] == id).map(|i| i["start"].as_str().unwrap().to_string()).collect() };
+    let win = "/api/events?start=2026-10-01&end=2026-11-01";
+    let from14 = |w: &serde_json::Value| starts(w, "standup").into_iter().filter(|x| x.as_str() >= "2026-10-14").collect::<Vec<_>>();
+    // a three-day fair two days later, whole
+    c.json(Method::POST, &format!("/api/events/alice/{}/messe/move", s.arbeit), json!({ "days": 2 })).await.ok();
+    let w = c.get_json(win).await.ok().json();
+    let m = w.as_array().unwrap().iter().find(|i| i["object_id"] == "messe").unwrap();
+    assert_eq!((m["start"].as_str(), m["end"].as_str()), (Some("2026-10-22T00:00:00"), Some("2026-10-25T00:00:00")));
+    // one standup (Wednesdays 09:00) to Thursday: only that one moves
+    let sp = format!("/api/events/alice/{}/standup/move", s.arbeit);
+    c.json(Method::POST, &sp, json!({ "days": 1, "at": "2026-10-14T09:00:00" })).await.ok();
+    let w = c.get_json(win).await.ok().json();
+    assert_eq!(from14(&w), ["2026-10-15T09:00:00", "2026-10-21T09:00:00", "2026-10-28T09:00:00"]);
+    // the whole series a day earlier: Tuesdays, the moved one with it (to the 14th), the exception too (no 6th)
+    c.json(Method::POST, &sp, json!({ "days": -1 })).await.ok();
+    let w = c.get_json(win).await.ok().json();
+    assert_eq!(from14(&w), ["2026-10-14T09:00:00", "2026-10-20T09:00:00", "2026-10-27T09:00:00"]);
+    assert!(!starts(&w, "standup").contains(&"2026-10-06T09:00:00".to_string()), "the exception moved along");
+    // the group's calendar is hers to change; bob's own calendars are not
+    c.json(Method::POST, &format!("/api/events/group.familie/{}/treffen/move", s.familie), json!({ "days": -3 })).await.ok();
+    assert_eq!(starts(&c.get_json(win).await.ok().json(), "treffen"), vec!["2026-10-15T00:00:00".to_string()]);
+    assert_eq!(c.json(Method::POST, "/api/events/bob/x/y/move", json!({ "days": 1 })).await.status, StatusCode::FORBIDDEN);
+    // nothing to do, an occurrence that is not there, a rule that cannot follow
+    assert_eq!(c.json(Method::POST, &sp, json!({ "days": 0 })).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(c.json(Method::POST, &sp, json!({ "days": 1, "at": "2026-10-16T09:00:00" })).await.status, StatusCode::CONFLICT);
+    s.app.put_ics("alice", &s.arbeit, "letzter", &crate::testkit::vevent("letzter", "Letzter Werktag", "DTSTART;TZID=Europe/Berlin:20261030T090000\nDTEND;TZID=Europe/Berlin:20261030T100000\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1")).await;
+    let r = c.json(Method::POST, &format!("/api/events/alice/{}/letzter/move", s.arbeit), json!({ "days": 1 })).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
 }

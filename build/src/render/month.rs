@@ -42,6 +42,17 @@ pub fn add_btn(l: &L) -> String {
     format!("<button class=\"add\" type=\"button\" title=\"+\" aria-label=\"{}\">+</button>", e(&l.t("ed-title-new")))
 }
 
+/// What calendar.js's drag and drop needs beyond key and start day: a multi-day entry's last day (the preview covers
+/// it), and a series occurrence's local start (`/move` moves that one alone when asked to; `events::move_event`).
+pub(super) fn drag_attrs(out: &mut String, i: &Instance) {
+    if i.multi_day() {
+        let _ = write!(out, " data-last=\"{}\"", i.last_date());
+    }
+    if i.recurring {
+        let _ = write!(out, " data-at=\"{}\"", i.start.format("%Y-%m-%dT%H:%M:%S"));
+    }
+}
+
 pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
     out.push_str("<div class=\"ev");
     if i.all_day || i.multi_day() {
@@ -55,7 +66,9 @@ pub(super) fn ev_html(out: &mut String, i: &Instance, role: Option<&str>) {
         out.push_str(" cancelled");
     }
     // the label is the title, and the start time after a space (digits and a colon: nothing to escape)
-    let _ = write!(out, "\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\" title=\"{}\">{}", E(&i.color), EKey(i), i.start_date(), E(&i.summary), E(&i.summary));
+    let _ = write!(out, "\" style=\"--c:{}\" data-key=\"{}\" data-date=\"{}\"", E(&i.color), EKey(i), i.start_date());
+    drag_attrs(out, i);
+    let _ = write!(out, " title=\"{}\">{}", E(&i.summary), E(&i.summary));
     if !i.all_day {
         let _ = write!(out, " {}", i.start.format("%H:%M"));
     }

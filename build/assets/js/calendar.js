@@ -126,7 +126,7 @@
     col.append(...(dir > 0 ? [old, ...pages, cur] : [cur, ...pages.reverse(), old])); wrap.append(col); // top to bottom = earlier to later
     wrap.addEventListener('wheel', monthWheel, { passive: false }); // the wheel keeps working over the moving column
     const a = col.animate([{ transform: `translateY(${dir > 0 ? 0 : -n * step}px)` }, { transform: `translateY(${dir > 0 ? -n * step : 0}px)` }], { duration: Math.min(FLIP_MAX, FLIP_MS + FLIP_STEP * (n - 1)), easing: FLIP_EASE, fill: 'forwards' });
-    const end = () => { if (!flip) return; flip = null; a.cancel(); if (wrap.parentNode) wrap.replaceWith(cur); };
+    const end = () => { if (!flip) return; flip = null; a.cancel(); if (wrap.parentNode) wrap.replaceWith(cur); dragAgain(); };
     flip = { end }; a.onfinish = end;
   }
 
@@ -150,7 +150,7 @@
   const weekStart = d => { const w = new Date(d); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); return w; };
   const stepDate = (kind, d, n) => { const x = new Date(d); if (kind === 'weeks') x.setDate(x.getDate() + 7 * n); else x.setMonth(x.getMonth() + n); return x; };
   const periodOf = (kind, d) => kind === 'weeks' ? weekStart(d) : new Date(d.getFullYear(), d.getMonth(), 1);
-  let tlSvg = null, tlKind = null, tlFirst = null, tlLast = null, tlItems = [], tlScroll = null;
+  let tlSvg = null, tlKind = null, tlFirst = null, tlLast = null, tlItems = [], tlScroll = null, tlNearest = null; // tlNearest: the rail item nearest a pointer event (drag and drop jumps by it)
   // items: one per period, optional line before it (month start in weeks, January in months)
   function tlBuild(kind) {
     const k = { ...TLK[kind], step: tlStep, r: tlR }, todayD = parse(today), nowP = fmt(periodOf(kind, todayD));
@@ -227,7 +227,7 @@
     if (!$('.tly', box)) { const y = document.createElement('div'); y.className = 'tly'; y.innerHTML = '<b></b>'; box.insertBefore(y, box.firstChild); }
     tlYearSync(box);
     tlHome = false;
-    const nearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
+    const nearest = tlNearest = e => { const top = tlSvg.getBoundingClientRect().top; const y = e.clientY - top; let best = null; for (const i of tlItems) if (!best || Math.abs(i.y - y) < Math.abs(best.y - y)) best = i; return best; };
     box.onmousemove = e => { const it = nearest(e); if (!it) return; const pre = tlSvg.querySelector('.pre'); pre.setAttribute('cy', it.y); svgShow(pre, true); tip.textContent = it.label; tip.hidden = false; tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px'; };
     box.onmouseleave = () => { tip.hidden = true; const pre = tlSvg.querySelector('.pre'); if (pre) svgShow(pre, false); };
     box.onclick = e => { const it = nearest(e); if (it) { tip.hidden = true; if (state.view === 'week') goWeek(it.date); else if (state.view === 'month') { state.month = it.date.slice(0, 7); load(); } else go(null, it.date); } };
@@ -445,7 +445,7 @@
   root.addEventListener('click', e => { const d = e.target.closest && e.target.closest('.v-month .day'), k = d && e.target.closest('[data-key]'); if (!k || offText(k, e)) return;
     if (!e.detail) { if (k.classList.contains('xt')) $('.dmore', d).focus(); return; }
     d.dataset.quiet = '1'; if (d.classList.contains('open')) dayClose(d); }, true);
-  root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const d = unfoldable(e.target); if (d) { delete d.dataset.quiet; dayOpen(d); } });
+  root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse' || (drag && drag.on)) return; const d = unfoldable(e.target); if (d) { delete d.dataset.quiet; dayOpen(d); } });
   root.addEventListener('pointerout', e => { const d = e.pointerType === 'mouse' && e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.contains(document.activeElement)) dayClose(d); });
   root.addEventListener('focusin', e => { const d = unfoldable(e.target); if (d && !d.dataset.quiet) dayOpen(d); });
   root.addEventListener('focusout', e => { const d = e.target.closest('.day.open'); if (d && !d.contains(e.relatedTarget) && !d.matches(':hover')) dayClose(d); });
@@ -481,10 +481,97 @@
     if (pager) { pager.addEventListener('wheel', state.view === 'month' ? monthWheel : yearWheel, { passive: false });
       // the wheel turns to a neighbour page: the pointer over the grid is the intent (also right after a turn, unmoved)
       practical.intent(pager, () => [...fetches(shifted(1)), ...fetches(shifted(-1))], true); }
-    wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root));
+    wireItems(root); mountWeeks($('.stream', root)); mountLedger($('.ledger', root)); dragAgain();
     const title = $('#title', root); if (title) { title.onclick = openPicker; practical.keyClick(title); title.setAttribute('aria-haspopup', 'dialog'); } // Enter/Space open the picker too
   }
   document.addEventListener('click', e => { if (!e.target.closest('.more')) $$('.more.open').forEach(m => m.classList.remove('open')); });
+  /* ---- drag and drop: an entry of the month grid or the week stream moves to another day, its times kept. The day it is
+     held by goes where the pointer is, the rest of a multi-day entry with it (every day it will cover is marked). Near the
+     top or bottom edge the week stream scrolls and the month turns (after a pause, again while the pointer stays); resting
+     on the rail jumps to its week or month. On the drop a question names both days; for a series it asks for this
+     occurrence or all of them (`POST /api/events/…/move`, events::move_event). Mouse and pen only: a finger scrolls. ---- */
+  const DRAG_MIN = 5, EDGE = 44, EDGE_M = 24, TURN_MS = 600, TURN_AGAIN = 1000, RAIL_MS = 450, CELLS = '.v-month > .month > .day[data-date], .v-week .dayblock[data-date]';
+  let drag = null; // { el, key, at, start, last, grab, x, y, on, ghost, to, ... }
+  const plusDays = (iso, n) => { const d = parse(iso); d.setDate(d.getDate() + n); return ymd(d); };
+  const daysFrom = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+  // a day or a stretch of days, with the year when the move crosses into another one (`y`)
+  const span = (a, b, y) => { const o = { day: 'numeric', month: 'short', ...(y && { year: 'numeric' }) }; return a === b ? dfmt(parse(a), { weekday: 'short', ...o }) : `${dfmt(parse(a), o)} – ${dfmt(parse(b), o)}`; };
+  const startOf = el => el.dataset.date || el.closest('[data-date]').dataset.date; // a week entry on its start day: the day block's date
+  function dragMark() { // the days the entry would cover, and the entry's own chips dimmed (again after a page swap)
+    $$('.drop-on, .drop-from', root).forEach(x => x.classList.remove('drop-on', 'drop-from')); if (!drag || !drag.on) return;
+    $$(`[data-key="${CSS.escape(drag.key)}"]`, root).forEach(x => { if (x.closest(CELLS) && startOf(x) === drag.start) x.classList.add('drop-from'); });
+    if (!drag.to) return; const a = plusDays(drag.start, drag.to), b = plusDays(drag.last, drag.to);
+    $$(CELLS, root).forEach(c => { if (c.dataset.date >= a && c.dataset.date <= b) c.classList.add('drop-on'); });
+  }
+  const dragAgain = () => { if (drag && drag.on && !drag.dead) { drag.to = undefined; dragOver(); } }; // new days under a resting pointer (a swap, the end of a page turn)
+  function dragOver() { // what lies under the pointer: a day, an edge, the rail
+    const d = drag, x = d.x, y = d.y;
+    d.ghost.style.transform = `translate(${x + 12}px, ${y + 10}px)`;
+    const t = document.elementFromPoint(x, y), cell = t && t.closest(CELLS), to = cell && root.contains(cell) ? daysFrom(d.grab, cell.dataset.date) : null;
+    if (to !== d.to) { d.to = to; dragMark(); $('small', d.ghost).textContent = to ? '→ ' + span(plusDays(d.start, to), plusDays(d.last, to)) : ''; }
+    // the rail: resting on a week or month jumps there
+    const rail = t && t.closest('.tl'), it = rail && tlNearest ? tlNearest({ clientY: y }) : null;
+    if ((it && it.period) !== d.railAt) { clearTimeout(d.railT); d.railAt = it && it.period; if (it && it.period) d.railT = setTimeout(() => railJump(it.period), RAIL_MS); }
+    // the edges: above the view's top (its toolbar) or below its bottom, and EDGE px inside them
+    const grid = state.view === 'month' && $('.v-month > .month', root), bar = $('.toolbar', root);
+    const band = grid ? EDGE_M : EDGE, top = (bar ? bar.getBoundingClientRect().bottom : 0) + band, bottom = Math.min(innerHeight, grid ? grid.getBoundingClientRect().bottom : innerHeight) - band;
+    const edge = rail ? 0 : y < top ? -1 : y > bottom ? 1 : 0;
+    if (edge !== d.edge) { d.edge = edge; clearTimeout(d.turnT); root.style.setProperty('--edge-t', `${top - band}px`); root.style.setProperty('--edge-b', `${innerHeight - bottom - band}px`);
+      if (edge) root.dataset.dragEdge = edge < 0 ? 'top' : 'bottom'; else delete root.dataset.dragEdge; // the edge glows (grid.css)
+      if (edge && state.view === 'month') { const turn = () => { if (drag !== d || d.edge !== edge) return; shift(edge); d.turnT = setTimeout(turn, TURN_AGAIN); }; d.turnT = setTimeout(turn, TURN_MS); }
+      if (edge && state.view === 'week' && !d.roll) roll(d); }
+  }
+  function roll(d) { // the week stream scrolls while the pointer is at an edge, the faster the closer to it
+    const stream = $('.stream', root); if (drag !== d || !d.edge || !stream) { d.roll = 0; return; }
+    const bar = $('.toolbar', root), top = (bar ? bar.getBoundingClientRect().bottom : 0) + EDGE, depth = d.edge < 0 ? top - d.y : d.y - (innerHeight - EDGE);
+    scrollerOf(stream).scrollBy(0, d.edge * Math.max(2, Math.min(24, depth / 2)));
+    d.roll = requestAnimationFrame(() => { if (drag === d) { dragOver(); roll(d); } });
+  }
+  function railJump(period) { // the week or month of a rail item, as its click goes there, but the picked day stays
+    if (!drag) return;
+    if (state.view === 'month') { state.month = period.slice(0, 7); load(false); return; }
+    const stream = $('.stream', root), b = stream && $(`.week[data-week="${period}"]`, stream);
+    if (b) { const box = scrollerOf(stream); box.scrollTop += b.getBoundingClientRect().top - (centreY() - b.getBoundingClientRect().height / 2); dragOver(); }
+    else { state.week = period; load(false); }
+  }
+  function dragOff(d) { // the drag's marks, timers and ghost gone; the drag itself ends on the button's release
+    clearTimeout(d.turnT); clearTimeout(d.railT); cancelAnimationFrame(d.roll); d.roll = 0; if (d.ghost) d.ghost.remove();
+    delete root.dataset.dragEdge; document.body.classList.remove('ev-drag'); $$('.drop-on, .drop-from', root).forEach(x => x.classList.remove('drop-on', 'drop-from'));
+  }
+  function dragEnd() {
+    const d = drag; drag = null; if (!d || !d.on) return null;
+    dragOff(d);
+    const eat = e => { e.stopPropagation(); e.preventDefault(); }; // the click this release makes is not one on the entry or its day
+    addEventListener('click', eat, true); setTimeout(() => removeEventListener('click', eat, true));
+    return d.dead ? null : d;
+  }
+  root.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.pointerType === 'touch' || drag) return;
+    const el = e.target.closest && e.target.closest('.ev[data-key]'), cell = el && el.closest(CELLS); if (!cell) return;
+    const start = startOf(el);
+    drag = { el, key: el.dataset.key, at: el.dataset.at || null, start, last: el.dataset.last || start, grab: cell.dataset.date, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, to: null, edge: 0 };
+  });
+  addEventListener('pointermove', e => {
+    const d = drag; if (!d || d.dead) return; d.x = e.clientX; d.y = e.clientY;
+    if (!d.on) { if (Math.hypot(d.x - d.x0, d.y - d.y0) < DRAG_MIN) return;
+      d.on = true; $$('.day.open', root).forEach(dayClose); getSelection().removeAllRanges(); document.body.classList.add('ev-drag');
+      const c = getComputedStyle(d.el).getPropertyValue('--c'), g = d.ghost = document.createElement('div'); g.className = 'ev-ghost'; g.style.setProperty('--c', c); root.style.setProperty('--dc', c);
+      g.innerHTML = '<b></b><small></small>'; g.firstChild.textContent = d.el.title || d.el.textContent; document.body.append(g); }
+    dragOver();
+  });
+  addEventListener('pointerup', async () => {
+    const d = dragEnd(); if (!d || !d.to) return;
+    const s2 = plusDays(d.start, d.to), l2 = plusDays(d.last, d.to), y = s2.slice(0, 4) !== d.start.slice(0, 4) || l2.slice(0, 4) !== d.last.slice(0, 4);
+    const title = d.el.title || d.el.textContent.trim(), a = span(d.start, d.last, y), b = span(s2, l2, y);
+    const scope = d.at ? await askChoice(tr('js-cal-move-series', { t: title, a, b }), [['one', tr('js-cal-move-one')], ['all', tr('js-cal-move-all')]], tr('js-cal-move-no'))
+      : (await askYesNo(tr('js-cal-move-ask', { t: title, a, b }), tr('js-cal-move-yes'), tr('js-cal-move-no'))) && 'all';
+    if (!scope) return;
+    const r = await practical.send(`/api/events/${d.key}/move`, 'POST', { days: d.to, at: scope === 'one' ? d.at : null });
+    practical.tell(r); if (r.ok) load(false);
+  });
+  addEventListener('pointercancel', dragEnd);
+  addEventListener('keydown', e => { const d = drag; if (e.key === 'Escape' && d && d.on && !d.dead) { e.preventDefault(); e.stopPropagation(); d.dead = true; d.to = null; dragOff(d); } }, true); // Escape drops nothing
+  document.addEventListener('selectstart', e => { if (drag) e.preventDefault(); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });
   /* an entry's data for the editor, on the intent to open it: started before the click, the answer is processed before the
      click instead of after the next frame (Chromium defers network tasks after an input until a frame is drawn: a ~9 vs

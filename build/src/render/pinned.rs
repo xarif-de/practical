@@ -108,7 +108,7 @@ fn week_view_and_blocks_golden() {
     // a multi-day event's bar stands on its first day of the week (app.js reads the day block's date there); the
     // later days carry its line only
     let w = week_blocks(date("2026-10-19"), 1, date("2026-10-14"), &v, &l, &hol);
-    assert!(w.contains("<section class=\"dayblock\" data-date=\"2026-10-20\" style=\"--ln:1\"><div class=\"dl\"><b>20</b><span>Di</span></div><ul><li class=\"mday run\" style=\"--k:0\"><time>ganztags</time><span class=\"ev allday\" style=\"--c:#0a84ff\" data-key=\"alice/a/messe\">Messe</span>"), "{w}");
+    assert!(w.contains("<section class=\"dayblock\" data-date=\"2026-10-20\" style=\"--ln:1\"><div class=\"dl\"><b>20</b><span>Di</span></div><ul><li class=\"mday run\" style=\"--k:0\"><time>ganztags</time><span class=\"ev allday\" style=\"--c:#0a84ff\" data-key=\"alice/a/messe\" data-last=\"2026-10-22\">Messe</span>"), "{w}");
     assert_eq!(w.matches("data-key=\"alice/a/messe\"").count(), 1, "{w}");
     assert!(w.contains("data-date=\"2026-10-21\" style=\"--ln:2\"><div class=\"dl\"><b>21</b><span>Mi</span></div><ul><li class=\"vh\">Messe</li><li class=\"mday run\" style=\"--k:1\">") && w.contains("</ul><i class=\"ln end\" style=\"--k:0;--c:#0a84ff\"></i><i class=\"ln\" style=\"--k:1;"), "21 and 22 October: {w}");
     assert!(w.contains("data-key=\"alice/a/s1\">Eins</span>"), "{w}");

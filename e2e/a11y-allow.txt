@@ -30,8 +30,6 @@ target-size	.dmore	P5 WCAG 2.5.8: under 24 px with too little space around (day 
 target-size	.cur	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.day > .mid	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.end	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.ev	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.ev[role]	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.mid	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.row > .typ	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
 target-size	.start	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
