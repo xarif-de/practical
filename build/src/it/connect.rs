@@ -118,7 +118,7 @@ async fn the_account_page_offers_the_wizard_and_the_manual_way() {
     page.ok()
         .has("id=\"add\"").has("id=\"add-android\"").has("id=\"add-android-install\"").has("id=\"add-android-connect\"").has("id=\"add-done\"").has("id=\"manual\"")
         // DAVx⁵ opens in its Nextcloud login on this server; without the app Chrome comes back to the install step
-        .has("intent://localhost:4001#Intent;scheme=davx5;package=at.bitfire.davdroid;S.loginFlow=1;S.browser_fallback_url=http%3A%2F%2Flocalhost%3A4001%2Fsettings%23add-android-install;end")
+        .has("intent://localhost:4001#Intent;scheme=davx5;package=at.bitfire.davdroid;S.loginFlow=1;S.browser_fallback_url=http%3A%2F%2Flocalhost%3A4001%2Fsettings%3Fdavx5%3Dmissing%23add-android-install;end")
         .has("https://f-droid.org/packages/at.bitfire.davdroid/")
         .has("https://dav.example.org/caldav/principal/alice");
     // a new password shows once, on the manual page

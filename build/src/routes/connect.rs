@@ -41,7 +41,7 @@ pub fn public_router() -> Router<SharedState> {
 /// fallback, the wizard's install page. Public: it reveals nothing but this server's host.
 async fn open_davx5(State(state): State<SharedState>) -> Response {
     let base = &state.config.public_url;
-    axum::response::Redirect::to(&connect::davx5_intent(base, &format!("{base}/settings#add-android-install"))).into_response()
+    axum::response::Redirect::to(&connect::davx5_intent(base, &format!("{base}/settings?davx5=missing#add-android-install"))).into_response()
 }
 
 pub fn router() -> Router<SharedState> {

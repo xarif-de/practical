@@ -13,7 +13,7 @@ fn page(lang: &str, public: &str, school: &str, names: &[(&str, &str)], tz: Opti
         public_regions: public.into(), school_regions: school.into(), region_names: names.iter().map(|(c, n)| (c.to_string(), (n.to_string(), String::new()))).collect(),
         picker_json: String::new(), holiday_css: String::new(), vacation_kind: String::new(), vacation_category: String::new(), vacation_calendar: String::new(), vacation_title: String::new(),
         vacation_calendars: vec![], vacation_calendar_unknown: false, vacation_summary: String::new(), alarm_snaps_start: String::new(), alarm_snaps_end: String::new(), alarm_snaps_default_start: String::new(), alarm_snaps_default_end: String::new(),
-        davx5_intent: String::new(), plan_host: String::new(), stores: &crate::domain::connect::STORES,
+        davx5_intent: String::new(), davx5_missing: false, plan_host: String::new(), stores: &crate::domain::connect::STORES,
     }
 }
 

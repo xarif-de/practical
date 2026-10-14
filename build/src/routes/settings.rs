@@ -96,6 +96,8 @@ pub struct SettingsPage {
     pub remote_servers: Vec<String>,
     /// "add a device" › Android: the link that opens DAVx⁵ in its login for this server (`domain::connect`)
     pub davx5_intent: String,
+    /// the page is Chrome's fallback of the DAVx⁵ link: the install step says DAVx⁵ is missing
+    pub davx5_missing: bool,
     /// this server's host as a user types it on the other device ("plan.example.org")
     pub plan_host: String,
     pub stores: &'static [crate::domain::connect::Store],
@@ -106,6 +108,9 @@ struct PageQuery {
     /// the wizard was opened through another device's QR code (`domain::connect::Pairs`)
     #[serde(default)]
     pair: String,
+    /// Chrome opened the intent link's fallback: DAVx⁵ is not installed (`domain::connect::davx5_intent`)
+    #[serde(default)]
+    davx5: String,
 }
 
 /// One sync link, as the collection's row and its own page read it. `kind`/`local_id` are what
@@ -276,7 +281,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_servers: crate::domain::remote::servers_of(&state, &user).await?,
         remote_links,
-        davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url, &format!("{}/settings#add-android-install", state.config.public_url)),
+        davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url, &format!("{}/settings?davx5=missing#add-android-install", state.config.public_url)),
+        davx5_missing: q.davx5 == "missing",
         stores: &crate::domain::connect::STORES,
         plan_host: url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default(),
         alarm_snaps_start: events::fmt_offsets(&snaps.start),

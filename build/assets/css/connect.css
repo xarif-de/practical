@@ -130,3 +130,30 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .connect-page .manual { font-size: 13.5px; color: var(--accent); }
 .connect-page .next .rec { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: color-mix(in srgb, var(--c2-ink) 70%, var(--fg)); }
 @media (max-width: 520px) { .connect-page .next li { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; } }
+/* "how it works": PractiCal ⇄ DAVx⁵ ⇄ the phone's own apps, then five short lines */
+.about-flow { display: flex; justify-content: center; align-items: flex-start; gap: 8px; margin: 6px 0 16px; }
+.about-flow > span { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 96px; }
+.about-flow small { font-size: 12px; line-height: 1.3; color: var(--fg-2); }
+.about-flow i { font-style: normal; color: var(--fg-3); font-size: 20px; margin-top: 10px; }
+.about-flow .apps { display: flex; gap: 2px; height: 44px; align-items: center; color: var(--accent); } .about-flow .apps .ico { width: 22px; height: 22px; }
+.about-list { text-align: left; margin: 0 auto; max-width: 480px; padding-left: 20px; display: grid; gap: 8px; font-size: 14.5px; line-height: 1.5; color: var(--fg-2); }
+/* install and set up: two sub-steps, the skip link above, the system settings folded */
+.wiz .wz h2.sub { font: 600 16px/1.3 var(--font); margin: 18px 0 6px; }
+.wiz .hint.top { margin: 0 0 4px; }
+.wiz details.sys { margin-top: 14px; text-align: left; background: var(--bg); border-radius: 12px; padding: 10px 12px; }
+.wiz details.sys summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+.wiz .sys-in { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 14px; align-items: center; margin-top: 10px; font-size: 13.5px; color: var(--fg-2); }
+.wiz .sys-in p { margin: 0 0 6px; } .wiz .sys-in ul { margin: 0; padding-left: 18px; line-height: 1.5; }
+@media (max-width: 520px) { .wiz .sys-in { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+/* more schematic parts: DAVx⁵'s intro pages and Android's app settings (black, blue switches) */
+.dx .ln.d { background: #4a4a4a; } .dx .pill.o { background: none; border: 1px solid #8bc34a; color: #eee; align-self: flex-start; margin-top: 4px; } .dx .pill.dim { background: #3d4a33; color: #e8f0dd; } /* not to tap: muted, still readable (axe 2026-10-15) */
+.dx .rd.chk i { border-radius: 2px; } .dx .rd.chk span { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.dx .ft.gr { background: #7cb342; display: flex; justify-content: space-between; align-items: center; } .dx .ft.r { display: flex; justify-content: flex-end; }
+.dx .dots4 { display: flex; gap: 3px; } .dx .dots4 i { width: 5px; height: 5px; border-radius: 50%; background: #c5e1a5; } .dx .dots4 i.on { background: #2b4512; }
+.dx .fab { width: 22px; height: 22px; border-radius: 50%; background: #558b2f; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.dx.sys { background: #000; color: #eee; } .dx.sys .hd { background: #000; font-weight: 700; }
+.dx .row2 { background: #1c1c1e; border-radius: 7px; padding: 5px 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 8.5px; }
+.dx .row2 small { color: #6ea8ff; font-size: 8px; text-align: right; flex: none; max-width: 50%; } .dx .row2 > span:first-child { min-width: 0; }
+.dx .cd { font-size: 8.5px; }
+.dx .tg.off { background: #555; border-color: #555; } .dx .tg.off i { left: 2px; background: #ddd; }
+.dx .tg.blue { background: #3b82f6; border-color: #3b82f6; } .dx .tg.blue i { background: #fff; }

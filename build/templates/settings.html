@@ -352,56 +352,45 @@
    for clients to come (iPhone/iPad, macOS, Thunderbird) belong next to the Android tile in #add. #}
 <section class="page wiz" id="add">
   {{ m::back("#account", ctx.t("tab-account")) }}
-  {{ m::wiz_bars(1, 3, "") }}
+  {{ m::wiz_bars(1, 5, "") }}
   <div class="wz">
     <h1>{{ ctx.t("wiz-choose-title") }}</h1><p class="lead">{{ ctx.t("wiz-choose-text") }}</p>
     <div class="wiz-tiles">
-      <a class="od" href="#add-android"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
-      <a class="oa" href="#add-android-connect"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
+      <a href="#add-android-about"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
     </div>
   </div>
   <div class="acts"><a class="muted" href="#account">‹ {{ ctx.t("wiz-back") }}</a></div>
 </section>
 
-{# another device: one code opens DAVx⁵ on the phone that scans it (routes::connect `open_davx5`) #}
-<section class="page wiz" id="add-android">
+{# what happens, before anything happens: a sync app between PractiCal and any calendar/contacts app #}
+<section class="page wiz" id="add-android-about">
   {{ m::back("#add", ctx.t("wiz-back")) }}
-  {{ m::wiz_bars(2, 3, ctx.t("wiz-scan-label")) }}
+  {{ m::wiz_bars(2, 5, ctx.t("about-label")) }}
   <div class="wz">
-    <h1>{{ ctx.t("wiz-scan-title") }}</h1><p class="lead">{{ ctx.t("wiz-scan-text") }}</p>
-    <span class="qr big" data-code="connect" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span>
-    <p class="lead after">{{ ctx.t("wiz-scan-then") }}</p>
-    <div class="wiz-strip"><figure>{{ m::dx_login(plan_host) }}<figcaption><span class="n">1</span>{{ ctx.t1("wiz-how-1", "btn", ctx.t("wiz-scr-1").as_str()) }}</figcaption></figure><figure>{{ m::dx_confirm(plan_host) }}<figcaption><span class="n">2</span>{{ ctx.t1("wiz-how-2", "btn", ctx.t("connect-ok").as_str()) }}</figcaption></figure></div>
-    <p class="lead">{{ ctx.t("wiz-how-after") }}</p>
-    <div class="live" data-live="waiting"><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
-    <p class="hint"><a href="#add-android-install">{{ ctx.t("wiz-install-first") }}</a></p>
+    <h1>{{ ctx.t("about-title") }}</h1>
+    <div class="about-flow" aria-hidden="true">
+      <span><img src="{{ ctx.asset("icon.svg") }}" alt="" width="44" height="44"><small>PractiCal</small></span><i>⇄</i>
+      <span><img src="{{ ctx.asset("davx5.svg") }}" alt="" width="44" height="44"><small>{{ ctx.t("about-d-sync") }}</small></span><i>⇄</i>
+      <span><b class="apps">{{ m::ico("calendar") }}{{ m::ico("contacts") }}{{ m::ico("tasks") }}</b><small>{{ ctx.t("about-d-apps") }}</small></span>
+    </div>
+    <ul class="about-list">
+      <li>{{ ctx.t("about-1") }}</li><li>{{ ctx.t("about-2") }}</li><li>{{ ctx.t("about-3") }}</li><li>{{ ctx.t("about-4") }}</li><li>{{ ctx.t("about-5") }}</li>
+    </ul>
   </div>
-  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a></div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-android-install">{{ ctx.t("about-go") }} ›</a></div>
 </section>
 
-{# the Android device itself: what DAVx⁵ will show, then the one tap; without DAVx⁵ Chrome opens the install page #}
-<section class="page wiz" id="add-android-connect">
-  {{ m::back("#add", ctx.t("wiz-back")) }}
-  {{ m::wiz_bars(2, 3, ctx.t("connect-ok")) }}
-  <div class="wz">
-    <div class="ic"><a href="https://www.davx5.com/" target="_blank" rel="noopener" title="www.davx5.com"><img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="DAVx⁵ (www.davx5.com)" width="56" height="56"></a></div>
-    <h1>{{ ctx.t("wiz-connect-title") }}</h1><p class="lead">{{ ctx.t("wiz-connect-lead") }}</p>
-    <div class="wiz-strip"><figure>{{ m::dx_login(plan_host) }}<figcaption><span class="n">1</span>{{ ctx.t1("wiz-how-1", "btn", ctx.t("wiz-scr-1").as_str()) }}</figcaption></figure><figure>{{ m::dx_confirm(plan_host) }}<figcaption><span class="n">2</span>{{ ctx.t1("wiz-how-2", "btn", ctx.t("connect-ok").as_str()) }}</figcaption></figure></div>
-    <p class="lead">{{ ctx.t("wiz-how-after") }}</p>
-    <a class="btn btn-primary big" href="{{ davx5_intent }}">{{ m::ico("android") }}<span>{{ ctx.t("wiz-connect-title") }}</span></a>
-    <p class="hint">{{ ctx.t("wiz-missing-hint") }} <a href="#add-android-install">{{ ctx.t("wiz-install-here") }}</a></p>
-  </div>
-  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a></div>
-</section>
-
-{# reached by a link, or by Chrome when DAVx⁵ is missing (the intent's browser_fallback_url) #}
+{# install, then DAVx⁵'s first start; also Chrome's fallback when the DAVx⁵ link finds no app (?davx5=missing) #}
 <section class="page wiz" id="add-android-install">
-  <span class="od">{{ m::back("#add-android", ctx.t("wiz-back")) }}</span><span class="oa">{{ m::back("#add-android-connect", ctx.t("wiz-back")) }}</span>
+  {{ m::back("#add-android-about", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(3, 5, ctx.t("inst-label")) }}
   <div class="wz">
     <div class="ic"><a href="https://www.davx5.com/" target="_blank" rel="noopener" title="www.davx5.com"><img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="DAVx⁵ (www.davx5.com)" width="56" height="56"></a></div>
-    <h1>{{ ctx.t("wiz-install-title") }}</h1>
-    <p class="miss oa">{{ ctx.t1("wiz-missing-banner", "btn", ctx.t("wiz-connect-now").as_str()) }}</p>
+    <h1>{{ ctx.t("inst-title") }}</h1>
+    {% if davx5_missing %}<p class="miss oa">{{ ctx.t1("wiz-missing-banner", "btn", ctx.t("inst-next").as_str()) }}</p>{% endif %}
+    <p class="hint top"><a class="od" href="#add-android">{{ ctx.t("inst-skip") }}</a><a class="oa" href="#add-android-connect">{{ ctx.t("inst-skip") }}</a></p>
+    <h2 class="sub">{{ ctx.t("inst-step1") }}</h2>
     <p class="lead">{{ ctx.t("wiz-install-text") }}</p>
     <div class="wiz-stores">
       <div class="group">{% for s in stores %}
@@ -409,12 +398,53 @@
       </div>
       <div class="od wiz-storeqr">{% for s in stores %}<div data-store-qr="{{ s.key }}"{% if !loop.first %} hidden{% endif %}><span class="qr" data-code="store-{{ s.key }}" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><a class="short" href="{{ s.url }}" target="_blank" rel="noopener">{{ s.short }}</a><span class="hint">{{ ctx.t1("wiz-store-scan", "store", s.name) }}</span></div>{% endfor %}</div>
     </div>
+    <h2 class="sub">{{ ctx.t("inst-step2") }}</h2>
+    <p class="lead">{{ ctx.t("inst-step2-text") }}</p>
+    <div class="wiz-strip">
+      <figure>{{ m::dx_perm() }}<figcaption><span class="n">1</span>{{ ctx.t("inst-cap-perm") }}</figcaption></figure>
+      <figure>{{ m::dx_backup() }}<figcaption><span class="n">2</span>{{ ctx.t("inst-cap-backup") }}</figcaption></figure>
+      <figure>{{ m::dx_welcome() }}<figcaption><span class="n">3</span>{{ ctx.t("inst-cap-welcome") }}</figcaption></figure>
+    </div>
+    <details class="sys">
+      <summary>{{ ctx.t("inst-sys-title") }}</summary>
+      <div class="sys-in">{{ m::dx_sys() }}<div><p>{{ ctx.t1("inst-sys-text", "btn", ctx.t("dx-app-settings").as_str()) }}</p><ul><li>{{ ctx.t("inst-sys-1") }}</li><li>{{ ctx.t("inst-sys-2") }}</li><li>{{ ctx.t("inst-sys-3") }}</li><li>{{ ctx.t("inst-sys-4") }}</li><li>{{ ctx.t("inst-sys-5") }}</li></ul><p class="hint">{{ ctx.t("inst-sys-note") }}</p></div></div>
+    </details>
   </div>
-  <div class="acts"><a class="muted od" href="#add-android">‹ {{ ctx.t("wiz-back") }}</a><a class="muted oa" href="#add-android-connect">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary od" href="#add-android">{{ ctx.t("wiz-installed") }} ›</a><a class="btn btn-primary oa" href="#add-android-connect">{{ ctx.t("wiz-connect-now") }} ›</a></div>
+  <div class="acts"><a class="muted" href="#add-android-about">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary od" href="#add-android">{{ ctx.t("inst-next") }} ›</a><a class="btn btn-primary oa" href="#add-android-connect">{{ ctx.t("inst-next") }} ›</a></div>
+</section>
+
+{# another device: one code opens DAVx⁵ on the phone that scans it (routes::connect `open_davx5`) #}
+<section class="page wiz" id="add-android">
+  {{ m::back("#add-android-install", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(4, 5, ctx.t("wiz-scan-label")) }}
+  <div class="wz">
+    <h1>{{ ctx.t("wiz-scan-title") }}</h1><p class="lead">{{ ctx.t("wiz-scan-text") }}</p>
+    <span class="qr big" data-code="connect" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span>
+    <p class="lead after">{{ ctx.t("wiz-scan-then") }}</p>
+    <div class="wiz-strip"><figure>{{ m::dx_login(plan_host) }}<figcaption><span class="n">1</span>{{ ctx.t1("wiz-how-1", "btn", ctx.t("wiz-scr-1").as_str()) }}</figcaption></figure><figure>{{ m::dx_confirm(plan_host) }}<figcaption><span class="n">2</span>{{ ctx.t1("wiz-how-2", "btn", ctx.t("connect-ok").as_str()) }}</figcaption></figure></div>
+    <p class="lead">{{ ctx.t("wiz-how-after") }}</p>
+    <div class="live" data-live="waiting"><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
+  </div>
+  <div class="acts"><a class="muted" href="#add-android-install">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+{# the Android device itself: what DAVx⁵ will show, then the one tap; without DAVx⁵ Chrome opens the install page #}
+<section class="page wiz" id="add-android-connect">
+  {{ m::back("#add-android-install", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(4, 5, ctx.t("connect-ok")) }}
+  <div class="wz">
+    <div class="ic"><a href="https://www.davx5.com/" target="_blank" rel="noopener" title="www.davx5.com"><img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="DAVx⁵ (www.davx5.com)" width="56" height="56"></a></div>
+    <h1>{{ ctx.t("wiz-connect-title") }}</h1><p class="lead">{{ ctx.t("wiz-connect-lead") }}</p>
+    <div class="wiz-strip"><figure>{{ m::dx_login(plan_host) }}<figcaption><span class="n">1</span>{{ ctx.t1("wiz-how-1", "btn", ctx.t("wiz-scr-1").as_str()) }}</figcaption></figure><figure>{{ m::dx_confirm(plan_host) }}<figcaption><span class="n">2</span>{{ ctx.t1("wiz-how-2", "btn", ctx.t("connect-ok").as_str()) }}</figcaption></figure></div>
+    <p class="lead">{{ ctx.t("wiz-how-after") }}</p>
+    <a class="btn btn-primary big" href="{{ davx5_intent }}">{{ m::ico("android") }}<span>{{ ctx.t("wiz-connect-title") }}</span></a>
+  </div>
+  <div class="acts"><a class="muted" href="#add-android-install">‹ {{ ctx.t("wiz-back") }}</a></div>
 </section>
 
 <section class="page wiz" id="add-done">
   {{ m::back("#account", ctx.t("tab-account")) }}
+  {{ m::wiz_bars(5, 5, "") }}
   <div class="wz">
     <div class="ok-dot">{{ m::ico("check") }}</div>
     <h1>{{ ctx.t("wiz-done-title") }}</h1>
