@@ -1,10 +1,8 @@
 # github.com publication, read by kubernetes/forgejo resources/mirror-lib.sh from this
 # repo's default branch. Every GitHub feature is off unless declared here.
-# description: verbatim; GitHub joins the lines with a space
-description: |
-  Calendar, contacts and tasks for your own server — with the fastest and most beautiful Browser UI you have ever seen.
-  🔗 xarif.gitlab.io/docker/practical
-homepage: https://xarif.gitlab.io/docker/practical/
+# the site link sits in GitHub's "About" box (homepage), not in the text
+description: Calendar, contacts and tasks for your own server — with the fastest and most beautiful Browser UI you have ever seen.
+homepage: https://xarif.gitlab.io/docker/practical
 features:
   # Public bug reports and contributions, as on gitlab.com. Merged on GitHub they would be
   # overwritten by the next mirror push: they are taken over on Forgejo (CONTRIBUTING.md).

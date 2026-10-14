@@ -4,7 +4,7 @@
 # shown under the project name on gitlab.com, line breaks kept
 description: |
   Calendar, contacts and tasks for your own server — with the fastest and most beautiful Browser UI you have ever seen.
-  🔗 xarif.gitlab.io/docker/practical
+  🔗 https://xarif.gitlab.io/docker/practical
 features:
   # The cluster pulls this repo's image from the mirror; with the registry disabled
   # an anonymous pull is refused with "DENIED: access forbidden".
