@@ -402,8 +402,9 @@
     <p class="lead">{{ ctx.t("inst-step2-text") }}</p>
     <div class="wiz-strip">
       <figure>{{ m::dx_perm() }}<figcaption><span class="n">1</span>{{ ctx.t("inst-cap-perm") }}</figcaption></figure>
-      <figure>{{ m::dx_backup() }}<figcaption><span class="n">2</span>{{ ctx.t("inst-cap-backup") }}</figcaption></figure>
-      <figure>{{ m::dx_welcome() }}<figcaption><span class="n">3</span>{{ ctx.t("inst-cap-welcome") }}</figcaption></figure>
+      <figure>{{ m::dx_battery() }}<figcaption><span class="n">2</span>{{ ctx.t("inst-cap-battery") }}</figcaption></figure>
+      <figure>{{ m::dx_backup() }}<figcaption><span class="n">3</span>{{ ctx.t("inst-cap-backup") }}</figcaption></figure>
+      <figure>{{ m::dx_welcome() }}<figcaption><span class="n">4</span>{{ ctx.t("inst-cap-welcome") }}</figcaption></figure>
     </div>
     <details class="sys">
       <summary>{{ ctx.t("inst-sys-title") }}</summary>
@@ -449,6 +450,7 @@
     <div class="ok-dot">{{ m::ico("check") }}</div>
     <h1>{{ ctx.t("wiz-done-title") }}</h1>
     <div class="group"><div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("smartphone") }}</span><span><span data-device>{{ ctx.t("connect-name-android") }}</span><span class="sub">{{ ctx.t("wiz-done-just") }}</span></span><span class="val"><span class="tag">{{ ctx.t("wiz-new") }}</span></span></div></div>
+    <div class="od"><p class="lead after">{{ ctx.t("done-phone-lead") }}</p>{{ m::connect_next(plan_host, ctx.user_id(), davx5_calendars, davx5_books) }}</div>
     <a class="another" href="#add">＋ {{ ctx.t("wiz-another") }}</a>
   </div>
   <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>

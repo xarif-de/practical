@@ -26,12 +26,7 @@
   <h1>{{ ctx.t("connect-done-title") }}</h1>
   {% if davx %}
   <p class="lead">{{ ctx.t("next-lead") }}</p>
-  <ol class="next">
-    <li>{{ m::dx_done(host) }}<div><h2><span class="n">1</span>{{ ctx.t("trail-back") }}</h2><p>{{ ctx.t("next-1-text") }}</p></div></li>
-    <li>{{ m::dx_account(account) }}<div><h2><span class="n">2</span>{{ ctx.t("next-2-title") }}</h2><p>{{ ctx.t2("next-2-text", ("method", ctx.t("dx-groups-cats").as_str()), ("btn", ctx.t("wiz-scr-3").as_str())) }}</p><p class="rec">{{ ctx.t("next-2-rec") }}</p></div></li>
-    <li>{{ m::dx_list(account, false, calendars) }}<div><h2><span class="n">3</span>{{ ctx.t("trail-cals") }}</h2><p>{{ ctx.t2("next-3-text", ("cal", ctx.t("dx-caldav").as_str()), ("card", ctx.t("dx-carddav").as_str())) }}</p></div></li>
-    <li>{{ m::dx_list(account, true, addressbooks) }}<div><h2><span class="n">✓</span>{{ ctx.t("wiz-finish") }}</h2><p>{{ ctx.t1("next-4-text", "btn", ctx.t("dx-sync-now").as_str()) }}</p></div></li>
-  </ol>
+  {{ m::connect_next(host, account, calendars, addressbooks) }}
   <a class="manual" href="https://manual.davx5.com/" target="_blank" rel="noopener">{{ ctx.t("next-manual") }}</a>
   {% else %}
   <p class="lead">{{ ctx.t1("connect-done-other", "app", app) }}</p>

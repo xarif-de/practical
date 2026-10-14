@@ -595,7 +595,7 @@ test('add a device: explained, installed, one QR code opens DAVx⁵, the confirm
   await expect(page.locator('[data-store-qr="fd"] .short')).toHaveText('f-droid.org/packages/at.bitfire.davdroid');
   await expect(page.locator('[data-store-qr="fd"] [data-code="store-fd"] svg')).toBeVisible();
   await expect(page.locator('[data-store-qr="gp"]')).toBeHidden();
-  await expect(page.locator('#add-android-install .wiz-strip .dx')).toHaveCount(3); // DAVx⁵'s first start
+  await expect(page.locator('#add-android-install .wiz-strip .dx')).toHaveCount(4); // DAVx⁵'s first start
   await page.locator('#add-android-install .acts a.btn-primary.od').click();
   await expect(page).toHaveURL(/#add-android$/);
   await expect(page.locator('#add-android [data-code="connect"] svg')).toBeVisible(); // the pairing's code arrived
@@ -624,6 +624,7 @@ test('add a device: explained, installed, one QR code opens DAVx⁵, the confirm
   // the wizard notices by itself
   await expect(page).toHaveURL(/#add-done$/, { timeout: 10000 });
   await expect(page.locator('#add-done [data-device]')).toHaveText('F4 Pixel');
+  await expect(page.locator('#add-done .next li')).toHaveCount(4); // on another device: what is left to do on the phone
   // the app fetches its credentials once
   const poll = () => fetch(BASE + path(start.poll.endpoint), { method: 'POST', body: new URLSearchParams({ token: start.poll.token }) });
   const g = await poll();

@@ -98,6 +98,9 @@ pub struct SettingsPage {
     pub davx5_intent: String,
     /// the page is Chrome's fallback of the DAVx⁵ link: the install step says DAVx⁵ is missing
     pub davx5_missing: bool,
+    /// the collections as DAVx⁵ lists them (done step on another device; as routes::connect `confirm`)
+    pub davx5_calendars: Vec<String>,
+    pub davx5_books: Vec<String>,
     /// this server's host as a user types it on the other device ("plan.example.org")
     pub plan_host: String,
     pub stores: &'static [crate::domain::connect::Store],
@@ -283,6 +286,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         remote_links,
         davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url, &format!("{}/settings?davx5=missing#add-android-install", state.config.public_url)),
         davx5_missing: q.davx5 == "missing",
+        davx5_books: abs_all.iter().map(|a| a.displayname.clone()).collect(),
+        davx5_calendars: cals_all.iter().map(|c| c.displayname.clone()).chain(abs_all.iter().map(|a| format!("{} birthdays", a.displayname))).collect(),
         stores: &crate::domain::connect::STORES,
         plan_host: url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default(),
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
