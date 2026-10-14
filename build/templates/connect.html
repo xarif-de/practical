@@ -1,11 +1,14 @@
-{#- /index.php/login/v2/flow/{id}: an app (DAVx⁵) asks for access; the user confirms and names the device (routes::connect) -#}
+{#- /index.php/login/v2/flow/{id}: an app (DAVx⁵) asks for access; the user confirms and names the device, then reads
+    what to do in DAVx⁵ (routes::connect). Shown in the app's browser tab: no app chrome (connect.css) -#}
 {% extends "layout.html" %}
 {% import "macros.html" as m %}
 {% block title %}{{ ctx.t("connect-page-title") }} · {{ ctx.t("app-name") }}{% endblock %}
 {% block content %}
+{%- let davx = app == "DAVx⁵" -%}
 <div class="connect-page">
   {% if state == "ask" %}
-  <div class="pair-icons" aria-hidden="true"><img src="{{ ctx.asset("icon.svg") }}" alt="" width="52" height="52"><span>⇄</span>{% if app == "DAVx⁵" %}<img class="app-ico" src="{{ ctx.asset("davx5.svg") }}" alt="" width="52" height="52">{% else %}<span class="app-ico generic">{{ m::ico("smartphone") }}</span>{% endif %}</div>
+  {% if davx %}{{ m::connect_trail(2) }}{% endif %}
+  <div class="pair-icons" aria-hidden="true"><img src="{{ ctx.asset("icon.svg") }}" alt="" width="52" height="52"><span>⇄</span>{% if davx %}<img src="{{ ctx.asset("davx5.svg") }}" alt="" width="52" height="52">{% else %}<span class="app-ico generic">{{ m::ico("smartphone") }}</span>{% endif %}</div>
   <h1>{{ ctx.t1("connect-title", "app", app) }}</h1>
   <p class="lead">{{ ctx.t1("connect-text", "user", ctx.user_id()) }}</p>
   <form method="post" action="/index.php/login/v2/flow/{{ id }}">
@@ -18,9 +21,21 @@
   </form>
   <a class="btn wide" href="/settings#account">{{ ctx.t("cancel") }}</a>
   {% else if state == "done" %}
+  {% if davx %}{{ m::connect_trail(3) }}{% endif %}
   <div class="ok-dot">{{ m::ico("check") }}</div>
   <h1>{{ ctx.t("connect-done-title") }}</h1>
-  <p class="lead">{{ ctx.t1("connect-done-text", "app", app) }}</p>
+  {% if davx %}
+  <p class="lead">{{ ctx.t("next-lead") }}</p>
+  <ol class="next">
+    <li>{{ m::dx_done(host) }}<div><h2><span class="n">1</span>{{ ctx.t("trail-back") }}</h2><p>{{ ctx.t("next-1-text") }}</p></div></li>
+    <li>{{ m::dx_account(account) }}<div><h2><span class="n">2</span>{{ ctx.t("next-2-title") }}</h2><p>{{ ctx.t2("next-2-text", ("method", ctx.t("dx-groups-cats").as_str()), ("btn", ctx.t("wiz-scr-3").as_str())) }}</p><p class="rec">{{ ctx.t("next-2-rec") }}</p></div></li>
+    <li>{{ m::dx_list(account, false, calendars) }}<div><h2><span class="n">3</span>{{ ctx.t("trail-cals") }}</h2><p>{{ ctx.t2("next-3-text", ("cal", ctx.t("dx-caldav").as_str()), ("card", ctx.t("dx-carddav").as_str())) }}</p></div></li>
+    <li>{{ m::dx_list(account, true, addressbooks) }}<div><h2><span class="n">✓</span>{{ ctx.t("wiz-finish") }}</h2><p>{{ ctx.t1("next-4-text", "btn", ctx.t("dx-sync-now").as_str()) }}</p></div></li>
+  </ol>
+  <a class="manual" href="https://manual.davx5.com/" target="_blank" rel="noopener">{{ ctx.t("next-manual") }}</a>
+  {% else %}
+  <p class="lead">{{ ctx.t1("connect-done-other", "app", app) }}</p>
+  {% endif %}
   {% else %}
   <div class="ok-dot gone">{{ m::ico("clock") }}</div>
   <h1>{{ ctx.t("connect-gone-title") }}</h1>

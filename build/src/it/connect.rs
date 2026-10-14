@@ -35,7 +35,8 @@ async fn davx5_gets_an_app_password_through_the_users_confirmation() {
     // the confirmation is a browser form: without the session's token it is refused
     let r = alice.post_form_raw(&path_of(&login), &[("name", "Pixel 9")]).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
-    alice.post_form(&path_of(&login), &[("name", "Pixel 9"), ("app", "DAVx⁵")]).await.ok().has("Verbunden");
+    // after the confirmation the page shows what DAVx⁵ asks next, with this user's account and collections
+    alice.post_form(&path_of(&login), &[("name", "Pixel 9"), ("app", "DAVx⁵")]).await.ok().has("Verbunden").has("Gruppen sind Kategorien der Kontakte").has("Abschließen").has("alice");
     // a confirmed flow cannot be confirmed again
     alice.get(&path_of(&login)).await.ok().has("Dieser Link ist abgelaufen");
     // 4. the app polls: a wrong token gets nothing, the right one the credentials once
@@ -79,8 +80,12 @@ async fn the_wizard_learns_when_the_other_device_opened_it_and_what_got_connecte
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     let p = r.json();
     let pair = p["pair"].as_str().unwrap().to_string();
-    assert_eq!(p["install"]["url"].as_str().unwrap(), format!("{PUBLIC_URL}/settings?pair={pair}#add-android-install"));
+    assert_eq!(p["connect"]["url"].as_str().unwrap(), format!("{PUBLIC_URL}/connect/davx5"), "the code opens DAVx⁵ directly");
     assert!(p["connect"]["svg"].as_str().unwrap().starts_with("<svg"));
+    // that link answers with the app link, no login needed (a camera app opens it in a fresh tab)
+    let r = s.app.anonymous().get("/connect/davx5").await;
+    assert!(r.status.is_redirection(), "{}", r.status);
+    assert!(r.location().unwrap().starts_with("intent://localhost:4001#Intent;scheme=davx5;package=at.bitfire.davdroid;S.loginFlow=1;"));
     assert_eq!(p["stores"].as_array().unwrap().len(), 5);
     // without the CSRF header no pairing is made
     let r = alice.send(Method::POST, "/settings/connect/pair", &hdr[..2], Body::from("pair=")).await;

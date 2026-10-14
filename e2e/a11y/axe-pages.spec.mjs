@@ -30,7 +30,7 @@ a11y('tasks: groups, table, board', async (page, check) => {
 a11y('settings: home, colours, collections, a calendar, groups and the typed question', async (page, check) => {
   await go(page, '/settings', '.set');
   await check('set-home');
-  for (const [hash, name] of [['#colors', 'set-colors'], ['#collections', 'set-collections'], ['#cal-alice-5eed0000-0000-4000-8000-000000000001', 'set-cal'], ['#account', 'set-account'], ['#add', 'set-add'], ['#add-android', 'set-add-android'], ['#add-android-install', 'set-add-install'], ['#add-android-connect', 'set-add-connect'], ['#manual', 'set-manual']]) {
+  for (const [hash, name] of [['#colors', 'set-colors'], ['#collections', 'set-collections'], ['#cal-alice-5eed0000-0000-4000-8000-000000000001', 'set-cal'], ['#account', 'set-account'], ['#add', 'set-add'], ['#add-android', 'set-add-android'], ['#add-android-install', 'set-add-install'], ['#manual', 'set-manual']]) {
     await page.goto('/settings' + hash);
     await page.locator(`section.page${hash}`).waitFor();
     await check(name);
@@ -48,6 +48,9 @@ a11y('connect: the confirmation page', async (page, check) => {
   await page.goto(new URL((await r.json()).login).pathname);
   await page.locator('.connect-page form').waitFor();
   await check('connect-ask');
+  await page.locator('.connect-page button[type=submit]').click();
+  await page.locator('.connect-page .next').waitFor();
+  await check('connect-done'); // what to do in DAVx⁵, with the schematic screens
 });
 
 a11y('history: map and list, the login page', async (page, check) => {

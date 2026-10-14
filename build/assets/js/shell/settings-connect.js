@@ -16,27 +16,27 @@
       codes = r.data; pair = codes.pair;
       $$('[data-code]', settings).forEach(el => {
         const k = el.dataset.code, s = k.startsWith('store-') && codes.stores.find(x => 'store-' + x.key === k);
-        const svg = k === 'install' ? codes.install.svg : k === 'connect' ? codes.connect.svg : s && s.svg;
+        const svg = k === 'connect' ? codes.connect.svg : s && s.svg;
         if (svg) el.innerHTML = svg; // the server's own SVG; the frame carries role and label (settings.html)
       });
       return codes;
     };
-    // the live state while a step waits for the other device: opened there (step 2), a device connected (step 4 → 5)
+    // the live state while the wizard waits for the phone: a confirmed flow of this user names the new device → done
     const poll = async () => {
       clearTimeout(timer);
       if (!/^#add-android/.test(location.hash) || document.hidden || !pair) return;
       const r = await practical.req('/settings/connect/status?pair=' + encodeURIComponent(pair));
-      if (r.ok && r.data) {
-        const o = $('[data-live="opened"]', settings); if (o) o.hidden = !r.data.opened;
-        if (r.data.device) { $('[data-device]', settings).textContent = r.data.device; location.hash = '#add-done'; return; }
-      } else if (r.kind === 'notfound') { codes = null; pair = ''; await ensure(); } // expired: a new pairing (new codes)
+      if (r.ok && r.data && r.data.device) { $('[data-device]', settings).textContent = r.data.device; location.hash = '#add-done'; return; }
+      if (!r.ok && r.kind === 'notfound') { codes = null; pair = ''; await ensure(); } // expired: a new pairing (new codes)
       timer = setTimeout(poll, 2000);
     };
+    // each path has its own step 2: a link of the other one is sent on
+    const OTHER = android ? { '#add-android': '#add-android-connect' } : { '#add-android-connect': '#add-android' };
     const step = async () => {
       const h = location.hash;
+      if (OTHER[h]) { location.replace(OTHER[h]); return; }
       if (h === '#add') { clearTimeout(timer); codes = null; pair = ''; return; } // a new run: a new pairing (a device of the last one would end it at once)
       if (!h.startsWith('#add-android')) { clearTimeout(timer); return; }
-      if (android && h === '#add-android') { location.replace('#add-android-install'); return; } // that step is for another device
       if (await ensure()) poll();
     };
     addEventListener('hashchange', step);

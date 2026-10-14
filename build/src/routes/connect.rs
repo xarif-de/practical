@@ -32,7 +32,16 @@ pub fn is_app_endpoint(method: &axum::http::Method, path: &str) -> bool {
 }
 
 pub fn public_router() -> Router<SharedState> {
-    Router::new().route("/index.php/login/v2", post(start)).route("/index.php/login/v2/poll/{id}", post(poll))
+    Router::new().route("/index.php/login/v2", post(start)).route("/index.php/login/v2/poll/{id}", post(poll)).route("/connect/davx5", get(open_davx5))
+}
+
+/// `GET /connect/davx5`: the target of the wizard's QR code — a camera app opens `https://` links only, so the
+/// code points here and this answers with the `intent:` link that opens DAVx⁵ in its login. Whether Chrome
+/// follows a redirect into an app without a tap is the browser's call; when it does not, it opens the link's
+/// fallback, the wizard's install page. Public: it reveals nothing but this server's host.
+async fn open_davx5(State(state): State<SharedState>) -> Response {
+    let base = &state.config.public_url;
+    axum::response::Redirect::to(&connect::davx5_intent(base, &format!("{base}/settings#add-android-install"))).into_response()
 }
 
 pub fn router() -> Router<SharedState> {
@@ -85,6 +94,16 @@ pub struct ConfirmPage {
     pub state: &'static str,
     pub app: String,
     pub name: String,
+    /// after the confirmation: what DAVx⁵ will show next (its account name, the collections to switch on)
+    pub account: String,
+    pub calendars: Vec<String>,
+    pub addressbooks: Vec<String>,
+    /// this server's host, as the app's browser tab shows it
+    pub host: String,
+}
+
+fn host_of(state: &SharedState) -> String {
+    url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default()
 }
 
 /// The app's name for the page: "DAVx⁵" for DAVx⁵ (`DAVx5/<version> (<package>)`, davx5-ose `ProductIds.kt`),
@@ -98,11 +117,11 @@ fn app_label(ua: &str) -> String {
 
 async fn confirm_page(State(state): State<SharedState>, _user: Principal, ctx: PageCtx, Path(id): Path<String>) -> ConfirmPage {
     let Some(ua) = state.connect.flows.pending(&id, chrono::Utc::now()) else {
-        return ConfirmPage { ctx, id, state: "gone", app: String::new(), name: String::new() };
+        return ConfirmPage { ctx, id, state: "gone", app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) };
     };
     let app = app_label(&ua);
     let name = if ua.starts_with("DAVx5") { ctx.t("connect-name-android") } else { app.clone() };
-    ConfirmPage { ctx, id, state: "ask", app, name }
+    ConfirmPage { ctx, id, state: "ask", app, name, account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) }
 }
 
 #[derive(Deserialize)]
@@ -121,7 +140,7 @@ struct ConfirmForm {
 async fn confirm(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path(id): Path<String>, Form(f): Form<ConfirmForm>) -> AppResult<ConfirmPage> {
     csrf::check(&session, &f.csrf).await?;
     let now = chrono::Utc::now();
-    let gone = || ConfirmPage { ctx: ctx.clone(), id: id.clone(), state: "gone", app: String::new(), name: String::new() };
+    let gone = || ConfirmPage { ctx: ctx.clone(), id: id.clone(), state: "gone", app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) };
     if state.connect.flows.pending(&id, now).is_none() {
         return Ok(gone());
     }
@@ -139,7 +158,12 @@ async fn confirm(State(state): State<SharedState>, user: Principal, session: Ses
         return Ok(gone());
     }
     state.connect.pairs.connected(&user.id, &name);
-    Ok(ConfirmPage { ctx, id, state: "done", app: f.app, name })
+    // the collections as DAVx⁵ lists them: the calendars, then one birthday calendar per address book
+    // (RustiCal's `birthday_calendar.rs`: "<address book> birthdays", v0.16.6)
+    let abs: Vec<String> = crate::domain::collections::addressbooks_for(&state, &user, false).await?.into_iter().map(|a| a.displayname).collect();
+    let mut calendars: Vec<String> = crate::domain::collections::calendars_for(&state, &user, false).await?.into_iter().map(|c| c.displayname).collect();
+    calendars.extend(abs.iter().map(|a| format!("{a} birthdays")));
+    Ok(ConfirmPage { ctx, id, state: "done", app: f.app, name, account: user.id.clone(), calendars, addressbooks: abs, host: host_of(&state) })
 }
 
 #[derive(serde::Serialize)]
@@ -159,8 +183,7 @@ struct StoreCode {
 #[derive(serde::Serialize)]
 struct PairAnswer {
     pair: String,
-    /// continues the wizard on the other device at the install step / at the connect step
-    install: Code,
+    /// opens DAVx⁵ on the phone that scans it ([`open_davx5`])
     connect: Code,
     stores: Vec<StoreCode>,
 }
@@ -178,13 +201,9 @@ async fn pair(State(state): State<SharedState>, user: Principal, _t: csrf::Token
     let now = chrono::Utc::now();
     let id = if !f.pair.is_empty() && state.connect.pairs.status(&f.pair, &user.id, now).is_some() { f.pair } else { state.connect.pairs.create(&user.id, now) };
     let base = &state.config.public_url;
-    let code = |hash: &str| {
-        let url = format!("{base}/settings?pair={id}#{hash}");
-        Code { svg: connect::qr_svg(&url), url }
-    };
+    let url = format!("{base}/connect/davx5");
     Json(PairAnswer {
-        install: code("add-android-install"),
-        connect: code("add-android-connect"),
+        connect: Code { svg: connect::qr_svg(&url), url },
         stores: connect::STORES.iter().map(|s| StoreCode { key: s.key, url: s.url, short: s.short, svg: connect::qr_svg(s.url) }).collect(),
         pair: id,
     })
