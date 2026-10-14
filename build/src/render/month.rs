@@ -43,13 +43,14 @@ pub fn add_btn(l: &L) -> String {
 }
 
 /// What calendar.js's drag and drop needs beyond key and start day: a multi-day entry's last day (the preview covers
-/// it), and a series occurrence's local start (`/move` moves that one alone when asked to; `events::move_event`).
+/// it), and a series occurrence's local start time — on its start day, `data-date` or the week's day block (`/move`
+/// moves that one alone when asked to; `events::move_event`).
 pub(super) fn drag_attrs(out: &mut String, i: &Instance) {
     if i.multi_day() {
         let _ = write!(out, " data-last=\"{}\"", i.last_date());
     }
     if i.recurring {
-        let _ = write!(out, " data-at=\"{}\"", i.start.format("%Y-%m-%dT%H:%M:%S"));
+        let _ = write!(out, " data-at=\"{}\"", i.start.format("%H:%M:%S"));
     }
 }
 

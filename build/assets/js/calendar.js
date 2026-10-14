@@ -503,20 +503,21 @@
     if (!drag.to) return; const a = plusDays(drag.start, drag.to), b = plusDays(drag.last, drag.to);
     $$(CELLS, root).forEach(c => { if (c.dataset.date >= a && c.dataset.date <= b) c.classList.add('drop-on'); });
   }
-  const dragAgain = () => { if (drag && drag.on && !drag.dead) { drag.to = undefined; dragOver(); } }; // new days under a resting pointer (a swap, the end of a page turn)
-  function dragOver() { // what lies under the pointer: a day, an edge, the rail
+  const dragAgain = () => { if (drag && drag.on && !drag.dead) { drag.to = undefined; dragOver(true); } }; // new days under a resting pointer (a swap, the end of a page turn)
+  function dragOver(still) { // what lies under the pointer: a day, an edge, the rail (`still`: the page moved, not the pointer)
     const d = drag, x = d.x, y = d.y;
     d.ghost.style.transform = `translate(${x + 12}px, ${y + 10}px)`;
     const t = document.elementFromPoint(x, y), cell = t && t.closest(CELLS), to = cell && root.contains(cell) ? daysFrom(d.grab, cell.dataset.date) : null;
     if (to !== d.to) { d.to = to; dragMark(); $('small', d.ghost).textContent = to ? '→ ' + span(plusDays(d.start, to), plusDays(d.last, to)) : ''; }
-    // the rail: resting on a week or month jumps there
+    // the rail: resting on a week or month jumps there; a rail its own jump scrolled under the resting pointer is no new rest
     const rail = t && t.closest('.tl'), it = rail && tlNearest ? tlNearest({ clientY: y }) : null;
-    if ((it && it.period) !== d.railAt) { clearTimeout(d.railT); d.railAt = it && it.period; if (it && it.period) d.railT = setTimeout(() => railJump(it.period), RAIL_MS); }
+    if (!still && (it && it.period) !== d.railAt) { clearTimeout(d.railT); d.railAt = it && it.period; if (it && it.period) d.railT = setTimeout(() => railJump(it.period), RAIL_MS); }
     // the edges: above the view's top (its toolbar) or below its bottom, and EDGE px inside them
     const grid = state.view === 'month' && $('.v-month > .month', root), bar = $('.toolbar', root);
-    const band = grid ? EDGE_M : EDGE, top = (bar ? bar.getBoundingClientRect().bottom : 0) + band, bottom = Math.min(innerHeight, grid ? grid.getBoundingClientRect().bottom : innerHeight) - band;
+    // (the month's lower band lies below its grid where the window leaves room, not on its last row of days)
+    const band = grid ? EDGE_M : EDGE, gb = grid ? grid.getBoundingClientRect().bottom : innerHeight, top = (bar ? bar.getBoundingClientRect().bottom : 0) + band, bottom = Math.min(gb + band, innerHeight) - band;
     const edge = rail ? 0 : y < top ? -1 : y > bottom ? 1 : 0;
-    if (edge !== d.edge) { d.edge = edge; clearTimeout(d.turnT); root.style.setProperty('--edge-t', `${top - band}px`); root.style.setProperty('--edge-b', `${innerHeight - bottom - band}px`);
+    if (edge !== d.edge) { d.edge = edge; clearTimeout(d.turnT); root.style.setProperty('--edge-t', `${top - band}px`); root.style.setProperty('--edge-b', `${Math.max(0, innerHeight - gb)}px`);
       if (edge) root.dataset.dragEdge = edge < 0 ? 'top' : 'bottom'; else delete root.dataset.dragEdge; // the edge glows (grid.css)
       if (edge && state.view === 'month') { const turn = () => { if (drag !== d || d.edge !== edge) return; shift(edge); d.turnT = setTimeout(turn, TURN_AGAIN); }; d.turnT = setTimeout(turn, TURN_MS); }
       if (edge && state.view === 'week' && !d.roll) roll(d); }
@@ -525,13 +526,13 @@
     const stream = $('.stream', root); if (drag !== d || !d.edge || !stream) { d.roll = 0; return; }
     const bar = $('.toolbar', root), top = (bar ? bar.getBoundingClientRect().bottom : 0) + EDGE, depth = d.edge < 0 ? top - d.y : d.y - (innerHeight - EDGE);
     scrollerOf(stream).scrollBy(0, d.edge * Math.max(2, Math.min(24, depth / 2)));
-    d.roll = requestAnimationFrame(() => { if (drag === d) { dragOver(); roll(d); } });
+    d.roll = requestAnimationFrame(() => { if (drag === d) { dragOver(true); roll(d); } });
   }
   function railJump(period) { // the week or month of a rail item, as its click goes there, but the picked day stays
     if (!drag) return;
-    if (state.view === 'month') { state.month = period.slice(0, 7); load(false); return; }
+    if (state.view === 'month') { state.month = period.slice(0, 7); load(); return; }
     const stream = $('.stream', root), b = stream && $(`.week[data-week="${period}"]`, stream);
-    if (b) { const box = scrollerOf(stream); box.scrollTop += b.getBoundingClientRect().top - (centreY() - b.getBoundingClientRect().height / 2); dragOver(); }
+    if (b) { const box = scrollerOf(stream); box.scrollTop += b.getBoundingClientRect().top - (centreY() - b.getBoundingClientRect().height / 2); dragOver(true); }
     else { state.week = period; load(false); }
   }
   function dragOff(d) { // the drag's marks, timers and ghost gone; the drag itself ends on the button's release
@@ -545,21 +546,27 @@
     addEventListener('click', eat, true); setTimeout(() => removeEventListener('click', eat, true));
     return d.dead ? null : d;
   }
+  const dragDrop = () => { const d = drag; drag = null; if (d && d.on) dragOff(d); }; // the release never came (a context menu, another window): nothing moves
   root.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.pointerType === 'touch' || drag) return;
+    if (e.button !== 0 || e.ctrlKey || e.pointerType === 'touch' || drag) return; // Ctrl+click: macOS's context menu takes the release
     const el = e.target.closest && e.target.closest('.ev[data-key]'), cell = el && el.closest(CELLS); if (!cell) return;
     const start = startOf(el);
-    drag = { el, key: el.dataset.key, at: el.dataset.at || null, start, last: el.dataset.last || start, grab: cell.dataset.date, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, to: null, edge: 0 };
+    // data-at is the occurrence's start time on its start day (month.rs drag_attrs); the colour (inline, no style recalc) is read
+    // now: a live reload may swap the chip before the drag starts; only this pointer drives the drag (a hovering pen does not)
+    drag = { el, id: e.pointerId, key: el.dataset.key, at: el.dataset.at ? `${start}T${el.dataset.at}` : null, start, last: el.dataset.last || start, grab: cell.dataset.date, c: el.style.getPropertyValue('--c'), x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, to: null, edge: 0 };
   });
   addEventListener('pointermove', e => {
-    const d = drag; if (!d || d.dead) return; d.x = e.clientX; d.y = e.clientY;
+    const d = drag; if (!d || e.pointerId !== d.id) return; if (!(e.buttons & 1)) return dragDrop(); if (d.dead) return; d.x = e.clientX; d.y = e.clientY;
     if (!d.on) { if (Math.hypot(d.x - d.x0, d.y - d.y0) < DRAG_MIN) return;
       d.on = true; $$('.day.open', root).forEach(dayClose); getSelection().removeAllRanges(); document.body.classList.add('ev-drag');
-      const c = getComputedStyle(d.el).getPropertyValue('--c'), g = d.ghost = document.createElement('div'); g.className = 'ev-ghost'; g.style.setProperty('--c', c); root.style.setProperty('--dc', c);
+      // the press focused the chip, and the question hands the focus back: that would unfold its tile or scroll the stream back to it
+      if (d.el.contains(document.activeElement)) document.activeElement.blur();
+      const c = d.c, g = d.ghost = document.createElement('div'); g.className = 'ev-ghost'; g.style.setProperty('--c', c); root.style.setProperty('--dc', c);
       g.innerHTML = '<b></b><small></small>'; g.firstChild.textContent = d.el.title || d.el.textContent; document.body.append(g); }
     dragOver();
   });
-  addEventListener('pointerup', async () => {
+  addEventListener('pointerup', async e => {
+    if (!drag || e.pointerId !== drag.id) return;
     const d = dragEnd(); if (!d || !d.to) return;
     const s2 = plusDays(d.start, d.to), l2 = plusDays(d.last, d.to), y = s2.slice(0, 4) !== d.start.slice(0, 4) || l2.slice(0, 4) !== d.last.slice(0, 4);
     const title = d.el.title || d.el.textContent.trim(), a = span(d.start, d.last, y), b = span(s2, l2, y);
@@ -567,9 +574,9 @@
       : (await askYesNo(tr('js-cal-move-ask', { t: title, a, b }), tr('js-cal-move-yes'), tr('js-cal-move-no'))) && 'all';
     if (!scope) return;
     const r = await practical.send(`/api/events/${d.key}/move`, 'POST', { days: d.to, at: scope === 'one' ? d.at : null });
-    practical.tell(r); if (r.ok) load(false);
+    practical.tell(r); if (r.ok || r.kind === 'conflict') load(false); // a conflict: the occurrence changed elsewhere, show it as it is now
   });
-  addEventListener('pointercancel', dragEnd);
+  addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.id) dragEnd(); }); addEventListener('blur', dragDrop);
   addEventListener('keydown', e => { const d = drag; if (e.key === 'Escape' && d && d.on && !d.dead) { e.preventDefault(); e.stopPropagation(); d.dead = true; d.to = null; dragOff(d); } }, true); // Escape drops nothing
   document.addEventListener('selectstart', e => { if (drag) e.preventDefault(); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });

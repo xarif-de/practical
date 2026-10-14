@@ -122,7 +122,7 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 .day.today .n { background: transparent; color: var(--today); font-weight: 700; }
 /* drag and drop of an entry (calendar.js): the days it would cover, its own chips dimmed, the ghost at the pointer,
    the edge that scrolls or turns glowing; --dc = the entry's colour */
-.day.drop-on, .dayblock.drop-on { background: color-mix(in srgb, var(--dc) 16%, var(--bg)); box-shadow: inset 0 0 0 2px var(--dc); }
+#viewroot .day.drop-on, #viewroot .dayblock.drop-on { /* the id: over :hover, .sel, holiday and weekend tiles */ background: color-mix(in srgb, var(--dc) 16%, var(--bg)); box-shadow: inset 0 0 0 2px var(--dc); }
 .drop-from { opacity: .35; }
 body.ev-drag, body.ev-drag * { cursor: grabbing !important; user-select: none; }
 .ev-ghost { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; display: grid; max-width: 260px; padding: 4px 8px; border-radius: 6px; border-left: 3px solid var(--c); background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; line-height: 1.35; }

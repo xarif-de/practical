@@ -89,7 +89,7 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
         return Err(AppError::NotFound);
     };
     let uid = main.get_uid().to_string();
-    let sequence: i64 = main.get_property("SEQUENCE").and_then(|p| p.value.parse().ok()).unwrap_or(0) + 1;
+    let sequence: i64 = main.get_property("SEQUENCE").and_then(|p| p.value.parse::<i64>().ok()).unwrap_or(0).saturating_add(1);
     let (raw, extra) = split_ics(&existing.get_ics());
     let lines = build_vevent(&uid, sequence, &input, tz, Some(&raw))?;
     let ics = ical::assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, "VEVENT", lines, &extra);

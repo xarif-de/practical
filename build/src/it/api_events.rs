@@ -306,6 +306,9 @@ async fn event_move_by_days() {
     // one standup (Wednesdays 09:00) to Thursday: only that one moves
     let sp = format!("/api/events/alice/{}/standup/move", s.arbeit);
     c.json(Method::POST, &sp, json!({ "days": 1, "at": "2026-10-14T09:00:00" })).await.ok();
+    // the moved one again, two days on and back: its override is found however far it lies from its own day
+    c.json(Method::POST, &sp, json!({ "days": 2, "at": "2026-10-15T09:00:00" })).await.ok();
+    c.json(Method::POST, &sp, json!({ "days": -2, "at": "2026-10-17T09:00:00" })).await.ok();
     let w = c.get_json(win).await.ok().json();
     assert_eq!(from14(&w), ["2026-10-15T09:00:00", "2026-10-21T09:00:00", "2026-10-28T09:00:00"]);
     // the whole series a day earlier: Tuesdays, the moved one with it (to the 14th), the exception too (no 6th)
@@ -319,6 +322,7 @@ async fn event_move_by_days() {
     assert_eq!(c.json(Method::POST, "/api/events/bob/x/y/move", json!({ "days": 1 })).await.status, StatusCode::FORBIDDEN);
     // nothing to do, an occurrence that is not there, a rule that cannot follow
     assert_eq!(c.json(Method::POST, &sp, json!({ "days": 0 })).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(c.json(Method::POST, &sp, json!({ "days": i64::MIN })).await.status, StatusCode::BAD_REQUEST, "no overflow: a 400, not a panic");
     assert_eq!(c.json(Method::POST, &sp, json!({ "days": 1, "at": "2026-10-16T09:00:00" })).await.status, StatusCode::CONFLICT);
     s.app.put_ics("alice", &s.arbeit, "letzter", &crate::testkit::vevent("letzter", "Letzter Werktag", "DTSTART;TZID=Europe/Berlin:20261030T090000\nDTEND;TZID=Europe/Berlin:20261030T100000\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1")).await;
     let r = c.json(Method::POST, &format!("/api/events/alice/{}/letzter/move", s.arbeit), json!({ "days": 1 })).await;

@@ -93,7 +93,10 @@ days move with it. While you drag, every day the event will cover is marked.
 
 When you drop the event, PractiCal asks before it moves it. For a repeating event, you choose whether to move only
 this event or the whole series. When the whole series moves, its pattern follows: a weekly event on Wednesdays moved
-by a day happens on Thursdays.
+by a day happens on Thursdays. A few patterns can't follow a move, such as "the last weekday of the month". PractiCal
+then says so, and you change the event in the editor instead.
+
+Dragging works with a mouse or a pen. On a touch screen, a finger scrolls the view as before.
 
 ### Move through time with a swipe
 

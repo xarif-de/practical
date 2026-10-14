@@ -100,12 +100,14 @@ test('month: the bottom edge turns the month while the pointer stays, the rail j
   await expect(page.locator('#title')).toHaveText('November 2026');
   await page.mouse.move(700, 450, { steps: 3 });
   await expect(page.locator('#viewroot')).not.toHaveAttribute('data-drag-edge', /./);
+  await settle(page); // a second turn may be on its way
   const title = await page.locator('#title').textContent();
   expect(['November 2026', 'Dezember 2026']).toContain(title); // a second turn may have begun before the pointer left
   // the rail: resting on a month far below
   const rail = await page.locator('.tl').boundingBox();
   await page.mouse.move(rail.x + 32, rail.y + rail.height - 30, { steps: 4 });
   await expect(page.locator('#title')).not.toHaveText(title);
+  await settle(page);
   const there = await page.locator('#title').textContent();
   await page.mouse.move(700, 450, { steps: 3 });
   const target = await page.locator('.v-month > .month > .day:not(.other)').nth(9).getAttribute('data-date');
@@ -132,6 +134,21 @@ test('week: an entry moves to another day block; the stream scrolls at the botto
   await page.locator('.ask [data-a="1"]').click();
   await expect(page.locator(`.dayblock[data-date="${target}"] .ev[data-key]`, { hasText: 'Elternabend' })).toHaveCount(1);
   expect(await startOf(page, `${FAM}/elternabend@seed`)).toBe(`${target}T19:30:00`); // the group's calendar is hers to change
+});
+
+test('a drag that comes back to its own day is no move and no click on the entry', async ({ page }) => {
+  await open(page, cal('month'));
+  const c = chipOn(page, '2026-10-25', 'Familienfest');
+  await hold(page, c, tile(page, '2026-10-28'));
+  expect(await marked(page)).toEqual(['2026-10-28']);
+  const b = await c.boundingBox();
+  await page.mouse.move(b.x + 10, b.y + b.height / 2, { steps: 6 });
+  expect(await marked(page)).toEqual([]);
+  await page.mouse.up();
+  await settle(page);
+  await expect(page.locator('.ask')).toHaveCount(0);
+  await expect(page.locator('#ed')).toBeHidden(); // the release on the chip itself: its click is eaten
+  await expect(page.locator('.ev-ghost, .drop-from')).toHaveCount(0);
 });
 
 test('a press without travel is still the click that opens the event', async ({ page }) => {

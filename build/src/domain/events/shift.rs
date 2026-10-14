@@ -6,8 +6,9 @@
 //! - One occurrence of a series (a target): its override is shifted, else one is written — the master without its
 //!   rule, RECURRENCE-ID in the master's DTSTART form (caldata refuses another), DTEND = new start + the master's
 //!   duration (caldata's own instance rule, event/mod.rs `recurid + duration`).
-//! - UTC values move in the user's zone (the time the views show stays across a DST change); TZID and floating values
-//!   in their own wall clock.
+//! - TZID and floating values move on their own wall clock; UTC values of a series in its rule's zone (its DTSTART's
+//!   TZID, else UTC: caldata runs floating and whole-day rules at UTC), a single event's and one occurrence's in the
+//!   user's (the time the views show stays across a DST change).
 
 use super::*;
 use chrono::Datelike;
@@ -239,7 +240,7 @@ fn shift_block(b: &Block, days: i64, rule: bool, tz: chrono_tz::Tz) -> AppResult
             (1, "EXRULE") if rule => return Err(unsupported()),
             (1, "SEQUENCE") => {
                 seq = true;
-                format!("SEQUENCE:{}", head_value(l).1.trim().parse::<i64>().unwrap_or(0) + 1)
+                format!("SEQUENCE:{}", head_value(l).1.trim().parse::<i64>().unwrap_or(0).saturating_add(1))
             }
             (1, "DTSTAMP") => format!("DTSTAMP:{now}"),
             (1, "LAST-MODIFIED") => {
@@ -273,7 +274,6 @@ fn new_override(master: &Block, rid: When, days: i64, dur: Duration, tz: chrono_
     let zone = tzid_of(ds);
     // the occurrence in the master's DTSTART form
     let r = match (When::parse(value).ok_or_else(unsupported)?, rid) {
-        (When::Date(_), When::Date(d)) => When::Date(d),
         (When::Local(_), When::Utc(t)) if zone.is_some() => When::Local(zone.map(|z| z.from_utc_datetime(&t).naive_local()).unwrap_or(t)),
         (When::Local(_), When::Local(t)) if zone.is_none() => When::Local(t),
         (When::Utc(_), When::Utc(t)) => When::Utc(t),
@@ -281,7 +281,7 @@ fn new_override(master: &Block, rid: When, days: i64, dur: Duration, tz: chrono_
     };
     let s = r.shift(days, tz).ok_or(AppError::bad("err-date-range"))?;
     let e = match s {
-        When::Date(d) => When::Date(d.checked_add_signed(Duration::days(dur.num_days().max(1))).ok_or(AppError::bad("err-date-range"))?),
+        When::Date(_) => return Err(unsupported()), // whole days go through `move_date`
         When::Local(t) => When::Local(t.checked_add_signed(dur).ok_or(AppError::bad("err-date-range"))?),
         When::Utc(t) => When::Utc(t.checked_add_signed(dur).ok_or(AppError::bad("err-date-range"))?),
     };
@@ -322,7 +322,7 @@ fn new_override(master: &Block, rid: When, days: i64, dur: Duration, tz: chrono_
 /// compared with the derived `PartialEq`: the override was dropped and the occurrence stayed; test
 /// `all_day_occurrence_moves_by_exdate_and_rdate`). An RDATE occurrence moves its RDATE; a day the rule makes but an
 /// EXDATE takes out comes back instead of becoming an RDATE as well (the EXDATE would hide it).
-fn move_date(master: &Block, from: NaiveDate, to: NaiveDate) -> Block {
+fn move_date(master: &Block, from: NaiveDate, to: NaiveDate) -> AppResult<Block> {
     let dates = |name: &str| -> (Vec<NaiveDate>, bool) {
         let mut v = vec![];
         let mut all = true;
@@ -337,6 +337,9 @@ fn move_date(master: &Block, from: NaiveDate, to: NaiveDate) -> Block {
         (v, all)
     };
     let ((mut ex, ex_ok), (mut rd, rd_ok)) = (dates("EXDATE"), dates("RDATE"));
+    if !ex_ok || !rd_ok {
+        return Err(unsupported()); // a date-time among them: the lists cannot be written back as dates
+    }
     if rd.contains(&from) {
         rd.retain(|d| *d != from);
     } else {
@@ -348,11 +351,10 @@ fn move_date(master: &Block, from: NaiveDate, to: NaiveDate) -> Block {
         rd.push(to);
     }
     let list = |name: &str, v: &[NaiveDate]| (!v.is_empty()).then(|| format!("{name};VALUE=DATE:{}", v.iter().map(|d| ical::fmt_date(*d)).collect::<Vec<_>>().join(",")));
-    let mut out: Block = master.iter().filter(|l| !((ex_ok && prop_name(l) == "EXDATE") || (rd_ok && prop_name(l) == "RDATE"))).cloned().collect();
+    let mut out: Block = master.iter().filter(|l| !matches!(prop_name(l).as_str(), "EXDATE" | "RDATE")).cloned().collect();
     let end = out.iter().position(|l| l.starts_with("BEGIN:VALARM") || l == "END:VEVENT").unwrap_or(out.len());
-    let add: Vec<String> = [ex_ok.then(|| list("EXDATE", &ex)).flatten(), rd_ok.then(|| list("RDATE", &rd)).flatten()].into_iter().flatten().collect();
-    out.splice(end..end, add);
-    out
+    out.splice(end..end, [list("EXDATE", &ex), list("RDATE", &rd)].into_iter().flatten());
+    Ok(out)
 }
 
 /// The stored object text moved by `days` (module doc). `one`: only the occurrence with this RECURRENCE-ID instant
@@ -363,27 +365,43 @@ pub fn shift_ics(ics: &str, days: i64, one: Option<(When, Duration)>, tz: chrono
     let rid_of = |b: &Block| top(b, "RECURRENCE-ID").and_then(|l| When::parse(head_value(l).1).map(|w| w.instant(tzid_of(l))));
     match one {
         None => {
+            // a series' values move in the zone its rule runs in (DTSTART's TZID; UTC for a UTC start), or a UTC EXDATE,
+            // UNTIL or RECURRENCE-ID would part from the occurrences across a DST change; a single event in the user's
+            // zone, whose shown time it keeps (test `utc_series_moves_in_its_own_zone`)
+            let master = parts.iter().filter_map(|p| p.as_ref().ok()).find(|b| is_event(b) && rid_of(b).is_none());
+            let zone = match master.and_then(|m| top(m, "DTSTART").filter(|_| top(m, "RRULE").or(top(m, "RDATE")).is_some())) {
+                // floating and whole-day starts too: caldata runs `Tz::Local` at UTC (types/timezone.rs `Utc.fix()`)
+                Some(l) => tzid_of(l).unwrap_or(chrono_tz::UTC),
+                None => tz,
+            };
             for p in parts.iter_mut() {
                 if let Ok(b) = p
                     && is_event(b)
                 {
-                    *b = shift_block(b, days, true, tz)?;
+                    *b = shift_block(b, days, true, zone)?;
                 }
             }
         }
         Some((rid, dur)) => {
-            if let Some(b) = parts.iter_mut().filter_map(|p| p.as_mut().ok()).find(|b| is_event(b) && rid_of(b) == Some(rid)) {
-                *b = shift_block(b, days, false, tz)?;
-            } else {
-                let at = parts.iter().position(|p| p.as_ref().is_ok_and(|b| is_event(b) && rid_of(b).is_none())).ok_or(AppError::NotFound)?;
-                let Ok(master) = &mut parts[at] else { return Err(AppError::NotFound) };
-                if let When::Date(d) = rid {
-                    let to = d.checked_add_signed(Duration::days(days)).filter(|t| ical::write_date_ok(*t)).ok_or(AppError::bad("err-date-range"))?;
-                    *master = shift_block(&move_date(master, d, to), 0, false, tz)?;
-                } else {
-                    let o = new_override(master, rid, days, dur, tz)?;
-                    parts.insert(at + 1, Ok(o));
+            let own = parts.iter().any(|p| p.as_ref().is_ok_and(|b| is_event(b) && rid_of(b) == Some(rid)));
+            let at = parts.iter().position(|p| p.as_ref().is_ok_and(|b| is_event(b) && rid_of(b).is_none())).ok_or(AppError::NotFound)?;
+            if let When::Date(d) = rid {
+                // another client's override of a whole-day occurrence: caldata never shows it (`move_date`), moving it
+                // would change nothing on screen, and an EXDATE would hide it from the clients that do show it
+                if own {
+                    return Err(unsupported());
                 }
+                let to = d.checked_add_signed(Duration::days(days)).filter(|t| ical::write_date_ok(*t)).ok_or(AppError::bad("err-date-range"))?;
+                let Ok(master) = &mut parts[at] else { return Err(AppError::NotFound) };
+                *master = shift_block(&move_date(master, d, to)?, 0, false, tz)?;
+            } else if own {
+                if let Some(b) = parts.iter_mut().filter_map(|p| p.as_mut().ok()).find(|b| is_event(b) && rid_of(b) == Some(rid)) {
+                    *b = shift_block(b, days, false, tz)?;
+                }
+            } else {
+                let Ok(master) = &parts[at] else { return Err(AppError::NotFound) };
+                let o = new_override(master, rid, days, dur, tz)?;
+                parts.insert(at + 1, Ok(o));
             }
         }
     }
@@ -407,7 +425,7 @@ pub fn shift_ics(ics: &str, days: i64, one: Option<(When, Duration)>, tz: chrono
 /// without it, or for an event without a rule, the whole event moves. `expected_etag` as in `update_event`.
 pub async fn move_event(state: &AppState, user: &Principal, p: &str, c: &str, id: &str, days: i64, at: Option<NaiveDateTime>, expected_etag: Option<&str>, tz: chrono_tz::Tz) -> AppResult<()> {
     collections::ensure_owner(user, p)?;
-    if days == 0 || days.abs() > 10_000 * 366 { // beyond `ical::YEARS` anyway; Duration::days panics far past it
+    if days == 0 || days.unsigned_abs() > 10_000 * 366 { // beyond `ical::YEARS` anyway; Duration::days panics far past it
         return Err(AppError::bad("err-date-range"));
     }
     let existing = state.calendars.get_object(p, c, id, false).await?;
@@ -422,11 +440,19 @@ pub async fn move_event(state: &AppState, user: &Principal, p: &str, c: &str, id
     };
     let one = match at {
         Some(at) if main.has_rruleset() => {
-            // the occurrence that starts at `at` in the user's zone, as caldata expands it (a moved one: its override)
-            let (ws, we) = (ical::to_utc(at, tz) - Duration::days(1), ical::to_utc(at, tz) + Duration::days(1));
-            let ev = main.expand_recurrence(Some(ws), Some(we), overrides).into_iter().find(|e| ical::local(&e.dtstart.0, tz).0 == at).ok_or(AppError::conflict("err-changed-event"))?;
-            let rid = ev.get_property("RECURRENCE-ID").and_then(|r| When::parse(&r.value).map(|w| w.instant(r.params.get_param("TZID").and_then(|z| ical::parse_tz(z))))).ok_or(AppError::conflict("err-changed-event"))?;
-            Some((rid, main.get_duration().unwrap_or_else(|| Duration::days(if main.dtstart.0.is_date() { 1 } else { 0 }))))
+            // the occurrence that starts at `at` in the user's zone: an override first (moved days away from its
+            // RECURRENCE-ID, the window below would not reach it: caldata emits an override only beside its rule
+            // instance, event/mod.rs `expand_recurrence`), else as caldata expands the rule around `at`
+            let rid_of = |e: &caldata::component::IcalEvent| e.get_property("RECURRENCE-ID").and_then(|r| When::parse(&r.value).map(|w| w.instant(r.params.get_param("TZID").and_then(|z| ical::parse_tz(z)))));
+            let rid = match overrides.iter().find(|o| ical::local(&o.dtstart.0, tz).0 == at) {
+                Some(o) => rid_of(o),
+                None => {
+                    let (ws, we) = (ical::to_utc(at, tz) - Duration::days(1), ical::to_utc(at, tz) + Duration::days(1));
+                    main.expand_recurrence(Some(ws), Some(we), overrides).iter().find(|e| ical::local(&e.dtstart.0, tz).0 == at).and_then(rid_of)
+                }
+            }
+            .ok_or(AppError::conflict("err-changed-event"))?;
+            Some((rid, main.get_duration().unwrap_or_default()))
         }
         _ => None,
     };
@@ -448,10 +474,14 @@ mod tests {
 
     /// local starts (Berlin) of every occurrence in 2026-2027, as caldata expands the object
     fn starts(ics: &str) -> Vec<NaiveDateTime> {
+        starts_in(ics, BER)
+    }
+
+    fn starts_in(ics: &str, zone: chrono_tz::Tz) -> Vec<NaiveDateTime> {
         let obj = CalendarObject::import(ics, None).expect("parses");
         let CalendarInnerData::Event(main, ov) = obj.get_inner().get_inner() else { panic!("no event") };
         let (a, b) = (ical::to_utc(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), BER), ical::to_utc(NaiveDate::from_ymd_opt(2028, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), BER));
-        let mut v: Vec<NaiveDateTime> = main.expand_recurrence(Some(a), Some(b), ov).iter().map(|e| ical::local(&e.dtstart.0, BER).0).collect();
+        let mut v: Vec<NaiveDateTime> = main.expand_recurrence(Some(a), Some(b), ov).iter().map(|e| ical::local(&e.dtstart.0, zone).0).collect();
         v.sort();
         v
     }
@@ -502,9 +532,8 @@ mod tests {
             let ics = series(rule, start);
             let out = shift_ics(&ics, days, None, BER).unwrap_or_else(|e| panic!("{rule}: {e:?}"));
             let want: Vec<NaiveDateTime> = starts(&ics).iter().map(|t| *t + Duration::days(days)).filter(|t| t.date().year() < 2028).collect();
-            let got: Vec<NaiveDateTime> = starts(&out).into_iter().filter(|t| *t >= want[0]).collect();
-            assert_eq!(got[..want.len().min(got.len())], want[..want.len().min(got.len())], "{rule} +{days}: {out}");
-            assert!(got.len() + 2 >= want.len(), "{rule} +{days}: {} of {}", got.len(), want.len());
+            let got: Vec<NaiveDateTime> = starts(&out).into_iter().filter(|t| t.date().year() < 2028).collect();
+            assert_eq!(got, want, "{rule} {days:+}: {out}");
         }
     }
 
@@ -562,5 +591,38 @@ mod tests {
         let ev = &back[back.find("BEGIN:VEVENT").unwrap()..]; // the VTIMEZONE has RDATEs of its own
         assert!(!ev.contains("EXDATE") && !ev.contains("RDATE"), "{ev}");
         assert_eq!(starts(&back), starts(&ics));
+    }
+
+    /// a UTC series, a UTC EXDATE of a Berlin series seen from New York: across the DST change every value moves in the
+    /// rule's zone, so the moved series is the old one `days` later (UTC instants) with its exception kept
+    #[test]
+    fn utc_series_moves_in_its_own_zone() {
+        let utc = chrono_tz::UTC;
+        for (body, days, user) in [
+            ("DTSTART:20261023T233000Z\nDTEND:20261024T003000Z\nRRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=4", 3, BER),
+            ("DTSTART:20261023T070000Z\nDTEND:20261023T080000Z\nRRULE:FREQ=DAILY;COUNT=10\nEXDATE:20261030T070000Z", 3, BER),
+            ("DTSTART;TZID=Europe/Berlin:20261102T090000\nDTEND;TZID=Europe/Berlin:20261102T100000\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20261103T080000Z", -3, chrono_tz::America::New_York),
+            // whole days and floating times run at UTC in caldata: a UTC UNTIL / EXDATE across 29 March stays on them
+            ("DTSTART;VALUE=DATE:20260320\nDTEND;VALUE=DATE:20260321\nRRULE:FREQ=DAILY;UNTIL=20260327T000000Z", 5, BER),
+            ("DTSTART:20260320T090000\nDTEND:20260320T100000\nRRULE:FREQ=DAILY;COUNT=10\nEXDATE:20260325T090000Z", 5, BER),
+        ] {
+            let ics = cal(&format!("BEGIN:VEVENT\nUID:z\nDTSTAMP:20260101T000000Z\nSUMMARY:Z\n{body}\nEND:VEVENT"));
+            let out = shift_ics(&ics, days, None, user).unwrap();
+            let zone = if body.starts_with("DTSTART:") { utc } else { BER };
+            let want: Vec<NaiveDateTime> = starts_in(&ics, zone).iter().map(|t| *t + Duration::days(days)).collect();
+            assert_eq!(starts_in(&out, zone), want, "{body}: {out}");
+        }
+    }
+
+    #[test]
+    fn whole_day_occurrence_refused_where_it_cannot_move() {
+        let base = "BEGIN:VEVENT\nUID:w\nDTSTAMP:20260101T000000Z\nSUMMARY:W\nDTSTART;VALUE=DATE:20261014\nDTEND;VALUE=DATE:20261015\nRRULE:FREQ=WEEKLY;COUNT=3";
+        let day = When::Date(NaiveDate::from_ymd_opt(2026, 10, 21).unwrap());
+        // another client's override of that day (caldata shows none); a date-time among the RDATEs
+        let foreign = cal(&format!("{base}\nEND:VEVENT\nBEGIN:VEVENT\nUID:w\nDTSTAMP:20260101T000000Z\nRECURRENCE-ID;VALUE=DATE:20261021\nSUMMARY:W2\nDTSTART;VALUE=DATE:20261022\nDTEND;VALUE=DATE:20261023\nEND:VEVENT"));
+        let mixed = cal(&format!("{base}\nRDATE:20261102T000000Z\nEND:VEVENT"));
+        for ics in [foreign, mixed] {
+            assert!(matches!(shift_ics(&ics, 1, Some((day, Duration::days(1))), BER), Err(AppError::BadRequest(_))), "{ics}");
+        }
     }
 }
