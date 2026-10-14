@@ -150,7 +150,8 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .dx .rd.chk i { border-radius: 2px; } .dx .rd.chk span { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .dx .ft.gr { background: #7cb342; display: flex; justify-content: space-between; align-items: center; } .dx .ft.r { display: flex; justify-content: flex-end; }
 .dx .dots4 { display: flex; gap: 3px; } .dx .dots4 i { width: 5px; height: 5px; border-radius: 50%; background: #c5e1a5; } .dx .dots4 i.on { background: #2b4512; }
-.dx .fab { width: 22px; height: 22px; border-radius: 50%; background: #558b2f; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+/* not .fab: grid.css fixes every .fab to the bottom right (the round ✓ floated there, 2026-10-15) */
+.dx .dxfab { width: 22px; height: 22px; border-radius: 50%; background: #558b2f; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
 .dx.sys { background: #000; color: #eee; } .dx.sys .hd { background: #000; font-weight: 700; }
 .dx .row2 { background: #1c1c1e; border-radius: 7px; padding: 5px 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 8.5px; }
 .dx .row2 small { color: #6ea8ff; font-size: 8px; text-align: right; flex: none; max-width: 50%; } .dx .row2 > span:first-child { min-width: 0; }
