@@ -9,6 +9,9 @@
 [![Rust](https://img.shields.io/badge/built%20with-Rust-dea584)](build/Cargo.toml)
 [![Languages](https://img.shields.io/badge/UI-EN%20·%20DE%20·%20FR%20·%20ES-af52de)](build/locales)
 
+[![Code on GitLab](https://img.shields.io/badge/code-GitLab-fc6d26?logo=gitlab&logoColor=white)](https://gitlab.com/xarif/docker/practical)
+[![Code on GitHub](https://img.shields.io/badge/code-GitHub-24292f?logo=github&logoColor=white)](https://github.com/xarif-de/practical)
+
 <img src="docs/images/03-month.webp" alt="PractiCal month view" width="100%">
 
 </div>
@@ -159,9 +162,8 @@ product. Thanks to my perfectionism, my love of detail, my joy in experimenting 
 development in Rust, the result became far more than I had first imagined.
 
 I hope you enjoy it as much as I do. PractiCal is my way of saying thank you to all the great open-source projects I
-use every day. Feedback, ideas for improvements, bug reports and contributions are very welcome: please
-[open an issue](https://gitlab.com/xarif/docker/practical/-/issues) or a
-[merge request](https://gitlab.com/xarif/docker/practical/-/merge_requests).
+use every day. Feedback, ideas for improvements, bug reports and contributions are very welcome: please open an
+issue or a merge/pull request on [GitLab](https://gitlab.com/xarif/docker/practical/-/issues) or [GitHub](https://github.com/xarif-de/practical/issues).
 
 — Thomas Steinbach
 
@@ -177,7 +179,7 @@ PractiCal image.
 All kudos for the backend belong to RustiCal. So do all backend issues: if something goes wrong with syncing, DAV
 clients or the server itself, please report it at
 [lennart-k/rustical/issues](https://github.com/lennart-k/rustical/issues). Anything about the web UI belongs
-[here](https://gitlab.com/xarif/docker/practical/-/issues).
+here, on [GitLab](https://gitlab.com/xarif/docker/practical/-/issues) or [GitHub](https://github.com/xarif-de/practical/issues).
 
 ## License
 

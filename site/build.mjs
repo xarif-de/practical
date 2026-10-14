@@ -25,6 +25,9 @@ const SITE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(SITE_DIR);
 export const SITE_URL = 'https://xarif.gitlab.io/docker/practical/';
 const REPO_URL = 'https://gitlab.com/xarif/docker/practical';
+// both public mirrors of the Forgejo source: [name, repo URL, file URL prefix]; links to repo files go to REPO_URL
+const CODE = [['GitLab', REPO_URL, `${REPO_URL}/-/blob/main/`], ['GitHub', 'https://github.com/xarif-de/practical', 'https://github.com/xarif-de/practical/blob/main/']];
+const codeNav = CODE.map(([n, u]) => `<a class="code" href="${u}"><span class="ico ico-${n.toLowerCase()}" aria-hidden="true"></span><span class="t">${n}</span></a>`).join('\n      ');
 const args = process.argv.slice(2);
 const CHECK = args.includes('--check');
 const OUT = path.resolve(args.includes('--out') ? args[args.indexOf('--out') + 1] : path.join(REPO, 'e2e', '.work', 'site'));
@@ -233,8 +236,8 @@ for (const [repoPath, file] of pages) {
     .replaceAll('{{description}}', esc(isIndex ? 'Screenshots and documentation of PractiCal, a fast self-hosted web app for calendars, contacts and tasks on RustiCal.' : `${title} — PractiCal documentation`))
     .replaceAll('{{bodyClass}}', isIndex ? 'page-index' : `page-doc${tocHtml ? ' has-toc' : ''}`)
     .replaceAll('{{script}}', isIndex ? '<script>document.documentElement.classList.add("js")</script>\n<script src="gallery.js" defer></script>' : '')
-    .replaceAll('{{source}}', `${REPO_URL}/-/blob/main/${repoPath}`)
-    .replaceAll('{{repo}}', REPO_URL)
+    .replace('{{codeNav}}', codeNav)
+    .replace('{{codeFoot}}', `<b>Source on</b> ${CODE.map(([n, u]) => `<a href="${u}"><b>${n}</b></a>`).join(' · ')} · This page on ${CODE.map(([n, , f]) => `<a href="${f}${repoPath}">${n}</a>`).join(' · ')}`)
     .replace('{{toc}}', tocHtml)
     .replace('{{backTop}}', back + tocMobile)
     .replace('{{backBottom}}', back)

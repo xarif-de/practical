@@ -46,6 +46,11 @@ img { max-width: 100%; height: auto; }
 .top-nav { margin-left: auto; display: flex; gap: 2px; }
 .top-nav a { color: var(--fg); text-decoration: none; padding: 6px 12px; border-radius: 999px; font-size: 15px; }
 .top-nav a:hover { background: var(--bg-3); }
+/* the two code mirrors: brand marks from Simple Icons (CC0), drawn in the text colour like the callout icons */
+.ico { display: inline-block; width: 1.1em; height: 1.1em; flex: none; vertical-align: -.18em; background: currentColor; -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
+.ico-gitlab { --ico: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m23.6004 9.5927-.0337-.0862L20.3.9814a.851.851 0 0 0-.3362-.405.8748.8748 0 0 0-.9997.0539.8748.8748 0 0 0-.29.4399l-2.2055 6.748H7.5375l-2.2057-6.748a.8573.8573 0 0 0-.29-.4412.8748.8748 0 0 0-.9997-.0537.8585.8585 0 0 0-.3362.4049L.4332 9.5015l-.0325.0862a6.0657 6.0657 0 0 0 2.0119 7.0105l.0113.0087.03.0213 4.976 3.7264 2.462 1.8633 1.4995 1.1321a1.0085 1.0085 0 0 0 1.2197 0l1.4995-1.1321 2.4619-1.8633 5.006-3.7489.0125-.01a6.0682 6.0682 0 0 0 2.0094-7.003z"/></svg>'); }
+.ico-github { --ico: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>'); }
+.top-nav .code { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---- layout */
 main { padding: 32px 0 56px; }
@@ -121,10 +126,10 @@ td code { white-space: nowrap; }
 .page-index .prose > h1 { font-size: clamp(2rem, 4.5vw, 3rem); letter-spacing: -.03em; margin-bottom: .35em; }
 .page-index .prose > p:first-of-type { font-size: 1.15rem; color: var(--fg-2); max-width: 760px; }
 .page-index .prose > h2 { border-top: 0; padding-top: 0; margin-top: 1.8em; font-size: 1.7rem; }
-/* the paragraph that is just one bold link (docs/index.md: the way back to gitlab.com) = a button */
-.page-index .prose > p:has(> a:only-child > b:only-child) { margin: 1.4em 0 0; }
-.page-index .prose > p > a:only-child:has(> b:only-child) { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; background: var(--accent); color: var(--on-accent); text-decoration: none; box-shadow: var(--shadow); }
-.page-index .prose > p > a:only-child:has(> b:only-child):hover { filter: brightness(1.08); }
+/* docs/index.md: the code on GitLab and GitHub = two buttons */
+.code-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 1.4em 0 0 !important; }
+.code-links a { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; background: var(--accent); color: var(--on-accent); text-decoration: none; box-shadow: var(--shadow); }
+.code-links a:hover { filter: brightness(1.08); }
 
 .doc-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .doc-cards li { margin: 0 !important; }
@@ -200,5 +205,7 @@ td code { white-space: nowrap; }
   /* a scrolled table keeps a readable last ("What it does") column instead of one word per line */
   td:last-child, th:last-child { min-width: 260px; }
 }
+/* phones: the code links shrink to their marks (the name stays for screen readers), Features goes */
+@media (max-width: 520px) { .top-nav .code .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
 @media (max-width: 420px) { .top-nav a:nth-child(2) { display: none; } }
 @media print { .site-header, .site-footer, .toc, .back, .g-nav, .g-chips { display: none !important; } .prose { border: 0; box-shadow: none; padding: 0; } }

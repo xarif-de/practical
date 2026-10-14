@@ -4,7 +4,7 @@ PractiCal is a fast, modern web app for calendars, contacts and tasks on your ow
 [RustiCal](https://github.com/lennart-k/rustical). Phones and desktop apps keep syncing over CalDAV/CardDAV; the
 browser gets a complete UI on the very same data.
 
-<p><a href="https://gitlab.com/xarif/docker/practical"><b>Source code, image and quick start on GitLab →</b></a></p>
+<p class="code-links"><a href="https://gitlab.com/xarif/docker/practical"><span class="ico ico-gitlab" aria-hidden="true"></span><b>Code on GitLab</b></a> <a href="https://github.com/xarif-de/practical"><span class="ico ico-github" aria-hidden="true"></span><b>Code on GitHub</b></a></p>
 
 ## Gallery
 

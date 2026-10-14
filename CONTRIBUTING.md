@@ -23,8 +23,11 @@ These pages explain the project from different angles:
 - [docs/architecture.md](docs/architecture.md) explains how PractiCal and RustiCal fit together.
 - [docs/performance-2026-10.md](docs/performance-2026-10.md) has the known limits and the performance history.
 
-The source repository is `git.xarif.de/docker/practical`. <https://gitlab.com/xarif/docker/practical> is its public
-mirror and hosts the image registry.
+The source repository is `git.xarif.de/docker/practical`. It has two public mirrors: <https://gitlab.com/xarif/docker/practical>, which
+also hosts the image registry and this site, and <https://github.com/xarif-de/practical>. Issues and merge/pull requests are welcome on both.
+Every push to the source overwrites the mirrors, so a contribution is never merged on a mirror: fetch it
+(`git fetch https://github.com/xarif-de/practical pull/<n>/head`, or `merge-requests/<n>/head` on GitLab), put its commits on `main` unchanged and push
+to the source. GitHub then marks the pull request as merged by itself.
 
 ## What you need
 
