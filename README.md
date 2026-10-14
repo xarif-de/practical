@@ -2,7 +2,7 @@
 
 <h1><img src="build/assets/logo.svg" alt="PractiCal" width="344"></h1>
 
-**Calendar, contacts and tasks for your own server — a fast, modern web app on top of RustiCal.**
+**Self-hosted calendar, contacts, and tasks — featuring the fastest, most beautiful web UI you’ve ever seen.**
 
 [![Release](https://img.shields.io/gitlab/v/tag/xarif/docker/practical?sort=semver&label=release&color=0a84ff)](https://gitlab.com/xarif/docker/practical/-/tags)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0--or--later-30b46c)](LICENSE)

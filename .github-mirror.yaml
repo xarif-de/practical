@@ -1,7 +1,7 @@
 # github.com publication, read by kubernetes/forgejo resources/mirror-lib.sh from this
 # repo's default branch. Every GitHub feature is off unless declared here.
 # the site link sits in GitHub's "About" box (homepage), not in the text
-description: Calendar, contacts and tasks for your own server — with the fastest and most beautiful Browser UI you have ever seen.
+description: Self-hosted calendar, contacts, and tasks — featuring the fastest, most beautiful web UI you’ve ever seen.
 homepage: https://xarif.gitlab.io/docker/practical
 features:
   # Public bug reports and contributions, as on gitlab.com. Merged on GitHub they would be

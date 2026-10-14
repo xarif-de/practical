@@ -3,7 +3,7 @@
 # project feature off, so everything this repo needs on its mirror is declared here.
 # shown under the project name on gitlab.com, line breaks kept
 description: |
-  Calendar, contacts and tasks for your own server — with the fastest and most beautiful Browser UI you have ever seen.
+  Self-hosted calendar, contacts, and tasks — featuring the fastest, most beautiful web UI you’ve ever seen.
   🔗 https://xarif.gitlab.io/docker/practical
 features:
   # The cluster pulls this repo's image from the mirror; with the registry disabled
