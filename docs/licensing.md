@@ -23,9 +23,11 @@ tag the UI shows (and `rustical --version` prints).
   `i-github` come from [Simple Icons](https://simpleicons.org/) (CC0-1.0); the marks stay their owners' trademarks
   and only name where an app is found. The Android robot is reproduced from work created and shared by Google and
   used according to the terms of the Creative Commons 3.0 Attribution License.
-- **DAVx⁵ app icon** (`build/assets/davx5.svg`, shown in "Add a device" to name the app to install): drawn from
-  DAVx⁵'s launcher icon (`ic_launcher_foreground.xml` on its `primaryColor`) in
-  [davx5-ose](https://github.com/bitfireAT/davx5-ose) (GPL-3.0). DAVx⁵ is a trademark of bitfire web
+- **DAVx⁵ logo** (`build/assets/davx5.svg`, in "Add a device" and on the confirmation page DAVx⁵ opens): the
+  official icon `davx5_icon_green_bg.svg` from [davx5.com/about/logos](https://www.davx5.com/about/logos), which
+  allows its use to refer and link to DAVx⁵ when it is not altered, not shown as one's own product and given
+  context (the wizard links it to www.davx5.com). Only its file was compacted (svgo 3, 3 decimals: 25.7 → 10.4 kB;
+  rendered at 256 px, no pixel differs by more than 7/255, 2026-10-14). DAVx⁵ is a product of bitfire web
   engineering GmbH; PractiCal is not affiliated with it.
 - **Logo lettering** (`build/assets/logo.svg`, `lettering.svg`): outlines of Inter Display ExtraBold from
   [Inter](https://github.com/rsms/inter) 4.1 (SIL Open Font License 1.1); no font file is shipped. The design:

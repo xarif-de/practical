@@ -52,7 +52,7 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
   `onboarding/steps.js` declares, and declaring either twice breaks the join.
 - Others: history.js/.css (/history only, after app.js) · sw.js (service worker, Web Push) · theme.js (colour
   scheme before first paint) · icons.svg (sprite `<symbol id="i-…">`; `i-sort` dims an arrow via
-  `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · davx5.svg (DAVx⁵'s app icon, docs/licensing.md) · icon.svg (favicon) + lettering.svg (top bar) + logo.svg (README, site; all generated, brand/) · leaflet.* (vendored 1.9.4, BSD-2,
+  `--sort-up`/`--sort-down`, `i-star-h` fills via `--ico-fill`) · davx5.svg (DAVx⁵'s official logo, terms in docs/licensing.md) · icon.svg (favicon) + lettering.svg (top bar) + logo.svg (README, site; all generated, brand/) · leaflet.* (vendored 1.9.4, BSD-2,
   loaded on first map use). No inline script anywhere (CSP `script-src 'self'`).
 - Client contract: `window.practical` (core.js: `$ $$ csrf esc escN escQ pad ymd parseYmd sprite ico keepCals send
   placeUnder noteRe noteHtml wheelTouch wheelAxis wheelPages swipeViews slide`; req.js: `req tell progress online

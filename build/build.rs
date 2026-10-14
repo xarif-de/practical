@@ -35,7 +35,7 @@ const ASSETS: &[(&str, &str, Minify)] = &[
     ("icon.svg", "image/svg+xml", Minify::No),
     // the top bar's brand: the outlined lettering alone (brand/build.py)
     ("lettering.svg", "image/svg+xml", Minify::No),
-    // DAVx⁵'s app icon, the "add a device" wizard and the confirmation page (docs/licensing.md)
+    // DAVx⁵'s official logo (davx5.com/about/logos: unaltered, linked to davx5.com), the "add a device" wizard and the confirmation page (docs/licensing.md)
     ("davx5.svg", "image/svg+xml", Minify::No),
     // the icon sprite of every <use> (layout.html carried it inline: 34 KB raw / 8 KB gzip per page)
     ("icons.svg", "image/svg+xml", Minify::No),

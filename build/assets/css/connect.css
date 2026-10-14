@@ -38,7 +38,7 @@
 .wiz .or::before, .wiz .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .wiz .mini { margin: 0; padding-left: 18px; color: var(--fg-2); font-size: 13.5px; line-height: 1.6; text-align: left; }
 .wiz .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.app-ico { border-radius: 13px; box-shadow: 0 0 0 1px var(--line); }
+/* the DAVx⁵ logo is shown as published: no frame, no rounding of ours (docs/licensing.md) */
 /* QR codes: the server's SVG in a white frame (also in the dark scheme: a camera needs dark on light) */
 .wiz .qr { display: inline-block; background: #fff; padding: 8px; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); line-height: 0; }
 .wiz .qr svg { width: 156px; height: 156px; display: block; }
@@ -95,4 +95,4 @@
 .connect-page .hint { margin: 0; font-size: 12.5px; color: var(--fg-3); }
 .connect-page .warn { margin: 0; font-size: 13px; color: var(--fg); background: color-mix(in srgb, var(--c4) 14%, transparent); border-radius: 8px; padding: 8px 10px; }
 .connect-page .pair-icons { display: flex; justify-content: center; align-items: center; gap: 10px; color: var(--fg-3); font-size: 22px; }
-.connect-page .app-ico.generic { width: 52px; height: 52px; display: grid; place-items: center; background: var(--bg); color: var(--accent); }
+.connect-page .app-ico.generic { border-radius: 13px; box-shadow: 0 0 0 1px var(--line); width: 52px; height: 52px; display: grid; place-items: center; background: var(--bg); color: var(--accent); }
