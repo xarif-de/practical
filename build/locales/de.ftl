@@ -100,7 +100,7 @@ addressbook-import = Adressbuch importieren …
 set-import-addressbook = Adressbuch importieren
 imp-ab-hint = Aus der Quelle entsteht ein neues Adressbuch. vCard-Dateien tragen keinen Namen: vorgeschlagen wird der Dateiname – du kannst ihn vor dem Import ändern.
 token-new-hint = Neues Passwort – jetzt kopieren, es wird nicht noch einmal angezeigt:
-# "add a device" (settings › Konto & Apps, routes::connect)
+# "add a device" (settings › connected devices, routes::connect)
 connect-hero-title = Deine Kalender auf all deinen Geräten
 connect-hero-text = Termine, Kontakte und Aufgaben auf Smartphone, Tablet und Computer – immer synchron mit PractiCal.
 connect-add = Gerät hinzufügen

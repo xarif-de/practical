@@ -100,7 +100,7 @@ addressbook-import = Importar libreta de direcciones …
 set-import-addressbook = Importar libreta de direcciones
 imp-ab-hint = La fuente se convierte en una libreta nueva. Los archivos vCard no llevan nombre: se propone el del archivo; puedes cambiarlo antes del import.
 token-new-hint = Contraseña nueva – cópiala ahora, no se volverá a mostrar:
-# "add a device" (settings › Konto & Apps, routes::connect)
+# "add a device" (settings › connected devices, routes::connect)
 connect-hero-title = Tus calendarios en todos tus dispositivos
 connect-hero-text = Eventos, contactos y tareas en el móvil, la tableta y el ordenador, siempre sincronizados con PractiCal.
 connect-add = Añadir un dispositivo
