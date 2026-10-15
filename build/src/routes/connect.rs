@@ -42,6 +42,7 @@ pub fn public_router() -> Router<SharedState> {
         .route("/index.php/login/v2/poll/{id}", post(poll))
         .route("/connect/davx5", get(open_davx5))
         .route("/connect/apple/{id}", get(apple_page))
+        .route("/connect/apple/{id}/manual", get(apple_manual))
         .route("/connect/apple/{id}/{file}", get(apple_download))
         .layer(DefaultBodyLimit::max(1024))
 }
@@ -111,7 +112,8 @@ pub struct ConfirmPage {
     pub ctx: PageCtx,
     pub id: String,
     /// "ask" (the form), "done" (confirmed), "gone" (unknown, expired or another user's); a profile link's
-    /// page: "apple" (`app` "other": a browser that cannot install it, `name` the link), "gone-apple"
+    /// pages: "apple" (`app` "other": a browser that cannot install it, `name` the link), "apple-manual" (the
+    /// setup by hand: `dav`, `account`, `groups`), "gone-apple"
     pub state: &'static str,
     pub app: String,
     pub name: String,
@@ -121,11 +123,14 @@ pub struct ConfirmPage {
     pub addressbooks: Vec<String>,
     /// this server's host, as the app's browser tab shows it
     pub host: String,
+    /// "apple-manual": the DAV server, and per group with calendars (its name, the login `user$group`)
+    pub dav: String,
+    pub groups: Vec<(String, String)>,
 }
 
 impl ConfirmPage {
     fn new(ctx: PageCtx, id: String, state: &'static str, host: String) -> Self {
-        ConfirmPage { ctx, id, state, app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host }
+        ConfirmPage { ctx, id, state, app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host, dav: String::new(), groups: vec![] }
     }
 }
 
@@ -223,31 +228,31 @@ struct AppleLink {
     url: String,
     file: String,
     qr: String,
+    /// the QR code of the link's manual guide (`…/manual`, the iPhone by hand from a computer)
+    manual_qr: String,
 }
 
-/// `POST /settings/connect/apple`: a profile link for this user, and its QR code (the wizard asks for a new
+/// `POST /settings/connect/apple`: a profile link for this user, and its QR codes (the wizard asks for a new
 /// one before this one expires).
 async fn apple_link(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> Json<AppleLink> {
     let id = state.connect.links.create(&user.id, q.name.as_deref(), chrono::Utc::now());
     let url = format!("{}/connect/apple/{id}", state.config.public_url);
-    Json(AppleLink { qr: connect::qr_svg(&url), file: format!("{url}/{APPLE_FILE}"), url })
+    Json(AppleLink { qr: connect::qr_svg(&url), manual_qr: connect::qr_svg(&format!("{url}/manual")), file: format!("{url}/{APPLE_FILE}"), url })
 }
 
 #[derive(serde::Serialize)]
 struct ManualPassword {
     name: String,
     password: String,
-    /// the password as a QR code, for the setup on another device
-    qr: String,
 }
 
 /// `POST /settings/connect/manual?name=iPhone`: the password of the iPhone's manual setup (#add-ios-values), an
-/// app token named after the device; the wizard asks once per run, when the password is first asked for (copied,
-/// shown, its QR code), and shows it as dots.
+/// app token named after the device; the wizard asks once per run, when the password is first asked for (copied
+/// or shown), and shows it as dots.
 async fn manual_password(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> AppResult<Json<ManualPassword>> {
     let name: String = q.name.as_deref().unwrap_or("iPhone").chars().filter(|c| !c.is_control()).take(NAME_MAX).collect();
     let (name, password) = tokens::create_unique(&state, &user, if name.trim().is_empty() { "iPhone" } else { &name }).await?;
-    Ok(Json(ManualPassword { qr: connect::qr_svg(&password), name, password }))
+    Ok(Json(ManualPassword { name, password }))
 }
 
 /// The profile's file name: Safari installs a `.mobileconfig` (support.apple.com/guide/profile-manager/pmdbd71ebc9).
@@ -266,21 +271,37 @@ async fn apple_page(State(state): State<SharedState>, ctx: PageCtx, headers: Hea
     ConfirmPage { app, account: user, name: format!("{}/connect/apple/{id}", state.config.public_url), ..ConfirmPage::new(ctx, id, "apple", host) }.into_response()
 }
 
-/// `GET /connect/apple/{id}/PractiCal.mobileconfig`: the configuration profile, made at the first download
-/// with an app token of its own (the device's name: [`connect::apple_device_name`] unless the wizard knew it);
-/// the user's open wizards learn the name. Public: the camera opens the link in a browser that may not be
-/// signed in; the link is the secret ([`connect::Links::create`]: briefly, one device — its client address
-/// and User-Agent). A second request of that device while the profile is made waits for it.
+/// `GET /connect/apple/{id}/manual`: the iPhone's manual setup on the iPhone, opened from a computer's code
+/// without a login: the way through Settings and the values, each with a copy button; the password comes
+/// from `…/password` when it is first copied. Public, like the profile.
+async fn apple_manual(State(state): State<SharedState>, ctx: PageCtx, Path(id): Path<String>) -> AppResult<Response> {
+    let host = connect::host_of(&state.config.public_url);
+    let Some(user) = state.connect.links.user(&id, chrono::Utc::now()) else {
+        return Ok((StatusCode::GONE, ConfirmPage::new(ctx, id, "gone-apple", host)).into_response());
+    };
+    let principal = state.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?;
+    let groups = crate::domain::groups::list_for_user(&state, &principal).await?.into_iter().filter(|g| g.n_calendars > 0).map(|g| (g.displayname, format!("{user}${}", g.id))).collect();
+    Ok(ConfirmPage { account: user, dav: state.config.public_dav_url.clone(), groups, ..ConfirmPage::new(ctx, id, "apple-manual", host) }.into_response())
+}
+
+/// `GET /connect/apple/{id}/PractiCal.mobileconfig` (the configuration profile) or `…/password` (the manual
+/// setup's password, JSON), made at the first request with an app token of its own (the device's name:
+/// [`connect::apple_device_name`] unless the wizard knew it); the user's open wizards learn the name. Public:
+/// the camera opens the link in a browser that may not be signed in; the link is the secret
+/// ([`connect::Links::create`]: briefly, one device — its client address and User-Agent — and one of the two
+/// kinds). A second request of that device while it is made waits for it.
 async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers: HeaderMap, peer: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>, Path((id, file)): Path<(String, String)>) -> AppResult<Response> {
     let ua = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).unwrap_or("");
-    let device = format!("{} {ua}", crate::auth::client_addr(&headers, peer.map(|p| p.0.0)));
+    let profile = file == APPLE_FILE;
+    // the kind is part of the device: a link that gave a password gives no profile, and the other way round
+    let device = format!("{} {} {ua}", if profile { "profile" } else { "password" }, crate::auth::client_addr(&headers, peer.map(|p| p.0.0)));
     let links = &state.connect.links;
     let (user, name) = loop {
         let changed = links.changed.notified();
         tokio::pin!(changed);
         changed.as_mut().enable(); // before the look: a profile finished in between still wakes it
-        match (file == APPLE_FILE).then(|| links.open(&id, &device, chrono::Utc::now())).flatten() {
-            Some(connect::Opened::Again(profile)) => return Ok(mobileconfig(profile)),
+        match (profile || file == "password").then(|| links.open(&id, &device, chrono::Utc::now())).flatten() {
+            Some(connect::Opened::Again(made)) => return Ok(if profile { mobileconfig(made) } else { Json(serde_json::json!({ "password": made })).into_response() }),
             Some(connect::Opened::Make(user, name)) => break (user, name),
             Some(connect::Opened::Busy) if tokio::time::timeout(std::time::Duration::from_secs(10), changed).await.is_ok() => continue,
             _ => {
@@ -294,18 +315,21 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
     // made in a task of its own: a client that goes away must not leave the link taken or a token half made
     let (st, link) = (state.clone(), id.clone());
     let task = tokio::spawn(async move {
-        let made = make_profile(&st, &user, &name, &description).await;
+        let made = match profile {
+            true => make_profile(&st, &user, &name, &description).await,
+            false => async { tokens::create_unique(&st, &st.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?, &name).await }.await,
+        };
         st.connect.links.made(&id, made.as_ref().ok().map(|(_, p)| p.as_str()), chrono::Utc::now());
         if let Ok((name, _)) = &made {
             st.connect.pairs.connected(&user, name);
         }
         made.map(|(_, p)| p)
     });
-    let profile = task.await.map_err(|e| {
+    let made = task.await.map_err(|e| {
         state.connect.links.made(&link, None, chrono::Utc::now()); // it panicked: the link is fresh again
         AppError::Internal(e.to_string())
     })??;
-    Ok(mobileconfig(profile))
+    Ok(if profile { mobileconfig(made) } else { Json(serde_json::json!({ "password": made })).into_response() })
 }
 
 /// The profile of `user`'s accounts with a new app token ([`tokens::create_unique`] of `name`). Returns (the

@@ -654,7 +654,7 @@ const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleW
 test('add a device: an iPhone scans a profile link, downloads its profile, and the wizard follows to the install', async ({ page }) => {
   await reloadAt(page, '#add');
   await page.locator('#add a[href="#add-ios-about"]').click();
-  await expect(page.locator('#add-ios-about .about-list li')).toHaveCount(4);
+  await expect(page.locator('#add-ios-about .about-list li')).toHaveCount(3);
   await page.locator('#add-ios-about a.btn-primary').click();
   await expect(page).toHaveURL(/#add-ios$/);
   await expect(page.locator('#add-ios .dots span')).toHaveText('Schritt 3 von 5 · Profil laden');
@@ -690,7 +690,6 @@ test('add a device: an iPhone scans a profile link, downloads its profile, and t
   await expect(page.locator('#add-ios-install .wiz-strip .dx')).toHaveCount(4); // Settings: loaded, install, warning, done
   await page.locator('#add-ios-install .acts a.btn-primary').click();
   await expect(page).toHaveURL(/#add-done$/);
-  await expect(page.locator('#add-done .p-ios')).toBeVisible();
   await expect(page.locator('#add-done .p-android')).toBeHidden(); // no DAVx⁵ steps after an iPhone
   await page.locator('#add-done a.btn-primary').click();
   const row = page.locator('#devices .cell', { hasText: 'iPhone' });
@@ -751,23 +750,19 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await expect(page).toHaveURL(/#add-done$/);
   await expect(page.locator('#add-done [data-device]')).toHaveText('iPhone');
   await expect(page.locator('#add-done .p-iosm')).toBeVisible();
-  await expect(page.locator('#add-done .p-iosa').first()).toBeHidden();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await pw.textContent());
-  // on a computer: a code opens the page on the iPhone; each value as a QR code, the password behind the eye
+  // on a computer: a code opens the guide on the iPhone (a profile link's page, no login); the values to type, the password behind the eye
   const desk = await browser.newContext({ baseURL: BASE, locale: 'de-DE' });
   const d = await desk.newPage();
   await loginAs(d, 'carol');
   await d.goto('/settings#add-ios-values');
-  await expect(d.locator('#add-ios-values [data-qr="manual"] svg')).toBeVisible();
+  await expect(d.locator('#add-ios-values [data-qr="apple-manual"] svg')).toBeVisible();
   await expect(d.locator('#add-ios-values [data-io-pw-copy]')).toBeHidden(); // copying is for the iPhone
-  const qr = d.locator('#add-ios-values .io-qr').first();
-  await qr.locator('button').hover();
-  await expect(qr.locator('.io-qrpop svg')).toBeVisible(); // the server address as a code
+  await expect(d.locator('#add-ios-values .io-form [data-copy]').first()).toBeHidden(); // no copy buttons on a computer
   await expect(d.locator('#iv-p')).toHaveText(''); // no password yet
   await d.locator('#add-ios-values [data-io-pw-show]').click();
   await expect(d.locator('#iv-p')).toBeVisible();
   await expect(d.locator('#iv-p')).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
-  await expect(d.locator('#add-ios-values [data-io-pw-qr] .io-qrpop svg')).toHaveCount(1);
   await desk.close();
   await page.goto('/settings?done=1#account'); // tidy up: both
   for (let i = 0; i < 2; i++) {

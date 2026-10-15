@@ -356,8 +356,8 @@
     <h1>{{ ctx.t("wiz-choose-title") }}</h1><p class="lead">{{ ctx.t("wiz-choose-text") }}</p>
     <div class="wiz-tiles">
       <a href="#add-android-about"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
-      <a href="#add-ios-about"><span class="ti" style="background:#0a84ff">{{ m::ico("iphone") }}</span><b>iPhone / iPad</b><span>{{ m::ico("star") }} {{ ctx.t("wiz-ios-auto") }}</span></a>
-      <a href="#add-ios-manual"><span class="ti" style="background:#0a84ff">{{ m::ico("iphone") }}</span><b>iPhone / iPad</b><span>{{ m::ico("hand") }} {{ ctx.t("wiz-ios-manual") }}</span></a>
+      <a href="#add-ios-about"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("wand") }}</i></span><b>iPhone / iPad</b><span>{{ m::ico("wand") }} {{ ctx.t("wiz-ios-auto") }}</span></a>
+      <a href="#add-ios-manual"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("hand") }}</i></span><b>iPhone / iPad</b><span>{{ m::ico("hand") }} {{ ctx.t("wiz-ios-manual") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
     </div>
   </div>
@@ -455,7 +455,7 @@
       <span><b class="apps">{{ m::ico("calendar") }}{{ m::ico("tasks") }}{{ m::ico("contacts") }}</b><small>{{ ctx.t("ios-about-apps") }}</small></span>
     </div>
     <ul class="about-list">
-      <li>{{ ctx.t("ios-about-1") }}</li><li>{{ ctx.t("ios-about-2") }}</li><li>{{ ctx.t("ios-about-3") }}</li><li>{{ ctx.t("about-5") }}</li>
+      <li>{{ ctx.t("ios-about-2") }}</li><li>{{ ctx.t("ios-about-3") }}</li><li>{{ ctx.t("about-5") }}</li>
     </ul>
   </div>
   <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-ios">{{ ctx.t("about-go") }} ›</a></div>
@@ -510,7 +510,7 @@
   {{ m::wiz_bars(3, 5, ctx.t("iom-values-label")) }}
   <div class="wz">
     <h1>{{ ctx.t("iom-values-title") }}</h1>
-    <div class="ni"><p class="lead">{{ ctx.t("iom-on-phone") }}</p><span class="qr" data-qr="manual" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="lead after">{{ ctx.t("iom-values-text-ni") }}</p></div>
+    <div class="ni"><p class="lead">{{ ctx.t("iom-on-phone") }}</p><span class="qr" data-qr="apple-manual" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="lead after">{{ ctx.t("iom-values-text-ni") }}</p></div>
     <p class="lead oi">{{ ctx.t("iom-values-text") }}</p>
     {{ m::io_values("iv", "CalDAV", ctx.public_dav_url, ctx.user_id(), "PractiCal") }}
     <p class="hint">{{ ctx.t("iom-desc-hint") }}</p>
@@ -547,7 +547,7 @@
     <h1 tabindex="-1">{{ ctx.t("wiz-done-title") }}</h1>
     <div class="group"><div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("smartphone") }}</span><span><span data-device>{{ ctx.t("connect-name-android") }}</span><span class="sub">{{ ctx.t("wiz-done-just") }}</span></span><span class="val"><span class="tag">{{ ctx.t("wiz-new") }}</span></span></div></div>
     <div class="od p-android"><p class="lead after">{{ ctx.t("done-phone-lead") }}</p>{{ m::connect_next(plan_host, ctx.user_id(), davx5_calendars, davx5_books) }}</div>
-    <ul class="about-list p-ios"><li>{{ ctx.t("ios-done-1") }}</li><li class="p-iosa">{{ ctx.t("ios-done-2") }}</li><li class="p-iosa">{{ ctx.t("ios-done-3") }}</li><li class="p-iosm">{{ ctx.t("iom-done") }}</li></ul>
+    <p class="lead after p-iosm">{{ ctx.t("iom-done") }}</p>
     <a class="another" href="#add">＋ {{ ctx.t("wiz-another") }}</a>
   </div>
   <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>

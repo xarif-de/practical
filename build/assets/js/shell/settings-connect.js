@@ -1,5 +1,32 @@
 // js/shell/settings-connect.js — part of the shell IIFE (src/bundle.rs; shares its scope with settings-pages.js): "add a
 // device" (settings.html #add…, routes::connect) — which path shows, the pairing with its QR codes, the live state
+  /* the iPhone by hand: the password's buttons in `scope` (the wizard; the profile link's manual page, connect.html). It is
+     made only when first asked for — `get()` → {password, name?}, once —, dots until then. Copy: the clipboard takes a
+     promise (Safari keeps the tap's permission while the token is made), else the text after it; the eye shows it. */
+  const ioPassword = (scope, get) => {
+    let p = null;
+    const once = () => p ||= get().then(m => {
+      $$('[data-io-pw]', scope).forEach(e => { e.textContent = m.password; });
+      if (m.name) $$('[data-device]', scope).forEach(e => { e.textContent = m.name; });
+      return m;
+    }, e => { p = null; throw e; });
+    $$('[data-io-pw-copy]', scope).forEach(b => b.addEventListener('click', async () => {
+      try {
+        if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/plain': once().then(m => new Blob([m.password], { type: 'text/plain' })) })]);
+        else await navigator.clipboard.writeText((await once()).password);
+        toast(tr('js-copied'));
+      } catch (_) { once().then(m => navigator.clipboard.writeText(m.password)).then(() => toast(tr('js-copied')), () => {}); }
+    }));
+    $$('[data-io-pw-show]', scope).forEach(b => b.addEventListener('click', async () => {
+      await once().catch(() => {});
+      const on = b.getAttribute('aria-pressed') !== 'true', row = b.closest('div');
+      b.setAttribute('aria-pressed', on);
+      $('[data-io-pw]', row).hidden = !on; $('[data-io-dots]', row).hidden = on;
+    }));
+    return () => { p = null; $$('[data-io-pw]', scope).forEach(e => { e.textContent = ''; }); }; // a new run: a new password
+  };
+  const cp = $('.connect-page [data-pw-url]');
+  if (cp) ioPassword($('.connect-page'), () => fetch(cp.dataset.pwUrl).then(r => r.ok ? r.json() : Promise.reject(r)));
   if (settings && $('#add', settings)) {
     /* The Android path when the browser names Android (Chrome's reduced User-Agent keeps "Android"); when it names no
        system at all, a touch screen counts as the device itself. Anything else (desktop, iPhone) is "another device". */
@@ -10,7 +37,7 @@
     /* An iPad's Safari says "Macintosh" (desktop sites, iPadOS 13+); a touch screen tells it from a Mac. */
     const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     settings.dataset.ios = ios ? '1' : '0';
-    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, manual = null;
+    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0;
     const device = ios && !/iPhone|iPod/.test(ua) ? 'iPad' : 'iPhone';
     // a pairing for this run of the wizard and the QR codes (POST: the pairing is this user's); `loud`: say why not
     const ensure = async loud => {
@@ -32,45 +59,20 @@
       if (!r.ok) { if (loud) practical.tell(r); return false; }
       linkAt = Date.now();
       $('[data-qr="apple"]', settings).innerHTML = r.data.qr;
+      $('[data-qr="apple-manual"]', settings).innerHTML = r.data.manual_qr; // the manual guide on the iPhone, from a computer
       $('[data-apple]', settings).href = r.data.file;
       $('#io-url', settings).textContent = r.data.url;
       $('[data-io-other]', settings).hidden = !(navigator.standalone || /FxiOS|DuckDuckGo|EdgiOS|OPiOS|OPT\/|GSA\//.test(ua));
       return true;
     };
-    /* the iPhone by hand (#add-ios-values, -more): its password, an app token made once per run of the wizard and only when
-       it is first asked for — copied, shown or as its QR code (routes::connect `manual_password`); dots until then */
-    const password = () => manual ||= practical.req('/settings/connect/manual?name=' + device, { method: 'POST' }).then(r => {
-      if (!r.ok) { manual = null; practical.tell(r); throw r; }
-      $$('[data-io-pw]', settings).forEach(e => { e.textContent = r.data.password; });
-      $$('[data-io-pw-qr] .io-qrpop', settings).forEach(e => { e.innerHTML = r.data.qr; }); // the server's own SVG
-      $$('[data-device]', settings).forEach(e => { e.textContent = r.data.name; });
-      return r.data;
-    });
-    // copy: the clipboard takes a promise (Safari keeps the tap's permission while the token is made), else the text after it
-    $$('[data-io-pw-copy]', settings).forEach(b => b.addEventListener('click', async () => {
-      try {
-        if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/plain': password().then(m => new Blob([m.password], { type: 'text/plain' })) })]);
-        else await navigator.clipboard.writeText((await password()).password);
-        toast(tr('js-copied'));
-      } catch (_) { password().then(m => navigator.clipboard.writeText(m.password)).then(() => toast(tr('js-copied')), () => {}); }
-    }));
-    // another device: the eye shows the password, a QR button shows a value to scan (hover/focus by CSS; a tap keeps it open)
-    $$('[data-io-pw-show]', settings).forEach(b => b.addEventListener('click', async () => {
-      await password().catch(() => {});
-      const on = b.getAttribute('aria-pressed') !== 'true', row = b.closest('div');
-      b.setAttribute('aria-pressed', on);
-      $('[data-io-pw]', row).hidden = !on; $('[data-io-dots]', row).hidden = on;
-    }));
-    $$('.io-qr > button', settings).forEach(b => {
-      const q = b.parentElement, ask = () => { if (q.hasAttribute('data-io-pw-qr')) password().catch(() => {}); };
-      b.addEventListener('focus', ask); b.addEventListener('mouseenter', ask);
-      b.addEventListener('click', () => { ask(); b.setAttribute('aria-expanded', q.classList.toggle('open')); });
-    });
+    // the iPhone by hand (#add-ios-values, -more): its password (routes::connect `manual_password`)
+    const newPassword = ioPassword(settings, () => practical.req('/settings/connect/manual?name=' + device, { method: 'POST' }).then(r => r.ok ? r.data : Promise.reject(practical.tell(r))));
     // the pages a device can get connected from: there the wizard waits for a device of this user that fetched its
-    // app password (Android) or its profile (iPhone) → done, or the iPhone's install step. Every 2 s for two
-    // minutes, then every 10 s; not while the page is hidden. The profile link is renewed after 8 minutes: it lives 10,
-    // and a downloaded one answers its device for 8 more (domain::connect LINK_SECS, LINK_AGAIN_SECS).
-    const WAIT = /^#add-(android(-connect)?|ios)$/;
+    // app password (Android) or its profile (iPhone) → done, or the iPhone's install step; on a computer the iPhone's
+    // values page waits too (its code is a link) and only names the device. Every 2 s for two minutes, then every 10 s;
+    // not while the page is hidden. The link is renewed after 8 minutes: it lives 10, and a used one answers its device
+    // for 8 more (domain::connect LINK_SECS, LINK_AGAIN_SECS).
+    const WAIT = ios ? /^#add-(android(-connect)?|ios)$/ : /^#add-(android(-connect)?|ios|ios-values)$/, LINKED = /^#add-ios(-values)?$/;
     const poll = async () => {
       clearTimeout(timer);
       if (!WAIT.test(location.hash) || document.hidden) return;
@@ -80,13 +82,14 @@
         if (r.ok && r.data.device) {
           $$('[data-device]', settings).forEach(e => { e.textContent = r.data.device; });
           codes = null; pair = ''; // Back starts a new wait instead of landing here again
+          if (location.hash === '#add-ios-values') return; // the iPhone copies from its own page; this one goes on by hand
           landed = true; location.replace(location.hash === '#add-ios' ? '#add-ios-install' : '#add-done');
           return;
         }
         if (r.kind === 'notfound') { codes = null; pair = ''; } // expired: a new pairing
       }
       if (!pair) await ensure(false);
-      if (location.hash === '#add-ios' && Date.now() - linkAt > 8 * 60e3) await link(false);
+      if (LINKED.test(location.hash) && Date.now() - linkAt > 8 * 60e3) await link(false);
       timer = setTimeout(poll, ++tries < 60 ? 2000 : 10000);
     };
     // each path has its own step 4: a link to the other one is sent on
@@ -98,11 +101,10 @@
       // #add-done's text: Android, the iPhone's profile, the iPhone by hand
       if (/^#add-(ios|android)/.test(h)) settings.dataset.path = /^#add-ios-(manual|values|more)$/.test(h) ? 'iosm' : h.startsWith('#add-ios') ? 'ios' : 'android';
       if ((h === '#add-done' || h === '#add-ios-install') && landed) { landed = false; $(h + ' h1').focus(); return; } // the page changed by itself: say so
-      if (h === '#add') { codes = null; pair = ''; linkAt = 0; manual = null; return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
-      if (h === '#add-ios-values' && !ios) { ensure(true); return; } // the code that opens this page on the iPhone
+      if (h === '#add') { codes = null; pair = ''; linkAt = 0; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
       if (h === '#add-android-install' && !android) ensure(true); // the stores' codes
       // Back from the install step keeps the link: the same device may load its profile again (domain::connect Links)
-      else if (WAIT.test(h) && await ensure(true) && (h !== '#add-ios' || Date.now() - linkAt < 8 * 60e3 || await link(true))) { tries = 0; poll(); }
+      else if (WAIT.test(h) && await ensure(true) && (!LINKED.test(h) || Date.now() - linkAt < 8 * 60e3 || await link(true))) { tries = 0; poll(); }
     };
     addEventListener('hashchange', step);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); // back from DAVx⁵: ask at once

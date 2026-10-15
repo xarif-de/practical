@@ -207,3 +207,26 @@ async fn an_iphone_by_hand_gets_a_password_of_its_own() {
     // the guide lists what a group's calendars need: an account as user$group
     alice.get("/settings").await.ok().has("id=\"add-ios-manual\"").has("alice$group.familie");
 }
+
+#[tokio::test]
+async fn a_computer_hands_the_manual_setup_to_the_iphone_without_a_login() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    let csrf = alice.csrf.clone();
+    let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    let l = alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await.json();
+    assert!(l["manual_qr"].as_str().unwrap().starts_with("<svg"));
+    let page = path_of(l["url"].as_str().unwrap());
+    let iphone = [("user-agent", UA_IPHONE)];
+    let mut phone = s.app.anonymous();
+    // the guide with the values and the group's login; no password before it is asked for
+    phone.send(Method::GET, &format!("{page}/manual"), &iphone, Body::empty()).await.ok().has("https://dav.example.org").has("alice$group.familie").has("data-pw-url");
+    let r = phone.send(Method::GET, &format!("{page}/password"), &iphone, Body::empty()).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    let pw = r.json()["password"].as_str().unwrap().to_string();
+    use base64ct::Encoding;
+    let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{pw}").as_bytes()));
+    assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
+    assert_eq!(phone.send(Method::GET, &format!("{page}/password"), &iphone, Body::empty()).await.json()["password"], pw, "a second copy: the same password");
+    assert_eq!(phone.send(Method::GET, &format!("{page}/PractiCal.mobileconfig"), &iphone, Body::empty()).await.status, StatusCode::GONE, "one link, one kind");
+}
