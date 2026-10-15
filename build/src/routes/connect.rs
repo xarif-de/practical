@@ -4,7 +4,7 @@
 //! - [`public_router`] (no login): `POST /index.php/login/v2` (start) and `POST /index.php/login/v2/poll/{id}`.
 //!   The app sends no browser metadata, so [`crate::csrf::origin_guard`] lets exactly these two paths through
 //!   ([`is_app_endpoint`]); neither reads the session: the start hands out nothing, the poll is authorised by
-//!   its token alone.
+//!   its token alone. Also `GET /connect/davx5`, the target of the wizard's QR code.
 //! - [`router`] (behind `require_user`): the confirmation page `GET|POST /index.php/login/v2/flow/{id}` (a
 //!   form with the session's CSRF token), `POST /settings/connect/pair` and `GET /settings/connect/status`.
 
@@ -17,7 +17,7 @@ use crate::extract::{Form, Path, Query};
 use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -31,17 +31,16 @@ pub fn is_app_endpoint(method: &axum::http::Method, path: &str) -> bool {
     method == axum::http::Method::POST && (path == "/index.php/login/v2" || path.strip_prefix("/index.php/login/v2/poll/").is_some_and(|id| !id.is_empty() && !id.contains('/')))
 }
 
+/// Open to anyone: a body is at most a poll token (`token=` + 64 characters).
 pub fn public_router() -> Router<SharedState> {
-    Router::new().route("/index.php/login/v2", post(start)).route("/index.php/login/v2/poll/{id}", post(poll)).route("/connect/davx5", get(open_davx5))
+    Router::new().route("/index.php/login/v2", post(start)).route("/index.php/login/v2/poll/{id}", post(poll)).route("/connect/davx5", get(open_davx5)).layer(DefaultBodyLimit::max(1024))
 }
 
 /// `GET /connect/davx5`: the target of the wizard's QR code — a camera app opens `https://` links only, so the
-/// code points here and this answers with the `intent:` link that opens DAVx⁵ in its login. Whether Chrome
-/// follows a redirect into an app without a tap is the browser's call; when it does not, it opens the link's
-/// fallback, the wizard's install page. Public: it reveals nothing but this server's host.
+/// code points here and this answers with the `intent:` link that opens DAVx⁵ in its login (on a Samsung
+/// phone, 2026-10-14: DAVx⁵ opened straight away). Public: it reveals nothing but this server's host.
 async fn open_davx5(State(state): State<SharedState>) -> Response {
-    let base = &state.config.public_url;
-    axum::response::Redirect::to(&connect::davx5_intent(base, &format!("{base}/settings?davx5=missing#add-android-install"))).into_response()
+    axum::response::Redirect::to(&connect::davx5_intent(&state.config.public_url)).into_response()
 }
 
 pub fn router() -> Router<SharedState> {
@@ -78,11 +77,20 @@ struct PollForm {
 }
 
 /// `POST /index.php/login/v2/poll/{id}`: 404 until confirmed, then the credentials ONCE (Nextcloud's contract).
-async fn poll(State(state): State<SharedState>, Path(id): Path<String>, Form(f): Form<PollForm>) -> Response {
-    match state.connect.flows.poll(&id, &f.token, chrono::Utc::now()) {
-        Some(g) => Json(g).into_response(),
-        None => (StatusCode::NOT_FOUND, "not granted").into_response(),
-    }
+/// The app token is made now, as the app takes it, and the user's open wizards learn the device's name.
+async fn poll(State(state): State<SharedState>, Path(id): Path<String>, Form(f): Form<PollForm>) -> AppResult<Response> {
+    let Some(taken) = state.connect.flows.poll(&id, &f.token, chrono::Utc::now()) else {
+        return Ok((StatusCode::NOT_FOUND, "not granted").into_response());
+    };
+    let app_password = match tokens::create(&state, &taken.user, &taken.name).await {
+        Ok(p) => p,
+        Err(e) => {
+            state.connect.flows.restore(taken); // the app may ask again
+            return Err(e);
+        }
+    };
+    state.connect.pairs.connected(&taken.user.id, &taken.name);
+    Ok(Json(Grant { server: state.config.public_dav_url.clone(), login_name: taken.user.id, app_password }).into_response())
 }
 
 #[derive(Template, WebTemplate)]
@@ -90,7 +98,7 @@ async fn poll(State(state): State<SharedState>, Path(id): Path<String>, Form(f):
 pub struct ConfirmPage {
     pub ctx: PageCtx,
     pub id: String,
-    /// "ask" (the form), "done" (confirmed), "gone" (unknown, expired or already confirmed)
+    /// "ask" (the form), "done" (confirmed), "gone" (unknown, expired or another user's)
     pub state: &'static str,
     pub app: String,
     pub name: String,
@@ -102,8 +110,10 @@ pub struct ConfirmPage {
     pub host: String,
 }
 
-fn host_of(state: &SharedState) -> String {
-    url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default()
+impl ConfirmPage {
+    fn new(ctx: PageCtx, id: String, state: &'static str, host: String) -> Self {
+        ConfirmPage { ctx, id, state, app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host }
+    }
 }
 
 /// The app's name for the page: "DAVx⁵" for DAVx⁵ (`DAVx5/<version> (<package>)`, davx5-ose `ProductIds.kt`),
@@ -115,13 +125,28 @@ fn app_label(ua: &str) -> String {
     ua.split([' ', '/']).next().filter(|s| !s.is_empty()).unwrap_or("?").chars().take(40).collect()
 }
 
-async fn confirm_page(State(state): State<SharedState>, _user: Principal, ctx: PageCtx, Path(id): Path<String>) -> ConfirmPage {
-    let Some(ua) = state.connect.flows.pending(&id, chrono::Utc::now()) else {
-        return ConfirmPage { ctx, id, state: "gone", app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) };
-    };
-    let app = app_label(&ua);
-    let name = if ua.starts_with("DAVx5") { ctx.t("connect-name-android") } else { app.clone() };
-    ConfirmPage { ctx, id, state: "ask", app, name, account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) }
+/// The device name the form suggests (and takes when left empty).
+fn default_name(ctx: &PageCtx, ua: &str) -> String {
+    if ua.starts_with("DAVx5") { ctx.t("connect-name-android") } else { app_label(ua) }
+}
+
+/// The page of a flow: the form while pending; the result for the user who confirmed it (a reload, a second tap).
+async fn confirm_page(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Path(id): Path<String>) -> AppResult<ConfirmPage> {
+    let now = chrono::Utc::now();
+    let host = connect::host_of(&state.config.public_url);
+    if let Some(ua) = state.connect.flows.pending(&id, now) {
+        return Ok(ConfirmPage { app: app_label(&ua), name: default_name(&ctx, &ua), ..ConfirmPage::new(ctx, id, "ask", host) });
+    }
+    let confirmed = state.connect.flows.confirmed(&id, &user.id, now);
+    done(&state, &user, ctx, id, host, confirmed).await
+}
+
+/// "done" with what DAVx⁵ asks next (this user's account and collections), or "gone" for `None`.
+async fn done(state: &SharedState, user: &Principal, ctx: PageCtx, id: String, host: String, confirmed: Option<(String, String)>) -> AppResult<ConfirmPage> {
+    let Some((ua, name)) = confirmed else { return Ok(ConfirmPage::new(ctx, id, "gone", host)) };
+    let books: Vec<String> = crate::domain::collections::addressbooks_for(state, user, false).await?.into_iter().map(|a| a.displayname).collect();
+    let calendars = connect::davx5_calendars(crate::domain::collections::calendars_for(state, user, false).await?.into_iter().map(|c| c.displayname), &books);
+    Ok(ConfirmPage { app: app_label(&ua), name, account: user.id.clone(), calendars, addressbooks: books, ..ConfirmPage::new(ctx, id, "done", host) })
 }
 
 #[derive(Deserialize)]
@@ -131,82 +156,33 @@ struct ConfirmForm {
     csrf: String,
     #[serde(default, deserialize_with = "crate::extract::text")]
     name: String,
-    #[serde(default)]
-    app: String,
 }
 
-/// The user confirms: a new app token named after the device, handed to the flow and announced to the
-/// user's open wizards.
+/// The user confirms: the flow learns who and the device's name (the app token follows when the app fetches
+/// it, [`poll`]).
 async fn confirm(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path(id): Path<String>, Form(f): Form<ConfirmForm>) -> AppResult<ConfirmPage> {
     csrf::check(&session, &f.csrf).await?;
     let now = chrono::Utc::now();
-    let gone = || ConfirmPage { ctx: ctx.clone(), id: id.clone(), state: "gone", app: String::new(), name: String::new(), account: String::new(), calendars: vec![], addressbooks: vec![], host: host_of(&state) };
-    if state.connect.flows.pending(&id, now).is_none() {
-        return Ok(gone());
-    }
-    let mut name: String = f.name.trim().chars().take(NAME_MAX).collect();
+    let mut name: String = f.name.chars().take(NAME_MAX).collect::<String>().trim().to_string();
     if name.is_empty() {
-        name = ctx.t("connect-name-android");
+        name = state.connect.flows.pending(&id, now).map(|ua| default_name(&ctx, &ua)).unwrap_or_default();
     }
-    let password = tokens::create(&state, &user, &name).await?;
-    if !state.connect.flows.grant(&id, Grant { server: state.config.public_dav_url.clone(), login_name: user.id.clone(), app_password: password.clone() }, now) {
-        // expired between the two checks: the token nobody will fetch goes again
-        let prefix = password.split('_').next().unwrap_or_default();
-        if let Some(t) = tokens::list(&state, &user).await?.into_iter().find(|t| t.name == name && t.id.starts_with(prefix)) {
-            tokens::delete(&state, &user, &t.id).await?;
-        }
-        return Ok(gone());
-    }
-    state.connect.pairs.connected(&user.id, &name);
-    // the collections as DAVx⁵ lists them: the calendars, then one birthday calendar per address book
-    // (RustiCal's `birthday_calendar.rs`: "<address book> birthdays", v0.16.6)
-    let abs: Vec<String> = crate::domain::collections::addressbooks_for(&state, &user, false).await?.into_iter().map(|a| a.displayname).collect();
-    let mut calendars: Vec<String> = crate::domain::collections::calendars_for(&state, &user, false).await?.into_iter().map(|c| c.displayname).collect();
-    calendars.extend(abs.iter().map(|a| format!("{a} birthdays")));
-    Ok(ConfirmPage { ctx, id, state: "done", app: f.app, name, account: user.id.clone(), calendars, addressbooks: abs, host: host_of(&state) })
+    let confirmed = state.connect.flows.grant(&id, &user, &name, now);
+    done(&state, &user, ctx, id, connect::host_of(&state.config.public_url), confirmed).await
 }
 
 #[derive(serde::Serialize)]
-struct Code {
-    url: String,
-    svg: String,
-}
-
-#[derive(serde::Serialize)]
-struct StoreCode {
-    key: &'static str,
-    url: &'static str,
-    short: &'static str,
-    svg: String,
-}
-
-#[derive(serde::Serialize)]
-struct PairAnswer {
+struct PairAnswer<'a> {
     pair: String,
-    /// opens DAVx⁵ on the phone that scans it ([`open_davx5`])
-    connect: Code,
-    stores: Vec<StoreCode>,
+    #[serde(flatten)]
+    codes: &'a connect::Codes,
 }
 
-#[derive(Deserialize)]
-struct PairForm {
-    /// a pairing the page already has (it was opened through one): kept if it is the user's
-    #[serde(default)]
-    pair: String,
-}
-
-/// `POST /settings/connect/pair`: the wizard's pairing and its QR codes (made here: the page gets them only
-/// when the wizard runs).
-async fn pair(State(state): State<SharedState>, user: Principal, _t: csrf::Token, Form(f): Form<PairForm>) -> Json<PairAnswer> {
-    let now = chrono::Utc::now();
-    let id = if !f.pair.is_empty() && state.connect.pairs.status(&f.pair, &user.id, now).is_some() { f.pair } else { state.connect.pairs.create(&user.id, now) };
-    let base = &state.config.public_url;
-    let url = format!("{base}/connect/davx5");
-    Json(PairAnswer {
-        connect: Code { svg: connect::qr_svg(&url), url },
-        stores: connect::STORES.iter().map(|s| StoreCode { key: s.key, url: s.url, short: s.short, svg: connect::qr_svg(s.url) }).collect(),
-        pair: id,
-    })
+/// `POST /settings/connect/pair`: a pairing for this run of the wizard, and its QR codes (sent here: the page
+/// gets them only when the wizard runs).
+async fn pair(State(state): State<SharedState>, user: Principal, _t: csrf::Token) -> Response {
+    let pair = state.connect.pairs.create(&user.id, chrono::Utc::now());
+    Json(PairAnswer { pair, codes: state.connect.codes(&state.config.public_url) }).into_response()
 }
 
 #[derive(Deserialize)]
@@ -214,7 +190,7 @@ struct StatusQuery {
     pair: String,
 }
 
-/// `GET /settings/connect/status?pair=…`: opened on the other device, and the device that got connected.
+/// `GET /settings/connect/status?pair=…`: the device that got connected meanwhile, if any.
 async fn status(State(state): State<SharedState>, user: Principal, Query(q): Query<StatusQuery>) -> Response {
     match state.connect.pairs.status(&q.pair, &user.id, chrono::Utc::now()) {
         Some(s) => Json(s).into_response(),

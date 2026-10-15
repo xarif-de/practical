@@ -21,7 +21,8 @@
 //!    `AuthenticationLayer` (the principal from the session or an HTTP Basic app token) →
 //!    [`csrf::origin_guard`] → the router.
 //! 4. The router: [`auth::router`] (`/login`, `/login/oidc*`, `/logout`), [`routes::connect::public_router`] (an
-//!    app's Login Flow v2 start and poll, the only POSTs the origin guard lets through without browser metadata), [`routes::dev`] (`/dev/reload`,
+//!    app's Login Flow v2 start and poll, the only POSTs the origin guard lets through without browser metadata;
+//!    `/connect/davx5`), [`routes::dev`] (`/dev/reload`,
 //!    development only), `/` → `/calendar` ([`routes::pages`]), and the protected part:
 //!    [`auth::require_user`] → [`ctx::localize_errors`] → [`error::catch_panic`] → the page and API routers
 //!    [`routes::calendar`], [`routes::contacts`], [`routes::tasks`], [`routes::history`],

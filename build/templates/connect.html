@@ -13,7 +13,6 @@
   <p class="lead">{{ ctx.t1("connect-text", "user", ctx.user_id()) }}</p>
   <form method="post" action="/index.php/login/v2/flow/{{ id }}">
     {{ m::csrf() }}
-    <input type="hidden" name="app" value="{{ app }}">
     <label class="field">{{ ctx.t("connect-name") }}<input type="text" name="name" value="{{ name }}" maxlength="60" required autocomplete="off"></label>
     <p class="hint">{{ ctx.t("connect-name-hint") }}</p>
     <p class="warn">{{ ctx.t("connect-warn") }}</p>

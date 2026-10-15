@@ -73,13 +73,6 @@ impl PageCtx {
     pub fn tp(&self, key: &str) -> String {
         self.i18n.plural_json(&self.lang, key)
     }
-    /// A message with two text arguments (the "add a device" help names a choice and a button of DAVx⁵)
-    pub fn t2(&self, key: &str, a: &(&str, &str), b: &(&str, &str)) -> String {
-        let mut args = FluentArgs::new();
-        args.set(a.0, a.1.to_string());
-        args.set(b.0, b.1.to_string());
-        self.i18n.t_args(&self.lang, key, Some(&args))
-    }
     /// "Step 2 of 4" (the "add a device" wizard, macros.html `wiz_bars`)
     pub fn step(&self, n: &i64, of: &i64) -> String {
         let mut a = FluentArgs::new();

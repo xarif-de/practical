@@ -1,5 +1,6 @@
 //! Connecting a device (routes::connect): Login Flow v2 as DAVx⁵ drives it — no browser metadata on the app's
-//! requests, the confirmation in the user's session — and the wizard's pairing.
+//! requests, the confirmation in the user's session, the app token made when the app fetches it — and the
+//! wizard's pairing.
 
 use super::seed::seed;
 use crate::testkit::PUBLIC_URL;
@@ -36,9 +37,13 @@ async fn davx5_gets_an_app_password_through_the_users_confirmation() {
     let r = alice.post_form_raw(&path_of(&login), &[("name", "Pixel 9")]).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
     // after the confirmation the page shows what DAVx⁵ asks next, with this user's account and collections
-    alice.post_form(&path_of(&login), &[("name", "Pixel 9"), ("app", "DAVx⁵")]).await.ok().has("Verbunden").has("Gruppen sind Kategorien der Kontakte").has("Abschließen").has("alice");
-    // a confirmed flow cannot be confirmed again
-    alice.get(&path_of(&login)).await.ok().has("Dieser Link ist abgelaufen");
+    alice.post_form(&path_of(&login), &[("name", "Pixel 9")]).await.ok().has("Verbunden").has("Gruppen sind Kategorien der Kontakte").has("Abschließen").has("alice");
+    // a second tap or a reload shows the same; another user gets nothing
+    alice.post_form(&path_of(&login), &[("name", "Zweitname")]).await.ok().has("Verbunden");
+    alice.get(&path_of(&login)).await.ok().has("Verbunden");
+    s.app.login("bob").await.get(&path_of(&login)).await.ok().has("Dieser Link ist abgelaufen");
+    // no app token before the app fetched it: a confirmation nobody fetches leaves nothing behind
+    assert!(!alice.get("/settings").await.body.contains("Pixel 9"));
     // 4. the app polls: a wrong token gets nothing, the right one the credentials once
     let r = app.send(Method::POST, &path_of(&endpoint), &form, Body::from(poll("wrong"))).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
@@ -54,6 +59,7 @@ async fn davx5_gets_an_app_password_through_the_users_confirmation() {
     let r = s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     alice.get("/settings").await.ok().has("Pixel 9").has("Meine verbundenen Geräte");
+    assert!(!alice.get("/settings").await.body.contains("Zweitname"), "the first name counts");
 }
 
 #[tokio::test]
@@ -71,43 +77,37 @@ async fn only_the_app_endpoints_skip_the_origin_check() {
 }
 
 #[tokio::test]
-async fn the_wizard_learns_when_the_other_device_opened_it_and_what_got_connected() {
+async fn the_wizard_learns_which_device_got_connected() {
     let s = seed().await;
     let mut alice = s.app.login("alice").await;
     let csrf = alice.csrf.clone();
-    let hdr = [("content-type", "application/x-www-form-urlencoded"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
-    let r = alice.send(Method::POST, "/settings/connect/pair", &hdr, Body::from("pair=")).await;
+    let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    let r = alice.send(Method::POST, "/settings/connect/pair", &hdr, Body::empty()).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     let p = r.json();
     let pair = p["pair"].as_str().unwrap().to_string();
-    assert_eq!(p["connect"]["url"].as_str().unwrap(), format!("{PUBLIC_URL}/connect/davx5"), "the code opens DAVx⁵ directly");
-    assert!(p["connect"]["svg"].as_str().unwrap().starts_with("<svg"));
-    // that link answers with the app link, no login needed (a camera app opens it in a fresh tab)
+    assert!(p["connect"].as_str().unwrap().starts_with("<svg"));
+    assert!(p["stores"]["fd"].as_str().unwrap().starts_with("<svg"));
+    // the code's link answers with the app link, no login needed (a camera app opens it in a fresh tab)
     let r = s.app.anonymous().get("/connect/davx5").await;
     assert!(r.status.is_redirection(), "{}", r.status);
     assert!(r.location().unwrap().starts_with("intent://localhost:4001#Intent;scheme=davx5;package=at.bitfire.davdroid;S.loginFlow=1;"));
-    assert_eq!(p["stores"].as_array().unwrap().len(), 5);
     // without the CSRF header no pairing is made
-    let r = alice.send(Method::POST, "/settings/connect/pair", &hdr[..2], Body::from("pair=")).await;
+    let r = alice.send(Method::POST, "/settings/connect/pair", &hdr[..1], Body::empty()).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
     let st = format!("/settings/connect/status?pair={pair}");
-    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "opened": false, "device": null }));
-    // another user can neither open nor read it
-    let mut bob = s.app.login("bob").await;
-    bob.get(&format!("/settings?pair={pair}")).await.ok();
-    assert_eq!(bob.get_json(&st).await.status, StatusCode::NOT_FOUND);
-    assert_eq!(alice.get_json(&st).await.json()["opened"], false);
-    // the phone opens the code's link (same user, its own session)
+    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": null }));
+    // another user cannot read it
+    assert_eq!(s.app.login("bob").await.get_json(&st).await.status, StatusCode::NOT_FOUND);
+    // a confirmed flow names the device in every open pairing of the user once the app fetched its password
     let mut phone = s.app.login("alice").await;
-    phone.get(&format!("/settings?pair={pair}")).await.ok();
-    assert_eq!(alice.get_json(&st).await.json()["opened"], true);
-    // the page reuses a pairing it was opened through
-    let r = phone.send(Method::POST, "/settings/connect/pair", &[("content-type", "application/x-www-form-urlencoded"), ("sec-fetch-site", "same-origin"), ("x-csrf-token", &phone.csrf.clone())], Body::from(format!("pair={pair}"))).await;
-    assert_eq!(r.json()["pair"].as_str(), Some(pair.as_str()));
-    // a confirmed flow names the device in every open pairing of the user
     let start = s.app.anonymous().send(Method::POST, "/index.php/login/v2", &[("user-agent", UA)], Body::empty()).await.json();
     phone.post_form(&path_of(start["login"].as_str().unwrap()), &[("name", "Pixel 9")]).await.ok();
-    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "opened": true, "device": "Pixel 9" }));
+    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": null }), "not before the app fetched it");
+    let body = format!("token={}", start["poll"]["token"].as_str().unwrap());
+    let r = s.app.anonymous().send(Method::POST, &path_of(start["poll"]["endpoint"].as_str().unwrap()), &[("content-type", "application/x-www-form-urlencoded")], Body::from(body)).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": "Pixel 9" }));
 }
 
 #[tokio::test]

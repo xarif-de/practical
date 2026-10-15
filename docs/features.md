@@ -403,7 +403,8 @@ that device only. **Settings → Account & apps → Add a device** walks you thr
 - **Android:** the assistant recommends the app DAVx⁵ and links every place to get it: Google Play, F-Droid (free),
   Galaxy Store, AppGallery and GitHub. On the phone, one tap on **Connect with DAVx⁵** opens DAVx⁵ with this server
   filled in. You confirm in the browser, and DAVx⁵ receives its password by itself: nothing to type or copy. On a
-  computer, QR codes take you to the same step on the phone, and the page shows when the phone is connected.
+  computer, the store links come as QR codes, one more QR code opens DAVx⁵ on the phone, and the page shows when
+  the phone is connected.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 

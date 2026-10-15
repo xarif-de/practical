@@ -108,9 +108,6 @@ pub struct SettingsPage {
 
 #[derive(Deserialize)]
 struct PageQuery {
-    /// the wizard was opened through another device's QR code (`domain::connect::Pairs`)
-    #[serde(default)]
-    pair: String,
     /// Chrome opened the intent link's fallback: DAVx⁵ is not installed (`domain::connect::davx5_intent`)
     #[serde(default)]
     davx5: String,
@@ -258,9 +255,6 @@ async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<Rem
 }
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<PageQuery>) -> AppResult<SettingsPage> {
-    if !q.pair.is_empty() {
-        state.connect.pairs.open(&q.pair, &user.id);
-    }
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let p = prefs::get(&state.db, &user.id).await?;
     let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
@@ -280,16 +274,17 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     };
     let abs_all = collections::addressbooks_for(&state, &user, false).await?;
     let remote_links = remote_rows(&state, &user).await?;
+    let davx5_books: Vec<String> = abs_all.iter().map(|a| a.displayname.clone()).collect();
     Ok(SettingsPage {
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_servers: crate::domain::remote::servers_of(&state, &user).await?,
         remote_links,
-        davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url, &format!("{}/settings?davx5=missing#add-android-install", state.config.public_url)),
+        davx5_intent: crate::domain::connect::davx5_intent(&state.config.public_url),
         davx5_missing: q.davx5 == "missing",
-        davx5_books: abs_all.iter().map(|a| a.displayname.clone()).collect(),
-        davx5_calendars: cals_all.iter().map(|c| c.displayname.clone()).chain(abs_all.iter().map(|a| format!("{} birthdays", a.displayname))).collect(),
+        davx5_calendars: crate::domain::connect::davx5_calendars(cals_all.iter().map(|c| c.displayname.clone()), &davx5_books),
+        davx5_books,
         stores: &crate::domain::connect::STORES,
-        plan_host: url::Url::parse(&state.config.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default(),
+        plan_host: crate::domain::connect::host_of(&state.config.public_url),
         alarm_snaps_start: events::fmt_offsets(&snaps.start),
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
         alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),

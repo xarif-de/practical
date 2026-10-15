@@ -2,8 +2,8 @@
    and the confirmation page an app opens (templates/connect.html). Two paths: .oa = on the Android device itself,
    .od = on another one; js/shell/settings-connect.js sets #settings[data-android] (no JS: the other-device path) */
 .settings:not([data-android="1"]) .oa, .settings[data-android="1"] .od { display: none !important; }
-/* a primary button with a symbol: icon-buttons.css turns a .btn holding an .ico into a link, this one stays a button */
-.set .btn.btn-primary:has(> .ico), .connect-page .btn.btn-primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; padding: 7px 14px; font-weight: 600; }
+/* a primary button with a symbol stays a button (icon-buttons.css: not a link) */
+.set .btn.btn-primary:has(> .ico), .connect-page .btn.btn-primary { padding: 7px 14px; font-weight: 600; }
 .set .btn.big, .connect-page .btn.big { padding: 11px 18px; font-size: 16px; border-radius: 12px; }
 .set .btn.big .ico { width: 20px; height: 20px; }
 /* the hero: blue gradient, a drawn laptop + tablet + phone (no image request); on a phone the scene sits on top */
@@ -29,16 +29,11 @@
 .wiz .wz h1 { font: 700 21px/1.25 var(--font-display); letter-spacing: normal; margin: 10px 0 6px; } /* the page's one h1: the step's title */
 .wiz .wz h1 + .oa { margin-top: 14px; }
 .wiz .lead { color: var(--fg-2); font-size: 14.5px; margin: 0 auto 16px; max-width: 460px; line-height: 1.5; } .wiz .lead.after { margin: 14px auto 4px; }
-.wiz .ic { display: grid; place-items: center; } .wiz .ic > .ico { width: 30px; height: 30px; color: #3ddc84; }
+.wiz .ic { display: grid; place-items: center; } /* the DAVx⁵ logo as published: no frame, no rounding of ours (docs/licensing.md) */
 .wiz .acts { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; }
 .wiz .acts .muted, .wiz .another { font-size: 14px; }
 .wiz .another { display: inline-block; margin-top: 12px; color: var(--accent); }
 .wiz .hint { font-size: 12.5px; color: var(--fg-3); line-height: 1.45; margin: 12px 0 0; }
-.wiz .or { display: flex; align-items: center; gap: 10px; color: var(--fg-3); font-size: 12.5px; margin: 16px auto; max-width: 360px; }
-.wiz .or::before, .wiz .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
-.wiz .mini { margin: 0; padding-left: 18px; color: var(--fg-2); font-size: 13.5px; line-height: 1.6; text-align: left; }
-.wiz .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-/* the DAVx⁵ logo is shown as published: no frame, no rounding of ours (docs/licensing.md) */
 /* QR codes: the server's SVG in a white frame (also in the dark scheme: a camera needs dark on light) */
 .wiz .qr { display: inline-block; background: #fff; padding: 8px; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); line-height: 0; }
 .wiz .qr svg { width: 156px; height: 156px; display: block; }
@@ -51,9 +46,7 @@
 .wiz-tiles span:not(.ti) { font-size: 12.5px; color: var(--fg-3); }
 .wiz-tiles .ti { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; color: #fff; margin-bottom: 6px; } .wiz-tiles .ti .ico { width: 28px; height: 28px; }
 .wiz .live { display: flex; gap: 10px; align-items: center; justify-content: center; font-size: 14px; color: var(--fg-2); margin-top: 12px; }
-.wiz .live[hidden] { display: none; }
 .wiz .live .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--c4); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c4) 22%, transparent); animation: wiz-pulse 1.6s ease-in-out infinite; }
-.wiz .live.ok .dot { background: var(--c2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c2) 22%, transparent); animation: none; }
 @keyframes wiz-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .wiz .live .dot { animation: none; } }
 /* step 3: the stores as settings rows; on another device a row picks the QR code beside the list */
@@ -71,7 +64,7 @@
 /* step 5 and the confirmation page: the green tick */
 .ok-dot { width: 56px; height: 56px; border-radius: 50%; background: var(--c2); color: #fff; display: grid; place-items: center; margin: 0 auto 4px; }
 .ok-dot .ico { width: 26px; height: 26px; } .ok-dot.gone { background: var(--fg-3); }
-.wiz #add-done .group, #add-done .wz .group { text-align: left; background: var(--bg); margin: 10px 0 0; }
+#add-done .wz .group { text-align: left; background: var(--bg); margin: 10px 0 0; }
 /* manual: a long address under its label, never over it (the old rows overlapped on a phone) */
 .set .cell.stack .k { display: block; font-size: 12px; color: var(--fg-3); }
 .set .cell.stack code { display: block; font-size: 13.5px; color: var(--fg); overflow-wrap: anywhere; }
@@ -100,7 +93,7 @@
 .dx.dk { background: #1b1b1b; color: #eee; } .dx.lt { background: #fff; color: #1d1d1f; }
 .dx .hd { background: #2a2a2a; padding: 9px 8px; font-size: 10.5px; overflow-wrap: anywhere; }
 .dx .bd { flex: 1; min-height: 0; overflow: hidden; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.dx .bd.c { align-items: center; text-align: center; justify-content: center; }
+.dx .bd.mid { align-items: center; text-align: center; justify-content: center; }
 .dx .big { font-size: 13px; line-height: 1.15; }
 .dx .fld { border: 1px solid #888; border-radius: 5px; padding: 5px 6px; font-size: 9.5px; overflow-wrap: anywhere; } .dx .fld small { display: block; font-size: 7.5px; color: #aaa; margin-bottom: 1px; }
 .dx .ft { background: #333; padding: 8px; } .dx .pill { display: inline-block; background: #c5e1a5; color: #1e3a0b; border-radius: 999px; padding: 5px 11px; font-weight: 600; font-size: 10px; }
@@ -114,11 +107,13 @@
 .dx .rd { display: flex; gap: 5px; align-items: flex-start; font-size: 8.5px; padding: 2px 3px; border-radius: 5px; }
 .dx .rd i { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #ddd; margin-top: 1px; } .dx .rd.on i { border-color: #c5e1a5; background: radial-gradient(#c5e1a5 40%, transparent 45%); }
 .dx .tabs { display: flex; background: #2a2a2a; font-size: 9px; } .dx .tabs span { flex: 1; text-align: center; padding: 6px 0; color: #c5e1a5; border-bottom: 2px solid transparent; } .dx .tabs span.on { border-bottom-color: #c5e1a5; }
-.dx .cd { background: #353535; border-radius: 7px; padding: 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-weight: 700; font-size: 9px; overflow-wrap: anywhere; }
+.dx .cd { background: #353535; border-radius: 7px; padding: 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-weight: 700; font-size: 8.5px; overflow-wrap: anywhere; }
 .dx .cd > span:first-child { color: #eee; } /* a list rule of the page must not reach into the picture (axe 2026-10-14: 2.42) */
 .dx .tg { flex: none; width: 24px; height: 13px; border-radius: 999px; border: 1.5px solid #c5e1a5; background: #c5e1a5; position: relative; } .dx .tg i { position: absolute; top: 1.5px; left: 12px; width: 7px; height: 7px; border-radius: 50%; background: #1e3a0b; }
-.dx .hi { box-shadow: 0 0 0 2px #ff9f0a; animation: dx-hi 1.6s ease-in-out infinite; } @keyframes dx-hi { 50% { box-shadow: 0 0 0 4px #ff9f0a66; } }
-@media (prefers-reduced-motion: reduce) { .dx .hi { animation: none; } }
+/* the pulse is a ring's opacity (no repaint per frame, as an animated box-shadow would be) */
+.dx .hi { box-shadow: 0 0 0 2px #ff9f0a; position: relative; } .dx .hi::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; box-shadow: 0 0 0 2px #ff9f0a66; opacity: 0; animation: dx-hi 1.6s ease-in-out infinite; pointer-events: none; }
+@keyframes dx-hi { 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dx .hi::after { animation: none; } }
 /* the confirmation page: in the app's browser tab, no app chrome; the trail of the whole setup; after it, what to do in DAVx⁵ */
 body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none; }
 .connect-page .trail { list-style: none; display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin: 0; padding: 0; }
@@ -155,6 +150,5 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .dx.sys { background: #000; color: #eee; } .dx.sys .hd { background: #000; font-weight: 700; }
 .dx .row2 { background: #1c1c1e; border-radius: 7px; padding: 5px 7px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 8.5px; }
 .dx .row2 small { color: #6ea8ff; font-size: 8px; text-align: right; flex: none; max-width: 50%; } .dx .row2 > span:first-child { min-width: 0; }
-.dx .cd { font-size: 8.5px; }
 .dx .tg.off { background: #555; border-color: #555; } .dx .tg.off i { left: 2px; background: #ddd; }
 .dx .tg.blue { background: #3b82f6; border-color: #3b82f6; } .dx .tg.blue i { background: #fff; }
