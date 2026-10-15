@@ -66,7 +66,7 @@ $R principals --help                                         # everything else
 Calendar apps never use this password. The DAV server accepts only app tokens. You create an app token in one of two
 ways:
 
-- In PractiCal: **Settings → Account & apps → Add a device** (DAVx⁵ on Android gets its token by itself; **Manual**
+- In PractiCal: **Settings → Connected devices → Add a device** (DAVx⁵ on Android gets its token by itself; **Manual**
   creates one to copy).
 - With the CLI: `rustical principals app-token create --name <device> <id>`.
 

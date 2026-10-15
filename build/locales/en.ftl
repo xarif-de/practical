@@ -27,7 +27,7 @@ login-hint-signup = Every account at the single sign-on can sign in. A new accou
 login-no-account = There is no account for this sign-in yet.
 login-create-account = Create an account at RustiCal
 login-id-rejected = The user name from the single sign-on cannot be an account name.
-tab-account = Account & apps
+tab-account = Connected devices
 tab-groups = Groups
 tab-collections = Calendars & address books
 tab-trash = Trash
@@ -101,7 +101,6 @@ set-import-addressbook = Import address book
 imp-ab-hint = The source becomes a new address book. vCard files carry no book name: the file name is proposed — you can change it before the import.
 token-new-hint = New password – copy it now, it will not be shown again:
 # "add a device" (settings › Konto & Apps, routes::connect)
-set-account = Account
 connect-hero-title = Your calendars on all your devices
 connect-hero-text = Events, contacts and tasks on phone, tablet and computer – always in sync with PractiCal.
 connect-add = Add a device
@@ -748,7 +747,6 @@ tk-v-deck = Cards
 tk-v-history = History
 tk-columns = Columns
 tk-col-created = Created
-set-account-sub = Account, connected devices
 set-vacation = Vacation
 set-days = { $n ->
     [one] { $n } day

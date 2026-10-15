@@ -1,4 +1,4 @@
-/* css/connect.css — Konto & Apps: the device hero, "add a device" (one .page.wiz per step, templates/settings.html)
+/* css/connect.css — Connected devices: the device hero, "add a device" (one .page.wiz per step, templates/settings.html)
    and the confirmation page an app opens (templates/connect.html). Two paths: .oa = on the Android device itself,
    .od = on another one; js/shell/settings-connect.js sets #settings[data-android] (no JS: the other-device path) */
 .settings:not([data-android="1"]) .oa, .settings[data-android="1"] .od { display: none !important; }

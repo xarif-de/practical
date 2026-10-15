@@ -15,7 +15,7 @@
 <section class="page" id="home">
   <h1>{{ ctx.t("nav-settings") }}</h1>
   <div class="group">
-    <a class="cell link" href="#account"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ ctx.user_id() }}<span class="sub">{{ ctx.public_dav_url.trim_start_matches("https://").trim_start_matches("http://") }}</span></span><span class="val">{{ ctx.t("set-account-sub") }}<span class="chev">›</span></span></a>
+    {% call m::nav_cell("#account", "var(--c2)", "smartphone") %}<span>{{ ctx.t("tab-account") }}</span><span class="val">{{ tokens.len() }}{% endcall %}
   </div>
   <div class="label">{{ ctx.t("tab-general") }}</div>
   <div class="group">
@@ -340,10 +340,6 @@
     {% if tokens.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("devices-none") }}</span></div>{% endif %}
   </div>
   <p class="foot">{{ ctx.t("devices-foot") }}</p>
-  <div class="label">{{ ctx.t("set-account") }}</div>
-  <div class="group">
-    <div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ ctx.user_id() }}<span class="sub">{{ self.dav_host() }}</span></span></div>
-  </div>
 </section>
 
 {# "add a device": one page per step, wizard frame of connect.css. Two paths: on the Android device itself

@@ -242,7 +242,7 @@ const SHOTS = [
   ['history', 'Change history', 'The change history as a list: an undone change with its before and after values, and the history of that event.', async p => {
     await p.goto('/history?view=list'); // the newest change is picked: the undo (02-demo.py)
     await p.locator('.hxc-card .hxc-pv b').first().waitFor({ state: 'attached' }); }, 'light'],
-  ['app-tokens', 'Connected devices', 'The account page: add a device, and every connected device with its own password.', async p => {
+  ['app-tokens', 'Connected devices', 'Connected devices: add a device, and every connected device with its own password.', async p => {
     await p.goto('/settings#account'); await p.locator('#account').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['groups', 'Groups', 'A group and its members: every member may add or remove members and manage the group\'s calendars.', async p => {
     await p.goto('/settings#groups'); await p.locator('#groups').waitFor(); }, 'light', { device: 'settings', fit: true }],

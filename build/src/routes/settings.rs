@@ -202,10 +202,6 @@ impl SettingsPage {
     pub fn device_icon(&self, name: &str) -> &'static str {
         crate::domain::connect::device_icon(name)
     }
-    /// the host the DAV apps reach (the manual page's first row)
-    pub fn dav_host(&self) -> &str {
-        self.ctx.public_dav_url.trim_start_matches("https://").trim_start_matches("http://")
-    }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }

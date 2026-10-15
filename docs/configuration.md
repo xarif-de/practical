@@ -88,7 +88,7 @@ Users sign in to PractiCal in one of two ways: with a password, or with single s
 offer both.
 
 In both cases, a user is a RustiCal **principal**. A principal is RustiCal's word for a user or a group. Calendar
-apps never use the login password: each device gets its own app token in PractiCal's settings (**Account & apps →
+apps never use the login password: each device gets its own app token in PractiCal's settings (**Connected devices →
 Add a device**).
 
 ### Password login

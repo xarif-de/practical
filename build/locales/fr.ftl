@@ -27,7 +27,7 @@ login-hint-signup = Tout compte de l’authentification unique peut se connecter
 login-no-account = Il n’existe pas encore de compte pour cette connexion.
 login-create-account = Créer un compte sur RustiCal
 login-id-rejected = Le nom d’utilisateur de l’authentification unique n’est pas autorisé comme nom de compte.
-tab-account = Compte et apps
+tab-account = Appareils connectés
 tab-groups = Groupes
 tab-collections = Calendriers et carnets d'adresses
 tab-trash = Corbeille
@@ -101,7 +101,6 @@ set-import-addressbook = Importer un carnet d'adresses
 imp-ab-hint = La source devient un nouveau carnet d’adresses. Les fichiers vCard ne portent pas de nom : le nom du fichier est proposé — vous pouvez le changer avant l’import.
 token-new-hint = Nouveau mot de passe – copiez-le maintenant, il ne sera plus affiché :
 # "add a device" (settings › Konto & Apps, routes::connect)
-set-account = Compte
 connect-hero-title = Vos calendriers sur tous vos appareils
 connect-hero-text = Événements, contacts et tâches sur smartphone, tablette et ordinateur – toujours synchronisés avec PractiCal.
 connect-add = Ajouter un appareil
@@ -745,7 +744,6 @@ tk-v-deck = Cartes
 tk-v-history = Historique
 tk-columns = Colonnes
 tk-col-created = Créée
-set-account-sub = Compte, appareils connectés
 set-vacation = Congés
 set-days = { $n ->
     [one] { $n } jour

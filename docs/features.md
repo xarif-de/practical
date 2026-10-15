@@ -398,7 +398,7 @@ would be quietly incomplete.
 ### Connect your phone and other devices
 
 Calendar apps on your phone or computer never use your login password. Each device gets its own password, made for
-that device only. **Settings → Account & apps → Add a device** walks you through it:
+that device only. **Settings → Connected devices → Add a device** walks you through it:
 
 - **Android:** the assistant recommends the app DAVx⁵ and links every place to get it: Google Play, F-Droid (free),
   Galaxy Store, AppGallery and GitHub. On the phone, one tap on **Connect with DAVx⁵** opens DAVx⁵ with this server
