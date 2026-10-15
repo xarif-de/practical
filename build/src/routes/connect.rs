@@ -8,8 +8,9 @@
 //!   page `GET /connect/apple/{id}` and file `GET /connect/apple/{id}/PractiCal.mobileconfig`: the
 //!   configuration profile an iPhone or iPad installs.
 //! - [`router`] (behind `require_user`): the confirmation page `GET|POST /index.php/login/v2/flow/{id}` (a
-//!   form with the session's CSRF token), `POST /settings/connect/pair`, `GET /settings/connect/status` and
-//!   `POST /settings/connect/apple` (a profile link).
+//!   form with the session's CSRF token), `POST /settings/connect/pair`, `GET /settings/connect/status`,
+//!   `POST /settings/connect/apple` (a profile link) and `POST /settings/connect/manual` (an iPhone's password
+//!   for its manual setup).
 
 use crate::csrf;
 use crate::ctx::PageCtx;
@@ -58,6 +59,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/connect/pair", post(pair))
         .route("/settings/connect/status", get(status))
         .route("/settings/connect/apple", post(apple_link))
+        .route("/settings/connect/manual", post(manual_password))
 }
 
 #[derive(serde::Serialize)]
@@ -231,6 +233,20 @@ async fn apple_link(State(state): State<SharedState>, user: Principal, Query(q):
     Json(AppleLink { qr: connect::qr_svg(&url), file: format!("{url}/{APPLE_FILE}"), url })
 }
 
+#[derive(serde::Serialize)]
+struct ManualPassword {
+    name: String,
+    password: String,
+}
+
+/// `POST /settings/connect/manual?name=iPhone`: the password of the iPhone's manual setup (#add-ios-values), an
+/// app token named after the device; the wizard asks once per run and shows it as dots with a copy button.
+async fn manual_password(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> AppResult<Json<ManualPassword>> {
+    let name: String = q.name.as_deref().unwrap_or("iPhone").chars().filter(|c| !c.is_control()).take(NAME_MAX).collect();
+    let (name, password) = tokens::create_unique(&state, &user, if name.trim().is_empty() { "iPhone" } else { &name }).await?;
+    Ok(Json(ManualPassword { name, password }))
+}
+
 /// The profile's file name: Safari installs a `.mobileconfig` (support.apple.com/guide/profile-manager/pmdbd71ebc9).
 pub const APPLE_FILE: &str = "PractiCal.mobileconfig";
 
@@ -289,9 +305,8 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
     Ok(mobileconfig(profile))
 }
 
-/// The profile of `user`'s accounts with a new app token, named `name` or, when a device of that name is
-/// connected already, "`name` (2)" and so on: two rows that look alike could not be told apart when one of them
-/// is to go. Returns (the token's name, the profile); the token is made last: nothing can fail after it.
+/// The profile of `user`'s accounts with a new app token ([`tokens::create_unique`] of `name`). Returns (the
+/// token's name, the profile); the token is made last: nothing can fail after it.
 async fn make_profile(state: &SharedState, user: &str, name: &str, description: &str) -> AppResult<(String, String)> {
     let user = state.principals.get_principal(user).await?.ok_or(AppError::NotFound)?;
     let mut accounts = vec![connect::AppleAccount { carddav: false, principal: user.id.clone(), description: "PractiCal".into() }, connect::AppleAccount { carddav: true, principal: user.id.clone(), description: "PractiCal".into() }];
@@ -301,9 +316,7 @@ async fn make_profile(state: &SharedState, user: &str, name: &str, description: 
     for g in crate::domain::groups::list_for_user(state, &user).await?.into_iter().filter(|g| g.n_calendars > 0) {
         accounts.push(connect::AppleAccount { carddav: false, principal: g.id, description: format!("PractiCal · {}", g.displayname) });
     }
-    let taken: Vec<String> = tokens::list(state, &user).await?.into_iter().map(|t| t.name).collect();
-    let name = (1..).map(|n| if n == 1 { name.to_string() } else { format!("{name} ({n})") }).find(|n| !taken.contains(n)).unwrap_or_default();
-    let password = tokens::create(state, &user, &name).await?;
+    let (name, password) = tokens::create_unique(state, &user, name).await?;
     let host = connect::host_of(&state.config.public_url);
     let profile = connect::apple_profile(&connect::AppleProfile { dav_url: &state.config.public_dav_url, user: &user.id, password: &password, host: &host, name: "PractiCal", description }, &accounts);
     Ok((name, profile))

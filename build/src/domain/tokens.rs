@@ -28,6 +28,15 @@ pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult
     Ok(format!("{id}_{secret}"))
 }
 
+/// [`create`] under `name`, or "`name` (2)" and so on when a device of that name is connected already: two rows
+/// that look alike could not be told apart when one of them is to go. Returns (the name, the token).
+pub async fn create_unique(state: &AppState, user: &Principal, name: &str) -> AppResult<(String, String)> {
+    let taken: Vec<String> = list(state, user).await?.into_iter().map(|t| t.name).collect();
+    let name = (1..).map(|n| if n == 1 { name.trim().to_string() } else { format!("{} ({n})", name.trim()) }).find(|n| !taken.contains(n)).unwrap_or_default();
+    let token = create(state, user, &name).await?;
+    Ok((name, token))
+}
+
 pub async fn delete(state: &AppState, user: &Principal, id: &str) -> AppResult<()> {
     // the store scopes by (principal, id); verify ownership explicitly anyway
     if !state.principals.get_app_tokens(&user.id).await?.iter().any(|t| t.id == id) {

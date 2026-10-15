@@ -190,3 +190,20 @@ async fn the_wizard_on_the_ipad_names_it() {
     assert_eq!(r.status, StatusCode::OK);
     alice.get("/settings").await.ok().has(">iPad<span class=\"sub\">");
 }
+
+#[tokio::test]
+async fn an_iphone_by_hand_gets_a_password_of_its_own() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    let csrf = alice.csrf.clone();
+    let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    assert_eq!(alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr[..1], Body::empty()).await.status, StatusCode::FORBIDDEN);
+    let r = alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await.json();
+    assert_eq!(r["name"], "iPhone");
+    use base64ct::Encoding;
+    let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{}", r["password"].as_str().unwrap()).as_bytes()));
+    assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
+    assert_eq!(alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await.json()["name"], "iPhone (2)");
+    // the guide lists what a group's calendars need: an account as user$group
+    alice.get("/settings").await.ok().has("id=\"add-ios-manual\"").has("alice$group.familie");
+}

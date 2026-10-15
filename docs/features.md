@@ -412,6 +412,12 @@ that device only. **Settings → Connected devices → Add a device** walks you 
   after you join another group, load the profile again: it replaces the old one on the iPhone, and you disconnect the
   older entry in PractiCal. Only Safari and Chrome can
   install profiles: the page tells you when another browser opened it.
+- **iPhone and iPad by hand**, for an iPhone whose profiles are locked (a company iPhone says "Unable to Install
+  Profile"): the assistant shows the way through **Settings → Apps → Calendar → Calendar Accounts → Add Account →
+  Add Other Account… → CalDAV Account**, then the server, user name, a new password (shown as dots) and the
+  description, each with a copy button. Contacts follow as a **CardDAV Account** with the same values; each group's
+  calendars as one more CalDAV account with the user name `you$group`. Read it on the iPhone itself: on a computer
+  the page shows a QR code that opens it there.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 

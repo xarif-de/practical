@@ -660,7 +660,8 @@ test('add a device: an iPhone scans a profile link, downloads its profile, and t
   await expect(page.locator('#add-ios .dots span')).toHaveText('Schritt 3 von 5 · Profil laden');
   await expect(page.locator('#add-ios [data-qr="apple"] svg')).toBeVisible(); // the profile link's code
   await expect(page.locator('#add-ios a[data-apple]')).toBeHidden(); // the download is the device's own button
-  await expect(page.locator('#add-ios .ni .wiz-strip .dx')).toHaveCount(3); // camera, Allow, Close
+  await expect(page.locator('#add-ios .ni .wiz-strip .dx')).toHaveCount(4); // Code Scanner, the link's page, Allow, Close
+  await expect(page.locator('#add-ios .alt a')).toHaveAttribute('href', '#add-ios-manual'); // a locked iPhone: by hand
   await expect(page.locator('#add-ios [data-live]')).toBeVisible();
   // the code's link: the phone camera opens it in a fresh browser — no session needed
   const r = await page.request.post('/settings/connect/apple', { headers: { 'X-CSRF-Token': await page.locator('meta[name=csrf]').getAttribute('content'), Origin: BASE } });
@@ -716,6 +717,40 @@ test('add a device: on the iPhone itself one button downloads the profile', asyn
   await page.goto('/settings?done=1#account'); // a new load: the list as the server has it now; tidy up
   const row = page.locator('#devices .cell', { hasText: 'iPhone' });
   await row.locator('button[data-confirm]').click();
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
+  await ctx.close();
+});
+
+test('add a device: an iPhone by hand — the way through Settings, the values to copy, contacts and groups', async ({ browser }) => {
+  const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await loginAs(page, 'carol'); // a user of her own: the password made here must not land in another test's list
+  await page.goto('/settings#add');
+  await page.locator('#add a[href="#add-ios-manual"]').click();
+  await expect(page.locator('#add-ios-manual .wiz-strip .dx')).toHaveCount(7); // Home Screen … CalDAV account
+  await expect(page.locator('#add-ios-manual [data-qr="manual"]')).toBeHidden(); // the code is for another device
+  await page.locator('#add-ios-manual .acts a.btn-primary').click();
+  await expect(page).toHaveURL(/#add-ios-values$/);
+  const pw = page.locator('#iv-p');
+  await expect(pw).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/); // made for this run, copied from the hidden element
+  await expect(pw).toBeHidden();
+  await expect(page.locator('#iv-u')).toHaveText('carol');
+  await expect(page.locator('#add-ios-values .io-form button[data-copy]')).toHaveCount(4);
+  const ok = await basic('carol', await pw.textContent());
+  expect((await ok.get('/api/history')).status()).toBe(200);
+  await ok.dispose();
+  await page.locator('#add-ios-values .acts a.btn-primary').click();
+  await expect(page.locator('#ic-p')).toHaveText(await pw.textContent()); // the contacts account: the same values
+  await page.goBack(); await page.goForward(); // back and on: still the one password
+  await expect(page.locator('#ic-p')).toHaveText(await pw.textContent());
+  await page.locator('#add-ios-more .acts a.btn-primary').click();
+  await expect(page).toHaveURL(/#add-done$/);
+  await expect(page.locator('#add-done [data-device]')).toHaveText('iPhone');
+  await expect(page.locator('#add-done .p-iosm')).toBeVisible();
+  await expect(page.locator('#add-done .p-iosa').first()).toBeHidden();
+  await page.goto('/settings?done=1#account');
+  await page.locator('#devices .cell', { hasText: 'iPhone' }).locator('button[data-confirm]').click();
   await page.locator('.ask [data-a="1"]').click();
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
   await ctx.close();

@@ -10,7 +10,8 @@
     /* An iPad's Safari says "Macintosh" (desktop sites, iPadOS 13+); a touch screen tells it from a Mac. */
     const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     settings.dataset.ios = ios ? '1' : '0';
-    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0;
+    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, manual = null;
+    const device = ios && !/iPhone|iPod/.test(ua) ? 'iPad' : 'iPhone';
     // a pairing for this run of the wizard and the QR codes (POST: the pairing is this user's); `loud`: say why not
     const ensure = async loud => {
       if (codes) return codes;
@@ -18,7 +19,7 @@
       if (!r.ok) { if (loud) practical.tell(r); return null; }
       codes = r.data; pair = codes.pair;
       $$('[data-qr]', settings).forEach(el => {
-        const svg = el.dataset.qr === 'connect' ? codes.connect : codes.stores[el.dataset.qr];
+        const svg = typeof codes[el.dataset.qr] === 'string' ? codes[el.dataset.qr] : codes.stores[el.dataset.qr];
         if (svg) el.innerHTML = svg; // the server's own SVG; the frame carries role and label (settings.html)
       });
       return codes;
@@ -27,7 +28,7 @@
        Only Safari and Chrome install a profile (domain::connect `installs_profiles`); a web app on the Home Screen
        is no browser at all: there the device is told to open the link's page in Safari. */
     const link = async loud => {
-      const r = await practical.req('/settings/connect/apple' + (ios ? '?name=' + (/iPhone|iPod/.test(ua) ? 'iPhone' : 'iPad') : ''), { method: 'POST' });
+      const r = await practical.req('/settings/connect/apple' + (ios ? '?name=' + device : ''), { method: 'POST' });
       if (!r.ok) { if (loud) practical.tell(r); return false; }
       linkAt = Date.now();
       $('[data-qr="apple"]', settings).innerHTML = r.data.qr;
@@ -35,6 +36,16 @@
       $('#io-url', settings).textContent = r.data.url;
       $('[data-io-other]', settings).hidden = !(navigator.standalone || /FxiOS|DuckDuckGo|EdgiOS|OPiOS|OPT\/|GSA\//.test(ua));
       return true;
+    };
+    /* the iPhone by hand (#add-ios-values, -more): its password, an app token made once per run of the wizard (routes::connect
+       `manual_password`); the pages show dots, the copy buttons take it from the hidden [data-io-pw] elements */
+    const password = async () => {
+      if (manual) return;
+      const r = await practical.req('/settings/connect/manual?name=' + device, { method: 'POST' });
+      if (!r.ok) { practical.tell(r); return; }
+      manual = r.data;
+      $$('[data-io-pw]', settings).forEach(e => { e.textContent = manual.password; });
+      $$('[data-device]', settings).forEach(e => { e.textContent = manual.name; });
     };
     // the pages a device can get connected from: there the wizard waits for a device of this user that fetched its
     // app password (Android) or its profile (iPhone) → done, or the iPhone's install step. Every 2 s for two
@@ -65,9 +76,12 @@
       const h = location.hash;
       if (OTHER[h]) { location.replace(OTHER[h]); return; }
       clearTimeout(timer);
-      if (/^#add-(ios|android)/.test(h)) settings.dataset.path = h.startsWith('#add-ios') ? 'ios' : 'android'; // #add-done's text
+      // #add-done's text: Android, the iPhone's profile, the iPhone by hand
+      if (/^#add-(ios|android)/.test(h)) settings.dataset.path = /^#add-ios-(manual|values|more)$/.test(h) ? 'iosm' : h.startsWith('#add-ios') ? 'ios' : 'android';
       if ((h === '#add-done' || h === '#add-ios-install') && landed) { landed = false; $(h + ' h1').focus(); return; } // the page changed by itself: say so
-      if (h === '#add') { codes = null; pair = ''; linkAt = 0; return; } // a new run: a new pairing (a device of the last one would end it at once) and link
+      if (h === '#add') { codes = null; pair = ''; linkAt = 0; manual = null; return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
+      if (h === '#add-ios-values' || h === '#add-ios-more') { password(); return; }
+      if (h === '#add-ios-manual' && !ios) { ensure(true); return; } // the code that opens this on the iPhone
       if (h === '#add-android-install' && !android) ensure(true); // the stores' codes
       // Back from the install step keeps the link: the same device may load its profile again (domain::connect Links)
       else if (WAIT.test(h) && await ensure(true) && (h !== '#add-ios' || Date.now() - linkAt < 8 * 60e3 || await link(true))) { tries = 0; poll(); }

@@ -373,17 +373,19 @@ pub struct Connect {
     codes: OnceLock<Codes>,
 }
 
-/// The wizard's QR codes as SVG: the one that opens DAVx⁵ (`/connect/davx5`) and one per store (by
-/// [`Store::key`]). They depend on nothing but this server's address: made once per process.
+/// The wizard's QR codes as SVG: the one that opens DAVx⁵ (`/connect/davx5`), the one that opens the iPhone's
+/// manual setup on the iPhone (`/settings#add-ios-manual`) and one per store (by [`Store::key`]). They depend on
+/// nothing but this server's address: made once per process.
 #[derive(serde::Serialize)]
 pub struct Codes {
     pub connect: String,
+    pub manual: String,
     pub stores: HashMap<&'static str, String>,
 }
 
 impl Connect {
     pub fn codes(&self, public_url: &str) -> &Codes {
-        self.codes.get_or_init(|| Codes { connect: qr_svg(&format!("{public_url}/connect/davx5")), stores: STORES.iter().map(|s| (s.key, qr_svg(s.url))).collect() })
+        self.codes.get_or_init(|| Codes { connect: qr_svg(&format!("{public_url}/connect/davx5")), manual: qr_svg(&format!("{public_url}/settings#add-ios-manual")), stores: STORES.iter().map(|s| (s.key, qr_svg(s.url))).collect() })
     }
 }
 

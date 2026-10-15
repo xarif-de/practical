@@ -202,6 +202,10 @@ impl SettingsPage {
     pub fn device_icon(&self, name: &str) -> &'static str {
         crate::domain::connect::device_icon(name)
     }
+    /// the groups with calendars: an iPhone set up by hand needs a CalDAV account for each (#add-ios-more)
+    pub fn cal_groups(&self) -> Vec<&GroupInfo> {
+        self.groups.iter().filter(|g| g.n_calendars > 0).collect()
+    }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
     }

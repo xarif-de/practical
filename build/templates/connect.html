@@ -43,10 +43,12 @@
   <p class="lead">{{ ctx.t("ios-inst-text") }}</p>
   {{ m::io_setup() }}
   <p class="hint">{{ ctx.t("ios-trouble-1") }}</p>
+  <p class="hint">{{ ctx.t("ios-alt") }} <a href="/settings#add-ios-manual">{{ ctx.t("ios-alt-link") }} ›</a></p>
   {% else %}
   <div class="ok-dot gone">{{ m::ico("clock") }}</div>
   <h1>{{ ctx.t("connect-gone-title") }}</h1>
   <p class="lead">{% if state == "gone-apple" %}{{ ctx.t("connect-gone-apple") }}{% else %}{{ ctx.t("connect-gone-text") }}{% endif %}</p>
+  {% if state == "gone-apple" %}<a class="btn wide" href="/settings#add-ios-manual">{{ ctx.t("ios-alt-link") }}</a>{% endif %}
   <a class="btn wide" href="/settings#account">{{ ctx.t("tab-account") }}</a>
   {% endif %}
 </div>
