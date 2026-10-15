@@ -724,19 +724,22 @@ test('add a device: on the iPhone itself one button downloads the profile', asyn
 
 test('add a device: an iPhone by hand — the way through Settings, the values to copy, contacts and groups', async ({ browser }) => {
   const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   const page = await ctx.newPage();
   await loginAs(page, 'carol'); // a user of her own: the password made here must not land in another test's list
   await page.goto('/settings#add');
   await page.locator('#add a[href="#add-ios-manual"]').click();
   await expect(page.locator('#add-ios-manual .wiz-strip .dx')).toHaveCount(7); // Home Screen … CalDAV account
-  await expect(page.locator('#add-ios-manual [data-qr="manual"]')).toBeHidden(); // the code is for another device
   await page.locator('#add-ios-manual .acts a.btn-primary').click();
   await expect(page).toHaveURL(/#add-ios-values$/);
+  await expect(page.locator('#add-ios-values [data-qr="manual"]')).toBeHidden(); // the code is for another device
   const pw = page.locator('#iv-p');
-  await expect(pw).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/); // made for this run, copied from the hidden element
+  await expect(pw).toHaveText(''); // no password before it is asked for
+  await page.locator('#add-ios-values [data-io-pw-copy]').click();
+  await expect(pw).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/); // made now, copied from the hidden element
   await expect(pw).toBeHidden();
   await expect(page.locator('#iv-u')).toHaveText('carol');
-  await expect(page.locator('#add-ios-values .io-form button[data-copy]')).toHaveCount(4);
+  await expect(page.locator('#add-ios-values .io-form .oi button')).toHaveCount(4); // a copy button per value
   const ok = await basic('carol', await pw.textContent());
   expect((await ok.get('/api/history')).status()).toBe(200);
   await ok.dispose();
@@ -749,10 +752,29 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await expect(page.locator('#add-done [data-device]')).toHaveText('iPhone');
   await expect(page.locator('#add-done .p-iosm')).toBeVisible();
   await expect(page.locator('#add-done .p-iosa').first()).toBeHidden();
-  await page.goto('/settings?done=1#account');
-  await page.locator('#devices .cell', { hasText: 'iPhone' }).locator('button[data-confirm]').click();
-  await page.locator('.ask [data-a="1"]').click();
-  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await pw.textContent());
+  // on a computer: a code opens the page on the iPhone; each value as a QR code, the password behind the eye
+  const desk = await browser.newContext({ baseURL: BASE, locale: 'de-DE' });
+  const d = await desk.newPage();
+  await loginAs(d, 'carol');
+  await d.goto('/settings#add-ios-values');
+  await expect(d.locator('#add-ios-values [data-qr="manual"] svg')).toBeVisible();
+  await expect(d.locator('#add-ios-values [data-io-pw-copy]')).toBeHidden(); // copying is for the iPhone
+  const qr = d.locator('#add-ios-values .io-qr').first();
+  await qr.locator('button').hover();
+  await expect(qr.locator('.io-qrpop svg')).toBeVisible(); // the server address as a code
+  await expect(d.locator('#iv-p')).toHaveText(''); // no password yet
+  await d.locator('#add-ios-values [data-io-pw-show]').click();
+  await expect(d.locator('#iv-p')).toBeVisible();
+  await expect(d.locator('#iv-p')).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
+  await expect(d.locator('#add-ios-values [data-io-pw-qr] .io-qrpop svg')).toHaveCount(1);
+  await desk.close();
+  await page.goto('/settings?done=1#account'); // tidy up: both
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#devices .cell', { hasText: 'iPhone' }).first().locator('button[data-confirm]').click();
+    await page.locator('.ask [data-a="1"]').click();
+    await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(1 - i);
+  }
   await ctx.close();
 });
 

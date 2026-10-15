@@ -202,6 +202,10 @@ impl SettingsPage {
     pub fn device_icon(&self, name: &str) -> &'static str {
         crate::domain::connect::device_icon(name)
     }
+    /// `text` as a QR code (the iPhone's manual setup on another device: a value to scan, #add-ios-values)
+    pub fn qr(&self, text: &str) -> String {
+        crate::domain::connect::qr_svg(text)
+    }
     /// the groups with calendars: an iPhone set up by hand needs a CalDAV account for each (#add-ios-more)
     pub fn cal_groups(&self) -> Vec<&GroupInfo> {
         self.groups.iter().filter(|g| g.n_calendars > 0).collect()

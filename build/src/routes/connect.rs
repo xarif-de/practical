@@ -237,14 +237,17 @@ async fn apple_link(State(state): State<SharedState>, user: Principal, Query(q):
 struct ManualPassword {
     name: String,
     password: String,
+    /// the password as a QR code, for the setup on another device
+    qr: String,
 }
 
 /// `POST /settings/connect/manual?name=iPhone`: the password of the iPhone's manual setup (#add-ios-values), an
-/// app token named after the device; the wizard asks once per run and shows it as dots with a copy button.
+/// app token named after the device; the wizard asks once per run, when the password is first asked for (copied,
+/// shown, its QR code), and shows it as dots.
 async fn manual_password(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> AppResult<Json<ManualPassword>> {
     let name: String = q.name.as_deref().unwrap_or("iPhone").chars().filter(|c| !c.is_control()).take(NAME_MAX).collect();
     let (name, password) = tokens::create_unique(&state, &user, if name.trim().is_empty() { "iPhone" } else { &name }).await?;
-    Ok(Json(ManualPassword { name, password }))
+    Ok(Json(ManualPassword { qr: connect::qr_svg(&password), name, password }))
 }
 
 /// The profile's file name: Safari installs a `.mobileconfig` (support.apple.com/guide/profile-manager/pmdbd71ebc9).

@@ -177,19 +177,29 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .dx.io.io-cam { background: #1c1c1e; } .dx.io.io-cam .bd { gap: 12px; }
 .dx.io .io-qrf { width: 64px; height: 64px; border: 2px solid #ffd60a; border-radius: 6px; display: grid; place-items: center; } .dx.io .io-qrf i { width: 44px; height: 44px; background: repeating-conic-gradient(#fff 0 25%, #555 0 50%) 0 0 / 11px 11px; }
 /* Control Center (one round control per <i>; the Code Scanner rings), the link's page, the Home Screen */
-.dx.io .io-cc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; align-content: center; padding: 10px; } .dx.io .io-cc > i { aspect-ratio: 1; border-radius: 50%; background: #ffffff2e; display: grid; place-items: center; } .dx.io .io-cc .io-qrf { width: 16px; height: 16px; border: 0; } .dx.io .io-cc .io-qrf i { width: 14px; height: 14px; background-size: 4px 4px; }
+.dx.io .io-cc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 22px; gap: 6px; align-content: center; padding: 8px; }
+.dx.io .io-cc > i { border-radius: 50%; background: #ffffff26; display: grid; place-items: center; color: #fff; } .dx.io .io-cc > i.sq { grid-column: span 2; grid-row: span 2; border-radius: 12px; } .dx.io .io-cc > i.tall { grid-row: span 2; border-radius: 12px; } .dx.io .io-cc > i.wide { grid-column: span 2; border-radius: 999px; } .dx.io .io-cc .ico { width: 13px; height: 13px; }
 .dx.io .io-app { width: 30px; height: 30px; border-radius: 7px; } .dx.io .bd.mid .ln { flex: none; } .dx.io .io-btn { background: #0a63c9; color: #fff; border-radius: 7px; padding: 5px 10px; font-weight: 700; font-size: 9px; margin-top: 6px; }
 .dx.io.io-home { background: linear-gradient(160deg, #6e4b7e, #2c2540); } .dx.io.io-home .bd { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px 7px; align-content: start; padding: 14px 9px; }
-.dx.io.io-home .bd > i { aspect-ratio: 1; border-radius: 6px; } .dx.io.io-home .bd > span { display: grid; justify-items: center; gap: 2px; color: #fff; border-radius: 6px; } .dx.io.io-home .bd > span .ico { width: 100%; height: auto; aspect-ratio: 1; padding: 3px; box-sizing: border-box; border-radius: 6px; background: #8e8e93; color: #f2f2f7; } .dx.io.io-home small { font-size: 6px; white-space: nowrap; }
-.dx.io .io-more span { color: #0a63c9; } .dx.io .tg { border-color: #34c759; background: #34c759; } .dx.io .tg i { background: #fff; }
+.dx.io.io-home .bd > i { aspect-ratio: 1; border-radius: 6px; } .dx.io.io-home .bd > span { display: grid; justify-items: center; gap: 2px; color: #fff; border-radius: 6px; } .dx.io .io-gear { display: block; width: 100%; aspect-ratio: 1; border-radius: 6px; background: linear-gradient(#e5e5ea, #8e8e93); color: #3a3a3c; } .dx.io .io-gear .ico { width: 100%; height: 100%; display: block; } .dx.io.io-home small { font-size: 6px; white-space: nowrap; }
+.dx.io .io-more span { color: #0a63c9; }
+.dx.io .io-ic { flex: none; width: 13px; height: 13px; border-radius: 3px; overflow: hidden; display: grid; place-items: center; color: #fff; margin-right: -1px; box-shadow: 0 0 0 .5px #0002; } .dx.io .io-ic .ico { width: 100%; height: 100%; display: block; } .dx.io .io-ic.apps { background: linear-gradient(#7a5af8, #4f46e5); } .dx.io .io-ic.apps .ico, .dx.io .io-ic.mail .ico, .dx.io .io-ic.card .ico { width: 10px; height: 10px; } .dx.io .io-ic.mail { background: #1e88f5; } .dx.io .io-ic.card { background: #a1a1a6; }
+.dx.io .io-row > span:not(.chev):not(.ln):not(.tg) { flex: 1; min-width: 0; }
+.dx.io .io-hd { display: grid; gap: 4px; padding: 7px 7px 8px; border-bottom: 1px solid #e5e5ea; } .dx.io .io-hd .io-ic { width: 22px; height: 22px; border-radius: 5px; } .dx.io .io-hd b { font-size: 11px; } .dx.io .io-hd .ln { height: 4px; border-radius: 2px; display: block; } .dx.io .tg { border-color: #34c759; background: #34c759; } .dx.io .tg i { background: #fff; }
 /* the iPhone by hand: the account sheet as the user fills it, each value with a copy button */
-.io-form { background: #f2f2f7; color: #1d1d1f; border-radius: 14px; overflow: hidden; text-align: left; max-width: 460px; margin: 0 auto; }
+.io-form { background: #f2f2f7; color: #1d1d1f; border-radius: 14px; text-align: left; max-width: 460px; margin: 0 auto; }
 .io-form .io-nav { display: flex; justify-content: space-between; padding: 10px 14px; font-size: 14px; } .io-form .io-nav span { color: #0a63c9; }
 .io-form dl { margin: 0 10px 10px; background: #fff; border-radius: 10px; }
 .io-form dl > div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 6px 6px 12px; font-size: 14px; } .io-form dl > div + div { border-top: 1px solid #e5e5ea; }
 .io-form dd { margin: 0; min-width: 0; } .io-form code { font-size: 13px; overflow-wrap: anywhere; color: #1d1d1f; } .io-form .dots { letter-spacing: .1em; color: #1d1d1f; }
 .io-form .btn.icon-btn { color: #0a63c9; background: none; }
-.wiz-tiles span .ico { width: 13px; height: 13px; vertical-align: -2px; }
+.io-form .io-act { display: flex; gap: 2px; } .io-form .io-act > span { display: flex; gap: 2px; }
+/* a value as a QR code beside its button: on hover, focus, or kept open by a tap (.open) */
+.io-form .io-qr { position: relative; } .io-form .io-qrpop { display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; background: #fff; padding: 8px; border-radius: 10px; box-shadow: 0 4px 18px #0004; line-height: 0; }
+.io-form .io-qrpop svg { width: 150px; height: 150px; } .io-form .io-qrpop:empty { display: none !important; }
+.io-form .io-qr:hover .io-qrpop, .io-form .io-qr:focus-within .io-qrpop, .io-form .io-qr.open .io-qrpop { display: block; }
+.wiz .sys-in a { color: var(--accent); }
+.wiz-tiles span .ico { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 2px; }
 .wiz .miss.alt { margin: 16px 0 0; } .wiz .miss.alt a { color: var(--accent); white-space: nowrap; }
 .wiz .sys-in.one { grid-template-columns: minmax(0, 1fr); }
 .wiz .miss p { margin: 0 0 6px; } .wiz .miss code { overflow-wrap: anywhere; font-size: 12.5px; }

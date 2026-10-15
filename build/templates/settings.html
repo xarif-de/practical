@@ -486,6 +486,7 @@
     <h1 tabindex="-1">{{ ctx.t("ios-inst-title") }}</h1><p class="lead">{{ ctx.t("ios-inst-text") }}</p>
     {{ m::io_setup() }}
     <details class="sys"><summary>{{ ctx.t("ios-trouble") }}</summary><div class="sys-in one"><ul><li>{{ ctx.t("ios-trouble-1") }}</li><li>{{ ctx.t("ios-trouble-2") }}</li><li>{{ ctx.t("ios-trouble-3") }}</li><li>{{ ctx.t("ios-trouble-4") }}</li><li>{{ ctx.t("ios-alt") }} <a href="#add-ios-manual">{{ ctx.t("ios-alt-link") }} ›</a></li></ul></div></details>
+    <p class="hint">{{ ctx.t("ios-alt-short") }} <a href="#add-ios-manual">{{ ctx.t("ios-alt-go") }}</a></p>
   </div>
   <div class="acts"><a class="muted" href="#add-ios">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-done">{{ ctx.t("ios-inst-next") }} ›</a></div>
 </section>
@@ -496,7 +497,6 @@
   {{ m::wiz_bars(2, 5, ctx.t("iom-open-label")) }}
   <div class="wz">
     <h1>{{ ctx.t("iom-open-title") }}</h1>
-    <div class="ni"><p class="lead">{{ ctx.t("iom-on-phone") }}</p><span class="qr" data-qr="manual" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span></div>
     <p class="lead after">{{ ctx.t("iom-open-text") }}</p>
     {{ m::io_way(false) }}
     <p class="lead">{{ ctx.t("iom-open-back") }}</p>
@@ -509,7 +509,9 @@
   {{ m::back("#add-ios-manual", ctx.t("wiz-back")) }}
   {{ m::wiz_bars(3, 5, ctx.t("iom-values-label")) }}
   <div class="wz">
-    <h1>{{ ctx.t("iom-values-title") }}</h1><p class="lead">{{ ctx.t("iom-values-text") }}</p>
+    <h1>{{ ctx.t("iom-values-title") }}</h1>
+    <div class="ni"><p class="lead">{{ ctx.t("iom-on-phone") }}</p><span class="qr" data-qr="manual" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="lead after">{{ ctx.t("iom-values-text-ni") }}</p></div>
+    <p class="lead oi">{{ ctx.t("iom-values-text") }}</p>
     {{ m::io_values("iv", "CalDAV", ctx.public_dav_url, ctx.user_id(), "PractiCal") }}
     <p class="hint">{{ ctx.t("iom-desc-hint") }}</p>
     <p class="lead after">{{ ctx.t("iom-save-text") }}</p>
@@ -529,7 +531,7 @@
     {% if !cal_groups.is_empty() %}
     <h2 class="sub">{{ ctx.t("iom-groups-title") }}</h2><p class="lead">{{ ctx.t("iom-groups-text") }}</p>
     <div class="io-form"><dl>{% for g in cal_groups %}{% let n = loop.index %}
-      <div><dt>{{ g.displayname }}</dt><dd><code id="ig-{{ n }}">{{ ctx.user_id() }}${{ g.id }}</code></dd><dd>{{ m::io_copy(format!("ig-{}", n), ctx.t("io-user")) }}</dd></div>{% endfor %}
+      {{ m::io_val(format!("ig-{}", n), g.displayname, format!("{}${}", self.ctx.user_id(), g.id)) }}{% endfor %}
     </dl></div>
     {% endif %}
     <p class="lead after">{{ ctx.t("iom-more-after") }}</p>
