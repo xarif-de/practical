@@ -54,10 +54,12 @@
   <p class="lead">{{ ctx.t("iom-save-text") }}</p>
   <div class="wiz-strip"><figure>{{ m::io_saved("CalDAV") }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-save").as_str()) }}</figcaption></figure></div>
   <h2>{{ ctx.t("iom-more-title") }}</h2><p class="lead">{{ ctx.t("iom-more-text") }}</p>
+  <div class="wiz-strip"><figure>{{ m::io_other(true) }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-carddav").as_str()) }}</figcaption></figure></div>
   <div data-pw-url="/connect/apple/{{ id }}/password">{{ m::io_values("ic", "CardDAV", dav, account, "PractiCal") }}</div>
   {% if !groups.is_empty() %}<h2>{{ ctx.t("iom-groups-title") }}</h2><p class="lead">{{ ctx.t("iom-groups-text") }}</p>
   <div class="io-form"><dl>{% for (name, login) in groups %}{% let n = loop.index %}{{ m::io_val(format!("ig-{}", n), name, login) }}{% endfor %}</dl></div>{% endif %}
   <p class="lead">{{ ctx.t("iom-more-after") }}</p>
+  <button class="btn btn-primary big wide" type="button" data-io-finish="{{ ctx.t("iom-finish-text") }}">{{ ctx.t("wiz-finish") }}</button>
   {% else %}
   <div class="ok-dot gone">{{ m::ico("clock") }}</div>
   <h1>{{ ctx.t("connect-gone-title") }}</h1>

@@ -27,6 +27,8 @@
   };
   const cp = $('.connect-page [data-pw-url]');
   if (cp) ioPassword($('.connect-page'), () => fetch(cp.dataset.pwUrl).then(r => r.ok ? r.json() : Promise.reject(r)));
+  // the end of the phone's guide: say that the page has done its job
+  $$('[data-io-finish]').forEach(b => b.addEventListener('click', () => askChoice(b.dataset.ioFinish, [['1', 'OK']], tr('js-close'))));
   if (settings && $('#add', settings)) {
     /* The Android path when the browser names Android (Chrome's reduced User-Agent keeps "Android"); when it names no
        system at all, a touch screen counts as the device itself. Anything else (desktop, iPhone) is "another device". */

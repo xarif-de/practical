@@ -356,8 +356,8 @@
     <h1>{{ ctx.t("wiz-choose-title") }}</h1><p class="lead">{{ ctx.t("wiz-choose-text") }}</p>
     <div class="wiz-tiles">
       <a href="#add-android-about"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
-      <a href="#add-ios-about"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("wand") }}</i></span><b>iPhone / iPad</b><span>{{ m::ico("wand") }} {{ ctx.t("wiz-ios-auto") }}</span></a>
-      <a href="#add-ios-manual"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("hand") }}</i></span><b>iPhone / iPad</b><span>{{ m::ico("hand") }} {{ ctx.t("wiz-ios-manual") }}</span></a>
+      <a href="#add-ios-about"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("wand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-auto") }}</span></a>
+      <a href="#add-ios-manual"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("hand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-manual") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
     </div>
   </div>
@@ -526,6 +526,7 @@
   {{ m::wiz_bars(4, 5, ctx.t("iom-more-label")) }}
   <div class="wz">
     <h1>{{ ctx.t("iom-more-title") }}</h1><p class="lead">{{ ctx.t("iom-more-text") }}</p>
+    <div class="wiz-strip"><figure>{{ m::io_other(true) }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-carddav").as_str()) }}</figcaption></figure></div>
     {{ m::io_values("ic", "CardDAV", ctx.public_dav_url, ctx.user_id(), "PractiCal") }}
     {%- let cal_groups = self.cal_groups() %}
     {% if !cal_groups.is_empty() %}

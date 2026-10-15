@@ -165,6 +165,9 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .dx.io .io-al { width: 92%; background: #f2f2f7; border-radius: 9px; display: grid; gap: 5px; padding: 9px 0 0; text-align: center; font-size: 8.5px; }
 .dx.io .io-al b, .dx.io .io-al small { padding: 0 7px; overflow-wrap: anywhere; hyphens: auto; } .dx.io .io-al b { font-size: 8px; } .dx.io .io-al small { font-size: 7.5px; color: #3c3c43; }
 .dx.io .io-abt { display: flex; border-top: 1px solid #c7c7cc; } .dx.io .io-abt span { flex: 1; min-width: 0; padding: 6px 2px; color: #0a63c9; font-size: 8.5px; border-radius: 0 0 9px 9px; } .dx.io .io-abt span + span { border-left: 1px solid #c7c7cc; font-weight: 700; }
+/* Safari's question in iOS 26 (the user's iPhone, 2026-10-15): text on the left, the two answers on the right, no lines */
+.dx.io .io-al.q { text-align: left; background: #fff; border-radius: 12px; padding: 9px 0 3px; } .dx.io .io-al.q b { font-weight: 600; }
+.dx.io .io-al.q .io-abt { border: 0; justify-content: flex-end; gap: 2px; padding: 0 4px; } .dx.io .io-al.q .io-abt span { flex: none; border: 0; padding: 5px 5px; border-radius: 6px; }
 .dx.io .io-ttl { font-size: 15px; margin: 4px 0 2px; }
 .dx.io .io-rows { background: #fff; border-radius: 8px; overflow: hidden; }
 .dx.io .io-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 6px 7px; font-size: 8.5px; min-height: 12px; } .dx.io .io-row + .io-row { border-top: 1px solid #e5e5ea; }
@@ -198,8 +201,7 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 /* the iOS pictures ring what to tap with a thin box inside the element (a row's ring would be cut by its list) */
 .dx.io .hi { box-shadow: inset 0 0 0 1.5px #ff9f0a; border-radius: 5px; } .dx.io .hi::after { inset: 0; box-shadow: inset 0 0 0 3px #ff9f0a59; }
 /* the iPhone tiles: Apple's mark, the way (wand: automatic, hand: by hand) as a badge */
-.wiz-tiles .ti { position: relative; } .wiz-tiles .ti .badge { position: absolute; right: -5px; bottom: -5px; width: 24px; height: 24px; border-radius: 50%; background: #0a84ff; color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); } .wiz-tiles .ti .badge .ico { width: 13px; height: 13px; }
-.wiz-tiles span .ico { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 2px; }
+.wiz-tiles .ti { position: relative; } .wiz-tiles .ti .badge { position: absolute; right: -5px; bottom: -5px; width: 24px; height: 24px; border-radius: 50%; background: #0a84ff; color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); } .wiz-tiles .ti .badge .ico { width: 13px; height: 13px; display: block; margin: 0; }
 .wiz .miss.alt { margin: 16px 0 0; } .wiz .miss.alt a { color: var(--accent); white-space: nowrap; }
 .wiz .sys-in.one { grid-template-columns: minmax(0, 1fr); }
 .wiz .miss p { margin: 0 0 6px; } .wiz .miss code { overflow-wrap: anywhere; font-size: 12.5px; }

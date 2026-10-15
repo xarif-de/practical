@@ -293,6 +293,7 @@ ios-alt-short = Si hay problemas, como alternativa
 ios-alt-go = continuar a mano
 iom-values-text-ni = Como alternativa, algo más laboriosa, puedes teclear los ajustes desde aquí. Haz clic en el ojo para ver la contraseña y asegúrate de que nadie más la vea.
 io-password-show = Mostrar contraseña
+iom-finish-text = ¡Listo! La configuración ha terminado; ya puedes cerrar esta página.
 # Apple's own words, iOS 26 (applelocalization.com, support.apple.com; macros.html io_*)
 io-allow-text = { $host } está intentando descargar un perfil de configuración. ¿Quieres permitirlo?
 io-ignore = Ignorar
