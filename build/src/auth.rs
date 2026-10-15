@@ -361,11 +361,8 @@ const PER_NAME: (f64, f64) = (5.0, 60.0);
 const PER_CLIENT: (f64, f64) = (30.0, 10.0);
 
 impl LoginThrottle {
-    /// The client: the address Traefik appended last to X-Forwarded-For (a client can only prepend to it),
-    /// else the peer.
     pub fn keys(headers: &HeaderMap, peer: Option<std::net::SocketAddr>, user: &str) -> [String; 2] {
-        let fwd = headers.get_all("x-forwarded-for").iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(',')).map(str::trim).filter(|v| !v.is_empty()).last().map(str::to_string);
-        let client = fwd.or_else(|| peer.map(|p| p.ip().to_string())).unwrap_or_default();
+        let client = client_addr(headers, peer);
         [format!("n {client} {}", user.trim().to_lowercase()), format!("c {client}")]
     }
 
@@ -432,6 +429,13 @@ pub fn urlenc(s: &str) -> String {
     let mut u = Url::parse("http://x/").unwrap();
     u.query_pairs_mut().append_pair("r", s);
     u.query().unwrap_or("").trim_start_matches("r=").to_string()
+}
+
+/// The client: the address Traefik appended last to X-Forwarded-For (a client can only prepend to it), else
+/// the peer.
+pub fn client_addr(headers: &HeaderMap, peer: Option<std::net::SocketAddr>) -> String {
+    let fwd = headers.get_all("x-forwarded-for").iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(',')).map(str::trim).filter(|v| !v.is_empty()).last().map(str::to_string);
+    fwd.or_else(|| peer.map(|p| p.ip().to_string())).unwrap_or_default()
 }
 
 /// Everything below /calendar, /contacts, /tasks, /settings, /api needs a user.

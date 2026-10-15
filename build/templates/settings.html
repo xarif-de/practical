@@ -342,10 +342,12 @@
   <p class="foot">{{ ctx.t("devices-foot") }}</p>
 </section>
 
-{# "add a device": one page per step, wizard frame of connect.css. Two paths: on the Android device itself
-   (`.oa`) and on another one (`.od`, with QR codes); js/shell/settings-connect.js sets data-android on
-   #settings and fills the codes and the live state. Without JS the other-device path shows. Placeholders
-   for clients to come (iPhone/iPad, macOS, Thunderbird) belong next to the Android tile in #add. #}
+{# "add a device": one page per step, wizard frame of connect.css. Android: on the device itself (`.oa`) and on
+   another one (`.od`, with QR codes); iPhone/iPad (#add-ios…, no app: a configuration profile): on the device
+   (`.oi`, a download button) and on another one (`.ni`, the QR code of a profile link).
+   js/shell/settings-connect.js sets data-android, data-ios and data-path (which path runs) on #settings and fills
+   the codes, the links and the live state. Without JS the other-device paths show. Clients to come (macOS,
+   Thunderbird) get a tile next to these in #add. #}
 <section class="page wiz" id="add">
   {{ m::back("#account", ctx.t("tab-account")) }}
   {{ m::wiz_bars(1, 5, "") }}
@@ -353,6 +355,7 @@
     <h1>{{ ctx.t("wiz-choose-title") }}</h1><p class="lead">{{ ctx.t("wiz-choose-text") }}</p>
     <div class="wiz-tiles">
       <a href="#add-android-about"><span class="ti" style="background:#3ddc84">{{ m::ico("android") }}</span><b>Android</b><span>{{ ctx.t("wiz-android-sub") }}</span></a>
+      <a href="#add-ios-about"><span class="ti" style="background:#0a84ff">{{ m::ico("iphone") }}</span><b>{{ ctx.t("wiz-ios") }}</b><span>{{ ctx.t("wiz-ios-sub") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
     </div>
   </div>
@@ -439,6 +442,51 @@
   <div class="acts"><a class="muted" href="#add-android-install">‹ {{ ctx.t("wiz-back") }}</a></div>
 </section>
 
+{# iPhone/iPad: what happens — no app, the device's own apps sync with PractiCal through a profile #}
+<section class="page wiz" id="add-ios-about">
+  {{ m::back("#add", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(2, 5, ctx.t("about-label")) }}
+  <div class="wz">
+    <h1>{{ ctx.t("ios-about-title") }}</h1>
+    <div class="about-flow" aria-hidden="true">
+      <span><img src="{{ ctx.asset("icon.svg") }}" alt="" width="44" height="44" loading="lazy"><small>PractiCal</small></span><i>⇄</i>
+      <span><b class="apps">{{ m::ico("calendar") }}{{ m::ico("tasks") }}{{ m::ico("contacts") }}</b><small>{{ ctx.t("ios-about-apps") }}</small></span>
+    </div>
+    <ul class="about-list">
+      <li>{{ ctx.t("ios-about-1") }}</li><li>{{ ctx.t("ios-about-2") }}</li><li>{{ ctx.t("ios-about-3") }}</li><li>{{ ctx.t("about-5") }}</li>
+    </ul>
+  </div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-ios">{{ ctx.t("about-go") }} ›</a></div>
+</section>
+
+{# the profile: the QR code of a profile link (another device), or its download (the device itself); waits for the download #}
+<section class="page wiz" id="add-ios">
+  {{ m::back("#add-ios-about", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(3, 5, ctx.t("ios-load-label")) }}
+  <div class="wz">
+    <h1>{{ ctx.t("ios-load-title") }}</h1>
+    <div class="ni"><p class="lead">{{ ctx.t("ios-scan-text") }}</p><span class="qr big" data-qr="apple" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="hint">{{ ctx.t("ios-scan-note") }}</p></div>
+    <div class="oi"><p class="lead">{{ ctx.t("ios-here-text") }}</p><div class="miss" data-io-other hidden><p>{{ ctx.t("ios-not-safari") }}</p><code id="io-url"></code> <button class="btn" type="button" data-copy="#io-url">{{ ctx.t("copy") }}</button></div><a class="btn btn-primary big" data-apple href="#add-ios">{{ m::ico("download") }}<span>{{ ctx.t("ios-load") }}</span></a></div>
+    <p class="lead after">{{ ctx.t("ios-then") }}</p>
+    <div class="ni">{{ m::io_load(plan_host, true) }}</div><div class="oi">{{ m::io_load(plan_host, false) }}</div>
+    <div class="live" data-live><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
+  </div>
+  <div class="acts"><a class="muted" href="#add-ios-about">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+{# the profile is on the device: install it in Settings (within 8 minutes, else iOS drops it) #}
+<section class="page wiz" id="add-ios-install">
+  {{ m::back("#add-ios", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(4, 5, ctx.t("inst-label")) }}
+  <div class="wz">
+    <div class="group"><div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("iphone") }}</span><span><span data-device>iPhone</span><span class="sub">{{ ctx.t("ios-loaded-sub") }}</span></span><span class="val">{{ m::ico("check") }}</span></div></div>
+    <h1 tabindex="-1">{{ ctx.t("ios-inst-title") }}</h1><p class="lead">{{ ctx.t("ios-inst-text") }}</p>
+    {{ m::io_setup() }}
+    <details class="sys"><summary>{{ ctx.t("ios-trouble") }}</summary><div class="sys-in one"><ul><li>{{ ctx.t("ios-trouble-1") }}</li><li>{{ ctx.t("ios-trouble-2") }}</li><li>{{ ctx.t("ios-trouble-3") }}</li><li>{{ ctx.t("ios-trouble-4") }}</li></ul></div></details>
+  </div>
+  <div class="acts"><a class="muted" href="#add-ios">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-done">{{ ctx.t("ios-inst-next") }} ›</a></div>
+</section>
+
 <section class="page wiz" id="add-done">
   {{ m::back("#account", ctx.t("tab-account")) }}
   {{ m::wiz_bars(5, 5, "") }}
@@ -446,7 +494,8 @@
     <div class="ok-dot">{{ m::ico("check") }}</div>
     <h1 tabindex="-1">{{ ctx.t("wiz-done-title") }}</h1>
     <div class="group"><div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("smartphone") }}</span><span><span data-device>{{ ctx.t("connect-name-android") }}</span><span class="sub">{{ ctx.t("wiz-done-just") }}</span></span><span class="val"><span class="tag">{{ ctx.t("wiz-new") }}</span></span></div></div>
-    <div class="od"><p class="lead after">{{ ctx.t("done-phone-lead") }}</p>{{ m::connect_next(plan_host, ctx.user_id(), davx5_calendars, davx5_books) }}</div>
+    <div class="od p-android"><p class="lead after">{{ ctx.t("done-phone-lead") }}</p>{{ m::connect_next(plan_host, ctx.user_id(), davx5_calendars, davx5_books) }}</div>
+    <ul class="about-list p-ios"><li>{{ ctx.t("ios-done-1") }}</li><li>{{ ctx.t("ios-done-2") }}</li><li>{{ ctx.t("ios-done-3") }}</li></ul>
     <a class="another" href="#add">＋ {{ ctx.t("wiz-another") }}</a>
   </div>
   <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>

@@ -405,6 +405,13 @@ that device only. **Settings → Connected devices → Add a device** walks you 
   filled in. You confirm in the browser, and DAVx⁵ receives its password by itself: nothing to type or copy. On a
   computer, the store links come as QR codes, one more QR code opens DAVx⁵ on the phone, and the page shows when
   the phone is connected.
+- **iPhone and iPad:** no app needed. The assistant makes a configuration profile that sets up Calendar, Reminders
+  and Contacts with a password of their own. On a computer, scan the QR code with the iPhone's camera; on the iPhone
+  itself, tap **Load profile**. Then install the profile in **Settings**: the page shows every tap. iOS marks the
+  profile as **Not Signed**; that is normal for such profiles. A group's calendars come as an account of their own;
+  after you join another group, load the profile again: it replaces the old one on the iPhone, and you disconnect the
+  older entry in PractiCal. Only Safari and Chrome can
+  install profiles: the page tells you when another browser opened it.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 

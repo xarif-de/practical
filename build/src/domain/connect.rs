@@ -1,6 +1,7 @@
-//! Connecting a device: the server side of Nextcloud Login Flow v2 (which DAVx⁵ speaks), the pairing
-//! through which the "add a device" wizard learns that a device got connected, and the QR codes and store
-//! links the wizard shows.
+//! Connecting a device: the server side of Nextcloud Login Flow v2 (which DAVx⁵ speaks), the profile links
+//! and configuration profiles of iPhones and iPads (no app: iOS sets up its own accounts, [`apple_profile`]),
+//! the pairing through which the "add a device" wizard learns that a device got connected, and the QR codes
+//! and store links the wizard shows.
 //!
 //! Login Flow v2, as DAVx⁵ drives it (davx5-ose `NextcloudLoginFlow.kt`, `NextcloudLogin.kt`, 2026-10-14):
 //! 1. `POST <base>/index.php/login/v2` → `{poll:{token,endpoint},login}`; the app opens `login` in a
@@ -13,7 +14,7 @@
 //!    `/.well-known/caldav` on that host (`DavResourceFinder.kt` `findInitialConfiguration`); RustiCal
 //!    answers that with a redirect (measured on dav.xarif.de: 308 → /caldav, 308 → /carddav).
 //!
-//! Both stores live in memory only: neither is worth keeping across a restart (the user starts over).
+//! All three stores live in memory only: none is worth keeping across a restart (the user starts over).
 
 use rustical_store::auth::Principal;
 use std::collections::HashMap;
@@ -180,11 +181,195 @@ impl Pairs {
     }
 }
 
-/// The in-process state of both, held in [`crate::state::AppState`], and the wizard's QR codes.
+/// The life of a profile link, as long as a Login Flow v2 flow.
+const LINK_SECS: i64 = FLOW_SECS;
+/// After its download a link answers the same profile for this long more, to the same device only: a second
+/// download (Safari may fetch twice, a user who tapped "Ignore" taps again) must not meet a used link. iOS
+/// drops a downloaded profile that is not installed within 8 minutes (support.apple.com/102400, 2026-04-14).
+const LINK_AGAIN_SECS: i64 = 8 * 60;
+/// Profile links per user at most (the wizard renews its link before it expires).
+const LINK_MAX_PER_USER: usize = 4;
+
+/// One profile link: made in the wizard for its user, opened once by the device that installs the profile.
+struct Link {
+    user: String,
+    /// the device's name when the wizard knows it (it runs on that device), else it comes from the download
+    name: Option<String>,
+    at: chrono::DateTime<chrono::Utc>,
+    state: LinkState,
+}
+
+/// `device`: who downloads (client address and User-Agent, [`Links::open`]).
+enum LinkState {
+    Fresh,
+    /// its profile is being made for `device`
+    Taken(String),
+    /// downloaded at the given time by `device`: the profile, answered again for [`LINK_AGAIN_SECS`]
+    Done(String, chrono::DateTime<chrono::Utc>, String),
+}
+
+impl Link {
+    fn live(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
+        match &self.state {
+            LinkState::Done(_, at, _) => now.signed_duration_since(*at).num_seconds() < LINK_AGAIN_SECS,
+            _ => now.signed_duration_since(self.at).num_seconds() < LINK_SECS,
+        }
+    }
+}
+
+/// What opening a link finds: a profile to make for (user, device name if the wizard knew it), the one made
+/// before, or one being made for this device (wait for [`Links::changed`]).
+pub enum Opened {
+    Make(String, Option<String>),
+    Again(String),
+    Busy,
+}
+
+#[derive(Default)]
+pub struct Links {
+    by_id: Mutex<HashMap<String, Link>>,
+    /// a profile was made (or could not be): a download that found its link busy looks again
+    pub changed: tokio::sync::Notify,
+}
+
+impl Links {
+    /// A new link of `user`: 32 random characters (190 bits), half of a token's, so that its QR code stays
+    /// coarse enough for a camera at a glance.
+    pub fn create(&self, user: &str, name: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> String {
+        let id = super::tokens::generate_secret()[..32].to_string();
+        let mut m = self.by_id.lock().unwrap();
+        m.retain(|_, l| l.live(now));
+        // full: the oldest unopened link goes first, a downloaded one next, one being made never
+        while m.values().filter(|l| l.user == user).count() >= LINK_MAX_PER_USER {
+            let Some(oldest) = m.iter().filter(|(_, l)| l.user == user && !matches!(l.state, LinkState::Taken(_))).min_by_key(|(_, l)| (matches!(l.state, LinkState::Done(..)), l.at)).map(|(k, _)| k.clone()) else { break };
+            m.remove(&oldest);
+        }
+        let name = name.map(|n| n.chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>().trim().to_string()).filter(|n| !n.is_empty());
+        m.insert(id.clone(), Link { user: user.to_string(), name, at: now, state: LinkState::Fresh });
+        id
+    }
+
+    /// The download by `device`: a fresh link is taken for it; a link taken or downloaded by it answers
+    /// `Busy` / its profile again (for [`LINK_AGAIN_SECS`]); `None` for an unknown or expired link and for
+    /// any other device — one link, one device: a photo of the code taken after the download gets nothing.
+    pub fn open(&self, id: &str, device: &str, now: chrono::DateTime<chrono::Utc>) -> Option<Opened> {
+        let mut m = self.by_id.lock().unwrap();
+        let l = m.get_mut(id).filter(|l| l.live(now))?;
+        match &l.state {
+            LinkState::Fresh => {
+                l.state = LinkState::Taken(device.to_string());
+                Some(Opened::Make(l.user.clone(), l.name.clone()))
+            }
+            LinkState::Taken(d) => (d == device).then_some(Opened::Busy),
+            LinkState::Done(p, _, d) => (d == device).then(|| Opened::Again(p.clone())),
+        }
+    }
+
+    /// The user of a link that can still be downloaded: its page offers the download.
+    pub fn user(&self, id: &str, now: chrono::DateTime<chrono::Utc>) -> Option<String> {
+        self.by_id.lock().unwrap().get(id).filter(|l| l.live(now)).map(|l| l.user.clone())
+    }
+
+    /// The profile of a taken link was made (`Some`), or could not be (`None`: the link is fresh again).
+    pub fn made(&self, id: &str, profile: Option<&str>, now: chrono::DateTime<chrono::Utc>) {
+        if let Some(l) = self.by_id.lock().unwrap().get_mut(id)
+            && let LinkState::Taken(d) = &l.state
+        {
+            l.state = match profile {
+                Some(p) => LinkState::Done(p.to_string(), now, d.clone()),
+                None => LinkState::Fresh,
+            };
+        }
+        self.changed.notify_waiters();
+    }
+}
+
+/// The device's name from the downloading browser's User-Agent. An iPad's Safari asks for desktop sites and
+/// says "Macintosh" (iPadOS 13+); a Mac rarely opens a code that a phone camera scans.
+pub fn apple_device_name(ua: &str) -> &'static str {
+    if ua.contains("iPad") || ua.contains("Macintosh") { "iPad" } else { "iPhone" }
+}
+
+/// Whether the browser of this User-Agent installs a configuration profile it downloads: Safari (Apple
+/// names it, support.apple.com/guide/profile-manager/pmdbd71ebc9) and Chrome (since ~v95, brave-ios #4358) do;
+/// Firefox (firefox-ios #25476) and DuckDuckGo (duckduckgo/iOS #830) only save it; Edge, Opera and the web views
+/// inside apps (Google, Instagram, Facebook, Line, WeChat) are not known to install it.
+pub fn installs_profiles(ua: &str) -> bool {
+    !["FxiOS", "DuckDuckGo", "EdgiOS", "OPiOS", "OPT/", "GSA/", "Instagram", "FBAN", "FBAV", "Line/", "MicroMessenger"].iter().any(|k| ua.contains(k))
+}
+
+/// An account of a profile: CalDAV or CardDAV, for the user or one of their groups.
+pub struct AppleAccount {
+    pub carddav: bool,
+    /// the principal the account opens; a group's is reached by logging in as `user$group` (RustiCal
+    /// `auth/middleware.rs`, v0.16.6)
+    pub principal: String,
+    pub description: String,
+}
+
+/// What a profile holds besides its accounts.
+pub struct AppleProfile<'a> {
+    pub dav_url: &'a str,
+    pub user: &'a str,
+    pub password: &'a str,
+    /// this server's host: the profile's organization and part of its identifier
+    pub host: &'a str,
+    pub name: &'a str,
+    pub description: &'a str,
+}
+
+/// An Apple configuration profile that sets up the user's accounts (developer.apple.com/documentation/
+/// devicemanagement/caldav and …/carddav). CalDAV goes to `/caldav-compat`: Apple's Calendar follows one
+/// calendar-home-set only, and that tree names the principal itself as its home (RustiCal `app.rs`, issue
+/// #180); Apple's Calendar sees one principal per account, so each group gets accounts of its own — both as
+/// in RustiCal's own profile (`apple_configuration/template.xml`, v0.16.6). `TargetDeviceType` 1 (iPhone/iPad)
+/// spares the user with a paired Apple Watch the question which device the profile is for
+/// (developer.apple.com/documentation/devicemanagement/toplevel). The identifier is the same for
+/// every profile of this user on this server: installing one again replaces the last one on that device
+/// instead of adding a second set of accounts.
+pub fn apple_profile(p: &AppleProfile, accounts: &[AppleAccount]) -> String {
+    use crate::domain::remote::xml::esc;
+    use std::fmt::Write;
+    let url = url::Url::parse(p.dav_url).unwrap_or_else(|_| url::Url::parse("https://invalid/").unwrap());
+    let (host, ssl) = (url.host_str().unwrap_or_default(), if url.scheme() == "https" { "true" } else { "false" });
+    // reverse-DNS characters only: "localhost:4001" and "a@b" are no identifier parts
+    let ident: String = format!("{}.practical.{}", p.host, p.user).chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' }).collect();
+    let uuid = || uuid::Uuid::new_v4().to_string().to_uppercase();
+    let mut items = String::new();
+    for (i, a) in accounts.iter().enumerate() {
+        let (k, kind, tree) = if a.carddav { ("CardDAV", "carddav", "carddav") } else { ("CalDAV", "caldav", "caldav-compat") };
+        let mut principal = url.clone();
+        if let Ok(mut s) = principal.path_segments_mut() {
+            s.pop_if_empty().extend([tree, "principal", a.principal.as_str()]);
+        }
+        let login = if a.principal == p.user { p.user.to_string() } else { format!("{}${}", p.user, a.principal) };
+        let port = url.port().map(|n| format!("<key>{k}Port</key><integer>{n}</integer>")).unwrap_or_default();
+        let _ = write!(
+            items,
+            "\n<dict><key>PayloadType</key><string>com.apple.{kind}.account</string><key>PayloadIdentifier</key><string>{ident}.{kind}.{i}</string><key>PayloadUUID</key><string>{}</string><key>PayloadVersion</key><integer>1</integer><key>PayloadDisplayName</key><string>{d}</string><key>{k}AccountDescription</key><string>{d}</string><key>{k}HostName</key><string>{}</string>{port}<key>{k}UseSSL</key><{ssl}/><key>{k}PrincipalURL</key><string>{}</string><key>{k}Username</key><string>{}</string><key>{k}Password</key><string>{}</string></dict>",
+            uuid(),
+            esc(host),
+            esc(principal.as_str()),
+            esc(&login),
+            esc(p.password),
+            d = esc(&a.description),
+        );
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>PayloadType</key><string>Configuration</string><key>TargetDeviceType</key><integer>1</integer><key>PayloadIdentifier</key><string>{ident}</string><key>PayloadUUID</key><string>{}</string><key>PayloadVersion</key><integer>1</integer><key>PayloadDisplayName</key><string>{}</string><key>PayloadDescription</key><string>{}</string><key>PayloadOrganization</key><string>{}</string><key>PayloadRemovalDisallowed</key><false/><key>PayloadContent</key><array>{items}\n</array></dict></plist>\n",
+        uuid(),
+        esc(p.name),
+        esc(p.description),
+        esc(p.host),
+    )
+}
+
+/// The in-process state of all three, held in [`crate::state::AppState`], and the wizard's QR codes.
 #[derive(Default)]
 pub struct Connect {
     pub flows: Flows,
     pub pairs: Pairs,
+    pub links: Links,
     codes: OnceLock<Codes>,
 }
 
@@ -344,6 +529,62 @@ mod tests {
             p.create("carol", t(i));
         }
         assert!(p.by_id.lock().unwrap().values().filter(|x| x.user == "carol").count() <= PAIR_MAX_PER_USER);
+    }
+
+    #[test]
+    fn a_profile_link_serves_one_device_briefly() {
+        let (l, phone, other) = (Links::default(), "1.2.3.4 iPhone", "5.6.7.8 iPhone");
+        let id = l.create("alice", None, t(0));
+        assert_eq!(l.user(&id, t(1)).as_deref(), Some("alice"));
+        assert!(matches!(l.open(&id, phone, t(1)), Some(Opened::Make(u, None)) if u == "alice"));
+        assert!(matches!(l.open(&id, phone, t(1)), Some(Opened::Busy)), "being made: the same device waits");
+        assert!(l.open(&id, other, t(1)).is_none(), "another device gets nothing");
+        l.made(&id, None, t(2));
+        assert!(matches!(l.open(&id, other, t(2)), Some(Opened::Make(..))), "not made: fresh again, for anyone");
+        l.made(&id, Some("<plist/>"), t(3));
+        assert!(matches!(l.open(&id, other, t(3 + LINK_AGAIN_SECS - 1)), Some(Opened::Again(p)) if p == "<plist/>"), "a second download: the same profile");
+        assert!(l.open(&id, phone, t(4)).is_none(), "but to that device only");
+        assert!(l.open(&id, other, t(3 + LINK_AGAIN_SECS)).is_none(), "then never again");
+        let old = l.create("alice", Some(" iPad\n "), t(10));
+        assert!(matches!(l.open(&old, phone, t(10)), Some(Opened::Make(_, Some(n))) if n == "iPad"));
+        assert!(l.user(&l.create("alice", None, t(0)), t(LINK_SECS)).is_none(), "expired unopened");
+        let busy = l.create("bob", None, t(19));
+        l.open(&busy, phone, t(19));
+        for i in 0..10 {
+            l.create("bob", None, t(20 + i));
+        }
+        let m = l.by_id.lock().unwrap();
+        assert!(m.values().filter(|x| x.user == "bob").count() <= LINK_MAX_PER_USER);
+        assert!(m.contains_key(&busy), "a link being made is never evicted");
+    }
+
+    #[test]
+    fn a_profile_sets_up_the_users_and_their_groups_accounts() {
+        let accounts = [
+            AppleAccount { carddav: false, principal: "alice".into(), description: "PractiCal".into() },
+            AppleAccount { carddav: true, principal: "alice".into(), description: "PractiCal".into() },
+            AppleAccount { carddav: false, principal: "group.k-s".into(), description: "PractiCal · K&S".into() },
+        ];
+        let p = AppleProfile { dav_url: "https://dav.example.org", user: "alice", password: "abcd_x<y", host: "plan.example.org", name: "PractiCal", description: "für alice" };
+        let x = apple_profile(&p, &accounts);
+        assert!(x.starts_with("<?xml") && x.contains("<key>TargetDeviceType</key><integer>1</integer>"), "{x}");
+        assert!(x.contains("<key>PayloadIdentifier</key><string>plan.example.org.practical.alice</string>"));
+        assert!(x.contains("<key>CalDAVHostName</key><string>dav.example.org</string><key>CalDAVUseSSL</key><true/><key>CalDAVPrincipalURL</key><string>https://dav.example.org/caldav-compat/principal/alice</string><key>CalDAVUsername</key><string>alice</string><key>CalDAVPassword</key><string>abcd_x&lt;y</string>"), "{x}");
+        assert!(x.contains("<key>CardDAVPrincipalURL</key><string>https://dav.example.org/carddav/principal/alice</string><key>CardDAVUsername</key><string>alice</string>"));
+        assert!(x.contains("<string>PractiCal · K&amp;S</string>") && x.contains("<key>CalDAVUsername</key><string>alice$group.k-s</string>"), "a group: its own account, logged in as user$group");
+        assert_eq!(x.matches("<key>PayloadUUID</key>").count(), 4, "one per account and the profile");
+        let local = apple_profile(&AppleProfile { dav_url: "http://localhost:4000/", ..p }, &accounts[..1]);
+        assert!(local.contains("<key>CalDAVHostName</key><string>localhost</string><key>CalDAVPort</key><integer>4000</integer><key>CalDAVUseSSL</key><false/><key>CalDAVPrincipalURL</key><string>http://localhost:4000/caldav-compat/principal/alice</string>"), "{local}");
+    }
+
+    #[test]
+    fn apple_devices_and_browsers() {
+        let safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
+        assert_eq!(apple_device_name(safari), "iPhone");
+        assert_eq!(apple_device_name("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"), "iPad");
+        assert!(installs_profiles(safari));
+        assert!(installs_profiles("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0 Mobile/15E148 Safari/604.1"), "Chrome");
+        assert!(!installs_profiles("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15"), "Firefox");
     }
 
     #[test]

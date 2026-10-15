@@ -79,8 +79,8 @@ Per region, in every view, and counted by the vacation planner.
 <td valign="top">
 
 ↩️ **And more**<br>
-Change history with undo for every change (also from phones), shared group calendars, one-tap phone setup with
-DAVx⁵, a password per device, `.ics`/`.vcf` import and export, push reminders, live updates.
+Change history with undo for every change (also from phones), shared group calendars, one-tap phone setup (DAVx⁵
+on Android, a profile on iPhone), a password per device, `.ics`/`.vcf` import and export, push reminders, live updates.
 [All features →](https://xarif.gitlab.io/docker/practical/features.html)
 
 </td>
@@ -125,9 +125,9 @@ kubectl -n practical apply -f kubernetes.yaml
 kubectl -n practical exec -it deploy/practical -c rustical -- rustical principals create alice --password
 ```
 
-Open `https://plan.your.domain` and sign in. To connect a phone or another calendar app, open **Settings → Account &
-apps → Add a device**: Android connects through DAVx⁵ with one tap, any other app with the addresses and a password
-shown there.
+Open `https://plan.your.domain` and sign in. To connect a phone or another calendar app, open **Settings → Connected
+devices → Add a device**: Android connects through DAVx⁵ with one tap, an iPhone or iPad through a profile it installs,
+any other app with the addresses and a password shown there.
 
 > [!tip]
 > The manifest expects TLS at the ingress and a default IngressClass (see the comments in

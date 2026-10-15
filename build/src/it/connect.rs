@@ -125,3 +125,68 @@ async fn the_account_page_offers_the_wizard_and_the_manual_way() {
     let r = alice.post_form("/settings/tokens", &[("name", "Thunderbird")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#manual"));
 }
+
+/// Safari on an iPhone (iOS 26).
+const UA_IPHONE: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
+
+#[tokio::test]
+async fn an_iphone_gets_a_profile_through_a_link_once() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    let csrf = alice.csrf.clone();
+    let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    assert_eq!(alice.send(Method::POST, "/settings/connect/apple", &hdr[..1], Body::empty()).await.status, StatusCode::FORBIDDEN, "no link without the CSRF header");
+    let pair = alice.send(Method::POST, "/settings/connect/pair", &hdr, Body::empty()).await.json()["pair"].as_str().unwrap().to_string();
+    let r = alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    let l = r.json();
+    let (page, file) = (path_of(l["url"].as_str().unwrap()), path_of(l["file"].as_str().unwrap()));
+    assert!(l["qr"].as_str().unwrap().starts_with("<svg"));
+    assert_eq!(file, format!("{page}/PractiCal.mobileconfig"));
+    // the code opens the link's page in a browser without a session; Firefox is told to use Safari
+    let iphone = [("user-agent", UA_IPHONE)];
+    let mut phone = s.app.anonymous();
+    phone.send(Method::GET, &page, &iphone, Body::empty()).await.ok().has("PractiCal.mobileconfig").has("alice");
+    assert!(!phone.send(Method::GET, &page, &iphone, Body::empty()).await.body.contains("class=\"warn\""));
+    phone.send(Method::GET, &page, &[("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) FxiOS/140.0 Mobile/15E148")], Body::empty()).await.ok().has("class=\"warn\"").has(&page);
+    let st = format!("/settings/connect/status?pair={pair}");
+    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": null }), "a page view connects nothing");
+    // the download: the profile with a working app token; the wizard learns the device
+    let r = phone.send(Method::GET, &file, &iphone, Body::empty()).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    assert_eq!(r.header("content-type").as_deref(), Some("application/x-apple-aspen-config"));
+    assert_eq!(r.header("cache-control").as_deref(), Some("no-store"));
+    let pw = r.body.split("<key>CalDAVPassword</key><string>").nth(1).and_then(|x| x.split('<').next()).unwrap().to_string();
+    assert!(r.body.contains("<string>https://dav.example.org/caldav-compat/principal/alice</string>"), "{}", r.body);
+    use base64ct::Encoding;
+    let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{pw}").as_bytes()));
+    assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
+    assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": "iPhone" }));
+    // a second download (Safari's retry) gets the same profile, no second token; another device nothing
+    let again = phone.send(Method::GET, &file, &iphone, Body::empty()).await;
+    assert_eq!(again.body, r.body);
+    assert_eq!(alice.get("/settings").await.body.matches(">iPhone<span class=\"sub\">").count(), 1, "one device");
+    let ipad = [("user-agent", "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1")];
+    assert_eq!(phone.send(Method::GET, &file, &ipad, Body::empty()).await.status, StatusCode::GONE, "one link, one device");
+    // a second iPhone (or the same one again): a name of its own, so the two rows can be told apart
+    let file2 = path_of(alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
+    assert_eq!(phone.send(Method::GET, &file2, &iphone, Body::empty()).await.status, StatusCode::OK);
+    alice.get("/settings").await.ok().has(">iPhone (2)<span class=\"sub\">");
+    // an unknown link, a wrong file name: gone
+    let r = phone.get("/connect/apple/nope").await;
+    assert_eq!(r.status, StatusCode::GONE);
+    r.has("Dieser Link ist abgelaufen");
+    assert_eq!(phone.get(&format!("{page}/other.mobileconfig")).await.status, StatusCode::GONE);
+}
+
+#[tokio::test]
+async fn the_wizard_on_the_ipad_names_it() {
+    let s = seed().await;
+    let mut alice = s.app.login("alice").await;
+    let csrf = alice.csrf.clone();
+    let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    let file = path_of(alice.send(Method::POST, "/settings/connect/apple?name=iPad", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
+    let r = s.app.anonymous().get(&file).await;
+    assert_eq!(r.status, StatusCode::OK);
+    alice.get("/settings").await.ok().has(">iPad<span class=\"sub\">");
+}

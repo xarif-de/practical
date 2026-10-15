@@ -2,6 +2,10 @@
    and the confirmation page an app opens (templates/connect.html). Two paths: .oa = on the Android device itself,
    .od = on another one; js/shell/settings-connect.js sets #settings[data-android] (no JS: the other-device path) */
 .settings:not([data-android="1"]) .oa, .settings[data-android="1"] .od { display: none !important; }
+/* the iPhone path: .oi = on the iPhone/iPad itself, .ni = on another device; #add-done tells the two paths apart by
+   data-path (no JS: the Android text) */
+.settings:not([data-ios="1"]) .oi, .settings[data-ios="1"] .ni { display: none !important; }
+.settings[data-path="ios"] .p-android, .settings:not([data-path="ios"]) .p-ios { display: none !important; }
 /* a primary button with a symbol stays a button (icon-buttons.css: not a link) */
 .set .btn.btn-primary:has(> .ico), .connect-page .btn.btn-primary { padding: 7px 14px; font-weight: 600; }
 .set .btn.big, .connect-page .btn.big { padding: 11px 18px; font-size: 16px; border-radius: 12px; }
@@ -64,7 +68,9 @@
 /* step 5 and the confirmation page: the green tick */
 .ok-dot { width: 56px; height: 56px; border-radius: 50%; background: var(--c2); color: #fff; display: grid; place-items: center; margin: 0 auto 4px; }
 .ok-dot .ico { width: 26px; height: 26px; } .ok-dot.gone { background: var(--fg-3); }
-#add-done .wz .group { text-align: left; background: var(--bg); margin: 10px 0 0; }
+#add-done .wz .group, #add-ios-install .wz .group { text-align: left; background: var(--bg); margin: 10px 0 0; }
+#add-ios-install .wz .group .val .ico { color: var(--c2); }
+#add-done .about-list { margin-top: 14px; }
 /* manual: a long address under its label, never over it (the old rows overlapped on a phone) */
 .set .cell.stack .k { display: block; font-size: 12px; color: var(--fg-3); }
 .set .cell.stack code { display: block; font-size: 13.5px; color: var(--fg); overflow-wrap: anywhere; }
@@ -152,3 +158,28 @@ body:has(.connect-page) .topbar, body:has(.connect-page) .tabbar { display: none
 .dx .row2 small { color: #6ea8ff; font-size: 8px; text-align: right; flex: none; max-width: 50%; } .dx .row2 > span:first-child { min-width: 0; }
 .dx .tg.off { background: #555; border-color: #555; } .dx .tg.off i { left: 2px; background: #ddd; }
 .dx .tg.blue { background: #3b82f6; border-color: #3b82f6; } .dx .tg.blue i { background: #fff; }
+/* iOS while it installs a profile (macros.html io_*): light, as iOS draws it; Safari's questions over a dimmed page */
+.dx.io { background: #f2f2f7; color: #1d1d1f; border-color: #1d1d1f; }
+.dx.io .io-url { background: #fff; color: #3c3c43; text-align: center; font-size: 8.5px; padding: 6px 4px; border-bottom: 1px solid #d1d1d6; overflow-wrap: anywhere; }
+.dx.io .bd.io-dim { background: #8e8e93; }
+.dx.io .io-al { width: 92%; background: #f2f2f7; border-radius: 9px; display: grid; gap: 5px; padding: 9px 0 0; text-align: center; font-size: 8.5px; }
+.dx.io .io-al b, .dx.io .io-al small { padding: 0 7px; overflow-wrap: anywhere; hyphens: auto; } .dx.io .io-al b { font-size: 8px; } .dx.io .io-al small { font-size: 7.5px; color: #3c3c43; }
+.dx.io .io-abt { display: flex; border-top: 1px solid #c7c7cc; } .dx.io .io-abt span { flex: 1; min-width: 0; padding: 6px 2px; color: #0a63c9; font-size: 8.5px; border-radius: 0 0 9px 9px; } .dx.io .io-abt span + span { border-left: 1px solid #c7c7cc; font-weight: 700; }
+.dx.io .io-ttl { font-size: 15px; margin: 4px 0 2px; }
+.dx.io .io-rows { background: #fff; border-radius: 8px; overflow: hidden; }
+.dx.io .io-row { display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 6px 7px; font-size: 8.5px; min-height: 12px; } .dx.io .io-row + .io-row { border-top: 1px solid #e5e5ea; }
+.dx.io .io-row small { color: #3c3c43; font-size: 7.5px; } .dx.io .io-row .io-red { color: #c4281c; font-weight: 600; } .dx.io .chev { color: #8e8e93; }
+.dx.io .io-av { width: 18px; height: 18px; border-radius: 50%; background: #c7c7cc; flex: none; } .dx.io .ln { flex: 1; background: #e5e5ea; }
+.dx.io .io-nav { display: flex; justify-content: space-between; align-items: center; gap: 4px; background: #f9f9f9; padding: 8px 6px; font-size: 7.5px; border-bottom: 1px solid #d1d1d6; } .dx.io .io-nav span { color: #0a63c9; } .dx.io .io-nav b { font-size: 8px; text-align: center; } .dx.io .io-nav .hi { font-weight: 700; border-radius: 4px; }
+.dx.io .io-prof { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0; } .dx.io .io-prof img { width: 30px; height: 30px; border-radius: 7px; } .dx.io .io-prof b { font-size: 10px; }
+.dx.io .io-cap { font-size: 7.5px; color: #3c3c43; text-transform: uppercase; letter-spacing: .02em; }
+.dx.io .io-sheet { margin-top: auto; background: #fff; border-radius: 9px; display: grid; text-align: center; font-size: 9px; } .dx.io .io-sheet span { padding: 6px; color: #0a63c9; } .dx.io .io-sheet span.hi { font-weight: 700; border-radius: 9px 9px 0 0; } .dx.io .io-sheet span + span { border-top: 1px solid #e5e5ea; }
+.dx.io.io-cam { background: #1c1c1e; } .dx.io.io-cam .bd { gap: 12px; }
+.dx.io .io-qrf { width: 64px; height: 64px; border: 2px solid #ffd60a; border-radius: 6px; display: grid; place-items: center; } .dx.io .io-qrf i { width: 44px; height: 44px; background: repeating-conic-gradient(#fff 0 25%, #555 0 50%) 0 0 / 11px 11px; }
+.dx.io .io-yl { background: #ffd60a; color: #1d1d1f; border-radius: 999px; padding: 4px 10px; font-weight: 700; font-size: 9px; max-width: 100%; overflow-wrap: anywhere; }
+.wiz .sys-in.one { grid-template-columns: minmax(0, 1fr); }
+.wiz .miss p { margin: 0 0 6px; } .wiz .miss code { overflow-wrap: anywhere; font-size: 12.5px; }
+/* the profile link's page on the iPhone (connect.html "apple") */
+.connect-page h2 { font: 600 16px/1.3 var(--font); margin: 8px 0 0; }
+.connect-page code.io-link { font-size: 12.5px; overflow-wrap: anywhere; background: var(--bg); border-radius: 8px; padding: 8px; }
+.connect-page .wiz-strip { margin: 0; }

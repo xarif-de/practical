@@ -649,6 +649,78 @@ test('add a device: explained, installed, one QR code opens DAVx⁵, the confirm
   await expect(page.locator('#devices .cell', { hasText: 'F4 Pixel' })).toHaveCount(0);
 });
 
+// the iPhone path: no app — a profile link's QR code, its page on the phone, the profile, then Settings
+const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1';
+test('add a device: an iPhone scans a profile link, downloads its profile, and the wizard follows to the install', async ({ page }) => {
+  await reloadAt(page, '#add');
+  await page.locator('#add a[href="#add-ios-about"]').click();
+  await expect(page.locator('#add-ios-about .about-list li')).toHaveCount(4);
+  await page.locator('#add-ios-about a.btn-primary').click();
+  await expect(page).toHaveURL(/#add-ios$/);
+  await expect(page.locator('#add-ios .dots span')).toHaveText('Schritt 3 von 5 · Profil laden');
+  await expect(page.locator('#add-ios [data-qr="apple"] svg')).toBeVisible(); // the profile link's code
+  await expect(page.locator('#add-ios a[data-apple]')).toBeHidden(); // the download is the device's own button
+  await expect(page.locator('#add-ios .ni .wiz-strip .dx')).toHaveCount(3); // camera, Allow, Close
+  await expect(page.locator('#add-ios [data-live]')).toBeVisible();
+  // the code's link: the phone camera opens it in a fresh browser — no session needed
+  const r = await page.request.post('/settings/connect/apple', { headers: { 'X-CSRF-Token': await page.locator('meta[name=csrf]').getAttribute('content'), Origin: BASE } });
+  expect(r.status()).toBe(200);
+  const link = await r.json();
+  const phone = await page.context().browser().newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE });
+  const tab = await phone.newPage();
+  await tab.goto(new URL(link.url).pathname);
+  await expect(tab.locator('.connect-page h1')).toHaveText('PractiCal auf diesem Gerät einrichten');
+  await expect(tab.locator('.connect-page .warn')).toHaveCount(0); // Safari installs profiles
+  await expect(tab.locator('.connect-page .wiz-strip .dx')).toHaveCount(6); // Allow, Close; then Settings ×4
+  const dl = await phone.request.get(await tab.locator('.connect-page a.btn-primary').getAttribute('href'));
+  expect(dl.status()).toBe(200);
+  expect(dl.headers()['content-type']).toBe('application/x-apple-aspen-config');
+  const xml = await dl.text();
+  expect(xml).toContain('<string>com.apple.caldav.account</string>');
+  expect(xml).toMatch(/caldav-compat\/principal\/alice</);
+  const pw = xml.match(/<key>CalDAVPassword<\/key><string>([^<]+)</)[1];
+  const ok = await basic('alice', pw);
+  expect((await ok.get('/api/history')).status()).toBe(200); // the profile's password is a working app token
+  await ok.dispose();
+  await phone.close();
+  // the wizard of the code that was not scanned notices the download of the other link too: one user, one device
+  await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
+  await expect(page.locator('#add-ios-install [data-device]')).toHaveText('iPhone');
+  await expect(page.locator('#add-ios-install .wiz-strip .dx')).toHaveCount(4); // Settings: loaded, install, warning, done
+  await page.locator('#add-ios-install .acts a.btn-primary').click();
+  await expect(page).toHaveURL(/#add-done$/);
+  await expect(page.locator('#add-done .p-ios')).toBeVisible();
+  await expect(page.locator('#add-done .p-android')).toBeHidden(); // no DAVx⁵ steps after an iPhone
+  await page.locator('#add-done a.btn-primary').click();
+  const row = page.locator('#devices .cell', { hasText: 'iPhone' });
+  await expect(row).toBeVisible();
+  await row.locator('button[data-confirm]').click();
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
+});
+
+test('add a device: on the iPhone itself one button downloads the profile', async ({ browser }) => {
+  const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await loginAs(page, 'bob'); // not alice: a download ends every open wizard of its user, and the test above waits in one
+  await page.goto('/settings#add-ios');
+  await expect(page.locator('#settings')).toHaveAttribute('data-ios', '1');
+  const btn = page.locator('#add-ios a[data-apple]');
+  await expect(btn).toHaveAttribute('href', /\/connect\/apple\/[A-Za-z0-9]{32}\/PractiCal\.mobileconfig$/);
+  await expect(page.locator('#add-ios [data-qr="apple"]')).toBeHidden(); // no code on the device itself
+  await expect(page.locator('#add-ios [data-io-other]')).toBeHidden(); // Safari installs it
+  const dl = await page.request.get(await btn.getAttribute('href'));
+  expect(dl.status()).toBe(200);
+  await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
+  await expect(page.locator('#add-ios-install [data-device]')).toHaveText('iPhone');
+  await page.goto('/settings?done=1#account'); // a new load: the list as the server has it now; tidy up
+  const row = page.locator('#devices .cell', { hasText: 'iPhone' });
+  await row.locator('button[data-confirm]').click();
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
+  await ctx.close();
+});
+
 test('add a device: on the Android device itself the wizard explains, installs, then connects with one tap', async ({ browser }) => {
   const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
