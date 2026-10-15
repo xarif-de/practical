@@ -31,7 +31,7 @@ stages: [build, deploy]
 api-doc:
   stage: build
   # same Rust as build/Dockerfile and build/rust-toolchain.toml (one Renovate group, renovate.json "rust toolchain")
-  image: rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627
+  image: rust:1.99-alpine@sha256:cbd696e7f89122654a8f52bf3dbbadc3309891cbd0d67570a038de672f893f88
   <<: *site-rules
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/.cargo-home
