@@ -327,12 +327,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
         tokio::pin!(changed);
         changed.as_mut().enable(); // before the look: a profile finished in between still wakes it
         match (profile || file == "password").then(|| links.open(&id, &device, chrono::Utc::now())).flatten() {
-            Some(connect::Opened::Again(user, name, made)) => {
-                // a second download (Safari's retry, a profile loaded again after "Ignore"): a wizard that went
-                // back to wait for it hears of it again
-                state.connect.pairs.connected(&user, &name, !profile);
-                return Ok(apple_answer(profile, made));
-            }
+            Some(connect::Opened::Again(made)) => return Ok(apple_answer(profile, made)),
             Some(connect::Opened::Make(user)) => break user,
             Some(connect::Opened::Busy) if tokio::time::timeout(std::time::Duration::from_secs(10), changed).await.is_ok() => continue,
             _ => return Ok(apple_gone(&state, ctx, id)),
@@ -347,7 +342,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
             true => make_profile(&st, &user, name, &description).await,
             false => async { tokens::create_unique(&st, &st.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?, name).await }.await,
         };
-        st.connect.links.made(&id, made.as_ref().ok().map(|(n, p)| (n.as_str(), p.as_str())), chrono::Utc::now());
+        st.connect.links.made(&id, made.as_ref().ok().map(|(_, p)| p.as_str()), chrono::Utc::now());
         if let Ok((name, _)) = &made {
             st.connect.pairs.connected(&user, name, !profile);
         }
