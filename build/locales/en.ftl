@@ -106,6 +106,15 @@ connect-hero-text = Events, contacts and tasks on phone, tablet and computer –
 connect-add = Add a device
 devices-title = My connected devices
 devices-since = connected since { $date }
+devices-seen-hour = last connected within the last hour
+devices-seen-hours = { $n ->
+    [one] last connected an hour ago
+   *[other] last connected { $n } hours ago
+}
+devices-seen-days = { $n ->
+    [one] last connected a day ago
+   *[other] last connected { $n } days ago
+}
 devices-none = No device connected yet.
 devices-foot = A disconnected device stops syncing at once. Your data stays.
 device-disconnect = Disconnect

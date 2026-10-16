@@ -131,6 +131,41 @@ async fn app_tokens_are_shown_once() {
 }
 
 #[tokio::test]
+async fn a_device_shows_once_it_connected_and_one_that_never_did_is_swept() {
+    use crate::domain::tokens::{self, Seen};
+    let s = seed().await;
+    let st = &s.app.state;
+    let mut c = s.app.login("alice").await;
+    let alice = st.principals.get_principal("alice").await.unwrap().unwrap();
+    let named = |n: &'static str| async move { tokens::devices(st, &st.principals.get_principal("alice").await.unwrap().unwrap()).await.unwrap().into_iter().find(|(t, _)| t.name == n) };
+    // made, not yet used: no connected device
+    c.post_form("/settings/tokens", &[("name", "Thunderbird")]).await;
+    let token = c.get("/settings").await.body.split("<code id=\"new-token\">").nth(1).map(|r| r[..r.find('<').unwrap()].to_string()).expect("token shown");
+    assert!(named("Thunderbird").await.is_none(), "never connected → hidden");
+    // its first use (RustiCal's middleware records it) makes it one
+    use base64ct::Encoding;
+    let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{token}").as_bytes()));
+    assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], axum::body::Body::empty()).await.status, StatusCode::OK);
+    assert!(matches!(named("Thunderbird").await, Some((_, Seen::At(_)))));
+    assert!(c.get("/settings").await.body.contains("zuletzt verbunden in der letzten Stunde"));
+    // a day later: the never-used one goes, the used one and one from before recording stay
+    tokens::create(st, &alice, "Halbfertig").await.unwrap();
+    tokens::create(st, &alice, "Alt").await.unwrap();
+    for (q, n) in [
+        ("UPDATE practical_token_use_since SET since = datetime('now', '-30 hours')", ""),
+        ("UPDATE app_tokens SET created_at = datetime('now', '-25 hours') WHERE displayname IN (?, 'Thunderbird')", "Halbfertig"),
+        ("UPDATE app_tokens SET created_at = datetime('now', '-40 hours') WHERE displayname = ?", "Alt"),
+    ] {
+        sqlx::query(q).bind(n).execute(&st.db).await.unwrap();
+    }
+    assert_eq!(tokens::sweep(st).await.unwrap(), 1);
+    let left: Vec<String> = st.principals.get_app_tokens("alice").await.unwrap().into_iter().map(|t| t.name).collect();
+    assert!(!left.contains(&"Halbfertig".to_string()) && left.contains(&"Thunderbird".to_string()) && left.contains(&"Alt".to_string()), "{left:?}");
+    assert!(matches!(named("Alt").await, Some((_, Seen::Unknown))), "made before uses were recorded: shown, nothing known");
+    assert!(c.get("/settings").await.body.contains("verbunden seit"));
+}
+
+#[tokio::test]
 async fn preferences_form() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;

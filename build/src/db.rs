@@ -346,6 +346,15 @@ CREATE TABLE practical_holidays (
         // the filter rows pinned as quick switches left of the filter button (`prefs::Prefs::filter_pins_json`)
         "ALTER TABLE practical_user_settings ADD COLUMN filter_pins_json TEXT;",
     ),
+    (
+        22,
+        /* Since when RustiCal records each app token's last use (`app_tokens.last_used`, the xarif fork from
+           v0.16.6-xarif.2 on; this migration runs with the first PractiCal on it). A token made after this
+           moment and never used is a device that never connected: hidden from the list and deleted after a day
+           (`tokens::sweep`). A token from before simply has no record yet. */
+        "CREATE TABLE practical_token_use_since (id INTEGER PRIMARY KEY CHECK (id = 1), since TEXT NOT NULL);
+         INSERT INTO practical_token_use_since (id, since) VALUES (1, CURRENT_TIMESTAMP);",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

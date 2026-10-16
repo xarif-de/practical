@@ -170,7 +170,11 @@ async fn an_iphone_gets_a_profile_through_a_link_once() {
     assert_eq!(phone.send(Method::GET, &file, &ipad, Body::empty()).await.status, StatusCode::GONE, "one link, one device");
     // a second iPhone (or the same one again): a name of its own, so the two rows can be told apart
     let file2 = path_of(alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
-    assert_eq!(phone.send(Method::GET, &file2, &iphone, Body::empty()).await.status, StatusCode::OK);
+    let second = phone.send(Method::GET, &file2, &iphone, Body::empty()).await;
+    assert_eq!(second.status, StatusCode::OK);
+    // a device is listed once it connected, not when its profile was fetched
+    assert!(!alice.get("/settings").await.body.contains(">iPhone (2)<span"), "not connected yet");
+    first_connection(&s, &second.body).await;
     alice.get("/settings").await.ok().has(">iPhone (2)<span class=\"sub\">");
     // an unknown link, a wrong file name: gone
     let r = phone.get("/connect/apple/nope").await;
@@ -188,7 +192,18 @@ async fn the_wizard_on_the_ipad_names_it() {
     let file = path_of(alice.send(Method::POST, "/settings/connect/apple?name=iPad", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
     let r = s.app.anonymous().get(&file).await;
     assert_eq!(r.status, StatusCode::OK);
+    first_connection(&s, &r.body).await;
     alice.get("/settings").await.ok().has(">iPad<span class=\"sub\">");
+}
+
+/// The device's first request with the profile's password: RustiCal records the use, and only then the
+/// settings list the device (domain::tokens::devices).
+async fn first_connection(s: &super::seed::Seed, profile: &str) {
+    use base64ct::Encoding;
+    let user = profile.split("<key>CalDAVUsername</key><string>").nth(1).and_then(|x| x.split('<').next()).unwrap();
+    let pw = profile.split("<key>CalDAVPassword</key><string>").nth(1).and_then(|x| x.split('<').next()).unwrap();
+    let h = format!("Basic {}", base64ct::Base64::encode_string(format!("{user}:{pw}").as_bytes()));
+    assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
 }
 
 #[tokio::test]

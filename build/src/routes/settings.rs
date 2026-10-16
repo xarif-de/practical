@@ -55,7 +55,8 @@ pub struct SettingsPage {
     pub addressbooks: Vec<AbInfo>,
     pub deleted_calendars: Vec<CalInfo>,
     pub deleted_addressbooks: Vec<AbInfo>,
-    pub tokens: Vec<AppToken>,
+    /// connected devices with when they were last seen ([`tokens::devices`]; never-connected tokens left out)
+    pub tokens: Vec<(AppToken, tokens::Seen)>,
     pub new_token: Option<String>,
     pub prefs: Prefs,
     pub owners: Vec<Owner>,
@@ -198,6 +199,21 @@ impl SettingsPage {
             None => self.ctx.t1("set-tz-default", "tz", &self.default_timezone),
         }
     }
+    /// the second line of a device's row: when it last connected (hour granularity: RustiCal records a use at
+    /// most once per hour), or since when it is connected for a token from before uses were recorded
+    pub fn device_seen(&self, t: &AppToken, seen: &tokens::Seen) -> String {
+        match seen {
+            tokens::Seen::At(at) => {
+                let hours = (chrono::Utc::now() - *at).num_hours().max(0);
+                match hours {
+                    0 => self.ctx.t("devices-seen-hour"),
+                    1..=47 => self.ctx.tn("devices-seen-hours", "n", hours),
+                    _ => self.ctx.tn("devices-seen-days", "n", hours / 24),
+                }
+            }
+            _ => t.created_at.map(|c| self.ctx.t1("devices-since", "date", c.format("%Y-%m-%d").to_string().as_str())).unwrap_or_default(),
+        }
+    }
     /// the symbol of a connected device's row
     pub fn device_icon(&self, name: &str) -> &'static str {
         crate::domain::connect::device_icon(name)
@@ -296,7 +312,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         addressbooks: abs_all.clone(),
         deleted_calendars: collections::calendars_for(&state, &user, true).await?,
         deleted_addressbooks: collections::addressbooks_for(&state, &user, true).await?,
-        tokens: tokens::list(&state, &user).await?,
+        tokens: tokens::devices(&state, &user).await?,
         new_token,
         prefs: p.clone(),
         owners: collections::owners(&state, &user).await?,

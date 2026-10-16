@@ -92,7 +92,7 @@
 //! |---|---|---|
 //! | [`tasks::spawn_change_poller`] | 2 s (`PRACTICAL__DEV_POLL_MS` in development) | reads the [`db::Watch`] stamp; only after a commit by another connection: [`domain::history::poll`] (ingest), then the calendar and address-book synctokens → [`state::ChangeEvent`] |
 //! | [`domain::push::spawn_reminder_loop`] | 60 s from start, first tick at once; only with a VAPID key | rebuilds its [`domain::push::Plan`] only when the stamp moved, a user's day changed or a retry is due (backoff 1…16 min); fire window [now−2 min, now+1 min] |
-//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions |
+//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions, app tokens that never connected within a day ([`domain::tokens::sweep`]) |
 //! | [`domain::remote::sched::spawn`] | 60 s; a link runs when its own interval elapsed, and a local change pushes at once | one `sync-collection` per due link (zero responses when nothing changed), then the two directions |
 //! | [`tasks::spawn_holiday_coverage`] ([`domain::holidays::maintain`]) | 24 h; the first round only reads saved state | country coverage and CLDR release check, weekly (ETag, usually 304) |
 //! | [`tasks::spawn_dev_asset_watcher`] | 300 ms, development only | mtimes of `assets/**` → `dev_reload` → `/dev/reload` ([`routes::dev`]) |

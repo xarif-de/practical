@@ -106,6 +106,15 @@ connect-hero-text = Termine, Kontakte und Aufgaben auf Smartphone, Tablet und Co
 connect-add = Gerät hinzufügen
 devices-title = Meine verbundenen Geräte
 devices-since = verbunden seit { $date }
+devices-seen-hour = zuletzt verbunden in der letzten Stunde
+devices-seen-hours = { $n ->
+    [one] zuletzt verbunden vor einer Stunde
+   *[other] zuletzt verbunden vor { $n } Stunden
+}
+devices-seen-days = { $n ->
+    [one] zuletzt verbunden vor einem Tag
+   *[other] zuletzt verbunden vor { $n } Tagen
+}
 devices-none = Noch kein Gerät verbunden.
 devices-foot = Ein getrenntes Gerät synchronisiert ab sofort nicht mehr. Deine Daten bleiben erhalten.
 device-disconnect = Trennen

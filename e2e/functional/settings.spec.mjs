@@ -713,8 +713,15 @@ test('add a device: on the iPhone itself one button downloads the profile', asyn
   expect(dl.status()).toBe(200);
   await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
   await expect(page.locator('#add-ios-install [data-device]')).toHaveText('iPhone');
-  await page.goto('/settings?done=1#account'); // a new load: the list as the server has it now; tidy up
+  await page.goto('/settings?done=1#account'); // a new load: the list as the server has it now
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0); // listed once it connected, not on download
+  const pw = (await dl.text()).split('<key>CalDAVPassword</key><string>')[1].split('<')[0];
+  const dev = await basic('bob', pw); // the iPhone's first request: RustiCal records the use
+  expect((await dev.get('/api/history')).status()).toBe(200);
+  await dev.dispose();
+  await page.reload(); // goto() to the same URL with the same hash would not load the page again
   const row = page.locator('#devices .cell', { hasText: 'iPhone' });
+  await expect(row.locator('.sub')).toHaveText('zuletzt verbunden in der letzten Stunde'); // tidy up
   await row.locator('button[data-confirm]').click();
   await page.locator('.ask [data-a="1"]').click();
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
@@ -764,12 +771,11 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await expect(d.locator('#iv-p')).toBeVisible();
   await expect(d.locator('#iv-p')).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
   await desk.close();
-  await page.goto('/settings?done=1#account'); // tidy up: both
-  for (let i = 0; i < 2; i++) {
-    await page.locator('#devices .cell', { hasText: 'iPhone' }).first().locator('button[data-confirm]').click();
-    await page.locator('.ask [data-a="1"]').click();
-    await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(1 - i);
-  }
+  await page.goto('/settings?done=1#account'); // the used password is a device; the one only shown on the computer is not (yet)
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(1);
+  await page.locator('#devices .cell', { hasText: 'iPhone' }).locator('button[data-confirm]').click(); // tidy up
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
   await ctx.close();
 });
 

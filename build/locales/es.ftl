@@ -106,6 +106,15 @@ connect-hero-text = Eventos, contactos y tareas en el móvil, la tableta y el or
 connect-add = Añadir un dispositivo
 devices-title = Mis dispositivos conectados
 devices-since = conectado desde el { $date }
+devices-seen-hour = última conexión hace menos de una hora
+devices-seen-hours = { $n ->
+    [one] última conexión hace una hora
+   *[other] última conexión hace { $n } horas
+}
+devices-seen-days = { $n ->
+    [one] última conexión hace un día
+   *[other] última conexión hace { $n } días
+}
 devices-none = Aún no hay ningún dispositivo conectado.
 devices-foot = Un dispositivo desconectado deja de sincronizar al instante. Tus datos se conservan.
 device-disconnect = Desconectar

@@ -10,6 +10,14 @@ de ct-days-in 0: in 0 Tagen
 de ct-days-in 1: in 1 Tag
 de ct-days-in 2: in 2 Tagen
 de ct-days-in 5: in 5 Tagen
+de devices-seen-days 0: zuletzt verbunden vor 0 Tagen
+de devices-seen-days 1: zuletzt verbunden vor einem Tag
+de devices-seen-days 2: zuletzt verbunden vor 2 Tagen
+de devices-seen-days 5: zuletzt verbunden vor 5 Tagen
+de devices-seen-hours 0: zuletzt verbunden vor 0 Stunden
+de devices-seen-hours 1: zuletzt verbunden vor einer Stunde
+de devices-seen-hours 2: zuletzt verbunden vor 2 Stunden
+de devices-seen-hours 5: zuletzt verbunden vor 5 Stunden
 de ed-h-days 0: 0 Tage
 de ed-h-days 1: 1 Tag
 de ed-h-days 2: 2 Tage
@@ -206,6 +214,14 @@ en ct-days-in 0: in 0 days
 en ct-days-in 1: in 1 day
 en ct-days-in 2: in 2 days
 en ct-days-in 5: in 5 days
+en devices-seen-days 0: last connected 0 days ago
+en devices-seen-days 1: last connected a day ago
+en devices-seen-days 2: last connected 2 days ago
+en devices-seen-days 5: last connected 5 days ago
+en devices-seen-hours 0: last connected 0 hours ago
+en devices-seen-hours 1: last connected an hour ago
+en devices-seen-hours 2: last connected 2 hours ago
+en devices-seen-hours 5: last connected 5 hours ago
 en ed-h-count 0: 0 times
 en ed-h-count 1: once
 en ed-h-count 2: 2 times
@@ -406,6 +422,14 @@ fr ct-days-in 0: dans 0 jour
 fr ct-days-in 1: dans 1 jour
 fr ct-days-in 2: dans 2 jours
 fr ct-days-in 5: dans 5 jours
+fr devices-seen-days 0: dernière connexion il y a un jour
+fr devices-seen-days 1: dernière connexion il y a un jour
+fr devices-seen-days 2: dernière connexion il y a 2 jours
+fr devices-seen-days 5: dernière connexion il y a 5 jours
+fr devices-seen-hours 0: dernière connexion il y a une heure
+fr devices-seen-hours 1: dernière connexion il y a une heure
+fr devices-seen-hours 2: dernière connexion il y a 2 heures
+fr devices-seen-hours 5: dernière connexion il y a 5 heures
 fr ed-h-days 0: 0 jour
 fr ed-h-days 1: 1 jour
 fr ed-h-days 2: 2 jours
@@ -606,6 +630,14 @@ es ct-days-in 0: dentro de 0 días
 es ct-days-in 1: dentro de 1 día
 es ct-days-in 2: dentro de 2 días
 es ct-days-in 5: dentro de 5 días
+es devices-seen-days 0: última conexión hace 0 días
+es devices-seen-days 1: última conexión hace un día
+es devices-seen-days 2: última conexión hace 2 días
+es devices-seen-days 5: última conexión hace 5 días
+es devices-seen-hours 0: última conexión hace 0 horas
+es devices-seen-hours 1: última conexión hace una hora
+es devices-seen-hours 2: última conexión hace 2 horas
+es devices-seen-hours 5: última conexión hace 5 horas
 es ed-h-count 0: 0 veces
 es ed-h-count 1: 1 vez
 es ed-h-count 2: 2 veces

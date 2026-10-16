@@ -130,6 +130,11 @@ pub fn spawn_trash_purger(state: SharedState) {
                 if let Err(e) = crate::sessions::purge(&state.db).await {
                     tracing::error!("session purge: {e}");
                 }
+                match crate::domain::tokens::sweep(&state).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!("device sweep: {n} token(s) never connected within a day"),
+                    Err(e) => tracing::error!("device sweep: {e}"),
+                }
             })
             .await;
         }
