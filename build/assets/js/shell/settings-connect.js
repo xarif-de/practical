@@ -15,20 +15,28 @@
         if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/plain': once().then(m => new Blob([m.password], { type: 'text/plain' })) })]);
         else await navigator.clipboard.writeText((await once()).password);
         toast(tr('js-copied'));
-      } catch (_) { once().then(m => navigator.clipboard.writeText(m.password)).then(() => toast(tr('js-copied')), () => {}); }
+      } catch (_) { once().then(m => navigator.clipboard.writeText(m.password)).then(() => toast(tr('js-copied')), () => toast(tr('js-io-pw-failed'))); }
     }));
     $$('[data-io-pw-show]', scope).forEach(b => b.addEventListener('click', async () => {
-      await once().catch(() => {});
+      try { await once(); } catch (_) { toast(tr('js-io-pw-failed')); return; }
       const on = b.getAttribute('aria-pressed') !== 'true', row = b.closest('div');
       b.setAttribute('aria-pressed', on);
       $('[data-io-pw]', row).hidden = !on; $('[data-io-dots]', row).hidden = on;
     }));
-    return () => { p = null; $$('[data-io-pw]', scope).forEach(e => { e.textContent = ''; }); }; // a new run: a new password
+    return () => { // a new run: a new password, shown as dots again
+      p = null;
+      $$('[data-io-pw]', scope).forEach(e => { e.textContent = ''; e.hidden = true; });
+      $$('[data-io-dots]', scope).forEach(e => { e.hidden = false; });
+      $$('[data-io-pw-show]', scope).forEach(b => b.setAttribute('aria-pressed', 'false'));
+    };
   };
   const cp = $('.connect-page [data-pw-url]');
   if (cp) ioPassword($('.connect-page'), () => fetch(cp.dataset.pwUrl).then(r => r.ok ? r.json() : Promise.reject(r)));
   // the end of the phone's guide: say that the page has done its job
-  $$('[data-io-finish]').forEach(b => b.addEventListener('click', () => askChoice(b.dataset.ioFinish, [['1', 'OK']], tr('js-close'))));
+  $$('[data-io-finish]').forEach(b => b.addEventListener('click', () => askChoice(b.dataset.ioFinish, [['1', tr('js-ok')]], tr('js-close'))));
+  // `/settings?add=ios-manual` (a profile link's "expired" page): a login keeps the query but drops a #hash
+  const addq = settings && new URLSearchParams(location.search).get('add');
+  if (addq && /^[a-z-]+$/.test(addq) && $('#add-' + addq, settings)) location.replace(location.pathname + '#add-' + addq);
   if (settings && $('#add', settings)) {
     /* The Android path when the browser names Android (Chrome's reduced User-Agent keeps "Android"); when it names no
        system at all, a touch screen counts as the device itself. Anything else (desktop, iPhone) is "another device". */

@@ -51,8 +51,12 @@ pub async fn sweep(state: &AppState) -> AppResult<usize> {
     for p in state.principals.get_principals().await? {
         for t in state.principals.get_app_tokens(&p.id).await? {
             if seen(&t, since) == Seen::Never && t.created_at.is_some_and(|c| c < cutoff) {
-                state.principals.remove_app_token(&p.id, &t.id).await?;
-                n += 1;
+                // read again right before the delete: a first use that landed since the list must keep the token
+                let fresh = state.principals.get_app_tokens(&p.id).await?.into_iter().find(|x| x.id == t.id);
+                if fresh.is_some_and(|x| x.last_used.is_none()) {
+                    state.principals.remove_app_token(&p.id, &t.id).await?;
+                    n += 1;
+                }
             }
         }
     }
@@ -85,7 +89,10 @@ pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult
 /// [`create`] under `name`, or "`name` (2)" and so on when a device of that name is connected already: two rows
 /// that look alike could not be told apart when one of them is to go. Returns (the name, the token).
 pub async fn create_unique(state: &AppState, user: &Principal, name: &str) -> AppResult<(String, String)> {
-    let taken: Vec<String> = list(state, user).await?.into_iter().map(|t| t.name).collect();
+    // names of tokens that never connected do not count: they are not listed and go with the next sweep, so an
+    // abandoned attempt must not push the device that connects to "iPhone (2)" (review 2026-10-16)
+    let since = since(state).await?;
+    let taken: Vec<String> = list(state, user).await?.into_iter().filter(|t| seen(t, since) != Seen::Never).map(|t| t.name).collect();
     let name = (1..).map(|n| if n == 1 { name.trim().to_string() } else { format!("{} ({n})", name.trim()) }).find(|n| !taken.contains(n)).unwrap_or_default();
     let token = create(state, user, &name).await?;
     Ok((name, token))

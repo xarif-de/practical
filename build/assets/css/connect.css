@@ -3,9 +3,9 @@
    .od = on another one; js/shell/settings-connect.js sets #settings[data-android] (no JS: the other-device path) */
 .settings:not([data-android="1"]) .oa, .settings[data-android="1"] .od { display: none !important; }
 /* the iPhone path: .oi = on the iPhone/iPad itself, .ni = on another device; #add-done tells the paths apart by
-   data-path: android, ios (the profile: .p-iosa), iosm (by hand: .p-iosm); no JS: the Android text */
+   data-path: android, ios (the profile), iosm (by hand: .p-iosm); no JS: the Android text */
 .settings:not([data-ios="1"]) .oi, .settings[data-ios="1"] .ni { display: none !important; }
-.settings[data-path^="ios"] .p-android, .settings:not([data-path^="ios"]) .p-ios, .settings:not([data-path="ios"]) .p-iosa, .settings:not([data-path="iosm"]) .p-iosm { display: none !important; }
+.settings[data-path^="ios"] .p-android, .settings:not([data-path="iosm"]) .p-iosm { display: none !important; }
 /* a primary button with a symbol stays a button (icon-buttons.css: not a link) */
 .set .btn.btn-primary:has(> .ico), .connect-page .btn.btn-primary { padding: 7px 14px; font-weight: 600; }
 .set .btn.big, .connect-page .btn.big { padding: 11px 18px; font-size: 16px; border-radius: 12px; }

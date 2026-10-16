@@ -213,11 +213,15 @@ async fn an_iphone_by_hand_gets_a_password_of_its_own() {
     let csrf = alice.csrf.clone();
     let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
     assert_eq!(alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr[..1], Body::empty()).await.status, StatusCode::FORBIDDEN);
-    let r = alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await.json();
+    let resp = alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await;
+    assert_eq!(resp.header("cache-control").as_deref(), Some("no-store"), "a password never goes into a cache");
+    let r = resp.json();
     assert_eq!(r["name"], "iPhone");
     use base64ct::Encoding;
     let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{}", r["password"].as_str().unwrap()).as_bytes()));
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
+    assert_eq!(alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await.json()["name"], "iPhone (2)");
+    // that one was never used: a new attempt does not count it, and becomes "iPhone (2)" again, not "(3)"
     assert_eq!(alice.send(Method::POST, "/settings/connect/manual?name=iPhone", &hdr, Body::empty()).await.json()["name"], "iPhone (2)");
     // the guide lists what a group's calendars need: an account as user$group
     alice.get("/settings").await.ok().has("id=\"add-ios-manual\"").has("alice$group.familie");
@@ -237,6 +241,7 @@ async fn a_computer_hands_the_manual_setup_to_the_iphone_without_a_login() {
     // the guide with the values and the group's login; no password before it is asked for
     phone.send(Method::GET, &format!("{page}/manual"), &iphone, Body::empty()).await.ok().has("https://dav.example.org").has("alice$group.familie").has("data-pw-url");
     let r = phone.send(Method::GET, &format!("{page}/password"), &iphone, Body::empty()).await;
+    assert_eq!(r.header("cache-control").as_deref(), Some("no-store"), "the phone's password: never cached");
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     let pw = r.json()["password"].as_str().unwrap().to_string();
     use base64ct::Encoding;

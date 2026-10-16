@@ -249,10 +249,17 @@ struct ManualPassword {
 /// `POST /settings/connect/manual?name=iPhone`: the password of the iPhone's manual setup (#add-ios-values), an
 /// app token named after the device; the wizard asks once per run, when the password is first asked for (copied
 /// or shown), and shows it as dots.
-async fn manual_password(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> AppResult<Json<ManualPassword>> {
+async fn manual_password(State(state): State<SharedState>, user: Principal, Query(q): Query<AppleLinkQuery>, _t: csrf::Token) -> AppResult<Response> {
     let name: String = q.name.as_deref().unwrap_or("iPhone").chars().filter(|c| !c.is_control()).take(NAME_MAX).collect();
     let (name, password) = tokens::create_unique(&state, &user, if name.trim().is_empty() { "iPhone" } else { &name }).await?;
-    Ok(Json(ManualPassword { name, password }))
+    Ok(no_store(Json(ManualPassword { name, password }).into_response()))
+}
+
+/// A response that carries a password: never into a cache (the app's default `private, no-cache` lets a browser
+/// keep it on disk), as the profile itself.
+fn no_store(mut r: Response) -> Response {
+    r.headers_mut().insert(header::CACHE_CONTROL, header::HeaderValue::from_static("no-store"));
+    r
 }
 
 /// The profile's file name: Safari installs a `.mobileconfig` (support.apple.com/guide/profile-manager/pmdbd71ebc9).
@@ -276,7 +283,7 @@ async fn apple_page(State(state): State<SharedState>, ctx: PageCtx, headers: Hea
 /// from `…/password` when it is first copied. Public, like the profile.
 async fn apple_manual(State(state): State<SharedState>, ctx: PageCtx, Path(id): Path<String>) -> AppResult<Response> {
     let host = connect::host_of(&state.config.public_url);
-    let Some(user) = state.connect.links.user(&id, chrono::Utc::now()) else {
+    let Some(user) = state.connect.links.open_manual(&id, chrono::Utc::now()) else {
         return Ok((StatusCode::GONE, ConfirmPage::new(ctx, id, "gone-apple", host)).into_response());
     };
     let principal = state.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?;
@@ -301,7 +308,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
         tokio::pin!(changed);
         changed.as_mut().enable(); // before the look: a profile finished in between still wakes it
         match (profile || file == "password").then(|| links.open(&id, &device, chrono::Utc::now())).flatten() {
-            Some(connect::Opened::Again(made)) => return Ok(if profile { mobileconfig(made) } else { Json(serde_json::json!({ "password": made })).into_response() }),
+            Some(connect::Opened::Again(made)) => return Ok(if profile { mobileconfig(made) } else { no_store(Json(serde_json::json!({ "password": made })).into_response()) }),
             Some(connect::Opened::Make(user, name)) => break (user, name),
             Some(connect::Opened::Busy) if tokio::time::timeout(std::time::Duration::from_secs(10), changed).await.is_ok() => continue,
             _ => {
@@ -329,7 +336,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
         state.connect.links.made(&link, None, chrono::Utc::now()); // it panicked: the link is fresh again
         AppError::Internal(e.to_string())
     })??;
-    Ok(if profile { mobileconfig(made) } else { Json(serde_json::json!({ "password": made })).into_response() })
+    Ok(if profile { mobileconfig(made) } else { no_store(Json(serde_json::json!({ "password": made })).into_response()) })
 }
 
 /// The profile of `user`'s accounts with a new app token ([`tokens::create_unique`] of `name`). Returns (the

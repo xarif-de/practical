@@ -423,7 +423,9 @@ that device only. **Settings → Connected devices → Add a device** walks you 
 
 <img src="images/31-app-tokens.webp" alt="The account page: add a device, and every connected device with its own password." width="100%">
 
-Every device is listed under **My connected devices**. To lock out a lost device, disconnect it there.
+A device is listed under **My connected devices** once it has connected for the first time, with the time it
+last connected (to the hour). A password that no device used within 24 hours is deleted again, so a setup that was
+never finished leaves nothing behind. To lock out a lost device, disconnect it there.
 
 ### Trash
 

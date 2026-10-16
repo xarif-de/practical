@@ -205,9 +205,11 @@ impl SettingsPage {
         match seen {
             tokens::Seen::At(at) => {
                 let hours = (chrono::Utc::now() - *at).num_hours().max(0);
+                // < 2 h is "the last hour": RustiCal writes a use at most once per hour and process, so a device
+                // that syncs all the time can read 1 h old
                 match hours {
-                    0 => self.ctx.t("devices-seen-hour"),
-                    1..=47 => self.ctx.tn("devices-seen-hours", "n", hours),
+                    0 | 1 => self.ctx.t("devices-seen-hour"),
+                    2..=47 => self.ctx.tn("devices-seen-hours", "n", hours),
                     _ => self.ctx.tn("devices-seen-days", "n", hours / 24),
                 }
             }
