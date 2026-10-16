@@ -9,8 +9,10 @@
 AGPL-3.0-or-later themselves, and runs as a network service: §13 is met by the "Source code" link in the user menu and
 on the login page, next to both versions.
 
-The image redistributes RustiCal's binary unmodified; its source is <https://github.com/lennart-k/rustical> at the
-tag the UI shows (and `rustical --version` prints).
+The image redistributes a modified RustiCal binary from the xarif fork. Its source is
+<https://github.com/xarif-de/rustical> at the tag the UI shows (`v<upstream>-xarif.<n>`); `XARIF.md` there lists
+the changes and their dates. The original is <https://github.com/lennart-k/rustical>. The fork's own web frontend
+also links its source (AGPL-3.0 section 13).
 
 ## Third-party assets
 

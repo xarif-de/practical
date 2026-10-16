@@ -42,7 +42,7 @@ fn page_context_helpers() {
     let c = ctx(None, "bob", "/settings/prefs");
     assert!(c.is_active("/settings") && !c.is_active("/set") && ctx(None, "b", "/settings").is_active("/settings"));
     assert_eq!((c.user_id(), c.locale(), c.version(), c.rustical_version()), ("bob", "de-DE", env!("CARGO_PKG_VERSION"), env!("RUSTICAL_TAG")));
-    assert_eq!(c.rustical_source_url(), format!("https://github.com/lennart-k/rustical/tree/v{}", env!("RUSTICAL_TAG")));
+    assert_eq!(c.rustical_source_url(), format!("https://github.com/xarif-de/rustical/tree/v{}", env!("RUSTICAL_TAG")));
     assert_eq!(c.t1("login-with", "name", "SSO"), "Anmelden mit SSO");
     assert_eq!(c.tn("set-regions-n", "n", 4), "4 Regionen");
     assert_eq!(c.i18n_src(), crate::routes::assets::url("i18n-de.js").unwrap());

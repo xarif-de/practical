@@ -33,6 +33,6 @@ deny = [
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# RustiCal's crates are `publish = false` and only reachable as git dependencies; web-push
-# is a git dependency OF RustiCal (lennart-k's fork), so it must resolve to the same source.
-allow-git = ["https://github.com/lennart-k/rustical", "https://github.com/lennart-k/rust-web-push"]
+# RustiCal's crates are `publish = false` and only reachable as git dependencies (the xarif
+# fork of RustiCal); web-push is a git dependency OF RustiCal (lennart-k's fork of it).
+allow-git = ["https://github.com/xarif-de/rustical", "https://github.com/lennart-k/rust-web-push"]

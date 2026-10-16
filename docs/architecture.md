@@ -46,8 +46,9 @@ Every change also lands in the change history, together with the device that mad
 The image contains two programs:
 
 - PractiCal at `/practical`. It is the entrypoint.
-- RustiCal's binary at `/usr/local/bin/rustical`, unmodified. It is copied from RustiCal's official image, at the
-  same version as the crates.
+- RustiCal's binary at `/usr/local/bin/rustical`, from the xarif fork
+  ([xarif-de/rustical](https://github.com/xarif-de/rustical): upstream release plus a few patches). It is copied
+  from the fork's image, at the same version as the crates.
 
 The pod's two containers run `rustical serve` and `practical serve` from this image. So the server and the UI
 always come from one release.
@@ -65,8 +66,10 @@ runs next to it. Two places name that release:
 
 - **The crates**: five `rustical_*` crates in `build/Cargo.toml` pin **one** git tag. They carry RustiCal's
   expectations about the schema. `build.rs` refuses a mix of tags, and it exports the tag as `RUSTICAL_TAG`.
-- **The binary**: `build/Dockerfile` copies RustiCal's binary from `ghcr.io/lennart-k/rustical:<the same tag>`. This
-  binary is the server that migrates the schema.
+- **The binary**: `build/Dockerfile` copies RustiCal's binary from
+  `registry.gitlab.com/xarif/docker/rustical:<the same tag>` (linux/amd64 and linux/arm64). This binary is the
+  server that migrates the schema. Its tags are `v<upstream>-xarif.<n>`; a fork migration cannot be undone, so
+  there is no way back to an older release once a newer one ran: fix forward.
 
 Three guards keep the two at one release:
 

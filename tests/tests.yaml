@@ -40,7 +40,7 @@ tests:
     timeout: 90s
     steps:
       - run:
-          - cmd: /practical check-rustical-image ghcr.io/lennart-k/rustical:0.0.0-not-the-tag@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          - cmd: /practical check-rustical-image registry.gitlab.com/xarif/docker/rustical:v0.0.0-not-the-tag@sha256:0000000000000000000000000000000000000000000000000000000000000000
             expect_failure: true
         output:
           allow:
@@ -60,7 +60,7 @@ tests:
             - "SAME-RELEASE"
 
   - name: ui-runs-against-a-rustical-migrated-database
-    # The pairing itself, as the pod runs it: RustiCal's own binary creates and migrates a
+    # The pairing itself, as the pod runs it: RustiCal's own binary (the xarif fork) creates and migrates a
     # fresh store and writes a principal + app token; PractiCal then starts against that
     # file (refuses a non-RustiCal schema, applies its practical_* migrations) and serves pages
     # whose queries read RustiCal's tables through the rustical_* crates. Proven to go red:
@@ -79,6 +79,9 @@ tests:
             fail() { echo "FAIL $*"; echo "--- rustical"; cat rustical.log; echo "--- ui"; cat ui.log; exit 1; }
             /usr/local/bin/rustical principals create probe -n IntegrationProbe >/dev/null || fail "principal create"
             tok=$(/usr/local/bin/rustical principals app-token create --name it probe) || fail "app-token create"
+            # the binary is the xarif fork's: its migration is applied (sqlx keeps the description;
+            # the WAL may still hold it, so read both files)
+            cat db.sqlite3* | grep -a -q 'app token last used' || fail "fork migration app_token_last_used missing"
             /usr/local/bin/rustical serve >rustical.log 2>&1 &
             srv=$!
             # PRACTICAL__* on this process only, as in the deployment.

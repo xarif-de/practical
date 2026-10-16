@@ -54,14 +54,15 @@ FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cab
 # HTTPS trust (OIDC, holidays, Web Push): the base image's ca-certificates-bundle is all rustls-native-certs reads;
 # `apk add ca-certificates` (dropped 2026-10-06) added 242 files + 0.25 MB, start CPU and RSS the same without it.
 LABEL org.opencontainers.image.source="https://gitlab.com/xarif/docker/practical"
-LABEL org.opencontainers.image.description="RustiCal (unmodified, /usr/local/bin/rustical) plus its web UI PractiCal: groups, collections, app tokens, calendar, contacts, tasks and change history on RustiCal's own SQLite store"
+LABEL org.opencontainers.image.description="RustiCal (xarif fork, modified: github.com/xarif-de/rustical, /usr/local/bin/rustical) plus its web UI PractiCal: groups, collections, app tokens, calendar, contacts, tasks and change history on RustiCal's own SQLite store"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 COPY --from=builder /practical /practical
-# RustiCal itself, unmodified, from its official image (static binary, AGPL-3.0-or-later;
-# source: https://github.com/lennart-k/rustical at the same tag). The tag MUST equal the
-# rustical_* crates' tag in Cargo.toml — build.rs and the image test check it, and one
-# Renovate group (renovate.json) moves both. Run as `/usr/local/bin/rustical serve`.
-COPY --from=ghcr.io/lennart-k/rustical:0.16.6@sha256:438c17ffdbcc4568cc6295f97e0b7eb4083815fb1852fc79780b050ffc93189a /usr/local/bin/rustical /usr/local/bin/rustical
+# RustiCal itself from the xarif fork's image (static binary, AGPL-3.0-or-later, modified:
+# upstream release + patches; source https://github.com/xarif-de/rustical at the same tag,
+# XARIF.md there). linux/amd64 + linux/arm64. The tag MUST equal the rustical_* crates' tag
+# in Cargo.toml — build.rs and the image test check it, and one Renovate group
+# (renovate.json) moves both. Run as `/usr/local/bin/rustical serve`.
+COPY --from=registry.gitlab.com/xarif/docker/rustical:v0.16.6-xarif.2@sha256:476465bfef651eb50f9f1076a47b251673bd3b5b7094a2ccc790735d4c60557c /usr/local/bin/rustical /usr/local/bin/rustical
 # the SQLite path RustiCal's image sets (its Dockerfile); PractiCal reads PRACTICAL__* only
 ENV RUSTICAL_DATA_STORE__SQLITE__DB_URL=/var/lib/rustical/db.sqlite3
 # PractiCal's allocator (mimalloc, Cargo.toml): return freed memory at once and commit arena memory

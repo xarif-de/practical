@@ -5,7 +5,7 @@
 set -eu
 OUT=$1
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-IMG="$(sed -n 's/^COPY --from=\(ghcr\.io\/lennart-k\/rustical:[^ ]*\) .*/\1/p' "$REPO/build/Dockerfile")"
+IMG="$(sed -n 's/^COPY --from=\(registry\.gitlab\.com\/xarif\/docker\/rustical:[^ ]*\) .*/\1/p' "$REPO/build/Dockerfile")"
 [ -n "$IMG" ] || { echo "no rustical image in build/Dockerfile" >&2; exit 1; }
 VOL=practical-demo-seed-$$
 CP=practical-demo-seedcp-$$

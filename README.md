@@ -166,8 +166,10 @@ issue or a merge/pull request on [GitLab](https://gitlab.com/xarif/docker/practi
 
 PractiCal is only the web frontend. The actual CalDAV/CardDAV server is
 [RustiCal](https://github.com/lennart-k/rustical) by lennart-k, a wonderful project in its own right. It stores your
-calendars, contacts and tasks, syncs them with your phones and desktop apps, and its binary ships unmodified in the
-PractiCal image.
+calendars, contacts and tasks, and syncs them with your phones and desktop apps. The PractiCal image ships RustiCal
+from [xarif-de/rustical](https://github.com/xarif-de/rustical): the upstream release plus a few changes that are
+also offered upstream (for example, app tokens record when they were last used, so PractiCal can show when a device
+last connected).
 
 All kudos for the backend belong to RustiCal. So do all backend issues: if something goes wrong with syncing, DAV
 clients or the server itself, please report it at
@@ -176,5 +178,5 @@ here, on [GitLab](https://gitlab.com/xarif/docker/practical/-/issues) or [GitHub
 
 ## License
 
-PractiCal is written by Thomas Steinbach and licensed under [AGPL-3.0-or-later](LICENSE). It builds on [RustiCal](https://github.com/lennart-k/rustical) (AGPL-3.0-or-later), whose binary ships
-unmodified in the image. Details: [licensing](https://xarif.gitlab.io/docker/practical/licensing.html).
+PractiCal is written by Thomas Steinbach and licensed under [AGPL-3.0-or-later](LICENSE). It builds on [RustiCal](https://github.com/lennart-k/rustical) (AGPL-3.0-or-later); the image ships a modified
+version of it, [xarif-de/rustical](https://github.com/xarif-de/rustical). Details: [licensing](https://xarif.gitlab.io/docker/practical/licensing.html).

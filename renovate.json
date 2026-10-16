@@ -5,16 +5,19 @@
   ],
   "packageRules": [
     {
-      "description": "RustiCal moves as ONE: the five rustical_* crates (one workspace tag; build.rs refuses mixed tags) and the RustiCal image whose binary the Dockerfile copies (build.rs and the image test require the same release). Matched by dependency name: for a git dependency the package name is the repository URL.",
+      "description": "RustiCal moves as ONE: the five rustical_* crates (one workspace tag; build.rs refuses mixed tags) and the RustiCal image whose binary the Dockerfile copies (build.rs and the image test require the same release). Both come from the xarif fork (github.com/xarif-de/rustical, image registry.gitlab.com/xarif/docker/rustical) with tags v<upstream>-xarif.<n>: npm-semver would read the suffix as a prerelease and never propose it, hence the regex versioning (build = the fork release). Our own tags need no waiting period (minimumReleaseAge null; the fork already waits 24 h after upstream), and the group waits until all six parts see the new tag (minimumGroupSize: the image appears minutes after the git tag). Matched by dependency name: for a git dependency the package name is the repository URL.",
       "matchDepNames": [
         "rustical_store",
         "rustical_store_sqlite",
         "rustical_ical",
         "rustical_oidc",
         "rustical_dav_push",
-        "ghcr.io/lennart-k/rustical"
+        "registry.gitlab.com/xarif/docker/rustical"
       ],
-      "groupName": "rustical"
+      "groupName": "rustical",
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-xarif\\.(?<build>\\d+)$",
+      "minimumReleaseAge": null,
+      "minimumGroupSize": 6
     },
     {
       "description": "One Rust version for the image build AND local dev/tests: the builder image (build/Dockerfile and the API-doc job in .gitlab-ci.yml, `rust:<x.y>-alpine`) and build/rust-toolchain.toml move in ONE PR. Until 2026-10-02 they were separate: the image (docker tags, no timestamps) updated at once, the toolchain file (Renovate's rust-toolchain manager, rust-version datasource WITH timestamps) waited the preset's 3-day minimumReleaseAge — so every Rust release left CI and `mise run test` on different compilers for days. build/Cargo.toml's rust-version is the MSRV floor and is not bumped.",

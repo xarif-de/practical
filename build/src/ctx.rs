@@ -61,7 +61,7 @@ impl PageCtx {
         env!("RUSTICAL_TAG")
     }
     pub fn rustical_source_url(&self) -> String {
-        format!("https://github.com/lennart-k/rustical/tree/v{}", env!("RUSTICAL_TAG"))
+        format!("https://github.com/xarif-de/rustical/tree/v{}", env!("RUSTICAL_TAG"))
     }
     pub fn t(&self, key: &str) -> String {
         self.i18n.t(&self.lang, key)

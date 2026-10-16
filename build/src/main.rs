@@ -209,7 +209,7 @@ fn print_version() {
     println!("practical {} (rustical crates v{RUSTICAL_TAG})", env!("CARGO_PKG_VERSION"));
 }
 
-/// `check-rustical-image ghcr.io/lennart-k/rustical:0.16.2@sha256:…` → exit 0 iff
+/// `check-rustical-image registry.gitlab.com/xarif/docker/rustical:v0.16.6-xarif.2@sha256:…` → exit 0 iff
 /// the image tag equals the crate tag this binary was built against.
 fn check_rustical_image(reference: &str) -> i32 {
     let no_digest = reference.split('@').next().unwrap_or(reference);
@@ -519,9 +519,9 @@ mod tests {
 
     #[test]
     fn image_tag_check() {
-        assert_eq!(check_rustical_image(&format!("ghcr.io/lennart-k/rustical:{}@sha256:abc", super::RUSTICAL_TAG)), 0);
-        assert_eq!(check_rustical_image("ghcr.io/lennart-k/rustical:0.0.1@sha256:abc"), 1);
-        assert_eq!(check_rustical_image("ghcr.io/lennart-k/rustical@sha256:abc"), 2);
+        assert_eq!(check_rustical_image(&format!("registry.gitlab.com/xarif/docker/rustical:v{}@sha256:abc", super::RUSTICAL_TAG)), 0);
+        assert_eq!(check_rustical_image("registry.gitlab.com/xarif/docker/rustical:v0.0.1-xarif.1@sha256:abc"), 1);
+        assert_eq!(check_rustical_image("registry.gitlab.com/xarif/docker/rustical@sha256:abc"), 2);
     }
 
     /// The image carries build/LICENSE (the Docker context is build/); the repository's own is
