@@ -165,9 +165,12 @@ async fn an_iphone_gets_a_profile_through_a_link_once() {
     let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{pw}").as_bytes()));
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
     assert_eq!(alice.get_json(&st).await.json(), serde_json::json!({ "device": "iPhone" }));
-    // a second download (Safari's retry) gets the same profile, no second token; another device nothing
+    // a second download (Safari's retry, or again after "Ignore") gets the same profile, no second token; a
+    // wizard that went back to wait (a new pairing) hears of it; another device gets nothing
+    let pair2 = alice.send(Method::POST, "/settings/connect/pair", &hdr, Body::empty()).await.json()["pair"].as_str().unwrap().to_string();
     let again = phone.send(Method::GET, &file, &iphone, Body::empty()).await;
     assert_eq!(again.body, r.body);
+    assert_eq!(alice.get_json(&format!("/settings/connect/status?pair={pair2}")).await.json(), serde_json::json!({ "device": "iPhone" }));
     assert_eq!(alice.get("/settings").await.body.matches(">iPhone<span class=\"sub\">").count(), 1, "one device");
     let ipad = [("user-agent", "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1")];
     assert_eq!(phone.send(Method::GET, &file, &ipad, Body::empty()).await.status, StatusCode::GONE, "one link, one device");

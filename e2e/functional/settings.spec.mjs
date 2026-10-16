@@ -713,6 +713,15 @@ test('add a device: on the iPhone itself one button downloads the profile', asyn
   expect(dl.status()).toBe(200);
   await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
   await expect(page.locator('#add-ios-install [data-device]')).toHaveText('iPhone');
+  // "Ignore" tapped: back, the same button loads the same profile again, and the wizard follows once more
+  const first = await btn.getAttribute('href');
+  await page.locator('#add-ios-install .acts a.muted').click();
+  await expect(page).toHaveURL(/#add-ios$/);
+  await expect(page.locator('#add-ios [data-live]')).toBeVisible();
+  expect(await btn.getAttribute('href')).toBe(first); // the same link, not a new one (a second token)
+  const again = await page.request.get(first);
+  expect(await again.text()).toBe(await dl.text());
+  await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
   await page.goto('/settings?done=1#account'); // a new load: the list as the server has it now
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0); // listed once it connected, not on download
   const pw = (await dl.text()).split('<key>CalDAVPassword</key><string>')[1].split('<')[0];

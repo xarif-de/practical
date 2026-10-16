@@ -54,7 +54,7 @@
     /* An iPad's Safari says "Macintosh" (desktop sites, iPadOS 13+); a touch screen tells it from a Mac. */
     const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     settings.dataset.ios = ios ? '1' : '0';
-    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, known = false, profiled = false;
+    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, known = false, profiled = 0, linking = null;
     const device = ios && !/iPhone|iPod/.test(ua) ? 'iPad' : 'iPhone';
     // the device of this run as the server named it ("iPhone (2)"); `known` until a new run
     const name = n => { known = true; $$('[data-device]', settings).forEach(e => { e.textContent = n; }); };
@@ -73,7 +73,7 @@
     /* the iPhone path's profile link (routes::connect `apple_link`): its QR code, and on the device the download.
        Only Safari and Chrome install a profile (domain::connect `installs_profiles`); a web app on the Home Screen
        is no browser at all: there the device is told to open the link's page in Safari. */
-    const link = async loud => {
+    const link = loud => linking ||= (async () => { // one request at a time: a tap may wake the wait and click at once
       const r = await practical.req('/settings/connect/apple', { method: 'POST' });
       if (!r.ok) { if (loud) practical.tell(r); return false; }
       linkAt = Date.now();
@@ -83,7 +83,7 @@
       $('#io-url', settings).textContent = r.data.url;
       $('[data-io-other]', settings).hidden = !(navigator.standalone || r.data.other);
       return true;
-    };
+    })().finally(() => { linking = null; });
     // the iPhone by hand (#add-ios-values, -more): its password (routes::connect `manual_password`)
     const newPassword = ioPassword(settings, () => practical.req('/settings/connect/manual?name=' + device, { method: 'POST' }).then(r => r.ok ? (known ||= ios, r.data) : Promise.reject(practical.tell(r)))); // shown on a computer: no device yet
     // the pages a device can get connected from: there the wizard waits for a device of this user that fetched its
@@ -100,12 +100,12 @@
       clearTimeout(timer);
       if (!WAIT.test(location.hash) || document.hidden || tries >= TRIES) return;
       if (pair) {
-        const r = await practical.req('/settings/connect/status?pair=' + encodeURIComponent(pair));
-        if (!WAIT.test(location.hash)) return; // left meanwhile
+        const asked = pair, r = await practical.req('/settings/connect/status?pair=' + encodeURIComponent(pair));
+        if (!WAIT.test(location.hash) || pair !== asked) return; // left or started anew meanwhile
         const h = location.hash, manual = r.ok && r.data.manual;
         if (r.ok && r.data.device && (h !== '#add-ios-install' || manual)) {
           name(r.data.device);
-          if (h === '#add-ios' && !manual) { landed = profiled = true; location.replace('#add-ios-install'); return; } // the pairing waits on there
+          if (h === '#add-ios' && !manual) { landed = true; profiled = Date.now(); location.replace('#add-ios-install'); return; } // the pairing waits on there
           codes = null; pair = ''; // Back starts a new wait instead of landing here again
           if (h === '#add-ios-values') return; // the iPhone copies from its own page; this one goes on by hand
           if (manual) settings.dataset.path = 'iosm'; // the phone refused the profile and went on by hand: its end
@@ -139,8 +139,10 @@
         if (WAIT.test(h)) { tries = 0; poll(); }
         return;
       }
-      if (h === '#add') { codes = null; pair = ''; linkAt = 0; known = profiled = false; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
-      if (h === '#add-ios' && profiled) { codes = null; pair = ''; profiled = false; } // Back from the install step: a new wait
+      if (h === '#add') { codes = null; pair = ''; linkAt = 0; known = false; profiled = 0; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
+      // Back from the install step: a new wait, and the same link until its download window closes (8 min after the
+      // download): loaded again ("Ignore" tapped) it answers the same profile and names the device once more
+      if (h === '#add-ios' && profiled) { codes = null; pair = ''; linkAt = Math.max(linkAt, profiled + 8 * 60e3 - RENEW); profiled = 0; }
       if (h === '#add-android-install' && !android) ensure(true); // the stores' codes
       // Back from the install step keeps the link: the same device may load its profile again (domain::connect Links).
       // A failed request was said once; the wait retries it quietly.

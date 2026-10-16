@@ -216,8 +216,9 @@ enum LinkState {
     Fresh,
     /// its profile is being made for `device`
     Taken(String),
-    /// downloaded at the given time by `device`: the profile, answered again for [`LINK_AGAIN_SECS`]
-    Done(String, chrono::DateTime<chrono::Utc>, String),
+    /// downloaded at the given time by `device`: the profile, answered again for [`LINK_AGAIN_SECS`], and its
+    /// token's name
+    Done(String, chrono::DateTime<chrono::Utc>, String, String),
 }
 
 impl Link {
@@ -225,19 +226,19 @@ impl Link {
         let within = |at: chrono::DateTime<chrono::Utc>, secs| now.signed_duration_since(at).num_seconds() < secs;
         let guide = self.manual.is_some_and(|m| within(m, MANUAL_SECS));
         match &self.state {
-            LinkState::Done(_, at, d) if d.starts_with("password ") => within(*at, MANUAL_SECS),
+            LinkState::Done(_, at, d, _) if d.starts_with("password ") => within(*at, MANUAL_SECS),
             // a refused profile: the guide opened on the phone keeps the link for its password
-            LinkState::Done(_, at, _) => within(*at, LINK_AGAIN_SECS) || guide,
+            LinkState::Done(_, at, _, _) => within(*at, LINK_AGAIN_SECS) || guide,
             _ => guide || (self.manual.is_none() && within(self.at, LINK_SECS)),
         }
     }
 }
 
-/// What opening a link finds: a profile to make for its user, the one made before, or one being made for this
-/// device (wait for [`Links::changed`]).
+/// What opening a link finds: a profile to make for its user, the one made before (user, token name, profile),
+/// or one being made for this device (wait for [`Links::changed`]).
 pub enum Opened {
     Make(String),
-    Again(String),
+    Again(String, String, String),
     Busy,
 }
 
@@ -277,11 +278,11 @@ impl Links {
             }
             LinkState::Taken(d) => (d == device).then_some(Opened::Busy),
             // the profile again only within its own window: a guide opened on the phone keeps the link for the password
-            LinkState::Done(p, at, d) if d == device && (d.starts_with("password ") || now.signed_duration_since(*at).num_seconds() < LINK_AGAIN_SECS) => Some(Opened::Again(p.clone())),
+            LinkState::Done(p, at, d, n) if d == device && (d.starts_with("password ") || now.signed_duration_since(*at).num_seconds() < LINK_AGAIN_SECS) => Some(Opened::Again(l.user.clone(), n.clone(), p.clone())),
             // the same phone after its profile, now asking for the manual password: an iPhone whose company
             // policy refuses profiles ("Unable to Install Profile") goes on by hand — once; the profile's token is
             // never used and goes with the next sweep (tokens::sweep)
-            LinkState::Done(_, _, d) if !l.switched && d.strip_prefix("profile ") == device.strip_prefix("password ") && d.starts_with("profile ") => {
+            LinkState::Done(_, _, d, _) if !l.switched && d.strip_prefix("profile ") == device.strip_prefix("password ") && d.starts_with("profile ") => {
                 l.switched = true;
                 l.state = LinkState::Taken(device.to_string());
                 Some(Opened::Make(l.user.clone()))
@@ -297,7 +298,7 @@ impl Links {
         let l = m.get_mut(id).filter(|l| l.live(now))?;
         let open = match &l.state {
             LinkState::Fresh => true,
-            LinkState::Done(_, _, d) => !l.switched && d.starts_with("profile "),
+            LinkState::Done(_, _, d, _) => !l.switched && d.starts_with("profile "),
             LinkState::Taken(_) => false,
         };
         if open && l.manual.is_none() {
@@ -311,14 +312,15 @@ impl Links {
         self.by_id.lock().unwrap().get(id).filter(|l| l.live(now)).map(|l| l.user.clone())
     }
 
-    /// The profile of a taken link was made (`Some`), or could not be (`None`: the link is fresh again).
-    pub fn made(&self, id: &str, profile: Option<&str>, now: chrono::DateTime<chrono::Utc>) {
+    /// The profile of a taken link was made (`Some`: its token's name, the profile), or could not be (`None`: the
+    /// link is fresh again).
+    pub fn made(&self, id: &str, profile: Option<(&str, &str)>, now: chrono::DateTime<chrono::Utc>) {
         let mut m = self.by_id.lock().unwrap();
         if let Some(l) = m.get_mut(id)
             && let LinkState::Taken(d) = &l.state
         {
             match profile {
-                Some(p) => l.state = LinkState::Done(p.to_string(), now, d.clone()),
+                Some((n, p)) => l.state = LinkState::Done(p.to_string(), now, d.clone(), n.to_string()),
                 // a switch to the password that failed: gone (fresh, any device could take it while the guide lives)
                 None if l.switched => drop(m.remove(id)),
                 None => l.state = LinkState::Fresh,
@@ -586,8 +588,8 @@ mod tests {
         assert!(l.open(&id, other, t(1)).is_none(), "another device gets nothing");
         l.made(&id, None, t(2));
         assert!(matches!(l.open(&id, other, t(2)), Some(Opened::Make(..))), "not made: fresh again, for anyone");
-        l.made(&id, Some("<plist/>"), t(3));
-        assert!(matches!(l.open(&id, other, t(3 + LINK_AGAIN_SECS - 1)), Some(Opened::Again(p)) if p == "<plist/>"), "a second download: the same profile");
+        l.made(&id, Some(("iPhone", "<plist/>")), t(3));
+        assert!(matches!(l.open(&id, other, t(3 + LINK_AGAIN_SECS - 1)), Some(Opened::Again(_, _, p)) if p == "<plist/>"), "a second download: the same profile");
         assert!(l.open(&id, phone, t(4)).is_none(), "but to that device only");
         assert!(l.open(&id, other, t(3 + LINK_AGAIN_SECS)).is_none(), "then never again");
         assert!(l.user(&l.create("alice", t(0)), t(LINK_SECS)).is_none(), "expired unopened");
@@ -598,21 +600,21 @@ mod tests {
         let pw = "password 1.2.3.4 Safari";
         let m = l.create("alice", t(0));
         assert!(matches!(l.open(&m, pw, t(1)), Some(Opened::Make(..))));
-        l.made(&m, Some("secret"), t(2));
-        assert!(matches!(l.open(&m, pw, t(2 + MANUAL_SECS - 1)), Some(Opened::Again(p)) if p == "secret"));
+        l.made(&m, Some(("iPhone", "secret")), t(2));
+        assert!(matches!(l.open(&m, pw, t(2 + MANUAL_SECS - 1)), Some(Opened::Again(_, _, p)) if p == "secret"));
         // a profile, then the same phone by hand: one switch, never a second, never another device
         let s = l.create("alice", t(0));
         assert!(matches!(l.open(&s, "profile 1.2.3.4 Safari", t(1)), Some(Opened::Make(..))));
-        l.made(&s, Some("<plist/>"), t(2));
+        l.made(&s, Some(("iPhone", "<plist/>")), t(2));
         assert!(l.open(&s, "password 9.9.9.9 Safari", t(3)).is_none(), "another device");
         assert!(matches!(l.open(&s, pw, t(3)), Some(Opened::Make(..))), "the same phone, by hand");
-        l.made(&s, Some("pw"), t(4));
+        l.made(&s, Some(("iPhone", "pw")), t(4));
         assert!(l.open(&s, "profile 1.2.3.4 Safari", t(5)).is_none(), "no way back to a second profile");
         // the guide opened after the profile: its password still comes when the walk through Settings outlasts
         // the profile's window (review 2026-10-17)
         let late = l.create("alice", t(0));
         l.open(&late, "profile 1.2.3.4 Safari", t(1));
-        l.made(&late, Some("<plist/>"), t(2));
+        l.made(&late, Some(("iPhone", "<plist/>")), t(2));
         assert_eq!(l.open_manual(&late, t(3)).as_deref(), Some("alice"));
         assert!(l.open(&late, "profile 1.2.3.4 Safari", t(2 + LINK_AGAIN_SECS)).is_none(), "the profile itself not again after its window");
         assert!(matches!(l.open(&late, pw, t(2 + LINK_AGAIN_SECS + 60)), Some(Opened::Make(..))), "by hand, after the profile's window");
@@ -620,7 +622,7 @@ mod tests {
         assert!(l.user(&late, t(2 + LINK_AGAIN_SECS + 62)).is_none(), "a failed switch is not fresh for any device");
         let gone = l.create("alice", t(0));
         l.open(&gone, "profile 1.2.3.4 Safari", t(1));
-        l.made(&gone, Some("<plist/>"), t(2));
+        l.made(&gone, Some(("iPhone", "<plist/>")), t(2));
         assert!(l.open_manual(&gone, t(2 + LINK_AGAIN_SECS)).is_none(), "the guide opened too late finds nothing");
         let busy = l.create("bob", t(19));
         l.open(&busy, phone, t(19));
