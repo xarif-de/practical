@@ -25,6 +25,14 @@ pub struct GroupInfo {
     pub n_addressbooks: usize,
 }
 
+impl GroupInfo {
+    /// An Apple device needs a CalDAV account of its own for this group: it has calendars (`user$group`,
+    /// domain::connect `apple_profile`; its address books come with the user's CardDAV account).
+    pub fn needs_cal_account(&self) -> bool {
+        self.n_calendars > 0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TrashedGroup {
     pub id: String,

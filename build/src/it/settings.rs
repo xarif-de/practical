@@ -147,10 +147,11 @@ async fn a_device_shows_once_it_connected_and_one_that_never_did_is_swept() {
     let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{token}").as_bytes()));
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], axum::body::Body::empty()).await.status, StatusCode::OK);
     assert!(matches!(named("Thunderbird").await, Some((_, Seen::At(_)))));
-    assert!(c.get("/settings").await.body.contains("zuletzt verbunden in der letzten Stunde"));
+    assert!(c.get("/settings").await.body.contains("zuletzt verbunden vor Kurzem"));
     // a day later: the never-used one goes, the used one and one from before recording stay
     tokens::create(st, &alice, "Halbfertig").await.unwrap();
     tokens::create(st, &alice, "Alt").await.unwrap();
+    tokens::create(st, &alice, "Frisch").await.unwrap(); // never used either, but younger than a day
     for (q, n) in [
         ("UPDATE practical_token_use_since SET since = datetime('now', '-30 hours')", ""),
         ("UPDATE app_tokens SET created_at = datetime('now', '-25 hours') WHERE displayname IN (?, 'Thunderbird')", "Halbfertig"),
@@ -160,7 +161,7 @@ async fn a_device_shows_once_it_connected_and_one_that_never_did_is_swept() {
     }
     assert_eq!(tokens::sweep(st).await.unwrap(), 1);
     let left: Vec<String> = st.principals.get_app_tokens("alice").await.unwrap().into_iter().map(|t| t.name).collect();
-    assert!(!left.contains(&"Halbfertig".to_string()) && left.contains(&"Thunderbird".to_string()) && left.contains(&"Alt".to_string()), "{left:?}");
+    assert!(!left.contains(&"Halbfertig".to_string()) && ["Thunderbird", "Alt", "Frisch"].iter().all(|n| left.contains(&n.to_string())), "{left:?}");
     assert!(matches!(named("Alt").await, Some((_, Seen::Unknown))), "made before uses were recorded: shown, nothing known");
     assert!(c.get("/settings").await.body.contains("verbunden seit"));
 }

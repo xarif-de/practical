@@ -721,7 +721,7 @@ test('add a device: on the iPhone itself one button downloads the profile', asyn
   await dev.dispose();
   await page.reload(); // goto() to the same URL with the same hash would not load the page again
   const row = page.locator('#devices .cell', { hasText: 'iPhone' });
-  await expect(row.locator('.sub')).toHaveText('zuletzt verbunden in der letzten Stunde'); // tidy up
+  await expect(row.locator('.sub')).toHaveText('zuletzt verbunden vor Kurzem'); // tidy up
   await row.locator('button[data-confirm]').click();
   await page.locator('.ask [data-a="1"]').click();
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
@@ -738,7 +738,7 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await expect(page.locator('#add-ios-manual .wiz-strip .dx')).toHaveCount(7); // Home Screen … CalDAV account
   await page.locator('#add-ios-manual .acts a.btn-primary').click();
   await expect(page).toHaveURL(/#add-ios-values$/);
-  await expect(page.locator('#add-ios-values [data-qr="manual"]')).toBeHidden(); // the code is for another device
+  await expect(page.locator('#add-ios-values [data-qr="apple-manual"]')).toBeHidden(); // the code is for another device
   const pw = page.locator('#iv-p');
   await expect(pw).toHaveText(''); // no password before it is asked for
   await page.locator('#add-ios-values [data-io-pw-copy]').click();
@@ -770,6 +770,15 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await d.locator('#add-ios-values [data-io-pw-show]').click();
   await expect(d.locator('#iv-p')).toBeVisible();
   await expect(d.locator('#iv-p')).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
+  // a new run that ends on the computer before the phone fetched its password: no Android name, nothing "connected"
+  await d.goto('/settings#add');
+  await d.locator('#add a[href="#add-ios-manual"]').click();
+  await d.locator('#add-ios-manual .acts a.btn-primary').click();
+  await d.locator('#add-ios-values .acts a.btn-primary').click();
+  await d.locator('#add-ios-more .acts a.btn-primary').click();
+  await expect(d).toHaveURL(/#add-done$/);
+  await expect(d.locator('#add-done [data-device]')).toHaveText('iPhone');
+  await expect(d.locator('#add-done .cell .sub')).toBeHidden();
   await desk.close();
   await page.goto('/settings?done=1#account'); // the used password is a device; the one only shown on the computer is not (yet)
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(1);
@@ -777,6 +786,39 @@ test('add a device: an iPhone by hand — the way through Settings, the values t
   await page.locator('.ask [data-a="1"]').click();
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
   await ctx.close();
+});
+
+test('add a device: an iPhone that refuses the profile goes on by hand, and the computer follows to that end', async ({ page }) => {
+  await reloadAt(page, '#add-ios');
+  await expect(page.locator('#add-ios [data-qr="apple"] svg')).toBeVisible();
+  const r = await page.request.post('/settings/connect/apple', { headers: { 'X-CSRF-Token': await page.locator('meta[name=csrf]').getAttribute('content'), Origin: BASE } });
+  const path = new URL((await r.json()).url).pathname;
+  const phone = await page.context().browser().newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE });
+  await phone.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+  const tab = await phone.newPage();
+  await tab.goto(path);
+  await tab.locator(`.connect-page a[href="${path}/manual"]`).click(); // "Unable to Install Profile": by hand
+  await expect(tab.locator('.connect-page .wiz-strip').first().locator('.dx')).toHaveCount(7);
+  await expect(tab.locator('#iv-p')).toHaveText(''); // no password before it is asked for
+  await tab.locator('#iv-p').locator('xpath=ancestor::div[1]').locator('[data-io-pw-copy]').click();
+  await expect(tab.locator('#iv-p')).toHaveText(/^[0-9a-f]{4}_[A-Za-z0-9]{64}$/);
+  const pw = await tab.locator('#iv-p').textContent();
+  expect(await tab.evaluate(() => navigator.clipboard.readText())).toBe(pw);
+  await expect(tab.locator('#ic-p')).toHaveText(pw); // contacts: the same password, no second one
+  const ok = await basic('alice', pw);
+  expect((await ok.get('/api/history')).status()).toBe(200);
+  await ok.dispose();
+  // the computer skips the install step of a profile that was never installed: the manual path's end
+  await expect(page).toHaveURL(/#add-done$/, { timeout: 10000 });
+  await expect(page.locator('#add-done .p-iosm')).toBeVisible();
+  await expect(page.locator('#add-done [data-device]')).toHaveText('iPhone');
+  await tab.locator('[data-io-finish]').click();
+  await expect(tab.locator('.ask')).toBeVisible();
+  await phone.close();
+  await page.locator('#add-done a.btn-primary').click(); // tidy up
+  await page.locator('#devices .cell', { hasText: 'iPhone' }).locator('button[data-confirm]').click();
+  await page.locator('.ask [data-a="1"]').click();
+  await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
 });
 
 test('add a device: on the Android device itself the wizard explains, installs, then connects with one tap', async ({ browser }) => {

@@ -143,6 +143,7 @@ struct Pair {
     user: String,
     at: chrono::DateTime<chrono::Utc>,
     device: Option<String>,
+    manual: bool,
 }
 
 #[derive(Default)]
@@ -153,6 +154,9 @@ pub struct Pairs {
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct PairStatus {
     pub device: Option<String>,
+    /// it fetched the manual setup's password, not a profile: an iPhone that goes on by hand
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manual: bool,
 }
 
 impl Pairs {
@@ -164,20 +168,21 @@ impl Pairs {
             let Some(oldest) = m.iter().filter(|(_, p)| p.user == user).min_by_key(|(_, p)| p.at).map(|(k, _)| k.clone()) else { break };
             m.remove(&oldest);
         }
-        m.insert(id.clone(), Pair { user: user.to_string(), at: now, device: None });
+        m.insert(id.clone(), Pair { user: user.to_string(), at: now, device: None, manual: false });
         id
     }
 
-    /// A device of `user` was just connected: every open pairing of theirs learns its name.
-    pub fn connected(&self, user: &str, device: &str) {
+    /// A device of `user` was just connected (`manual`: by hand): every open pairing of theirs learns its name.
+    pub fn connected(&self, user: &str, device: &str, manual: bool) {
         for p in self.by_id.lock().unwrap().values_mut().filter(|p| p.user == user) {
             p.device = Some(device.to_string());
+            p.manual = manual;
         }
     }
 
     pub fn status(&self, id: &str, user: &str, now: chrono::DateTime<chrono::Utc>) -> Option<PairStatus> {
         let m = self.by_id.lock().unwrap();
-        m.get(id).filter(|p| p.user == user && now.signed_duration_since(p.at).num_seconds() < PAIR_SECS).map(|p| PairStatus { device: p.device.clone() })
+        m.get(id).filter(|p| p.user == user && now.signed_duration_since(p.at).num_seconds() < PAIR_SECS).map(|p| PairStatus { device: p.device.clone(), manual: p.manual })
     }
 }
 
@@ -187,9 +192,10 @@ const LINK_SECS: i64 = FLOW_SECS;
 /// download (Safari may fetch twice, a user who tapped "Ignore" taps again) must not meet a used link. iOS
 /// drops a downloaded profile that is not installed within 8 minutes (support.apple.com/102400, 2026-04-14).
 const LINK_AGAIN_SECS: i64 = 8 * 60;
-/// A link whose manual guide the phone opened (`/manual`), and a password it fetched, live this long: the setup
-/// by hand (seven pictures, CalDAV, CardDAV, an account per group, app switches) outlasts both windows above, and
-/// a guide that expired half-way left a copy button doing nothing (review 2026-10-16).
+/// A link whose manual guide the phone opened (`/manual`, also after a refused profile), and a password it fetched,
+/// live this long: the setup by hand (seven pictures, CalDAV, CardDAV, an account per group, app switches)
+/// outlasts both windows above, and a guide that expired half-way left a copy button doing nothing (reviews
+/// 2026-10-16, 2026-10-17).
 const MANUAL_SECS: i64 = 30 * 60;
 /// Profile links per user at most (the wizard renews its link before it expires).
 const LINK_MAX_PER_USER: usize = 4;
@@ -197,12 +203,10 @@ const LINK_MAX_PER_USER: usize = 4;
 /// One profile link: made in the wizard for its user, opened once by the device that installs the profile.
 struct Link {
     user: String,
-    /// the device's name when the wizard knows it (it runs on that device), else it comes from the download
-    name: Option<String>,
     at: chrono::DateTime<chrono::Utc>,
     state: LinkState,
-    /// its manual guide was opened ([`Links::open_manual`]): lives [`MANUAL_SECS`] from then
-    manual: bool,
+    /// when its manual guide was opened ([`Links::open_manual`]): the link lives [`MANUAL_SECS`] from then
+    manual: Option<chrono::DateTime<chrono::Utc>>,
     /// a downloaded profile was traded once for the manual password ([`Links::open`])
     switched: bool,
 }
@@ -218,17 +222,21 @@ enum LinkState {
 
 impl Link {
     fn live(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
+        let within = |at: chrono::DateTime<chrono::Utc>, secs| now.signed_duration_since(at).num_seconds() < secs;
+        let guide = self.manual.is_some_and(|m| within(m, MANUAL_SECS));
         match &self.state {
-            LinkState::Done(_, at, d) => now.signed_duration_since(*at).num_seconds() < if d.starts_with("password ") { MANUAL_SECS } else { LINK_AGAIN_SECS },
-            _ => now.signed_duration_since(self.at).num_seconds() < if self.manual { MANUAL_SECS } else { LINK_SECS },
+            LinkState::Done(_, at, d) if d.starts_with("password ") => within(*at, MANUAL_SECS),
+            // a refused profile: the guide opened on the phone keeps the link for its password
+            LinkState::Done(_, at, _) => within(*at, LINK_AGAIN_SECS) || guide,
+            _ => guide || (self.manual.is_none() && within(self.at, LINK_SECS)),
         }
     }
 }
 
-/// What opening a link finds: a profile to make for (user, device name if the wizard knew it), the one made
-/// before, or one being made for this device (wait for [`Links::changed`]).
+/// What opening a link finds: a profile to make for its user, the one made before, or one being made for this
+/// device (wait for [`Links::changed`]).
 pub enum Opened {
-    Make(String, Option<String>),
+    Make(String),
     Again(String),
     Busy,
 }
@@ -243,17 +251,16 @@ pub struct Links {
 impl Links {
     /// A new link of `user`: 32 random characters (190 bits), half of a token's, so that its QR code stays
     /// coarse enough for a camera at a glance.
-    pub fn create(&self, user: &str, name: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> String {
+    pub fn create(&self, user: &str, now: chrono::DateTime<chrono::Utc>) -> String {
         let id = super::tokens::generate_secret()[..32].to_string();
         let mut m = self.by_id.lock().unwrap();
         m.retain(|_, l| l.live(now));
         // full: the oldest unopened link goes first, a downloaded one next, one being made never
         while m.values().filter(|l| l.user == user).count() >= LINK_MAX_PER_USER {
-            let Some(oldest) = m.iter().filter(|(_, l)| l.user == user && !matches!(l.state, LinkState::Taken(_))).min_by_key(|(_, l)| (matches!(l.state, LinkState::Done(..)) || l.manual, l.at)).map(|(k, _)| k.clone()) else { break };
+            let Some(oldest) = m.iter().filter(|(_, l)| l.user == user && !matches!(l.state, LinkState::Taken(_))).min_by_key(|(_, l)| (matches!(l.state, LinkState::Done(..)) || l.manual.is_some(), l.at)).map(|(k, _)| k.clone()) else { break };
             m.remove(&oldest);
         }
-        let name = name.map(|n| n.chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>().trim().to_string()).filter(|n| !n.is_empty());
-        m.insert(id.clone(), Link { user: user.to_string(), name, at: now, state: LinkState::Fresh, manual: false, switched: false });
+        m.insert(id.clone(), Link { user: user.to_string(), at: now, state: LinkState::Fresh, manual: None, switched: false });
         id
     }
 
@@ -266,7 +273,7 @@ impl Links {
         match &l.state {
             LinkState::Fresh => {
                 l.state = LinkState::Taken(device.to_string());
-                Some(Opened::Make(l.user.clone(), l.name.clone()))
+                Some(Opened::Make(l.user.clone()))
             }
             LinkState::Taken(d) => (d == device).then_some(Opened::Busy),
             LinkState::Done(p, _, d) if d == device => Some(Opened::Again(p.clone())),
@@ -276,20 +283,24 @@ impl Links {
             LinkState::Done(_, _, d) if !l.switched && d.strip_prefix("profile ") == device.strip_prefix("password ") && d.starts_with("profile ") => {
                 l.switched = true;
                 l.state = LinkState::Taken(device.to_string());
-                Some(Opened::Make(l.user.clone(), l.name.clone()))
+                Some(Opened::Make(l.user.clone()))
             }
             LinkState::Done(..) => None,
         }
     }
 
-    /// The manual guide's page was opened on the phone: the link lives [`MANUAL_SECS`] from now (a fresh one) and is
-    /// the last one a renewing wizard pushes out. The link's user, while it lives.
+    /// The manual guide's page was opened on the phone: the link lives [`MANUAL_SECS`] from now (a fresh one, or one
+    /// whose profile the phone refused) and is the last one a renewing wizard pushes out. The link's user, while it lives.
     pub fn open_manual(&self, id: &str, now: chrono::DateTime<chrono::Utc>) -> Option<String> {
         let mut m = self.by_id.lock().unwrap();
         let l = m.get_mut(id).filter(|l| l.live(now))?;
-        if matches!(l.state, LinkState::Fresh) && !l.manual {
-            l.manual = true;
-            l.at = now;
+        let open = match &l.state {
+            LinkState::Fresh => true,
+            LinkState::Done(_, _, d) => !l.switched && d.starts_with("profile "),
+            LinkState::Taken(_) => false,
+        };
+        if open && l.manual.is_none() {
+            l.manual = Some(now);
         }
         Some(l.user.clone())
     }
@@ -548,11 +559,11 @@ mod tests {
     fn a_pair_is_its_users_only() {
         let p = Pairs::default();
         let id = p.create("alice", t(0));
-        assert_eq!(p.status(&id, "alice", t(1)), Some(PairStatus { device: None }));
+        assert_eq!(p.status(&id, "alice", t(1)), Some(PairStatus { device: None, manual: false }));
         assert!(p.status(&id, "mallory", t(1)).is_none(), "another user cannot read it");
-        p.connected("bob", "Bob's phone");
-        p.connected("alice", "Pixel 9");
-        assert_eq!(p.status(&id, "alice", t(2)), Some(PairStatus { device: Some("Pixel 9".into()) }));
+        p.connected("bob", "Bob's phone", false);
+        p.connected("alice", "Pixel 9", false);
+        assert_eq!(p.status(&id, "alice", t(2)), Some(PairStatus { device: Some("Pixel 9".into()), manual: false }));
         assert!(p.status(&id, "alice", t(PAIR_SECS)).is_none(), "expired");
         for i in 0..20 {
             p.create("carol", t(i));
@@ -563,9 +574,9 @@ mod tests {
     #[test]
     fn a_profile_link_serves_one_device_briefly() {
         let (l, phone, other) = (Links::default(), "1.2.3.4 iPhone", "5.6.7.8 iPhone");
-        let id = l.create("alice", None, t(0));
+        let id = l.create("alice", t(0));
         assert_eq!(l.user(&id, t(1)).as_deref(), Some("alice"));
-        assert!(matches!(l.open(&id, phone, t(1)), Some(Opened::Make(u, None)) if u == "alice"));
+        assert!(matches!(l.open(&id, phone, t(1)), Some(Opened::Make(u)) if u == "alice"));
         assert!(matches!(l.open(&id, phone, t(1)), Some(Opened::Busy)), "being made: the same device waits");
         assert!(l.open(&id, other, t(1)).is_none(), "another device gets nothing");
         l.made(&id, None, t(2));
@@ -574,30 +585,39 @@ mod tests {
         assert!(matches!(l.open(&id, other, t(3 + LINK_AGAIN_SECS - 1)), Some(Opened::Again(p)) if p == "<plist/>"), "a second download: the same profile");
         assert!(l.open(&id, phone, t(4)).is_none(), "but to that device only");
         assert!(l.open(&id, other, t(3 + LINK_AGAIN_SECS)).is_none(), "then never again");
-        let old = l.create("alice", Some(" iPad\n "), t(10));
-        assert!(matches!(l.open(&old, phone, t(10)), Some(Opened::Make(_, Some(n))) if n == "iPad"));
-        assert!(l.user(&l.create("alice", None, t(0)), t(LINK_SECS)).is_none(), "expired unopened");
+        assert!(l.user(&l.create("alice", t(0)), t(LINK_SECS)).is_none(), "expired unopened");
         // the manual guide: opened late, it lives MANUAL_SECS from then; its password as long after the fetch
-        let m = l.create("alice", None, t(0));
+        let m = l.create("alice", t(0));
         assert_eq!(l.open_manual(&m, t(LINK_SECS - 1)).as_deref(), Some("alice"));
         assert!(l.user(&m, t(LINK_SECS - 1 + MANUAL_SECS - 1)).is_some() && l.user(&m, t(LINK_SECS - 1 + MANUAL_SECS)).is_none());
         let pw = "password 1.2.3.4 Safari";
-        let m = l.create("alice", None, t(0));
+        let m = l.create("alice", t(0));
         assert!(matches!(l.open(&m, pw, t(1)), Some(Opened::Make(..))));
         l.made(&m, Some("secret"), t(2));
         assert!(matches!(l.open(&m, pw, t(2 + MANUAL_SECS - 1)), Some(Opened::Again(p)) if p == "secret"));
         // a profile, then the same phone by hand: one switch, never a second, never another device
-        let s = l.create("alice", None, t(0));
+        let s = l.create("alice", t(0));
         assert!(matches!(l.open(&s, "profile 1.2.3.4 Safari", t(1)), Some(Opened::Make(..))));
         l.made(&s, Some("<plist/>"), t(2));
         assert!(l.open(&s, "password 9.9.9.9 Safari", t(3)).is_none(), "another device");
         assert!(matches!(l.open(&s, pw, t(3)), Some(Opened::Make(..))), "the same phone, by hand");
         l.made(&s, Some("pw"), t(4));
         assert!(l.open(&s, "profile 1.2.3.4 Safari", t(5)).is_none(), "no way back to a second profile");
-        let busy = l.create("bob", None, t(19));
+        // the guide opened after the profile: its password still comes when the walk through Settings outlasts
+        // the profile's window (review 2026-10-17)
+        let late = l.create("alice", t(0));
+        l.open(&late, "profile 1.2.3.4 Safari", t(1));
+        l.made(&late, Some("<plist/>"), t(2));
+        assert_eq!(l.open_manual(&late, t(3)).as_deref(), Some("alice"));
+        assert!(matches!(l.open(&late, pw, t(2 + LINK_AGAIN_SECS + 60)), Some(Opened::Make(..))), "by hand, after the profile's window");
+        let gone = l.create("alice", t(0));
+        l.open(&gone, "profile 1.2.3.4 Safari", t(1));
+        l.made(&gone, Some("<plist/>"), t(2));
+        assert!(l.open_manual(&gone, t(2 + LINK_AGAIN_SECS)).is_none(), "the guide opened too late finds nothing");
+        let busy = l.create("bob", t(19));
         l.open(&busy, phone, t(19));
         for i in 0..10 {
-            l.create("bob", None, t(20 + i));
+            l.create("bob", t(20 + i));
         }
         let m = l.by_id.lock().unwrap();
         assert!(m.values().filter(|x| x.user == "bob").count() <= LINK_MAX_PER_USER);

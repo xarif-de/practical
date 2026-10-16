@@ -106,7 +106,7 @@ connect-hero-text = Events, contacts and tasks on phone, tablet and computer –
 connect-add = Add a device
 devices-title = My connected devices
 devices-since = connected since { $date }
-devices-seen-hour = last connected within the last hour
+devices-seen-hour = last connected recently
 devices-seen-hours = { $n ->
     [one] last connected an hour ago
    *[other] last connected { $n } hours ago
@@ -1066,6 +1066,7 @@ js-yes = Yes
 js-no = No
 js-close = Close
 js-copied = Copied.
+js-copy-failed = Could not copy. The password is shown now, to copy it by hand.
 js-ok = OK
 js-io-pw-failed = The password could not be created. Try again, or scan the code again.
 js-req-offline = No connection to the server.

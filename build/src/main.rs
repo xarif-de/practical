@@ -98,7 +98,8 @@
 //! | [`tasks::spawn_dev_asset_watcher`] | 300 ms, development only | mtimes of `assets/**` → `dev_reload` → `/dev/reload` ([`routes::dev`]) |
 //!
 //! Idle cost (bench statement log, 1 SSE client and 1 push subscriber, 60 s): 31 × `PRAGMA data_version` (the
-//! poller every 2 s plus the reminder tick's), nothing else.
+//! poller every 2 s plus the reminder tick's), nothing else. A device in use adds at most one commit per hour and
+//! process (RustiCal records its app token's use, `app_tokens.last_used`): one poll round and one plan rebuild.
 //!
 //! # Caches
 //!

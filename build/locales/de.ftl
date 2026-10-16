@@ -106,7 +106,7 @@ connect-hero-text = Termine, Kontakte und Aufgaben auf Smartphone, Tablet und Co
 connect-add = Gerät hinzufügen
 devices-title = Meine verbundenen Geräte
 devices-since = verbunden seit { $date }
-devices-seen-hour = zuletzt verbunden in der letzten Stunde
+devices-seen-hour = zuletzt verbunden vor Kurzem
 devices-seen-hours = { $n ->
     [one] zuletzt verbunden vor einer Stunde
    *[other] zuletzt verbunden vor { $n } Stunden
@@ -1063,6 +1063,7 @@ js-yes = Ja
 js-no = Nein
 js-close = Schließen
 js-copied = Kopiert.
+js-copy-failed = Kopieren ging nicht. Das Passwort steht jetzt zum Abschreiben da.
 js-ok = OK
 js-io-pw-failed = Das Passwort konnte nicht erstellt werden. Versuche es noch einmal oder scanne den Code neu.
 js-req-offline = Keine Verbindung zum Server.

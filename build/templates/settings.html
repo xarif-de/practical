@@ -499,7 +499,7 @@
   <div class="wz">
     <h1>{{ ctx.t("iom-open-title") }}</h1>
     <p class="lead after">{{ ctx.t("iom-open-text") }}</p>
-    {{ m::io_way(false) }}
+    {{ m::io_way() }}
     <p class="lead">{{ ctx.t("iom-open-back") }}</p>
   </div>
   <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-ios-values">{{ ctx.t("iom-next") }} ›</a></div>
@@ -513,10 +513,10 @@
     <h1>{{ ctx.t("iom-values-title") }}</h1>
     <div class="ni"><p class="lead">{{ ctx.t("iom-on-phone") }}</p><span class="qr" data-qr="apple-manual" role="img" aria-label="{{ ctx.t("wiz-qr") }}"></span><p class="lead after">{{ ctx.t("iom-values-text-ni") }}</p></div>
     <p class="lead oi">{{ ctx.t("iom-values-text") }}</p>
-    {{ m::io_values("iv", "CalDAV", ctx.public_dav_url, ctx.user_id(), "PractiCal") }}
+    {{ m::io_values("iv", "CalDAV", ctx.public_dav_url, ctx.user_id()) }}
     <p class="hint">{{ ctx.t("iom-desc-hint") }}</p>
     <p class="lead after">{{ ctx.t("iom-save-text") }}</p>
-    <div class="wiz-strip"><figure>{{ m::io_saved("CalDAV") }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-save").as_str()) }}</figcaption></figure></div>
+    <div class="wiz-strip"><figure>{{ m::io_saved() }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-save").as_str()) }}</figcaption></figure></div>
   </div>
   <div class="acts"><a class="muted" href="#add-ios-manual">‹ {{ ctx.t("wiz-back") }}</a><a class="btn btn-primary" href="#add-ios-more">{{ ctx.t("iom-next") }} ›</a></div>
 </section>
@@ -528,7 +528,7 @@
   <div class="wz">
     <h1>{{ ctx.t("iom-more-title") }}</h1><p class="lead">{{ ctx.t("iom-more-text") }}</p>
     <div class="wiz-strip"><figure>{{ m::io_other(true) }}<figcaption>{{ ctx.t1("io-cap-tap", "item", ctx.t("io-carddav").as_str()) }}</figcaption></figure></div>
-    {{ m::io_values("ic", "CardDAV", ctx.public_dav_url, ctx.user_id(), "PractiCal") }}
+    {{ m::io_values("ic", "CardDAV", ctx.public_dav_url, ctx.user_id()) }}
     {%- let cal_groups = self.cal_groups() %}
     {% if !cal_groups.is_empty() %}
     <h2 class="sub">{{ ctx.t("iom-groups-title") }}</h2><p class="lead">{{ ctx.t("iom-groups-text") }}</p>

@@ -143,6 +143,9 @@ async fn an_iphone_gets_a_profile_through_a_link_once() {
     let (page, file) = (path_of(l["url"].as_str().unwrap()), path_of(l["file"].as_str().unwrap()));
     assert!(l["qr"].as_str().unwrap().starts_with("<svg"));
     assert_eq!(file, format!("{page}/PractiCal.mobileconfig"));
+    assert_eq!(l["other"], false, "the asking browser installs profiles");
+    let fx = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str()), ("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) FxiOS/140.0 Mobile/15E148")];
+    assert_eq!(alice.send(Method::POST, "/settings/connect/apple", &fx, Body::empty()).await.json()["other"], true, "Firefox only saves it");
     // the code opens the link's page in a browser without a session; Firefox is told to use Safari
     let iphone = [("user-agent", UA_IPHONE)];
     let mut phone = s.app.anonymous();
@@ -184,13 +187,15 @@ async fn an_iphone_gets_a_profile_through_a_link_once() {
 }
 
 #[tokio::test]
-async fn the_wizard_on_the_ipad_names_it() {
+async fn an_ipad_is_named_by_its_browser() {
     let s = seed().await;
     let mut alice = s.app.login("alice").await;
     let csrf = alice.csrf.clone();
     let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
-    let file = path_of(alice.send(Method::POST, "/settings/connect/apple?name=iPad", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
-    let r = s.app.anonymous().get(&file).await;
+    let file = path_of(alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await.json()["file"].as_str().unwrap());
+    // iPadOS Safari asks for desktop sites: it says "Macintosh"
+    let ipad = [("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15")];
+    let r = s.app.anonymous().send(Method::GET, &file, &ipad, Body::empty()).await;
     assert_eq!(r.status, StatusCode::OK);
     first_connection(&s, &r.body).await;
     alice.get("/settings").await.ok().has(">iPad<span class=\"sub\">");
@@ -233,6 +238,7 @@ async fn a_computer_hands_the_manual_setup_to_the_iphone_without_a_login() {
     let mut alice = s.app.login("alice").await;
     let csrf = alice.csrf.clone();
     let hdr = [("sec-fetch-site", "same-origin"), ("x-csrf-token", csrf.as_str())];
+    let pair = alice.send(Method::POST, "/settings/connect/pair", &hdr, Body::empty()).await.json()["pair"].as_str().unwrap().to_string();
     let l = alice.send(Method::POST, "/settings/connect/apple", &hdr, Body::empty()).await.json();
     assert!(l["manual_qr"].as_str().unwrap().starts_with("<svg"));
     let page = path_of(l["url"].as_str().unwrap());
@@ -248,5 +254,7 @@ async fn a_computer_hands_the_manual_setup_to_the_iphone_without_a_login() {
     let h = format!("Basic {}", base64ct::Base64::encode_string(format!("alice:{pw}").as_bytes()));
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], Body::empty()).await.status, StatusCode::OK);
     assert_eq!(phone.send(Method::GET, &format!("{page}/password"), &iphone, Body::empty()).await.json()["password"], pw, "a second copy: the same password");
+    // the computer's wizard learns that the phone went on by hand: not the profile's install step
+    assert_eq!(alice.get_json(&format!("/settings/connect/status?pair={pair}")).await.json(), serde_json::json!({ "device": "iPhone", "manual": true }));
     assert_eq!(phone.send(Method::GET, &format!("{page}/PractiCal.mobileconfig"), &iphone, Body::empty()).await.status, StatusCode::GONE, "one link, one kind");
 }

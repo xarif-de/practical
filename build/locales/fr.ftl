@@ -106,7 +106,7 @@ connect-hero-text = Événements, contacts et tâches sur smartphone, tablette e
 connect-add = Ajouter un appareil
 devices-title = Mes appareils connectés
 devices-since = connecté depuis le { $date }
-devices-seen-hour = dernière connexion il y a moins d’une heure
+devices-seen-hour = dernière connexion récemment
 devices-seen-hours = { $n ->
     [one] dernière connexion il y a une heure
    *[other] dernière connexion il y a { $n } heures
@@ -1068,6 +1068,7 @@ js-yes = Oui
 js-no = Non
 js-close = Fermer
 js-copied = Copié.
+js-copy-failed = Impossible de copier. Le mot de passe est affiché pour le recopier à la main.
 js-ok = OK
 js-io-pw-failed = Le mot de passe n’a pas pu être créé. Réessayez ou scannez à nouveau le code.
 js-req-offline = Pas de connexion au serveur.

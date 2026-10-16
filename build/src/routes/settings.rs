@@ -205,8 +205,8 @@ impl SettingsPage {
         match seen {
             tokens::Seen::At(at) => {
                 let hours = (chrono::Utc::now() - *at).num_hours().max(0);
-                // < 2 h is "the last hour": RustiCal writes a use at most once per hour and process, so a device
-                // that syncs all the time can read 1 h old
+                // < 2 h is "recently": RustiCal writes a use at most once per hour and process, so a device that
+                // syncs all the time can read up to 2 h old
                 match hours {
                     0 | 1 => self.ctx.t("devices-seen-hour"),
                     2..=47 => self.ctx.tn("devices-seen-hours", "n", hours),
@@ -222,7 +222,7 @@ impl SettingsPage {
     }
     /// the groups with calendars: an iPhone set up by hand needs a CalDAV account for each (#add-ios-more)
     pub fn cal_groups(&self) -> Vec<&GroupInfo> {
-        self.groups.iter().filter(|g| g.n_calendars > 0).collect()
+        self.groups.iter().filter(|g| g.needs_cal_account()).collect()
     }
     pub fn scheme_is(&self, s: &str) -> bool {
         self.prefs.scheme.as_deref().unwrap_or("auto") == s
