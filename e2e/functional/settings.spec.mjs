@@ -831,6 +831,22 @@ test('add a device: an iPhone that refuses the profile goes on by hand, and the 
   await expect(page.locator('#devices .cell', { hasText: 'iPhone' })).toHaveCount(0);
 });
 
+test('add a device: after a refused profile the computer goes by hand with a new code and waits on', async ({ page }) => {
+  await reloadAt(page, '#add-ios');
+  await expect(page.locator('#add-ios [data-qr="apple"] svg')).toBeVisible();
+  const url = await page.locator('#io-url').textContent();
+  const phone = await page.context().browser().newContext({ baseURL: BASE, locale: 'de-DE', userAgent: UA_IPHONE });
+  expect((await phone.request.get(new URL(url).pathname + '/PractiCal.mobileconfig')).status()).toBe(200);
+  await phone.close();
+  await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
+  await page.locator('#add-ios-install .hint a[href="#add-ios-manual"]').click();
+  await page.locator('#add-ios-manual .acts a.btn-primary').click();
+  await expect(page).toHaveURL(/#add-ios-values$/);
+  await expect(page.locator('#io-url')).not.toHaveText(url); // a code of its own, not the downloaded profile's link
+  await page.waitForRequest(/\/settings\/connect\/status\?pair=/); // still waiting for the phone
+  await expect(page).toHaveURL(/#add-ios-values$/);
+});
+
 test('add a device: on the Android device itself the wizard explains, installs, then connects with one tap', async ({ browser }) => {
   const ctx = await browser.newContext({ baseURL: BASE, locale: 'de-DE', userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();

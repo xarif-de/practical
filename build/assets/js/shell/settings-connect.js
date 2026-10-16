@@ -145,7 +145,9 @@
       if (h === '#add') { codes = null; pair = ''; linkAt = 0; known = profiled = false; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
       // Back from the install step ("Ignore" tapped): a new wait with a new link, so the next load makes a profile the
       // wait hears of; it replaces the first on the iPhone, whose unused password goes with the sweep (tokens::sweep)
-      if (h === '#add-ios' && profiled) { codes = null; pair = ''; linkAt = 0; profiled = false; }
+      // The same on the way by hand after a profile ("Unable to Install Profile"): its pairing heard of the profile
+      // already and would end the values page's wait at once
+      if (/^#add-ios(-manual|-values)?$/.test(h) && profiled) { codes = null; pair = ''; linkAt = 0; known = profiled = false; }
       if (h === '#add-android-install' && !android) ensure(true); // the stores' codes
       // A failed request was said once; the wait retries it quietly.
       else if (WAIT.test(h)) {
