@@ -845,6 +845,8 @@ test('add a device: after a refused profile the computer goes by hand with a new
   await expect(page.locator('#io-url')).not.toHaveText(url); // a code of its own, not the downloaded profile's link
   await page.waitForRequest(/\/settings\/connect\/status\?pair=/); // still waiting for the phone
   await expect(page).toHaveURL(/#add-ios-values$/);
+  await page.goto('/settings?again=1#add-done'); // a fresh load on the end page: no path known, the default text
+  await expect(page.locator('#add-done [data-device]')).toHaveText('Android-Gerät (DAVx⁵)');
 });
 
 test('add a device: on the Android device itself the wizard explains, installs, then connects with one tap', async ({ browser }) => {

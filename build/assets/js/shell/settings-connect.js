@@ -105,8 +105,10 @@
       if (pair) {
         const asked = pair, r = await practical.req('/settings/connect/status?pair=' + encodeURIComponent(pair));
         if (!WAIT.test(location.hash) || pair !== asked) return; // left or started anew meanwhile
+        // the install and the values page wait for a phone going by hand only: a profile heard there (also one from
+        // before, through Back/Forward) ends nothing
         const h = location.hash, manual = r.ok && r.data.manual;
-        if (r.ok && r.data.device && (h !== '#add-ios-install' || manual)) {
+        if (r.ok && r.data.device && (manual || !/^#add-ios-(install|values)$/.test(h))) {
           name(r.data.device);
           if (h === '#add-ios' && !manual) { landed = profiled = true; location.replace('#add-ios-install'); return; } // the pairing waits on there
           codes = null; pair = ''; // Back starts a new wait instead of landing here again
@@ -134,7 +136,7 @@
       if (/^#add-(ios|android)/.test(h)) settings.dataset.path = /^#add-ios-(manual|values|more)$/.test(h) ? 'iosm' : h.startsWith('#add-ios') ? 'ios' : 'android';
       if (h === '#add-done') { // the iPhone by hand may end here before the phone fetched its password: no "connected" yet
         const d = $('#add-done', settings);
-        if (!known) $('[data-device]', d).textContent = settings.dataset.path === 'android' ? unnamed : device;
+        if (!known) $('[data-device]', d).textContent = /^ios/.test(settings.dataset.path || '') ? device : unnamed;
         $('.sub', d).hidden = !known && settings.dataset.path === 'iosm';
       }
       if ((h === '#add-done' || h === '#add-ios-install') && landed) { // the page changed by itself: say so
