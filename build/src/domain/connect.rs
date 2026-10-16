@@ -257,7 +257,7 @@ impl Links {
         m.retain(|_, l| l.live(now));
         // full: the oldest unopened link goes first, a downloaded one next, one being made never
         while m.values().filter(|l| l.user == user).count() >= LINK_MAX_PER_USER {
-            let Some(oldest) = m.iter().filter(|(_, l)| l.user == user && !matches!(l.state, LinkState::Taken(_))).min_by_key(|(_, l)| (matches!(l.state, LinkState::Done(..)) || l.manual.is_some(), l.at)).map(|(k, _)| k.clone()) else { break };
+            let Some(oldest) = m.iter().filter(|(_, l)| l.user == user && !matches!(l.state, LinkState::Taken(_))).min_by_key(|(_, l)| (matches!(l.state, LinkState::Done(..)) || l.manual.is_some(), l.manual.unwrap_or(l.at))).map(|(k, _)| k.clone()) else { break };
             m.remove(&oldest);
         }
         m.insert(id.clone(), Link { user: user.to_string(), at: now, state: LinkState::Fresh, manual: None, switched: false });
@@ -276,7 +276,8 @@ impl Links {
                 Some(Opened::Make(l.user.clone()))
             }
             LinkState::Taken(d) => (d == device).then_some(Opened::Busy),
-            LinkState::Done(p, _, d) if d == device => Some(Opened::Again(p.clone())),
+            // the profile again only within its own window: a guide opened on the phone keeps the link for the password
+            LinkState::Done(p, at, d) if d == device && (d.starts_with("password ") || now.signed_duration_since(*at).num_seconds() < LINK_AGAIN_SECS) => Some(Opened::Again(p.clone())),
             // the same phone after its profile, now asking for the manual password: an iPhone whose company
             // policy refuses profiles ("Unable to Install Profile") goes on by hand — once; the profile's token is
             // never used and goes with the next sweep (tokens::sweep)
@@ -312,14 +313,18 @@ impl Links {
 
     /// The profile of a taken link was made (`Some`), or could not be (`None`: the link is fresh again).
     pub fn made(&self, id: &str, profile: Option<&str>, now: chrono::DateTime<chrono::Utc>) {
-        if let Some(l) = self.by_id.lock().unwrap().get_mut(id)
+        let mut m = self.by_id.lock().unwrap();
+        if let Some(l) = m.get_mut(id)
             && let LinkState::Taken(d) = &l.state
         {
-            l.state = match profile {
-                Some(p) => LinkState::Done(p.to_string(), now, d.clone()),
-                None => LinkState::Fresh,
-            };
+            match profile {
+                Some(p) => l.state = LinkState::Done(p.to_string(), now, d.clone()),
+                // a switch to the password that failed: gone (fresh, any device could take it while the guide lives)
+                None if l.switched => drop(m.remove(id)),
+                None => l.state = LinkState::Fresh,
+            }
         }
+        drop(m);
         self.changed.notify_waiters();
     }
 }
@@ -609,7 +614,10 @@ mod tests {
         l.open(&late, "profile 1.2.3.4 Safari", t(1));
         l.made(&late, Some("<plist/>"), t(2));
         assert_eq!(l.open_manual(&late, t(3)).as_deref(), Some("alice"));
+        assert!(l.open(&late, "profile 1.2.3.4 Safari", t(2 + LINK_AGAIN_SECS)).is_none(), "the profile itself not again after its window");
         assert!(matches!(l.open(&late, pw, t(2 + LINK_AGAIN_SECS + 60)), Some(Opened::Make(..))), "by hand, after the profile's window");
+        l.made(&late, None, t(2 + LINK_AGAIN_SECS + 61));
+        assert!(l.user(&late, t(2 + LINK_AGAIN_SECS + 62)).is_none(), "a failed switch is not fresh for any device");
         let gone = l.create("alice", t(0));
         l.open(&gone, "profile 1.2.3.4 Safari", t(1));
         l.made(&gone, Some("<plist/>"), t(2));

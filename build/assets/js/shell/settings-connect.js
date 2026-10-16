@@ -54,7 +54,7 @@
     /* An iPad's Safari says "Macintosh" (desktop sites, iPadOS 13+); a touch screen tells it from a Mac. */
     const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
     settings.dataset.ios = ios ? '1' : '0';
-    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, known = false;
+    let pair = '', codes = null, timer = 0, tries = 0, landed = false, linkAt = 0, known = false, profiled = false;
     const device = ios && !/iPhone|iPod/.test(ua) ? 'iPad' : 'iPhone';
     // the device of this run as the server named it ("iPhone (2)"); `known` until a new run
     const name = n => { known = true; $$('[data-device]', settings).forEach(e => { e.textContent = n; }); };
@@ -85,27 +85,31 @@
       return true;
     };
     // the iPhone by hand (#add-ios-values, -more): its password (routes::connect `manual_password`)
-    const newPassword = ioPassword(settings, () => practical.req('/settings/connect/manual?name=' + device, { method: 'POST' }).then(r => r.ok ? (known = true, r.data) : Promise.reject(practical.tell(r))));
+    const newPassword = ioPassword(settings, () => practical.req('/settings/connect/manual?name=' + device, { method: 'POST' }).then(r => r.ok ? (known ||= ios, r.data) : Promise.reject(practical.tell(r)))); // shown on a computer: no device yet
     // the pages a device can get connected from: there the wizard waits for a device of this user that fetched its
     // app password (Android) or its profile (iPhone) → done, or the iPhone's install step; on a computer the iPhone's
-    // values page waits too (its code is a link) and only names the device. Every 2 s for two minutes, then every 10 s
+    // values page waits too (its code is a link) and only names the device, and its install step for a phone that
+    // refuses the profile and goes on by hand (→ the manual end). Every 2 s for two minutes, then every 10 s
     // for 13 more; not while the page is hidden. Then a tap, a key or the page shown again waits on: a code left open
-    // on a screen stays no lasting key (review 2026-10-17). The link is renewed after 8 minutes: it lives 10, and a
-    // used one answers its device for 8 more (domain::connect LINK_SECS, LINK_AGAIN_SECS).
-    const WAIT = ios ? /^#add-(android(-connect)?|ios)$/ : /^#add-(android(-connect)?|ios|ios-values)$/, LINKED = /^#add-ios(-values)?$/;
-    const RENEW = 8 * 60e3, TRIES = 60 + 78;
+    // on a screen stays no lasting key (review 2026-10-17). The link is renewed after 5 minutes: it lives 10, so a
+    // code scanned late still leaves 5; a used one answers its device for 8 more (domain::connect LINK_SECS,
+    // LINK_AGAIN_SECS). The device's own download button renews a stale link before it goes.
+    const WAIT = ios ? /^#add-(android(-connect)?|ios)$/ : /^#add-(android(-connect)?|ios|ios-values|ios-install)$/, LINKED = /^#add-ios(-values)?$/;
+    const RENEW = 5 * 60e3, TRIES = 60 + 78;
     const poll = async () => {
       clearTimeout(timer);
       if (!WAIT.test(location.hash) || document.hidden || tries >= TRIES) return;
       if (pair) {
         const r = await practical.req('/settings/connect/status?pair=' + encodeURIComponent(pair));
         if (!WAIT.test(location.hash)) return; // left meanwhile
-        if (r.ok && r.data.device) {
+        const h = location.hash, manual = r.ok && r.data.manual;
+        if (r.ok && r.data.device && (h !== '#add-ios-install' || manual)) {
           name(r.data.device);
+          if (h === '#add-ios' && !manual) { landed = profiled = true; location.replace('#add-ios-install'); return; } // the pairing waits on there
           codes = null; pair = ''; // Back starts a new wait instead of landing here again
-          if (location.hash === '#add-ios-values') return; // the iPhone copies from its own page; this one goes on by hand
-          if (r.data.manual) settings.dataset.path = 'iosm'; // the phone refused the profile and went on by hand: its end
-          landed = true; location.replace(location.hash === '#add-ios' && !r.data.manual ? '#add-ios-install' : '#add-done');
+          if (h === '#add-ios-values') return; // the iPhone copies from its own page; this one goes on by hand
+          if (manual) settings.dataset.path = 'iosm'; // the phone refused the profile and went on by hand: its end
+          landed = true; location.replace('#add-done');
           return;
         }
         if (r.kind === 'notfound') { codes = null; pair = ''; } // expired: a new pairing
@@ -130,8 +134,13 @@
         if (!known) $('[data-device]', d).textContent = settings.dataset.path === 'android' ? unnamed : device;
         $('.sub', d).hidden = !known && settings.dataset.path === 'iosm';
       }
-      if ((h === '#add-done' || h === '#add-ios-install') && landed) { landed = false; $(h + ' h1').focus(); return; } // the page changed by itself: say so
-      if (h === '#add') { codes = null; pair = ''; linkAt = 0; known = false; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
+      if ((h === '#add-done' || h === '#add-ios-install') && landed) { // the page changed by itself: say so
+        landed = false; $(h + ' h1').focus();
+        if (WAIT.test(h)) { tries = 0; poll(); }
+        return;
+      }
+      if (h === '#add') { codes = null; pair = ''; linkAt = 0; known = profiled = false; newPassword(); return; } // a new run: a new pairing (a device of the last one would end it at once), link and password
+      if (h === '#add-ios' && profiled) { codes = null; pair = ''; profiled = false; } // Back from the install step: a new wait
       if (h === '#add-android-install' && !android) ensure(true); // the stores' codes
       // Back from the install step keeps the link: the same device may load its profile again (domain::connect Links).
       // A failed request was said once; the wait retries it quietly.
@@ -144,6 +153,12 @@
     addEventListener('hashchange', step);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (tries >= TRIES) wake(); else poll(); } }); // back from DAVx⁵: ask at once
     ['pointerdown', 'keydown'].forEach(t => settings.addEventListener(t, wake));
+    const dl = $('[data-apple]', settings);
+    dl.addEventListener('click', async e => {
+      if (Date.now() - linkAt < RENEW) return;
+      e.preventDefault();
+      if (await link(true)) location.href = dl.href;
+    });
     step();
     // step 3 on another device: a store row picks the QR code beside the list instead of leaving the page
     if (!android) {

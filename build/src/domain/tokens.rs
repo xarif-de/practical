@@ -39,7 +39,7 @@ pub async fn since(state: &AppState) -> AppResult<Option<DateTime<Utc>>> {
 pub async fn devices(state: &AppState, user: &Principal) -> AppResult<Vec<(AppToken, Seen)>> {
     let since = since(state).await?;
     let mut d: Vec<(AppToken, Seen)> = state.principals.get_app_tokens(&user.id).await?.into_iter().map(|t| { let s = seen(&t, since); (t, s) }).filter(|(_, s)| *s != Seen::Never).collect();
-    d.sort_by_key(|(t, s)| std::cmp::Reverse(match s { Seen::At(at) => Some(*at), _ => t.created_at }));
+    d.sort_by_key(|(t, s)| std::cmp::Reverse((match s { Seen::At(at) => Some(*at), _ => t.created_at }, t.created_at)));
     Ok(d)
 }
 

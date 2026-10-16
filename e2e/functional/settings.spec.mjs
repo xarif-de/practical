@@ -797,6 +797,9 @@ test('add a device: an iPhone that refuses the profile goes on by hand, and the 
   await phone.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   const tab = await phone.newPage();
   await tab.goto(path);
+  const dl = await phone.request.get(await tab.locator('.connect-page a.btn-primary').getAttribute('href'));
+  expect(dl.status()).toBe(200); // the profile, which a company iPhone then refuses to install
+  await expect(page).toHaveURL(/#add-ios-install$/, { timeout: 10000 });
   await tab.locator(`.connect-page a[href="${path}/manual"]`).click(); // "Unable to Install Profile": by hand
   await expect(tab.locator('.connect-page .wiz-strip').first().locator('.dx')).toHaveCount(7);
   await expect(tab.locator('#iv-p')).toHaveText(''); // no password before it is asked for
@@ -808,7 +811,7 @@ test('add a device: an iPhone that refuses the profile goes on by hand, and the 
   const ok = await basic('alice', pw);
   expect((await ok.get('/api/history')).status()).toBe(200);
   await ok.dispose();
-  // the computer skips the install step of a profile that was never installed: the manual path's end
+  // the computer leaves the install step of a profile that was never installed: the manual path's end
   await expect(page).toHaveURL(/#add-done$/, { timeout: 10000 });
   await expect(page.locator('#add-done .p-iosm')).toBeVisible();
   await expect(page.locator('#add-done [data-device]')).toHaveText('iPhone');
