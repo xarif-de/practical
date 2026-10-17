@@ -20,9 +20,10 @@ test('with the flag: set up, upload, and the entry opens read-only', async ({ pa
   await page.locator('#add a[href="#add-uploader"]').click();
   await page.locator('#add-uploader input[name=calendar]').fill('Arbeit E2E');
   await page.locator('#add-uploader button[type=submit]').click();
-  await expect(page.locator('#up-token')).toBeVisible();
-  const token = (await page.locator('#up-token').textContent()).trim(), cal = (await page.locator('#up-cal').textContent()).trim();
-  await expect(page.locator('#up-toml')).toContainText(`calendar = "${cal}"`);
+  await expect(page.locator('#up-toml')).toBeVisible();
+  const toml = await page.locator('#up-toml').textContent();
+  const val = (k) => toml.match(new RegExp(`^${k} = "([^"]+)"`, 'm'))[1];
+  const token = val('token'), cal = val('calendar');
   // one entry tomorrow at 09:00 UTC, uploaded as the uploader does
   const day = new Date(Date.now() + 86400000).toISOString().slice(0, 10), ymd = day.replace(/-/g, '');
   const ics = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//e2e//EN\r\nBEGIN:VEVENT\r\nUID:e2e-upl@x\r\nDTSTAMP:20260101T000000Z\r\nDTSTART:${ymd}T090000Z\r\nDTEND:${ymd}T100000Z\r\nSUMMARY:Upload E2E\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
