@@ -360,6 +360,7 @@
       <a href="#add-ios-about"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("wand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-auto") }}</span></a>
       <a href="#add-ios-manual"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("hand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-manual") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
+      {% if uploader %}<a href="#add-uploader"><span class="ti" style="background:#0a64ad">{{ m::ico("briefcase") }}</span><b>PractiCalUploader</b><span>{{ ctx.t("wiz-uploader-sub") }}</span></a>{% endif %}
     </div>
   </div>
   <div class="acts"><a class="muted" href="#account">‹ {{ ctx.t("wiz-back") }}</a></div>
@@ -554,6 +555,40 @@
   </div>
   <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>
 </section>
+
+{% if uploader %}
+{# PractiCalUploader (domain::uploader, only with PRACTICAL__UPLOADER): name it, get an app token and a read-only calendar;
+   the values show once, right after the POST (SESSION_NEW_UPLOADER) #}
+<section class="page wiz" id="add-uploader">
+  {{ m::back("#add", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(2, 2, ctx.t("upl-label")) }}
+  <div class="wz">
+    {% if let Some(u) = new_uploader %}
+    <div class="ok-dot">{{ m::ico("check") }}</div>
+    <h1 tabindex="-1">{{ ctx.t("upl-done-title") }}</h1>
+    <p class="lead">{{ ctx.t("upl-done-text") }}</p>
+    <div class="group">
+      <div class="cell noic stack"><span><span class="k">{{ ctx.t("upl-url") }}</span><code id="up-url">{{ u.url }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#up-url" title="{{ ctx.t("copy") }}: {{ ctx.t("upl-url") }}" aria-label="{{ ctx.t("copy") }}: {{ ctx.t("upl-url") }}">{{ m::ico("copy") }}</button></span></div>
+      <div class="cell noic stack"><span><span class="k">{{ ctx.t("upl-user") }}</span><code id="up-user">{{ u.user }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#up-user" title="{{ ctx.t("copy") }}: {{ ctx.t("upl-user") }}" aria-label="{{ ctx.t("copy") }}: {{ ctx.t("upl-user") }}">{{ m::ico("copy") }}</button></span></div>
+      <div class="cell noic stack"><span><span class="k">{{ ctx.t("upl-token") }}</span><code id="up-token">{{ u.token }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#up-token" title="{{ ctx.t("copy") }}: {{ ctx.t("upl-token") }}" aria-label="{{ ctx.t("copy") }}: {{ ctx.t("upl-token") }}">{{ m::ico("copy") }}</button></span></div>
+      <div class="cell noic stack"><span><span class="k">{{ ctx.t("upl-cal") }}</span><code id="up-cal">{{ u.calendar }}</code></span><span class="val"><button class="btn icon-btn" type="button" data-copy="#up-cal" title="{{ ctx.t("copy") }}: {{ ctx.t("upl-cal") }}" aria-label="{{ ctx.t("copy") }}: {{ ctx.t("upl-cal") }}">{{ m::ico("copy") }}</button></span></div>
+    </div>
+    <div class="label">{{ ctx.t("upl-config") }}</div>
+    <pre class="upl-toml"><code id="up-toml">{{ u.toml() }}</code></pre>
+    <button class="btn" type="button" data-copy="#up-toml">{{ m::ico("copy") }}<span>{{ ctx.t("copy") }}</span></button>
+    {% else %}
+    <h1>{{ ctx.t("upl-title") }}</h1>
+    <p class="lead">{{ ctx.t("upl-text") }}</p>
+    <form method="post" action="/settings/uploader">{{ m::csrf() }}
+      <label class="field">{{ ctx.t("upl-device") }}<input type="text" name="name" value="PractiCalUploader" maxlength="60" required autocomplete="off"></label>
+      <label class="field">{{ ctx.t("upl-calendar") }}<input type="text" name="calendar" value="{{ ctx.t("upl-cal-default") }}" maxlength="60" required autocomplete="off"></label>
+      <button type="submit" class="btn btn-primary big wide">{{ ctx.t("upl-create") }}</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a>{% if new_uploader.is_some() %}<a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a>{% endif %}</div>
+</section>
+{% endif %}
 
 <section class="page" id="manual">
   {{ m::back("#add", ctx.t("wiz-back")) }}

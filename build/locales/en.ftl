@@ -1952,3 +1952,27 @@ js-rm-failed = { $n ->
     [one] %n not taken over.
    *[other] %n not taken over.
 }
+
+# PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
+err-calendar-read-only = this calendar is read-only
+err-name-too-long = the name is too long (60 characters at most)
+err-uploader-ics = invalid event in the upload: { $uid }
+err-uploader-too-many = too many events in one upload
+hxj-src-uploader = PractiCalUploader
+wiz-uploader-sub = Events from another source
+upl-label = Uploader
+upl-title = Connect PractiCalUploader
+upl-text = PractiCalUploader copies events from a source PractiCal cannot reach itself (for example Outlook on a work computer) into a calendar of its own. In PractiCal, that calendar is read-only.
+upl-device = Device name
+upl-cal-default = Work
+upl-calendar = Calendar name
+upl-create = Connect
+upl-done-title = Uploader connected
+upl-done-text = Enter these values in the uploader's configuration. You see the password only now.
+upl-config = Configuration
+upl-url = Address
+upl-user = User
+upl-token = Password
+upl-cal = Calendar
+ed-read-only = Read-only calendar · view only
+cal-read-only = read-only

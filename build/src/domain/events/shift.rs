@@ -425,6 +425,7 @@ pub fn shift_ics(ics: &str, days: i64, one: Option<(When, Duration)>, tz: chrono
 /// without it, or for an event without a rule, the whole event moves. `expected_etag` as in `update_event`.
 pub async fn move_event(state: &AppState, user: &Principal, p: &str, c: &str, id: &str, days: i64, at: Option<NaiveDateTime>, expected_etag: Option<&str>, tz: chrono_tz::Tz) -> AppResult<()> {
     collections::ensure_owner(user, p)?;
+    collections::ensure_writable(state, p, c).await?;
     if days == 0 || days.unsigned_abs() > 10_000 * 366 { // beyond `ical::YEARS` anyway; Duration::days panics far past it
         return Err(AppError::bad("err-date-range"));
     }

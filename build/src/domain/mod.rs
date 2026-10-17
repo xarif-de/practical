@@ -5,7 +5,7 @@
 //! [`contacts`], their collections ([`collections`], [`groups`], [`tokens`]); the change history
 //! ([`history`], [`history_text`]); per-user data ([`prefs`], [`catrules`], [`colors`], [`search_history`]);
 //! search ([`search`]); outside sources ([`holidays`], [`geo`]); reminders ([`push`]); [`transfer`]
-//! (import/export) and the text helpers in [`ical`].
+//! (import/export), [`uploader`] (PractiCalUploader's read-only calendars) and the text helpers in [`ical`].
 
 pub mod catrules;
 pub mod collections;
@@ -28,3 +28,4 @@ pub mod search_history;
 pub mod tasks;
 pub mod tokens;
 pub mod transfer;
+pub mod uploader;

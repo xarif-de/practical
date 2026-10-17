@@ -36,7 +36,7 @@ fn foreign_event_data_stays_text() {
         start: i.start, end: i.end, all_day: false, rrule: None, rrule_until: None, exdates: vec![], rdates: vec![], organizer: None, attendees: vec![], alarms: vec![],
         categories: vec![x.into()], status: String::new(), transp: String::new(), class: String::new(), priority: None, color: String::new(), geo: None,
         links: vec![link("javascript:alert(1)"), link(" JAVA\tSCRIPT:alert(1)"), link("data:text/html,<script>alert(1)</script>"), link("https://example.org/?a=1&b=2")],
-        related: vec![], etag: String::new(), has_overrides: false, timezone: String::new(),
+        related: vec![], etag: String::new(), has_overrides: false, timezone: String::new(), read_only: false,
     };
     let l = L::new("de", crate::i18n::I18n::load());
     let details = HashMap::from([(i.key(), det)]);

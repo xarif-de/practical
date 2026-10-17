@@ -355,6 +355,12 @@ CREATE TABLE practical_holidays (
         "CREATE TABLE practical_token_use_since (id INTEGER PRIMARY KEY CHECK (id = 1), since TEXT NOT NULL);
          INSERT INTO practical_token_use_since (id, since) VALUES (1, CURRENT_TIMESTAMP);",
     ),
+    (
+        23,
+        // calendars PractiCal keeps read-only (`collections::is_read_only`); source 'uploader' = filled by
+        // PractiCalUploader through `PUT /api/uploader/calendars/{id}` (`domain::uploader`)
+        "CREATE TABLE practical_readonly_calendars (principal TEXT NOT NULL, calendar_id TEXT NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, calendar_id));",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

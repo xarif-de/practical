@@ -1954,3 +1954,27 @@ js-rm-failed = { $n ->
     [one] %n sin copiar.
    *[other] %n sin copiar.
 }
+
+# PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
+err-calendar-read-only = Este calendario es de solo lectura.
+err-name-too-long = El nombre es demasiado largo (60 caracteres como máximo).
+err-uploader-ics = Evento no válido en la subida: { $uid }
+err-uploader-too-many = Demasiados eventos en una subida.
+hxj-src-uploader = PractiCalUploader
+wiz-uploader-sub = Eventos de otra fuente
+upl-label = Uploader
+upl-title = Conectar PractiCalUploader
+upl-text = PractiCalUploader copia los eventos de una fuente que PractiCal no puede alcanzar por sí mismo (por ejemplo, Outlook en un ordenador del trabajo) en un calendario propio. En PractiCal, ese calendario es de solo lectura.
+upl-device = Nombre del dispositivo
+upl-cal-default = Trabajo
+upl-calendar = Nombre del calendario
+upl-create = Conectar
+upl-done-title = Uploader conectado
+upl-done-text = Introduce estos valores en la configuración del uploader. La contraseña solo se muestra ahora.
+upl-config = Configuración
+upl-url = Dirección
+upl-user = Usuario
+upl-token = Contraseña
+upl-cal = Calendario
+ed-read-only = Calendario de solo lectura · solo vista
+cal-read-only = solo lectura

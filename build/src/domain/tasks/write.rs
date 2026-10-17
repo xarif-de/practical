@@ -220,6 +220,7 @@ fn has_tzid(l: &str) -> bool {
 
 pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, tz: chrono_tz::Tz) -> AppResult<String> {
     collections::ensure_owner(user, &i.principal)?;
+    collections::ensure_writable(state, &i.principal, &i.cal_id).await?;
     normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
@@ -233,6 +234,7 @@ pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, t
 /// attendees, foreign X-properties — is carried over from the stored object.
 pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mut i: TaskInput, expected_etag: Option<&str>, tz: chrono_tz::Tz) -> AppResult<()> {
     collections::ensure_owner(user, &i.principal)?;
+    collections::ensure_writable(state, &i.principal, &i.cal_id).await?;
     let existing = state.calendars.get_object(&i.principal, &i.cal_id, object_id, false).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()

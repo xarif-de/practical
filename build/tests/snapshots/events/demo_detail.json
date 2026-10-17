@@ -206,6 +206,7 @@
   "rdates": [
     "2026-10-10T19:00:00"
   ],
+  "read_only": false,
   "related": [
     {
       "extra": [],

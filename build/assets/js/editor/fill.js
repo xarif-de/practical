@@ -4,7 +4,7 @@
     const old = d && !asNew; current = old ? d : null; openDate = date; touched = false; form.reset(); $('#ed-error').textContent = '';
     $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); catsInit([]); $$('.rows .row', form).forEach(x => x.remove());
     f.key.value = old ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = old ? d.etag : '';
-    form.classList.toggle('new', !old); f.summary.placeholder = old ? D.tTitle : D.tNewtitle;
+    form.classList.toggle('new', !old); form.classList.toggle('ro', !!(old && d.read_only)); f.summary.placeholder = old ? D.tTitle : D.tNewtitle;
     const b = $('#ed-save'); b.title = old ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     if (d && TASK) {
       f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
@@ -29,6 +29,7 @@
       f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); linksInit([], []); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
+    if (!old && f.calendar.selectedOptions[0] && f.calendar.selectedOptions[0].disabled) { const o = [...f.calendar.options].find(x => !x.disabled); if (o) f.calendar.value = o.value; } // a new entry never lands in a read-only calendar
     locInit(); syncDot(); mode(old ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(old ? 'open' : 'new'); baseline = adjusted ? pre : serialize(); updateButtons();
   }
   // `quiet`: a new form that is always on screen (the tasks page) must not take the focus when it appears

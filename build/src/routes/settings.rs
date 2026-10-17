@@ -43,6 +43,8 @@ use pref_forms::*;
 use transfer::*;
 
 pub(crate) const SESSION_NEW_TOKEN: &str = "new_token";
+/// What [`token_forms::uploader_create`] made, shown once on #add-uploader (`uploader::Made`).
+pub(crate) const SESSION_NEW_UPLOADER: &str = "new_uploader";
 
 #[derive(Template, WebTemplate)]
 #[template(path = "settings.html")]
@@ -58,6 +60,10 @@ pub struct SettingsPage {
     /// connected devices with when they were last seen ([`tokens::devices`]; never-connected tokens left out)
     pub tokens: Vec<(AppToken, tokens::Seen)>,
     pub new_token: Option<String>,
+    /// `PRACTICAL__UPLOADER`: the PractiCalUploader tile and its page (#add-uploader)
+    pub uploader: bool,
+    /// the uploader just connected: its values, shown once
+    pub new_uploader: Option<crate::domain::uploader::Made>,
     pub prefs: Prefs,
     pub owners: Vec<Owner>,
     pub palette: Vec<String>,
@@ -274,6 +280,7 @@ async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<Rem
 
 async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<PageQuery>) -> AppResult<SettingsPage> {
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
+    let new_uploader: Option<crate::domain::uploader::Made> = if state.config.uploader && session.get_value(SESSION_NEW_UPLOADER).await?.is_some() { session.remove(SESSION_NEW_UPLOADER).await? } else { None };
     let p = prefs::get(&state.db, &user.id).await?;
     let snaps = events::alarm_snaps(p.alarm_snaps_json.as_deref());
     let (public_regions, school_regions) = (p.regions(false), p.regions(true));
@@ -316,6 +323,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         deleted_addressbooks: collections::addressbooks_for(&state, &user, true).await?,
         tokens: tokens::devices(&state, &user).await?,
         new_token,
+        uploader: state.config.uploader,
+        new_uploader,
         prefs: p.clone(),
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
@@ -469,6 +478,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/addressbooks/{owner}/{id}/purge", post(addressbook_purge))
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
+        .route("/settings/uploader", post(uploader_create))
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/onboarding/lang", post(onboarding::lang_save))
         .route("/settings/onboarding/confirm", post(onboarding::confirm))

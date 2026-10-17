@@ -503,7 +503,9 @@ pub fn qr_svg(text: &str) -> String {
 /// The symbol of a device row, guessed from its name (a token carries nothing else).
 pub fn device_icon(name: &str) -> &'static str {
     let n = name.to_lowercase();
-    if ["ipad", "tablet", "tab "].iter().any(|k| n.contains(k)) {
+    if n.contains("uploader") {
+        "briefcase" // a PractiCalUploader (domain::uploader): fills a work calendar
+    } else if ["ipad", "tablet", "tab "].iter().any(|k| n.contains(k)) {
         "tablet"
     } else if ["davx", "android", "iphone", "phone", "handy", "pixel", "galaxy", "smartphone", "móvil", "portable", "téléphone"].iter().any(|k| n.contains(k)) {
         "smartphone"
@@ -679,5 +681,6 @@ mod tests {
         assert_eq!(device_icon("Pixel 9 (DAVx⁵)"), "smartphone");
         assert_eq!(device_icon("iPad"), "tablet");
         assert_eq!(device_icon("MacBook (Thunderbird)"), "laptop");
+        assert_eq!(device_icon("PractiCalUploader"), "briefcase");
     }
 }

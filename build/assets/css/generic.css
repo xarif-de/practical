@@ -29,6 +29,8 @@ form.inline { display: inline; }
 .danger-zone summary::-webkit-details-marker { display: none; }
 .danger-zone[open] { flex-basis: 100%; }
 .token-reveal code { font-size: 14px; user-select: all; overflow-wrap: anywhere; }
+/* the uploader's config section (settings #add-uploader), copied as a whole */
+.upl-toml { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .login { max-width: 380px; margin: 10vh auto; background: var(--tile); border-radius: 16px; padding: 24px; display: grid; gap: 12px; }
 .login h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 .login .pwform { display: grid; gap: 8px; } .login label { display: grid; gap: 4px; font-size: 13px; color: var(--fg-2); }

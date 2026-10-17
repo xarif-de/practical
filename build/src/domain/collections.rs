@@ -33,6 +33,8 @@ pub struct CalInfo {
     pub subscription_url: Option<String>,
     pub deleted_at: Option<NaiveDateTime>,
     pub synctoken: i64,
+    /// PractiCal writes nothing into it ([`is_read_only`]): a subscription, or a calendar of `practical_readonly_calendars`
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -88,10 +90,58 @@ fn cal_info(c: Calendar, owner: &Owner) -> CalInfo {
         description: c.meta.description.unwrap_or_default(),
         components: c.components.iter().map(|c| c.as_str().to_string()).collect(),
         timezone_id: c.timezone_id.unwrap_or_default(),
+        read_only: c.subscription_url.is_some(),
         subscription_url: c.subscription_url,
         deleted_at: c.deleted_at,
         synctoken: c.synctoken,
     }
+}
+
+/// The calendars of `practical_readonly_calendars` (all users: a handful of rows).
+async fn read_only_rows(state: &AppState) -> AppResult<std::collections::HashSet<(String, String)>> {
+    use sqlx::Row;
+    Ok(sqlx::query("SELECT principal, calendar_id FROM practical_readonly_calendars").fetch_all(&state.db).await?.into_iter().map(|r| (r.get("principal"), r.get("calendar_id"))).collect())
+}
+
+/// The one read-only predicate: a subscribed calendar (the next refresh would overwrite a change) or one
+/// PractiCal keeps read-only (`practical_readonly_calendars`, e.g. filled by PractiCalUploader). Every PractiCal
+/// write into a calendar asks [`ensure_writable`]; CalDAV clients are not covered (RustiCal grants them write).
+pub async fn is_read_only(state: &AppState, principal: &str, cal_id: &str) -> AppResult<bool> {
+    let row: Option<i64> = sqlx::query_scalar("SELECT 1 FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(principal).bind(cal_id).fetch_optional(&state.db).await?;
+    if row.is_some() {
+        return Ok(true);
+    }
+    Ok(match state.calendars.get_calendar(principal, cal_id, true).await {
+        Ok(c) => c.subscription_url.is_some(),
+        Err(rustical_store::Error::NotFound) => false, // the write that follows answers for a missing calendar
+        Err(e) => return Err(e.into()),
+    })
+}
+
+/// `Err` for a write into a read-only calendar ([`is_read_only`]): `err-subscribed-read-only` for a
+/// subscription (the message it always had), else `err-calendar-read-only`.
+pub async fn ensure_writable(state: &AppState, principal: &str, cal_id: &str) -> AppResult<()> {
+    if !is_read_only(state, principal, cal_id).await? {
+        return Ok(());
+    }
+    let subscribed = state.calendars.get_calendar(principal, cal_id, true).await.is_ok_and(|c| c.subscription_url.is_some());
+    Err(AppError::bad(if subscribed { "err-subscribed-read-only" } else { "err-calendar-read-only" }))
+}
+
+/// Marks a calendar read-only for PractiCal (`source`: who fills it, e.g. "uploader").
+pub async fn set_read_only(state: &AppState, principal: &str, cal_id: &str, source: &str) -> AppResult<()> {
+    sqlx::query("INSERT INTO practical_readonly_calendars (principal, calendar_id, source) VALUES (?, ?, ?) ON CONFLICT(principal, calendar_id) DO UPDATE SET source = excluded.source")
+        .bind(principal)
+        .bind(cal_id)
+        .bind(source)
+        .execute(&state.db)
+        .await?;
+    Ok(())
+}
+
+/// The source a read-only calendar was marked with ([`set_read_only`]); `None` if it has no row.
+pub async fn read_only_source(state: &AppState, principal: &str, cal_id: &str) -> AppResult<Option<String>> {
+    Ok(sqlx::query_scalar("SELECT source FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(principal).bind(cal_id).fetch_optional(&state.db).await?)
 }
 
 fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
@@ -109,10 +159,14 @@ fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
 }
 
 pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) -> AppResult<Vec<CalInfo>> {
+    let ro = read_only_rows(state).await?;
     let mut out = vec![];
     for o in owners(state, user).await? {
         let cals = if deleted { state.calendars.get_deleted_calendars(&o.id).await? } else { state.calendars.get_calendars(&o.id).await? };
-        out.extend(cals.into_iter().map(|c| cal_info(c, &o)));
+        out.extend(cals.into_iter().map(|c| cal_info(c, &o)).map(|mut c| {
+            c.read_only |= ro.contains(&(c.principal.clone(), c.id.clone()));
+            c
+        }));
     }
     Ok(out)
 }
@@ -294,7 +348,10 @@ pub async fn restore_addressbook(state: &AppState, user: &Principal, owner: &str
 pub async fn delete_object(state: &AppState, user: &Principal, store: Store, principal: &str, coll: &str, object_id: &str) -> AppResult<()> {
     ensure_owner(user, principal)?;
     match store {
-        Store::Cal => state.calendars.delete_object(principal, coll, object_id, true).await?,
+        Store::Cal => {
+            ensure_writable(state, principal, coll).await?;
+            state.calendars.delete_object(principal, coll, object_id, true).await?
+        }
         Store::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, principal, coll, object_id, true).await?,
     }
     Ok(())

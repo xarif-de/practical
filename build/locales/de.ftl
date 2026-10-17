@@ -1949,3 +1949,27 @@ js-rm-failed = { $n ->
     [one] %n nicht übernommen.
    *[other] %n nicht übernommen.
 }
+
+# PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
+err-calendar-read-only = Dieser Kalender ist schreibgeschützt.
+err-name-too-long = Der Name ist zu lang (höchstens 60 Zeichen).
+err-uploader-ics = Ungültiger Termin im Upload: { $uid }
+err-uploader-too-many = Zu viele Termine in einem Upload.
+hxj-src-uploader = PractiCalUploader
+wiz-uploader-sub = Termine aus einer anderen Quelle
+upl-label = Uploader
+upl-title = PractiCalUploader verbinden
+upl-text = Der PractiCalUploader lädt Termine aus einer Quelle, die PractiCal selbst nicht erreicht (zum Beispiel Outlook auf einem Arbeitsrechner), in einen eigenen Kalender. In PractiCal ist dieser Kalender schreibgeschützt.
+upl-device = Gerätename
+upl-cal-default = Arbeit
+upl-calendar = Name des Kalenders
+upl-create = Verbinden
+upl-done-title = Uploader verbunden
+upl-done-text = Trage diese Werte in die Konfiguration des Uploaders ein. Das Passwort siehst du nur jetzt.
+upl-config = Konfiguration
+upl-url = Adresse
+upl-user = Benutzer
+upl-token = Passwort
+upl-cal = Kalender
+ed-read-only = Schreibgeschützter Kalender · nur Ansicht
+cal-read-only = schreibgeschützt

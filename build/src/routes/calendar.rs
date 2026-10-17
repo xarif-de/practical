@@ -89,6 +89,10 @@ impl CalendarPage {
     pub fn has_shared(&self) -> bool {
         self.calendars.iter().any(|c| c.is_group)
     }
+    /// principal/id of the read-only calendars, comma-separated: calendar.js does not drag their entries
+    pub fn read_only_cals(&self) -> String {
+        self.calendars.iter().filter(|c| c.read_only).map(|c| format!("{}/{}", c.principal, c.id)).collect::<Vec<_>>().join(",")
+    }
 }
 
 #[derive(Template)]

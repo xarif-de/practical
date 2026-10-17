@@ -300,6 +300,7 @@ fn store_chunk(chunk: &[(String, String)]) -> AppResult<Vec<(String, CalendarObj
 pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<usize> {
     collections::ensure_owner(user, principal)?;
     state.calendars.get_calendar(principal, cal_id, false).await?;
+    collections::ensure_writable(state, principal, cal_id).await?;
     let (objects, _) = file_objects(ics, false).await?;
     if objects.is_empty() {
         return Err(AppError::bad("err-no-calendar-objects"));

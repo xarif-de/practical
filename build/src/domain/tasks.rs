@@ -114,6 +114,8 @@ pub struct TaskDetail {
     pub timezone: String,
     /// The task carries a recurrence rule this editor does not model — shown as a hint, kept on save
     pub has_rrule: bool,
+    /// its calendar takes no PractiCal writes (`collections::is_read_only`): the editor stays in view mode
+    pub read_only: bool,
 }
 
 fn first<'a>(props: &'a [String], name: &str) -> Option<&'a String> {
@@ -361,6 +363,7 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
         etag: obj.get_etag().to_string(),
         timezone: tz.name().to_string(),
         has_rrule: first(p, "RRULE").is_some(),
+        read_only: collections::is_read_only(state, principal, cal_id).await?,
     })
 }
 
