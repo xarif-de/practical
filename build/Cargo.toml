@@ -109,7 +109,7 @@ tower = "=0.5.3"
 [build-dependencies]
 # JS minifier with a real parser (a syntax error fails the build): app.js brotli 100.2 → 69.4 KB.
 # One project (oxc-project), 6 lines because the ES2020 target lives in oxc_compat.
-oxc_allocator = "0.153"
+oxc_allocator = "0.154"
 oxc_parser = { version = "0.153", default-features = false }
 oxc_span = "0.153"
 oxc_minifier = "0.153"
