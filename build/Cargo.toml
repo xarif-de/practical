@@ -113,7 +113,7 @@ oxc_allocator = "0.153"
 oxc_parser = { version = "0.153", default-features = false }
 oxc_span = "0.153"
 oxc_minifier = "0.153"
-oxc_codegen = { version = "0.153", default-features = false }
+oxc_codegen = { version = "0.154", default-features = false }
 oxc_compat = "0.153"
 # brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
 brotli = "9"
