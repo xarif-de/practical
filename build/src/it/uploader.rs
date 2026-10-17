@@ -47,9 +47,12 @@ async fn setup_shows_the_values_once_and_the_upload_mirrors_the_snapshot() {
     let r = c.post_form("/settings/uploader", &[("name", "PractiCalUploader"), ("calendar", "Arbeit")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#add-uploader"), "{}", r.body);
     let page = c.get("/settings").await;
-    let (token, cal) = (code(&page.body, "up-token"), code(&page.body, "up-cal"));
-    assert_eq!(code(&page.body, "up-user"), "alice");
-    page.has(&format!("calendar = &#34;{cal}&#34;"));
+    // the page shows only the configuration block (escaped quotes in HTML)
+    let toml = code(&page.body, "up-toml").replace("&#34;", "\"");
+    let val = |k: &str| toml.lines().find_map(|l| l.strip_prefix(&format!("{k} = \""))).map(|v| v.trim_end_matches('"').to_string()).unwrap();
+    let (token, cal) = (val("token"), val("calendar"));
+    assert_eq!(val("user"), "alice");
+    assert!(!page.body.contains("id=\"up-token\""), "no separate values");
     assert!(!c.get("/settings").await.body.contains(&token), "shown once");
     assert!(crate::domain::collections::is_read_only(&app.state, "alice", &cal).await.unwrap());
 
