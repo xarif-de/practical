@@ -57,6 +57,7 @@ pub async fn create_event(state: &AppState, user: &Principal, input: EventInput,
 /// clients and the change history see the same event; a live object with it there gets a new one.
 pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz, keep_uid: Option<&str>) -> AppResult<String> {
     collections::ensure_owner(user, &input.principal)?;
+    collections::ensure_writable(state, &input.principal, &input.cal_id).await?;
     let tz = user_tz(&input, default_tz);
     let keep = match keep_uid {
         Some(u) if state.calendars.get_object(&input.principal, &input.cal_id, u, false).await.is_err() => Some(u.to_string()),
@@ -77,6 +78,7 @@ pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInp
 /// (raw blocks), so "edit the series" never silently drops a moved single occurrence.
 pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, input: EventInput, expected_etag: Option<&str>, default_tz: chrono_tz::Tz) -> AppResult<()> {
     collections::ensure_owner(user, &input.principal)?;
+    collections::ensure_writable(state, &input.principal, &input.cal_id).await?;
     let tz = user_tz(&input, default_tz);
     let existing = state.calendars.get_object(&input.principal, &input.cal_id, object_id, false).await?;
     if let Some(e) = expected_etag

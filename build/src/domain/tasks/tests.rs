@@ -119,6 +119,7 @@ fn cal() -> CalInfo {
         subscription_url: None,
         deleted_at: None,
         synctoken: 0,
+        read_only: false,
     }
 }
 fn with(extra: &str) -> String {

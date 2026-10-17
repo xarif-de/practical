@@ -32,7 +32,8 @@ pub struct Source {
     pub cal: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cal_color: Option<String>,
-    /// false for objects of a subscribed calendar: the next refresh would overwrite a change
+    /// false for objects of a read-only calendar (`CalInfo::read_only`: a subscription's next refresh, an
+    /// uploader's next upload would overwrite a change)
     pub editable: bool,
     /// events and tasks: their CATEGORIES (the colour optimiser puts them with their category)
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -77,7 +78,7 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
             key: format!("{}/{}/{}", cal.principal, cal.id, o.id),
             cal: Some(cal.displayname.clone()),
             cal_color: Some(cal.color.clone()),
-            editable: cal.subscription_url.is_none(),
+            editable: !cal.read_only,
             cats: o.categories.iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect(),
         });
     }
@@ -90,7 +91,7 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
 pub async fn category_objects(state: &AppState, user: &Principal, scope: &str, name: &str, from: &str) -> AppResult<Vec<String>> {
     let (name, from) = (name.trim(), from.trim().to_lowercase());
     let mut out = vec![];
-    for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| c.subscription_url.is_none()) {
+    for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| !c.read_only) {
         for o in events::object_meta(state, cal).await?.objs.iter().filter(|o| o.event == (scope == "event") && matches!(scope, "event" | "task")) {
             if o.color.as_deref().is_some_and(|c| c.trim().to_lowercase() == from) && o.categories.iter().any(|c| c.trim() == name) {
                 out.push(format!("{}/{}/{}", cal.principal, cal.id, o.id));
@@ -175,10 +176,8 @@ pub async fn set_object_color(state: &AppState, user: &Principal, principal: &st
     if !color.is_empty() && !prefs::is_hex_color(color) {
         return Err(AppError::bad("err-color-or-empty"));
     }
-    let cal = state.calendars.get_calendar(principal, cal_id, false).await?;
-    if cal.subscription_url.is_some() {
-        return Err(AppError::bad("err-subscribed-read-only"));
-    }
+    state.calendars.get_calendar(principal, cal_id, false).await?;
+    collections::ensure_writable(state, principal, cal_id).await?;
     let existing = state.calendars.get_object(principal, cal_id, object_id, false).await?;
     let Some(ics) = with_color(&existing.get_ics(), &color.to_lowercase()) else {
         return Err(AppError::bad("err-no-event-or-task"));

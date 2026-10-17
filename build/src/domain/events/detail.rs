@@ -42,6 +42,8 @@ pub struct EventDetail {
     pub etag: String,
     pub has_overrides: bool,
     pub timezone: String,
+    /// its calendar takes no PractiCal writes (`collections::is_read_only`): the editor stays in view mode
+    pub read_only: bool,
 }
 
 pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz) -> AppResult<EventDetail> {
@@ -50,7 +52,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
-    let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0 };
+    let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false };
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
     let (raw, _) = split_ics(&obj.get_ics());
     let rrule = main.get_property("RRULE").map(|p| ical::rrule_canon(&p.value));
@@ -89,6 +91,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
         timezone,
+        read_only: collections::is_read_only(state, principal, cal_id).await?,
     })
 }
 

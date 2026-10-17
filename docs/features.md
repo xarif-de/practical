@@ -418,6 +418,9 @@ that device only. **Settings → Connected devices → Add a device** walks you 
   description, each with a copy button. Contacts follow as a **CardDAV Account** with the same values; each group's
   calendars as one more CalDAV account with the user name `you$group`. Read it on the iPhone itself: on a computer
   the page shows a QR code that opens the guide on the iPhone without signing in there.
+- **PractiCalUploader**, only where the server enables it (`PRACTICAL__UPLOADER`): a private companion tool that
+  fills a read-only calendar from another source, for example Outlook on a work computer. The assistant creates its
+  password and calendar and shows the values for its configuration once.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 

@@ -130,7 +130,7 @@ fn day_view_and_rows_golden() {
             crate::domain::events::Link { kind: "url".into(), uri: "https://www.example.org/a/very/long/path/that/goes/on/and/on/and/on".into(), ..Default::default() },
             crate::domain::events::Link { kind: "attach".into(), embedded: true, filename: "befund.pdf".into(), bin_index: Some(0), ..Default::default() },
         ],
-        related: vec![], etag: String::new(), has_overrides: false, timezone: "Europe/Berlin".into(),
+        related: vec![], etag: String::new(), has_overrides: false, timezone: "Europe/Berlin".into(), read_only: false,
     };
     details.insert("alice/b/tomato".to_string(), d);
     assert_snapshot("render/day_view_de.html", &lines_of_html(&day_view(date("2026-10-16"), date("2026-10-14"), &v, &l, "Arbeit, Privat", &details, &hol)));

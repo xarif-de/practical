@@ -1,7 +1,8 @@
 // The server pair of a run: `serve` of this checkout's build on fresh COPIES of the fixture DB —
 //  - dev (port): development mode (DEV_ASSETS_DIR = the minified assets this build embeds, from build-server.sh;
 //    E2E_ASSETS=source serves build/assets as written instead), DEV_LOGIN=alice, DEV_NOW = NOW — every test;
-//  - login (port + 1): no development mode, password login — the login page and the password login test.
+//  - login (port + 1): no development mode, password login, PRACTICAL__UPLOADER — the login page, the password login
+//    test and the uploader's.
 // Egress of both is blocked (HTTP(S)_PROXY → 127.0.0.1:9). Every PID started is listed in <runDir>/pids until it
 // is stopped, so global-teardown.mjs can stop what a crashed worker left behind (and nothing else).
 import { spawn } from 'node:child_process';
@@ -42,6 +43,9 @@ function start(bin, runDir, port, db, dev, tag) {
     PRACTICAL__DEFAULT_LANG: 'de',
     HTTP_PROXY: BLOCK, HTTPS_PROXY: BLOCK, http_proxy: BLOCK, https_proxy: BLOCK, ALL_PROXY: BLOCK, NO_PROXY: '', no_proxy: '',
   };
+  // PractiCalUploader (PRACTICAL__UPLOADER) only on the login server: the dev server's pages, which the visual and a11y
+  // states show, stay as they are without it; functional/uploader.spec.mjs covers both
+  if (!dev) env.PRACTICAL__UPLOADER = 'true';
   if (dev) Object.assign(env, { PRACTICAL__DEV_ASSETS_DIR: process.env.E2E_ASSETS === 'source' ? path.join(REPO, 'build', 'assets') : `${bin}.assets`, PRACTICAL__DEV_LOGIN: 'alice', PRACTICAL__DEV_NOW: NOW, PRACTICAL__DEV_POLL_MS: String(POLL_MS) });
   const out = fs.openSync(log, 'w');
   const child = spawn(bin, ['serve'], { env, stdio: ['ignore', out, out] });

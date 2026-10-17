@@ -154,6 +154,11 @@ pub async fn plan(state: &AppState, user: &Principal, c: &Change, all: &[Change]
             skips.push(skip("coll", None));
             continue;
         }
+        // a read-only calendar takes no undo either (collections::ensure_writable): no write access
+        if it.store == Store::Cal && crate::domain::collections::is_read_only(state, &it.principal, &it.coll).await? {
+            skips.push(skip("access", None));
+            continue;
+        }
         let key: ObjKey = (it.store, it.principal.clone(), it.coll.clone(), it.object_id.clone());
         let now = memo.read_obj(state, &key).await?;
         let gone_by = || later_of(it).into_iter().rev().find(|x| x.items.iter().any(|i| i.uid == it.uid && i.act == "delete")).map(|x| x.id);

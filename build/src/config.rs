@@ -45,6 +45,9 @@ pub struct Config {
     /// 32 random bytes (base64) sealing a stored app password. None = sync links cannot be
     /// created; a one-off import still works, it stores nothing.
     pub remote_secret_key: Option<Vec<u8>>,
+    /// Offer the "PractiCalUploader" device (a private companion tool that fills a read-only calendar through
+    /// `PUT /api/uploader/calendars/{id}`). Default false: tile, setup routes and endpoint answer 404.
+    pub uploader: bool,
     pub default_timezone: String,
     pub default_lang: String,
     /// Session lifetime (inactivity) in hours.
@@ -204,6 +207,7 @@ impl Config {
             holidays_enabled: var_bool("HOLIDAYS_ENABLED", true)?,
             remote_private_origins: remote_private_origins()?,
             remote_secret_key: remote_secret_key()?,
+            uploader: var_bool("UPLOADER", false)?,
             default_timezone: var_or("DEFAULT_TIMEZONE", "Europe/Berlin"),
             default_lang: var_or("DEFAULT_LANG", "de"),
             session_hours,

@@ -76,6 +76,7 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | `HOLIDAYS_ENABLED` | `true` | `false` turns off all holiday requests. See [Holidays](#holidays). |
 | `DEFAULT_TIMEZONE` | `Europe/Berlin` | The time zone for users who have not picked one. |
 | `DEFAULT_LANG` | `de` | The language for users who have not picked one: `de`, `en`, `fr` or `es`. |
+| `UPLOADER` | `false` | `true` offers the **PractiCalUploader** device. See [PractiCalUploader](#practicaluploader). |
 
 ### Development only
 
@@ -171,6 +172,34 @@ regions have no server default: until a user names one, no holidays are drawn.
 Every user picks their own regions in the settings.
 
 If the server has no internet access, set `HOLIDAYS_ENABLED=false`.
+
+## PractiCalUploader
+
+PractiCalUploader is a separate, private companion tool. It copies events from a source PractiCal cannot reach
+itself, for example Outlook on a work computer, into a calendar of its own. Most installations do not need it, so it
+is off by default.
+
+With `PRACTICAL__UPLOADER=true`:
+
+- **Settings → Connected devices → Add a device** shows a **PractiCalUploader** tile. It asks for a device name and
+  a calendar name, then creates a device password and a new calendar. The page shows the address, user name,
+  password and calendar ID once, together with a ready `[practical]` section for the uploader's configuration file.
+- The new calendar is **read-only in PractiCal**: you cannot create, change, move or delete its events, and the editor
+  opens them in view mode only. CalDAV apps are not blocked; the next upload overwrites what they change.
+- The uploader sends its whole snapshot to `PUT /api/uploader/calendars/{calendar id}` with HTTP Basic authentication
+  (user name and device password):
+
+  ```json
+  { "window": { "start": "2026-07-01T00:00:00Z", "end": "2027-10-01T00:00:00Z" },
+    "events": [ { "uid": "…", "ics": "BEGIN:VCALENDAR…END:VCALENDAR" } ] }
+  ```
+
+  Each `ics` holds one event with that UID (a series with its exceptions). PractiCal checks every event first and
+  writes nothing if one is invalid. Then it creates and updates what changed, leaves identical events alone, and
+  deletes events that are no longer in the snapshot, except those that ended before `window.start`. The answer counts
+  `created`, `updated`, `deleted` and `unchanged`. The body may be up to 32 MiB with up to 20,000 events.
+
+Without the setting, the tile is gone and the endpoint answers 404. Calendars made earlier stay read-only.
 
 ## RustiCal settings that matter next to PractiCal
 

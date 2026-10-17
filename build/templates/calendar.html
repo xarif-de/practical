@@ -12,7 +12,7 @@
 {% endblock %}
 {% block head %}{% if !holiday_css.is_empty() %}<style>{{ holiday_css|safe }}</style>{% endif %}{% endblock %}
 {% block content %}
-<div id="viewroot" data-view="{{ view }}" data-date="{{ date }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}">
+<div id="viewroot" data-view="{{ view }}" data-date="{{ date }}" data-today="{{ today }}" data-tz="{{ timezone }}" data-cals="{{ cals_param }}" data-ro="{{ self.read_only_cals() }}">
 {% include "calendar_fragment.html" %}
 </div>
 {{ picker|safe }}

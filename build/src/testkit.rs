@@ -194,6 +194,7 @@ pub fn config(db_path: &str) -> Config {
         // a test dials only a stub it started itself; the allow-list is filled by the tests that need it
         remote_private_origins: vec![],
         remote_secret_key: None,
+        uploader: false,
         bind: "127.0.0.1:0".into(),
         db_path: db_path.into(),
         rustical_url: String::new(),

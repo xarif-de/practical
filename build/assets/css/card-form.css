@@ -68,6 +68,9 @@
 .cardform .tags input { flex: 1; min-width: 120px; width: auto; }
 /* modes */
 .cardform.mode-view .edits { display: none !important; }
+/* a read-only calendar's entry (`.ro`, editor/fill.js): no unlock, no delete; its hint replaces the view-mode one */
+.cardform.ro #ed-lock, .cardform.ro #ed-delete, .cardform.ro .vh { display: none; }
+.cardform:not(.ro) .ro-hint { display: none; }
 .cardform.mode-edit .views, .cardform.mode-edit .acts { display: none !important; }
 .cardform.mode-view input, .cardform.mode-view textarea, .cardform.mode-view select { pointer-events: none; }
 .cardform.mode-view select { appearance: none; }
