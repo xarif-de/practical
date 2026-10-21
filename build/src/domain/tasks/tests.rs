@@ -120,6 +120,7 @@ fn cal() -> CalInfo {
         deleted_at: None,
         synctoken: 0,
         read_only: false,
+        managed: false,
     }
 }
 fn with(extra: &str) -> String {

@@ -125,7 +125,7 @@
 
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
-{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
@@ -151,7 +151,12 @@
     <a class="cell btnrow" href="/settings/export/{{ kinds }}/{{ c.principal }}/{{ c.id }}">{{ ico("file-export") }}<span>{{ export_label }}</span></a>
     <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept="{{ accept }}" hidden data-import="/settings/import/{{ kinds }}/{{ c.principal }}/{{ c.id }}"></label>
   </div>
+  {%- if managed %}
+  {#- a PractiCalUploader device manages it: removed there, or with the device (uploader::managed) -#}
+  <p class="foot">{{ ctx.t("upl-managed-hint") }}</p>
+  {%- else %}
   <form class="group sp" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/delete">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("group-delete-confirm") }}</button></form>
+  {%- endif %}
 </section>{%- endmacro -%}
 
 {#- settings trash: restore and purge of a deleted calendar or address book, the empty-list row -#}

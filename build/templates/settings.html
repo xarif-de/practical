@@ -163,13 +163,13 @@
 </section>
 
 {% for c in calendars %}
-{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str())) %}
+{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str()), c.managed) %}
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
     {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}{% endcall %}
 {% endfor %}
 
 {% for a in addressbooks %}
-{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str())) %}{% endcall %}
+{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str()), false) %}{% endcall %}
 {% endfor %}
 
 <section class="page" id="new-calendar">
@@ -336,12 +336,38 @@
   <div class="group" id="devices">
     {% for (t, seen) in tokens %}
     {% let when = self.device_seen(t, seen) %}
+    {% if let Some(u) = self.uploader_device(t.id.as_str()) %}
+    {#- an uploader takes its calendars along only if asked: its own page lists them (#upl-del-…) -#}
+    <div class="cell"><span class="swatch" style="background:var(--c{{ loop.index0 % 6 + 1 }})">{{ m::ico("briefcase") }}</span><span>{{ t.name }}<span class="sub">{{ ctx.tn("n-calendars", "n", u.calendars.len() as i64) }}{% if !when.is_empty() %} · {{ when }}{% endif %}</span></span><span class="val"><a class="link danger" href="#upl-del-{{ u.id }}">{{ ctx.t("device-disconnect") }}</a></span></div>
+    {% else %}
     <div class="cell"><span class="swatch" style="background:var(--c{{ loop.index0 % 6 + 1 }})">{{ m::ico(self.device_icon(t.name)) }}</span><span>{{ t.name }}{% if !when.is_empty() %}<span class="sub">{{ when }}</span>{% endif %}</span><span class="val"><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-disconnect", "name", t.name) }}">{{ ctx.t("device-disconnect") }}</button></form></span></div>
+    {% endif %}
     {% endfor %}
     {% if tokens.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("devices-none") }}</span></div>{% endif %}
   </div>
   <p class="foot">{{ ctx.t("devices-foot") }}</p>
 </section>
+
+{%- for u in uploader_devices %}
+{#- deleting a PractiCalUploader: its token goes; each ticked calendar goes to the trash, the others stay read-only without a device -#}
+<section class="page" id="upl-del-{{ u.id }}">
+  {{ m::back("#account", ctx.t("tab-account")) }}
+  <h1>{{ ctx.t1("upl-del-title", "name", u.name) }}</h1>
+  <form method="post" action="/settings/uploader/{{ u.id }}/delete">
+    {{ m::csrf() }}
+    {% if !u.calendars.is_empty() %}
+    <div class="label">{{ ctx.t("upl-del-calendars") }}</div>
+    <div class="group">
+      {% for (id, name) in u.calendars %}
+      <label class="cell noic"><span>{{ name }}</span><span class="val"><input type="checkbox" name="trash-{{ id }}" value="1" aria-label="{{ ctx.t1("upl-del-also", "name", name) }}"></span></label>
+      {% endfor %}
+    </div>
+    <p class="foot">{{ ctx.t("upl-del-hint") }}</p>
+    {% endif %}
+    <div class="group sp"><button class="cell btnrow danger" type="submit">{{ ctx.t("upl-del-go") }}</button></div>
+  </form>
+</section>
+{%- endfor %}
 
 {# "add a device": one page per step, wizard frame of connect.css. Android: on the device itself (`.oa`) and on
    another one (`.od`, with QR codes); iPhone/iPad (#add-ios…, no app: a configuration profile): on the device
@@ -574,7 +600,7 @@
     <p class="lead">{{ ctx.t("upl-text") }}</p>
     <form method="post" action="/settings/uploader">{{ m::csrf() }}
       <label class="field">{{ ctx.t("upl-device") }}<input type="text" name="name" value="PractiCalUploader" maxlength="60" required autocomplete="off"></label>
-      <label class="field">{{ ctx.t("upl-calendar") }}<input type="text" name="calendar" value="{{ ctx.t("upl-cal-default") }}" maxlength="60" required autocomplete="off"></label>
+      <label class="field">{{ ctx.t("upl-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
       <button type="submit" class="btn btn-primary big wide">{{ ctx.t("upl-create") }}</button>
     </form>
     {% endif %}

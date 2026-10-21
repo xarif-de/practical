@@ -145,5 +145,5 @@ pub fn router() -> Router<SharedState> {
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
         .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64
         // after the layer above: a snapshot is bigger than an edit (uploader::MAX_BODY)
-        .route("/api/uploader/calendars/{id}", axum::routing::put(uploader_api::upload).layer(axum::extract::DefaultBodyLimit::max(crate::domain::uploader::MAX_BODY)))
+        .route("/api/uploader", axum::routing::put(uploader_api::upload).layer(axum::extract::DefaultBodyLimit::max(crate::domain::uploader::MAX_BODY)))
 }

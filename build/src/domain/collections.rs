@@ -35,6 +35,8 @@ pub struct CalInfo {
     pub synctoken: i64,
     /// PractiCal writes nothing into it ([`is_read_only`]): a subscription, or a calendar of `practical_readonly_calendars`
     pub read_only: bool,
+    /// a live PractiCalUploader device manages it (`uploader::managed`): it cannot be deleted here
+    pub managed: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -91,6 +93,7 @@ fn cal_info(c: Calendar, owner: &Owner) -> CalInfo {
         components: c.components.iter().map(|c| c.as_str().to_string()).collect(),
         timezone_id: c.timezone_id.unwrap_or_default(),
         read_only: c.subscription_url.is_some(),
+        managed: false,
         subscription_url: c.subscription_url,
         deleted_at: c.deleted_at,
         synctoken: c.synctoken,
@@ -104,7 +107,7 @@ async fn read_only_rows(state: &AppState) -> AppResult<std::collections::HashSet
 }
 
 /// The one read-only predicate: a subscribed calendar (the next refresh would overwrite a change) or one
-/// PractiCal keeps read-only (`practical_readonly_calendars`, e.g. filled by PractiCalUploader). Every PractiCal
+/// PractiCal keeps read-only (`practical_readonly_calendars`, e.g. filled by PractiCalUploader, `domain::uploader`). Every PractiCal
 /// write into a calendar asks [`ensure_writable`]; CalDAV clients are not covered (RustiCal grants them write).
 pub async fn is_read_only(state: &AppState, principal: &str, cal_id: &str) -> AppResult<bool> {
     let row: Option<i64> = sqlx::query_scalar("SELECT 1 FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(principal).bind(cal_id).fetch_optional(&state.db).await?;
@@ -128,7 +131,9 @@ pub async fn ensure_writable(state: &AppState, principal: &str, cal_id: &str) ->
     Err(AppError::bad(if subscribed { "err-subscribed-read-only" } else { "err-calendar-read-only" }))
 }
 
-/// Marks a calendar read-only for PractiCal (`source`: who fills it, e.g. "uploader").
+/// Marks a calendar read-only for PractiCal (`source`: who fills it). Tests only: the uploader writes its rows
+/// with key and device (`uploader::upload`).
+#[cfg(test)]
 pub async fn set_read_only(state: &AppState, principal: &str, cal_id: &str, source: &str) -> AppResult<()> {
     sqlx::query("INSERT INTO practical_readonly_calendars (principal, calendar_id, source) VALUES (?, ?, ?) ON CONFLICT(principal, calendar_id) DO UPDATE SET source = excluded.source")
         .bind(principal)
@@ -137,11 +142,6 @@ pub async fn set_read_only(state: &AppState, principal: &str, cal_id: &str, sour
         .execute(&state.db)
         .await?;
     Ok(())
-}
-
-/// The source a read-only calendar was marked with ([`set_read_only`]); `None` if it has no row.
-pub async fn read_only_source(state: &AppState, principal: &str, cal_id: &str) -> AppResult<Option<String>> {
-    Ok(sqlx::query_scalar("SELECT source FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(principal).bind(cal_id).fetch_optional(&state.db).await?)
 }
 
 fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
@@ -160,11 +160,14 @@ fn ab_info(a: Addressbook, owner: &Owner, color: Option<String>) -> AbInfo {
 
 pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) -> AppResult<Vec<CalInfo>> {
     let ro = read_only_rows(state).await?;
+    let managed = crate::domain::uploader::managed(state).await?;
     let mut out = vec![];
     for o in owners(state, user).await? {
         let cals = if deleted { state.calendars.get_deleted_calendars(&o.id).await? } else { state.calendars.get_calendars(&o.id).await? };
         out.extend(cals.into_iter().map(|c| cal_info(c, &o)).map(|mut c| {
-            c.read_only |= ro.contains(&(c.principal.clone(), c.id.clone()));
+            let key = (c.principal.clone(), c.id.clone());
+            c.read_only |= ro.contains(&key);
+            c.managed = managed.contains(&key);
             c
         }));
     }
@@ -282,7 +285,17 @@ pub async fn update_calendar(state: &AppState, user: &Principal, owner: &str, id
 
 pub async fn delete_calendar(state: &AppState, user: &Principal, owner: &str, id: &str, hard: bool) -> AppResult<()> {
     ensure_owner(user, owner)?;
+    // a calendar a PractiCalUploader device manages is removed there (deselected) or with the device; one it
+    // deselected waits in the trash and may be purged from there
+    let in_trash = state.calendars.get_calendar(owner, id, true).await.is_ok_and(|c| c.deleted_at.is_some());
+    if !in_trash && crate::domain::uploader::managed(state).await?.contains(&(owner.to_string(), id.to_string())) {
+        return Err(AppError::bad("err-calendar-managed"));
+    }
     state.calendars.delete_calendar(owner, id, !hard).await?;
+    if hard {
+        // purged: nothing is left to restore or take over (the uploader's key would point at nothing)
+        sqlx::query("DELETE FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(owner).bind(id).execute(&state.db).await?;
+    }
     // a sync link is reached through its collection, so it has to end with it
     crate::domain::remote::unlink_collection(state, owner, crate::domain::remote::dav::Kind::Cal, id).await;
     Ok(())

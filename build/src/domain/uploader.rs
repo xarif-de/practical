@@ -1,12 +1,17 @@
-//! PractiCalUploader: a private companion tool (one per device) that mirrors a calendar PractiCal cannot reach
-//! itself (an Outlook store on a work laptop) into a read-only calendar here. Only with `PRACTICAL__UPLOADER=true`.
+//! PractiCalUploader: a private companion tool that mirrors calendars PractiCal cannot reach itself (an Outlook
+//! store on a work laptop) into read-only calendars here. Only with `PRACTICAL__UPLOADER=true`.
 //!
-//! - [`setup`]: the device tile's "connect" — an app token named after the device and a new VEVENT calendar,
-//!   marked read-only with source [`SOURCE`] (`collections::set_read_only`), so nothing in PractiCal writes into it.
-//! - [`upload`]: `PUT /api/uploader/calendars/{id}` — a full snapshot of the source's window. Everything is
-//!   checked before the first write; then changed objects are put, identical ones left alone, and objects no
-//!   longer in the snapshot deleted unless they lie wholly before the window (history the source no longer
-//!   holds). One change in the history (source "uploader").
+//! - A **device** ([`setup`]) is an app token plus a row of `practical_uploader_devices`: who set it up
+//!   (`principal`, the Basic user of its uploads) and who owns what it uploads (`owner`: that user or one of their
+//!   groups, fixed at setup). No calendar is made at setup.
+//! - [`upload`]: `PUT /api/uploader` — the device's COMPLETE selection, one snapshot per calendar. Each entry is
+//!   found by the uploader's opaque `key` among the owner's calendars (`practical_readonly_calendars.source_key`):
+//!   created when new, taken over when its device is gone, restored when in the trash, refused (409) when another
+//!   live device manages it. A calendar of this device that is no longer in the list goes to the trash
+//!   (deselected). Everything is checked before the first write; one change in the history (source "uploader").
+//! - A managed calendar ([`managed`]) cannot be deleted in PractiCal; [`delete_device`] lets the user pick which
+//!   of its calendars go to the trash, the rest stay read-only without a device (and can then be deleted).
+//! - Name and colour belong to PractiCal: the uploader's `name` only names a calendar when it is created.
 
 use crate::domain::collections::{self, NewCalendar};
 use crate::domain::history::{self, Actor};
@@ -15,14 +20,20 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use chrono::{DateTime, Utc};
 use rustical_ical::CalendarObject;
-use rustical_store::auth::Principal;
+use rustical_store::auth::{AuthenticationProvider, Principal};
 use rustical_store::{CalendarReadStore, CalendarWriteStore};
+use sqlx::Row;
+use std::collections::{HashMap, HashSet};
 
 /// `practical_readonly_calendars.source` of an uploader's calendar.
 pub const SOURCE: &str = "uploader";
-/// Events of one snapshot at most (a work calendar of 1.5 years holds a few hundred, measured 2026-10-17: 235).
+/// Events of one calendar at most (a work calendar of 1.5 years holds a few hundred, measured 2026-10-17: 235).
 pub const MAX_EVENTS: usize = 20_000;
-/// The body limit of the upload route (a snapshot of [`MAX_EVENTS`] small events stays below it).
+/// Calendars of one upload at most (one Outlook profile listed 30 calendars, 2026-10-17).
+pub const MAX_CALENDARS: usize = 64;
+/// Length of a calendar key at most (the uploader sends account address + Exchange folder id).
+pub const MAX_KEY: usize = 200;
+/// The body limit of the upload route.
 pub const MAX_BODY: usize = 32 * 1024 * 1024;
 
 #[derive(serde::Deserialize)]
@@ -38,9 +49,16 @@ pub struct UploadEvent {
 }
 
 #[derive(serde::Deserialize)]
-pub struct Upload {
+pub struct UploadCalendar {
+    pub key: String,
+    pub name: String,
     pub window: Window,
     pub events: Vec<UploadEvent>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct Upload {
+    pub calendars: Vec<UploadCalendar>,
 }
 
 #[derive(serde::Serialize, Debug, Default, PartialEq, Eq)]
@@ -51,44 +69,133 @@ pub struct Counts {
     pub unchanged: usize,
 }
 
+#[derive(serde::Serialize, Debug)]
+pub struct CalendarResult {
+    pub key: String,
+    pub calendar: String,
+    #[serde(flatten)]
+    pub counts: Counts,
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct Uploaded {
+    pub calendars: Vec<CalendarResult>,
+    pub trashed: Vec<String>,
+}
+
+/// A row of `practical_uploader_devices`.
+#[derive(Debug, Clone)]
+pub struct Device {
+    pub id: String,
+    pub principal: String,
+    pub owner: String,
+    pub token_id: String,
+    pub name: String,
+}
+
+fn device_of(r: sqlx::sqlite::SqliteRow) -> Device {
+    Device { id: r.get("id"), principal: r.get("principal"), owner: r.get("owner"), token_id: r.get("token_id"), name: r.get("name") }
+}
+
 /// What the device page shows once after [`setup`].
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Made {
     pub url: String,
     pub user: String,
     pub token: String,
-    pub calendar: String,
-    pub calendar_name: String,
 }
 
 impl Made {
-    /// The uploader's `[practical]` config section (its README), ready to paste.
+    /// The uploader's `[practical]` block (its README: `practicaluploader connect`), ready to paste.
     pub fn toml(&self) -> String {
-        format!("[practical]\nurl = \"{}\"\nuser = \"{}\"\ntoken = \"{}\"\ncalendar = \"{}\"\n", self.url, self.user, self.token, self.calendar)
+        format!("[practical]\nurl = \"{}\"\nuser = \"{}\"\ntoken = \"{}\"\n", self.url, self.user, self.token)
     }
 }
 
-/// A new uploader device: its app token (`device`) and its read-only calendar (`calendar_name`).
-pub async fn setup(state: &AppState, user: &Principal, device: &str, calendar_name: &str) -> AppResult<Made> {
-    let (device, calendar_name) = (device.trim(), calendar_name.trim());
-    if device.is_empty() || calendar_name.is_empty() {
+/// A new uploader device of `user`, uploading into calendars of `owner` (the user or one of their groups).
+pub async fn setup(state: &AppState, user: &Principal, name: &str, owner: &str) -> AppResult<Made> {
+    let name = name.trim();
+    if name.is_empty() {
         return Err(AppError::bad("err-name-required"));
     }
-    if device.chars().count() > crate::domain::connect::NAME_MAX || calendar_name.chars().count() > crate::domain::connect::NAME_MAX {
+    if name.chars().count() > crate::domain::connect::NAME_MAX {
         return Err(AppError::bad("err-name-too-long"));
     }
-    let new = NewCalendar {
-        owner: user.id.clone(),
-        name: calendar_name.to_string(),
-        color: String::new(),
-        description: String::new(),
-        components: vec![rustical_ical::CalendarObjectType::Event],
-        timezone: state.config.default_timezone.clone(),
-    };
-    let calendar = collections::create_calendar(state, user, new).await?;
-    collections::set_read_only(state, &user.id, &calendar, SOURCE).await?;
-    let token = crate::domain::tokens::create(state, user, device).await?;
-    Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token, calendar, calendar_name: calendar_name.to_string() })
+    collections::ensure_owner(user, owner)?;
+    let name = crate::domain::tokens::unique_name(state, user, name).await?;
+    let (token_id, token) = crate::domain::tokens::create_with_id(state, user, &name).await?;
+    sqlx::query("INSERT INTO practical_uploader_devices (id, principal, owner, token_id, name) VALUES (?, ?, ?, ?, ?)")
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(&user.id)
+        .bind(owner)
+        .bind(&token_id)
+        .bind(&name)
+        .execute(&state.db)
+        .await?;
+    Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token })
+}
+
+/// Devices whose app token still exists, by id. A device whose token is gone (deleted elsewhere, or swept as
+/// never connected) is dead: its row is dropped here and its calendars count as orphaned.
+pub async fn live_devices(state: &AppState) -> AppResult<HashMap<String, Device>> {
+    let rows: Vec<Device> = sqlx::query("SELECT id, principal, owner, token_id, name FROM practical_uploader_devices").fetch_all(&state.db).await?.into_iter().map(device_of).collect();
+    let mut tokens: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut live = HashMap::new();
+    for d in rows {
+        if !tokens.contains_key(&d.principal) {
+            let ids = state.principals.get_app_tokens(&d.principal).await?.into_iter().map(|t| t.id).collect();
+            tokens.insert(d.principal.clone(), ids);
+        }
+        if tokens[&d.principal].contains(&d.token_id) {
+            live.insert(d.id.clone(), d);
+        } else {
+            forget_device(state, &d.id).await?;
+        }
+    }
+    Ok(live)
+}
+
+/// Drops a device row and unlinks its calendars (they stay read-only, orphaned).
+async fn forget_device(state: &AppState, id: &str) -> AppResult<()> {
+    sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE device_id = ?").bind(id).execute(&state.db).await?;
+    sqlx::query("DELETE FROM practical_uploader_devices WHERE id = ?").bind(id).execute(&state.db).await?;
+    Ok(())
+}
+
+/// The (owner, calendar id) pairs a live device manages: PractiCal refuses to delete them.
+pub async fn managed(state: &AppState) -> AppResult<HashSet<(String, String)>> {
+    let live = live_devices(state).await?;
+    Ok(sqlx::query("SELECT principal, calendar_id, device_id FROM practical_readonly_calendars WHERE device_id IS NOT NULL")
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .filter(|r| live.contains_key(&r.get::<String, _>("device_id")))
+        .map(|r| (r.get("principal"), r.get("calendar_id")))
+        .collect())
+}
+
+/// The device whose app token authenticated this request (`Authorization: Basic <user>:<token>`), else NotFound.
+/// Checked here, not taken from the principal extractor: RustiCal's layer keeps a cookie session's principal
+/// when the Basic credentials are wrong.
+pub async fn device_for(state: &AppState, user: &Principal, headers: &axum::http::HeaderMap) -> AppResult<Device> {
+    use base64ct::Encoding;
+    let basic = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Basic ")).ok_or(AppError::NotFound)?;
+    let raw = base64ct::Base64::decode_vec(basic.trim()).map_err(|_| AppError::NotFound)?;
+    let (u, token) = std::str::from_utf8(&raw).ok().and_then(|s| s.split_once(':')).ok_or(AppError::NotFound)?;
+    if u != user.id {
+        return Err(AppError::NotFound);
+    }
+    let (prefix, secret) = token.split_once('_').unwrap_or(("", token));
+    let live = live_devices(state).await?;
+    let tokens = state.principals.get_app_tokens(&user.id).await?;
+    for d in live.into_values().filter(|d| d.principal == user.id) {
+        if let Some(t) = tokens.iter().find(|t| t.id == d.token_id && t.id.starts_with(prefix))
+            && password_auth::verify_password(secret, t.token.as_ref()).is_ok()
+        {
+            return Ok(d);
+        }
+    }
+    Err(AppError::NotFound)
 }
 
 /// The object id of a UID: the UID itself when it is a plain path segment, else a digest of it (so one UID
@@ -103,19 +210,9 @@ pub fn object_id(uid: &str) -> String {
     }
 }
 
-/// The calendar `cal_id` is the user's uploader calendar, else NotFound (the route must not tell other
-/// calendars apart from missing ones).
-async fn ensure_target(state: &AppState, user: &Principal, cal_id: &str) -> AppResult<()> {
-    if collections::read_only_source(state, &user.id, cal_id).await?.as_deref() != Some(SOURCE) {
-        return Err(AppError::NotFound);
-    }
-    state.calendars.get_calendar(&user.id, cal_id, false).await.map_err(|_| AppError::NotFound)?;
-    Ok(())
-}
-
 /// Checks one event of a snapshot: a parseable VCALENDAR whose one UID is `uid`, an event.
-fn check(e: &UploadEvent) -> AppResult<CalendarObject> {
-    let bad = |why: &str| AppError::bad1("err-uploader-ics", "uid", format!("{}: {why}", e.uid.chars().take(80).collect::<String>()));
+fn check(key: &str, e: &UploadEvent) -> AppResult<CalendarObject> {
+    let bad = |why: &str| AppError::bad1("err-uploader-ics", "uid", format!("{} / {}: {why}", key.chars().take(60).collect::<String>(), e.uid.chars().take(80).collect::<String>()));
     if e.uid.is_empty() || e.uid.chars().count() > 255 {
         return Err(bad("uid length"));
     }
@@ -135,23 +232,134 @@ fn before(obj: &CalendarObject, start: DateTime<Utc>) -> bool {
     obj.get_inner().get_inner().get_last_occurence().map(|l| l.date_ceil()).is_some_and(|d| d <= start.date_naive())
 }
 
-pub async fn upload(state: &AppState, user: &Principal, cal_id: &str, u: Upload) -> AppResult<Counts> {
-    ensure_target(state, user, cal_id).await?;
-    if u.events.len() > MAX_EVENTS {
+/// How an entry of the upload reaches its calendar.
+enum Target {
+    /// a calendar with this key: (id, in the trash, purged from the store since, managed by this device)
+    Known { cal: String, trashed: bool, gone: bool, mine: bool },
+    New,
+}
+
+/// (in the trash, gone from the store) of a calendar of `owner`.
+async fn whereabouts(state: &AppState, owner: &str, cal: &str) -> AppResult<(bool, bool)> {
+    match state.calendars.get_calendar(owner, cal, true).await {
+        Ok(c) => Ok((c.deleted_at.is_some(), false)),
+        Err(rustical_store::Error::NotFound) => Ok((false, true)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Upload) -> AppResult<Uploaded> {
+    collections::ensure_owner(user, &device.owner)?;
+    let owner = device.owner.as_str();
+    if u.calendars.len() > MAX_CALENDARS {
         return Err(AppError::bad("err-uploader-too-many"));
     }
-    if u.window.end <= u.window.start {
-        return Err(AppError::bad("err-date-range"));
+    // everything checked before the first write: a bad request changes nothing
+    let mut keys = HashSet::new();
+    let mut wants: Vec<HashMap<String, CalendarObject>> = vec![];
+    for c in &u.calendars {
+        if c.key.is_empty() || c.key.chars().count() > MAX_KEY || !keys.insert(c.key.as_str()) {
+            return Err(AppError::bad1("err-uploader-ics", "uid", format!("{}: calendar key empty, too long or twice", c.key.chars().take(60).collect::<String>())));
+        }
+        if c.events.len() > MAX_EVENTS {
+            return Err(AppError::bad("err-uploader-too-many"));
+        }
+        if c.window.end <= c.window.start {
+            return Err(AppError::bad("err-date-range"));
+        }
+        let mut want = HashMap::new();
+        for e in &c.events {
+            let obj = check(&c.key, e)?;
+            if want.insert(object_id(&e.uid), obj).is_some() {
+                return Err(AppError::bad1("err-uploader-ics", "uid", format!("{} / {}: duplicate", c.key.chars().take(60).collect::<String>(), e.uid.chars().take(80).collect::<String>())));
+            }
+        }
+        wants.push(want);
     }
-    // everything checked before the first write: a bad snapshot changes nothing
-    let mut want = std::collections::HashMap::new();
-    for e in &u.events {
-        let obj = check(e)?;
-        if want.insert(object_id(&e.uid), obj).is_some() {
-            return Err(AppError::bad1("err-uploader-ics", "uid", format!("{}: duplicate", e.uid.chars().take(80).collect::<String>())));
+    let live = live_devices(state).await?;
+    let rows: Vec<(String, String, Option<String>)> = sqlx::query("SELECT calendar_id, source_key, device_id FROM practical_readonly_calendars WHERE principal = ? AND source = ? AND source_key IS NOT NULL")
+        .bind(owner)
+        .bind(SOURCE)
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|r| (r.get("calendar_id"), r.get("source_key"), r.get("device_id")))
+        .collect();
+    let mut targets = vec![];
+    for c in &u.calendars {
+        let t = match rows.iter().find(|(_, k, _)| *k == c.key) {
+            None => Target::New,
+            Some((_, _, Some(d))) if *d != device.id && live.contains_key(d) => {
+                return Err(AppError::Conflict(crate::error::Msg { key: "err-uploader-other-device", args: vec![("key", c.key.chars().take(80).collect())] }));
+            }
+            Some((cal, _, d)) => {
+                let (trashed, gone) = whereabouts(state, owner, cal).await?;
+                Target::Known { cal: cal.clone(), trashed, gone, mine: d.as_deref() == Some(device.id.as_str()) }
+            }
+        };
+        targets.push(t);
+    }
+
+    let mut g = history::begin(state, Actor { src: SOURCE, who: user.id.clone(), label: None, reverts: None }).await;
+    let mut out = Uploaded { calendars: vec![], trashed: vec![] };
+    for ((c, want), t) in u.calendars.iter().zip(wants).zip(targets) {
+        let cal = match t {
+            Target::Known { cal, gone: true, .. } => {
+                // purged from the store since: the row only holds the key — start over
+                sqlx::query("DELETE FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(owner).bind(&cal).execute(&state.db).await?;
+                create(state, user, owner, device, c).await?
+            }
+            Target::Known { cal, trashed, mine, .. } => {
+                if trashed {
+                    state.calendars.restore_calendar(owner, &cal).await?;
+                }
+                if !mine {
+                    sqlx::query("UPDATE practical_readonly_calendars SET device_id = ? WHERE principal = ? AND calendar_id = ?").bind(&device.id).bind(owner).bind(&cal).execute(&state.db).await?;
+                }
+                cal
+            }
+            Target::New => create(state, user, owner, device, c).await?,
+        };
+        let counts = apply(state, owner, &cal, &c.window, want, &mut g).await?;
+        out.calendars.push(CalendarResult { key: c.key.clone(), calendar: cal, counts });
+    }
+    // calendars of this device that are no longer selected go to the trash (restored when selected again)
+    for (cal, key, d) in &rows {
+        if d.as_deref() == Some(device.id.as_str()) && !keys.contains(key.as_str()) && whereabouts(state, owner, cal).await? == (false, false) {
+            state.calendars.delete_calendar(owner, cal, true).await?;
+            out.trashed.push(cal.clone());
         }
     }
-    let have: std::collections::HashMap<String, CalendarObject> = state.calendars.get_objects(&user.id, cal_id).await?.into_iter().collect();
+    g.commit().await;
+    Ok(out)
+}
+
+async fn create(state: &AppState, user: &Principal, owner: &str, device: &Device, c: &UploadCalendar) -> AppResult<String> {
+    let name: String = c.name.trim().chars().take(120).collect();
+    let new = NewCalendar {
+        owner: owner.to_string(),
+        name: if name.is_empty() { device.name.clone() } else { name },
+        color: String::new(),
+        description: String::new(),
+        components: vec![rustical_ical::CalendarObjectType::Event],
+        timezone: state.config.default_timezone.clone(),
+    };
+    let cal = collections::create_calendar(state, user, new).await?;
+    sqlx::query("INSERT INTO practical_readonly_calendars (principal, calendar_id, source, source_key, device_id) VALUES (?, ?, ?, ?, ?)")
+        .bind(owner)
+        .bind(&cal)
+        .bind(SOURCE)
+        .bind(&c.key)
+        .bind(&device.id)
+        .execute(&state.db)
+        .await?;
+    Ok(cal)
+}
+
+/// One calendar's snapshot: put what is new or changed (by bytes), leave identical objects alone, delete what
+/// is no longer there unless it ends before the window.
+async fn apply(state: &AppState, owner: &str, cal: &str, window: &Window, want: HashMap<String, CalendarObject>, g: &mut history::Guard<'_>) -> AppResult<Counts> {
+    let have: HashMap<String, CalendarObject> = state.calendars.get_objects(owner, cal).await?.into_iter().collect();
     let mut n = Counts::default();
     let mut puts = vec![];
     for (id, obj) in want.iter() {
@@ -167,24 +375,63 @@ pub async fn upload(state: &AppState, user: &Principal, cal_id: &str, u: Upload)
             }
         }
     }
-    let gone: Vec<&String> = have.iter().filter(|(id, o)| !want.contains_key(*id) && !before(o, u.window.start)).map(|(id, _)| id).collect();
-    if puts.is_empty() && gone.is_empty() {
-        return Ok(n);
-    }
-    let mut g = history::begin(state, Actor { src: SOURCE, who: user.id.clone(), label: None, reverts: None }).await;
+    let gone: Vec<&String> = have.iter().filter(|(id, o)| !want.contains_key(*id) && !before(o, window.start)).map(|(id, _)| id).collect();
     for (id, _) in &puts {
-        g.object(Store::Cal, &user.id, cal_id, id);
+        g.object(Store::Cal, owner, cal, id);
     }
     for id in &gone {
-        g.object(Store::Cal, &user.id, cal_id, id);
+        g.object(Store::Cal, owner, cal, id);
     }
     for chunk in puts.chunks(crate::domain::transfer::IMPORT_CHUNK) {
-        state.calendars.put_objects(&user.id, cal_id, chunk.to_vec(), true).await?;
+        state.calendars.put_objects(owner, cal, chunk.to_vec(), true).await?;
     }
     for id in gone {
-        state.calendars.delete_object(&user.id, cal_id, id, true).await?;
+        state.calendars.delete_object(owner, cal, id, true).await?;
         n.deleted += 1;
     }
-    g.commit().await;
     Ok(n)
+}
+
+/// A device of `user` with its calendars (for the device list and its delete page).
+pub struct DeviceView {
+    pub id: String,
+    pub token_id: String,
+    pub name: String,
+    /// (calendar id, display name), not in the trash
+    pub calendars: Vec<(String, String)>,
+}
+
+pub async fn devices_of(state: &AppState, user: &Principal) -> AppResult<Vec<DeviceView>> {
+    let mut out = vec![];
+    for d in live_devices(state).await?.into_values().filter(|d| d.principal == user.id) {
+        let ids: Vec<String> = sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await?;
+        let mut calendars = vec![];
+        for id in ids {
+            if let Ok(c) = state.calendars.get_calendar(&d.owner, &id, false).await {
+                calendars.push((id, c.meta.displayname.unwrap_or_default()));
+            }
+        }
+        calendars.sort_by(|a, b| a.1.cmp(&b.1));
+        out.push(DeviceView { id: d.id, token_id: d.token_id, name: d.name, calendars });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
+/// Deletes a device of `user`: its token goes, the calendars in `trash` go to the trash, the others stay
+/// read-only without a device. NotFound for another user's device.
+pub async fn delete_device(state: &AppState, user: &Principal, id: &str, trash: &HashSet<String>) -> AppResult<()> {
+    let d = sqlx::query("SELECT id, principal, owner, token_id, name FROM practical_uploader_devices WHERE id = ? AND principal = ?").bind(id).bind(&user.id).fetch_optional(&state.db).await?.map(device_of).ok_or(AppError::NotFound)?;
+    let ids: Vec<String> = sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await?;
+    for cal in ids.iter().filter(|c| trash.contains(*c)) {
+        match state.calendars.delete_calendar(&d.owner, cal, true).await {
+            Ok(()) | Err(rustical_store::Error::NotFound) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    match state.principals.remove_app_token(&user.id, &d.token_id).await {
+        Ok(()) | Err(rustical_store::Error::NotFound) => {}
+        Err(e) => return Err(e.into()),
+    }
+    forget_device(state, &d.id).await
 }

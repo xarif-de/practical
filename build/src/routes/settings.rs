@@ -62,8 +62,11 @@ pub struct SettingsPage {
     pub new_token: Option<String>,
     /// `PRACTICAL__UPLOADER`: the PractiCalUploader tile and its page (#add-uploader)
     pub uploader: bool,
-    /// the uploader just connected: its values, shown once
+    /// the uploader just connected: its block, shown once
     pub new_uploader: Option<crate::domain::uploader::Made>,
+    /// the user's PractiCalUploader devices: their row in the device list leads to a delete page that asks
+    /// which of their calendars go too
+    pub uploader_devices: Vec<crate::domain::uploader::DeviceView>,
     pub prefs: Prefs,
     pub owners: Vec<Owner>,
     pub palette: Vec<String>,
@@ -222,6 +225,10 @@ impl SettingsPage {
             _ => t.created_at.map(|c| self.ctx.t1("devices-since", "date", c.format("%Y-%m-%d").to_string().as_str())).unwrap_or_default(),
         }
     }
+    /// the PractiCalUploader device behind an app token: its row leads to the delete page (#upl-del-…)
+    pub fn uploader_device(&self, token_id: &str) -> Option<&crate::domain::uploader::DeviceView> {
+        self.uploader_devices.iter().find(|d| d.token_id == token_id)
+    }
     /// the symbol of a connected device's row
     pub fn device_icon(&self, name: &str) -> &'static str {
         crate::domain::connect::device_icon(name)
@@ -325,6 +332,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         new_token,
         uploader: state.config.uploader,
         new_uploader,
+        uploader_devices: crate::domain::uploader::devices_of(&state, &user).await?,
         prefs: p.clone(),
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
@@ -479,6 +487,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/uploader", post(uploader_create))
+        .route("/settings/uploader/{id}/delete", post(uploader_delete))
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/onboarding/lang", post(onboarding::lang_save))
         .route("/settings/onboarding/confirm", post(onboarding::confirm))

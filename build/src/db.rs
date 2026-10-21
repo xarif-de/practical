@@ -358,8 +358,18 @@ CREATE TABLE practical_holidays (
     (
         23,
         // calendars PractiCal keeps read-only (`collections::is_read_only`); source 'uploader' = filled by
-        // PractiCalUploader through `PUT /api/uploader/calendars/{id}` (`domain::uploader`)
+        // PractiCalUploader through `PUT /api/uploader` (`domain::uploader`; key and device since migration 24)
         "CREATE TABLE practical_readonly_calendars (principal TEXT NOT NULL, calendar_id TEXT NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (principal, calendar_id));",
+    ),
+    (
+        24,
+        // PractiCalUploader devices (`domain::uploader`): one per app token; `owner` (the user or a group) owns every
+        // calendar the device uploads. A calendar it manages carries the device and the uploader's key for it
+        // (`source_key`, unique per owner: a later device with the same key takes the calendar over)
+        "CREATE TABLE practical_uploader_devices (id TEXT PRIMARY KEY, principal TEXT NOT NULL, owner TEXT NOT NULL, token_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+         ALTER TABLE practical_readonly_calendars ADD COLUMN source_key TEXT;
+         ALTER TABLE practical_readonly_calendars ADD COLUMN device_id TEXT;
+         CREATE UNIQUE INDEX practical_readonly_calendars_key ON practical_readonly_calendars (principal, source_key) WHERE source_key IS NOT NULL;",
     ),
 ];
 

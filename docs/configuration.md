@@ -175,31 +175,45 @@ If the server has no internet access, set `HOLIDAYS_ENABLED=false`.
 
 ## PractiCalUploader
 
-PractiCalUploader is a separate, private companion tool. It copies events from a source PractiCal cannot reach
-itself, for example Outlook on a work computer, into a calendar of its own. Most installations do not need it, so it
-is off by default.
+PractiCalUploader is a separate, private companion tool. It copies calendars from a source PractiCal cannot reach
+itself, for example Outlook on a work computer. Most installations do not need it, so it is off by default.
 
 With `PRACTICAL__UPLOADER=true`:
 
 - **Settings → Connected devices → Add a device** shows a **PractiCalUploader** tile. It asks for a device name and
-  a calendar name, then creates a device password and a new calendar. The page shows the address, user name,
-  password and calendar ID once, together with a ready `[practical]` section for the uploader's configuration file.
-- The new calendar is **read-only in PractiCal**: you cannot create, change, move or delete its events, and the editor
-  opens them in view mode only. CalDAV apps are not blocked; the next upload overwrites what they change.
-- The uploader sends its whole snapshot to `PUT /api/uploader/calendars/{calendar id}` with HTTP Basic authentication
-  (user name and device password):
+  who owns the uploaded calendars: you or one of your groups. That owner is fixed for the device. PractiCal creates
+  a device password and shows once a `[practical]` block (address, user name, password) for
+  `practicaluploader connect`. No calendar is created yet.
+- **The uploader decides which calendars.** On each upload PractiCal creates a calendar the device sends for the
+  first time, named as the device names it. After that, name and colour are yours to change; uploads keep them.
+- Uploaded calendars are **read-only in PractiCal**: you cannot create, change, move or delete their events, and the
+  editor opens them in view mode only. CalDAV apps are not blocked; the next upload overwrites what they change.
+- While the device manages a calendar, you cannot delete it in PractiCal. Remove it in the uploader instead (it goes
+  to the trash), or disconnect the device.
+- **Disconnecting the device** (Connected devices) lists its calendars. Ticked ones go to the trash. The others stay
+  read-only without a device, and you can delete them like any calendar.
+- A device that sends a calendar again finds it: from the trash, or left behind by a disconnected device. So setting
+  the uploader up anew keeps your names and colours.
+- The uploader sends its complete selection to `PUT /api/uploader` with HTTP Basic authentication (user name and
+  device password; the password also tells PractiCal which device it is):
 
   ```json
-  { "window": { "start": "2026-07-01T00:00:00Z", "end": "2027-10-01T00:00:00Z" },
-    "events": [ { "uid": "…", "ics": "BEGIN:VCALENDAR…END:VCALENDAR" } ] }
+  { "calendars": [
+      { "key": "…", "name": "Kalender",
+        "window": { "start": "2026-07-01T00:00:00Z", "end": "2027-10-01T00:00:00Z" },
+        "events": [ { "uid": "…", "ics": "BEGIN:VCALENDAR…END:VCALENDAR" } ] } ] }
   ```
 
-  Each `ics` holds one event with that UID (a series with its exceptions). PractiCal checks every event first and
-  writes nothing if one is invalid. Then it creates and updates what changed, leaves identical events alone, and
-  deletes events that are no longer in the snapshot, except those that ended before `window.start`. The answer counts
-  `created`, `updated`, `deleted` and `unchanged`. The body may be up to 32 MiB with up to 20,000 events.
+  `key` is the uploader's stable name for a calendar. Each `ics` holds one event with that UID (a series with its
+  exceptions). PractiCal checks everything first and writes nothing if one part is invalid. Then, per calendar, it
+  creates and updates what changed, leaves identical events alone, and deletes events no longer sent, except those
+  that ended before `window.start`. A calendar of this device that is missing from the list goes to the trash. A
+  calendar another connected device manages answers 409. The answer lists per calendar its `key`, `calendar` (ID)
+  and the counts `created`, `updated`, `deleted`, `unchanged`, and the IDs it moved to the trash as `trashed`. The
+  body may be up to 32 MiB, with up to 64 calendars of up to 20,000 events each.
 
-Without the setting, the tile is gone and the endpoint answers 404. Calendars made earlier stay read-only.
+Without the setting, the tile is gone and the endpoint answers 404. Uploaded calendars stay read-only, and a device
+made earlier can still be disconnected.
 
 ## RustiCal settings that matter next to PractiCal
 

@@ -52,7 +52,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
-    let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false };
+    let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false };
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
     let (raw, _) = split_ics(&obj.get_ics());
     let rrule = main.get_property("RRULE").map(|p| ical::rrule_canon(&p.value));

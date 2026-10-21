@@ -46,7 +46,7 @@ pub struct Config {
     /// created; a one-off import still works, it stores nothing.
     pub remote_secret_key: Option<Vec<u8>>,
     /// Offer the "PractiCalUploader" device (a private companion tool that fills a read-only calendar through
-    /// `PUT /api/uploader/calendars/{id}`). Default false: tile, setup routes and endpoint answer 404.
+    /// `PUT /api/uploader`). Default false: tile, setup route and endpoint answer 404.
     pub uploader: bool,
     pub default_timezone: String,
     pub default_lang: String,
