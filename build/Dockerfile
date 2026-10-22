@@ -4,7 +4,7 @@
 # 1000 — both processes open the SAME WAL-mode SQLite file and its -wal/-shm siblings.
 
 # renovate: datasource=docker packageName=rust
-FROM rust:1.99-alpine@sha256:3ea887915f261f273d6a24efdfdb92665dee12199923e57870453644fe4ae5c9 AS builder
+FROM rust:1.99-alpine@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS builder
 # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls).
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
