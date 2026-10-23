@@ -37,6 +37,8 @@ const ASSETS: &[(&str, &str, Minify)] = &[
     ("lettering.svg", "image/svg+xml", Minify::No),
     // DAVx⁵'s official logo (davx5.com/about/logos: unaltered, linked to davx5.com), the "add a device" wizard and the confirmation page (docs/licensing.md)
     ("davx5.svg", "image/svg+xml", Minify::No),
+    // PractiCalUploader's icon (PractiCal's with an upload arrow; tools/practicaluploader brand/icon.svg), its "add a device" tile
+    ("uploader.svg", "image/svg+xml", Minify::No),
     // the icon sprite of every <use> (layout.html carried it inline: 34 KB raw / 8 KB gzip per page)
     ("icons.svg", "image/svg+xml", Minify::No),
     // the colour scheme before the first paint (layout.html <head>, parser-blocking; was inline)

@@ -25,6 +25,8 @@ also links its source (AGPL-3.0 section 13).
   `i-appgallery` and `i-github` come from [Simple Icons](https://simpleicons.org/) (CC0-1.0); the marks stay their owners' trademarks
   and only name where an app is found. The Android robot is reproduced from work created and shared by Google and
   used according to the terms of the Creative Commons 3.0 Attribution License.
+- **PractiCalUploader icon** (`build/assets/uploader.svg`, the uploader tile in "Add a device"): PractiCal's own icon
+  with an upward arrow instead of the marked day; source `tools/practicaluploader` brand/icon.svg.
 - **DAVx⁵ logo** (`build/assets/davx5.svg`, in "Add a device" and on the confirmation page DAVx⁵ opens): the
   official icon `davx5_icon_green_bg.svg` from [davx5.com/about/logos](https://www.davx5.com/about/logos), which
   allows its use to refer and link to DAVx⁵ when it is not altered, not shown as one's own product and given

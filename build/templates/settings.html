@@ -386,7 +386,7 @@
       <a href="#add-ios-about"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("wand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-auto") }}</span></a>
       <a href="#add-ios-manual"><span class="ti" style="background:#1d1d1f">{{ m::ico("apple") }}<i class="badge">{{ m::ico("hand") }}</i></span><b>iPhone / iPad</b><span>{{ ctx.t("wiz-ios-manual") }}</span></a>
       <a href="#manual"><span class="ti" style="background:var(--fg-3)">{{ m::ico("link") }}</span><b>{{ ctx.t("wiz-manual") }}</b><span>{{ ctx.t("wiz-manual-sub") }}</span></a>
-      {% if uploader %}<a href="#add-uploader"><span class="ti" style="background:#0a64ad">{{ m::ico("briefcase") }}</span><b>PractiCalUploader</b><span>{{ ctx.t("wiz-uploader-sub") }}</span></a>{% endif %}
+      {% if uploader %}<a href="#add-uploader"><img class="ti" src="{{ ctx.asset("uploader.svg") }}" alt="" width="56" height="56"><b>PractiCalUploader</b><span>{{ ctx.t("wiz-uploader-sub") }}</span></a>{% endif %}
     </div>
   </div>
   <div class="acts"><a class="muted" href="#account">‹ {{ ctx.t("wiz-back") }}</a></div>
