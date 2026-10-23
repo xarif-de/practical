@@ -42,6 +42,14 @@
         "build/rust-toolchain.toml"
       ],
       "pinDigests": false
+    },
+    {
+      "description": "The oxc_* crates are one monorepo release and move as ONE: oxc_parser 0.155 takes an oxc_span::SourceType, so any single crate bumped alone builds two oxc_span versions and fails (`multiple different versions of crate oxc_span`, CI of PR #54, 2026-10-23). Twelve such PRs (0.154 and 0.155, six crates each) sat red. separateMultipleMinor false: an outstanding minor is not worth a branch of its own, the group goes straight to the newest.",
+      "matchPackageNames": [
+        "/^oxc(_|$)/"
+      ],
+      "groupName": "oxc",
+      "separateMultipleMinor": false
     }
   ],
   "customManagers": [
