@@ -106,9 +106,9 @@ pub struct Made {
 }
 
 impl Made {
-    /// The uploader's `[practical]` block (its README: `practicaluploader connect`), ready to paste.
+    /// The uploader's `[connection]` block (its README: `practicaluploader set connection`), ready to paste.
     pub fn toml(&self) -> String {
-        format!("[practical]\nurl = \"{}\"\nuser = \"{}\"\ntoken = \"{}\"\n", self.url, self.user, self.token)
+        format!("[connection]\nurl = \"{}\"\nuser = \"{}\"\ntoken = \"{}\"\n", self.url, self.user, self.token)
     }
 }
 
