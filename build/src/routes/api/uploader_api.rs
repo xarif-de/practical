@@ -12,3 +12,13 @@ pub(super) async fn upload(State(state): State<SharedState>, user: Principal, he
     let device = uploader::device_for(&state, &user, &headers).await?;
     Ok(axum::Json(uploader::upload(&state, &user, &device, u).await?))
 }
+
+/// `GET /api/uploader`: the device's own view (`uploader::info`), read only — for `practicaluploader status`.
+/// 403 when the credentials are a user's but not an uploader device's (another app password).
+pub(super) async fn info(State(state): State<SharedState>, user: Principal, headers: HeaderMap) -> AppResult<axum::Json<uploader::DeviceInfo>> {
+    if !state.config.uploader {
+        return Err(AppError::NotFound);
+    }
+    let device = uploader::device_for(&state, &user, &headers).await.map_err(|e| if matches!(e, AppError::NotFound) { AppError::Forbidden } else { e })?;
+    Ok(axum::Json(uploader::info(&state, &device).await?))
+}

@@ -392,6 +392,42 @@ async fn apply(state: &AppState, owner: &str, cal: &str, window: &Window, want: 
     Ok(n)
 }
 
+/// What `GET /api/uploader` tells the device about itself (`practicaluploader status`): its name and owner,
+/// and every calendar it manages, by key, with the name it has in PractiCal and whether it is in the trash.
+#[derive(serde::Serialize)]
+pub struct DeviceInfo {
+    pub device: String,
+    pub owner: String,
+    pub calendars: Vec<ManagedCalendar>,
+}
+
+#[derive(serde::Serialize)]
+pub struct ManagedCalendar {
+    pub key: String,
+    pub calendar: String,
+    pub name: String,
+    pub trashed: bool,
+}
+
+pub async fn info(state: &AppState, device: &Device) -> AppResult<DeviceInfo> {
+    let rows: Vec<(String, String)> = sqlx::query("SELECT calendar_id, source_key FROM practical_readonly_calendars WHERE device_id = ? AND source_key IS NOT NULL")
+        .bind(&device.id)
+        .fetch_all(&state.db)
+        .await?
+        .into_iter()
+        .map(|r| (r.get("calendar_id"), r.get("source_key")))
+        .collect();
+    let mut calendars = vec![];
+    for (calendar, key) in rows {
+        // a calendar purged from the store since keeps only its key row: not reported
+        if let Ok(c) = state.calendars.get_calendar(&device.owner, &calendar, true).await {
+            calendars.push(ManagedCalendar { key, name: c.meta.displayname.clone().unwrap_or_default(), trashed: c.deleted_at.is_some(), calendar });
+        }
+    }
+    calendars.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(DeviceInfo { device: device.name.clone(), owner: device.owner.clone(), calendars })
+}
+
 /// A device of `user` with its calendars (for the device list and its delete page).
 pub struct DeviceView {
     pub id: String,

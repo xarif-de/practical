@@ -211,6 +211,9 @@ With `PRACTICAL__UPLOADER=true`:
   calendar another connected device manages answers 409. The answer lists per calendar its `key`, `calendar` (ID)
   and the counts `created`, `updated`, `deleted`, `unchanged`, and the IDs it moved to the trash as `trashed`. The
   body may be up to 32 MiB, with up to 64 calendars of up to 20,000 events each.
+- `GET /api/uploader`, with the same authentication, changes nothing and answers the device's own view for
+  `practicaluploader status`: `device` (name), `owner`, and `calendars` with `key`, `calendar` (ID), `name` (as in
+  PractiCal) and `trashed`. Another app password of the user answers 403, a wrong password 401 or 403.
 
 Without the setting, the tile is gone and the endpoint answers 404. Uploaded calendars stay read-only, and a device
 made earlier can still be disconnected.

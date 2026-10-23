@@ -278,3 +278,38 @@ async fn a_read_only_calendar_takes_no_practical_write() {
     // the editor's calendar picker offers it disabled, the calendar page marks it for calendar.js
     c.get("/calendar").await.ok().has(&format!("data-ro=\"alice/{cal}\""));
 }
+
+async fn get_info(app: &TestApp, user: &str, token: &str) -> Resp {
+    use base64ct::Encoding;
+    let auth = format!("Basic {}", base64ct::Base64::encode_string(format!("{user}:{token}").as_bytes()));
+    let mut b = Client::for_router(app.router.clone());
+    b.send(Method::GET, "/api/uploader", &[("authorization", &auth)], axum::body::Body::empty()).await
+}
+
+#[tokio::test]
+async fn the_device_reads_its_own_status() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "alice").await;
+    let j = get_info(&app, "alice", &token).await.ok().json();
+    assert_eq!((j["device"].as_str(), j["owner"].as_str(), j["calendars"].as_array().map(Vec::len)), (Some("PractiCalUploader"), Some("alice"), Some(0)));
+    let up = put(&app, "alice", &token, vec![cal("a", "A", vec![]), cal("b", "B", vec![])]).await.ok().json();
+    put(&app, "alice", &token, vec![cal("a", "A", vec![])]).await.ok();
+    let j = get_info(&app, "alice", &token).await.ok().json();
+    assert_eq!(j["calendars"], json!([
+        { "key": "a", "calendar": up["calendars"][0]["calendar"], "name": "A", "trashed": false },
+        { "key": "b", "calendar": up["calendars"][1]["calendar"], "name": "B", "trashed": true },
+    ]));
+    // reading changes nothing
+    assert_eq!(get_info(&app, "alice", &token).await.ok().json(), j);
+    // another app password of the user is no device; a wrong token is refused; without the flag: 404
+    let r = c.post_form("/settings/tokens", &[("name", "phone")]).await;
+    let other = code(&c.get("/settings").await.body, "new-token");
+    assert_eq!(get_info(&app, "alice", &other).await.status, StatusCode::FORBIDDEN, "{}", r.body);
+    refused(get_info(&app, "alice", "nope_nope").await);
+    let off = self::app(false).await;
+    let mut c = off.login("alice").await;
+    c.post_form("/settings/tokens", &[("name", "phone")]).await;
+    let valid = code(&c.get("/settings").await.body, "new-token");
+    assert_eq!(get_info(&off, "alice", &valid).await.status, StatusCode::NOT_FOUND, "the flag is off");
+}
