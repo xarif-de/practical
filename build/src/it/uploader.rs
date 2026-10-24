@@ -262,7 +262,6 @@ async fn a_read_only_calendar_takes_no_practical_write() {
     let mut upd = upd;
     upd["etag"] = d["etag"].clone();
     refused(c.json(Method::PUT, &path, upd).await);
-    refused(c.json(Method::POST, "/api/events", json!({ "principal": "alice", "cal_id": cal, "summary": "Neu", "start": "2026-10-21T09:00:00", "end": "2026-10-21T10:00:00" })).await);
     refused(c.json(Method::POST, &format!("{path}/move"), json!({ "days": 1 })).await);
     refused(c.delete(&path).await);
     refused(c.json(Method::POST, "/api/tasks", json!({ "principal": "alice", "cal_id": cal, "summary": "Neu" })).await);
@@ -270,6 +269,8 @@ async fn a_read_only_calendar_takes_no_practical_write() {
     assert_eq!(c.get_json(&format!("/api/tasks/alice/{cal}/t")).await.ok().json()["read_only"], true);
     // a move out of it would delete it here
     let other = app.calendar("alice", "Privat", "#000000", &["VEVENT"]).await;
+    // with a writable calendar beside it, a create aimed at the read-only one names the read-only one
+    refused(c.json(Method::POST, "/api/events", json!({ "principal": "alice", "cal_id": cal, "summary": "Neu", "start": "2026-10-21T09:00:00", "end": "2026-10-21T10:00:00" })).await);
     let d = c.get_json(&path).await.json();
     refused(c.json(Method::PUT, &path, json!({ "principal": "alice", "cal_id": other, "summary": "Termin 2", "start": "2026-10-20T11:00:00", "end": "2026-10-20T12:00:00", "etag": d["etag"] })).await);
     assert!(crate::domain::colors::set_object_color(&app.state, &app.principal("alice").await, "alice", &cal, "e", "#ff0000").await.is_err());
@@ -340,4 +341,30 @@ async fn the_wizard_waits_for_the_devices_first_request() {
     let mut b = app.login("bob").await;
     assert_eq!(b.get(&format!("/settings/uploader/{dev}/status")).await.status, StatusCode::NOT_FOUND);
     assert_eq!(c.post_form("/settings/uploader", &[("name", " "), ("owner", "alice")]).await.location().as_deref(), Some("/settings#add-uploader"));
+}
+
+/// The page `#cal-<principal>-<id>` of the settings (its `<section>`).
+fn cal_page<'a>(body: &'a str, principal: &str, cal: &str) -> &'a str {
+    let at = body.find(&format!("id=\"cal-{principal}-{cal}\"")).expect("the calendar's page");
+    &body[at..at + body[at..].find("</section>").unwrap()]
+}
+
+#[tokio::test]
+async fn without_a_writable_calendar_nothing_is_created_or_imported() {
+    let app = app(false).await;
+    let cal = app.calendar("alice", "Arbeit", "#000000", &["VEVENT"]).await;
+    let mut c = app.login("alice").await;
+    let new = |cal: &str| json!({ "principal": "alice", "cal_id": cal, "summary": "Neu", "start": "2026-10-21T09:00:00", "end": "2026-10-21T10:00:00" });
+    assert!(cal_page(&c.get("/settings").await.ok().body, "alice", &cal).contains("data-import="), "a writable calendar takes an import");
+    crate::domain::collections::set_read_only(&app.state, "alice", &cal, "uploader").await.unwrap();
+    assert!(!cal_page(&c.get("/settings").await.ok().body, "alice", &cal).contains("data-import="), "a read-only one offers none");
+    // only read-only calendars: a create says that there is no calendar to write into
+    let no_cal = |r: Resp| { assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body); assert!(r.body.contains("einen Kalender an") || r.body.contains("Create a calendar"), "{}", r.body) };
+    no_cal(c.json(Method::POST, "/api/events", new(&cal)).await);
+    // ... as it does for a user without any calendar
+    let mut b = app.login("bob").await;
+    no_cal(b.json(Method::POST, "/api/events", json!({ "principal": "bob", "cal_id": "none", "summary": "Neu", "start": "2026-10-21T09:00:00", "end": "2026-10-21T10:00:00" })).await);
+    // a writable calendar again: creating works
+    let other = app.calendar("alice", "Privat", "#000000", &["VEVENT"]).await;
+    c.json(Method::POST, "/api/events", new(&other)).await.ok();
 }

@@ -125,7 +125,7 @@
 
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
-{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
@@ -149,7 +149,9 @@
   {%- endif %}
   <div class="group sp">
     <a class="cell btnrow" href="/settings/export/{{ kinds }}/{{ c.principal }}/{{ c.id }}">{{ ico("file-export") }}<span>{{ export_label }}</span></a>
+    {%- if !read_only %}{#- nothing can be written into a read-only calendar (collections::is_read_only), an import neither #}
     <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept="{{ accept }}" hidden data-import="/settings/import/{{ kinds }}/{{ c.principal }}/{{ c.id }}"></label>
+    {%- endif %}
   </div>
   {%- if managed %}
   {#- a PractiCalUploader device manages it: removed there, or with the device (uploader::managed) -#}

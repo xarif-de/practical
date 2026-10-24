@@ -1065,6 +1065,9 @@ v-n-minutes = { $n ->
 js-yes = Yes
 js-no = No
 js-close = Close
+js-nocal-ro = All your calendars are read-only: no new events can go into them. Create a calendar of your own in the settings.
+js-nocal-none = You have no calendar for events yet. Create one in the settings.
+js-nocal-go = Create a calendar
 js-copied = Copied.
 js-copy-failed = Could not copy. The password is shown now, to copy it by hand.
 js-ok = OK
@@ -1955,6 +1958,7 @@ js-rm-failed = { $n ->
 
 # PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
 err-calendar-read-only = this calendar is read-only
+err-no-writable-calendar = There is no calendar new events can be written to. Create a calendar in the settings.
 err-name-too-long = the name is too long (60 characters at most)
 err-uploader-ics = invalid event in the upload: { $uid }
 err-uploader-too-many = Too many calendars or events in one upload.

@@ -422,7 +422,9 @@ that device only. **Settings → Connected devices → Add a device** walks you 
   fills read-only calendars from another source, for example Outlook on a work computer. You name the device and
   choose who owns its calendars; the assistant shows the commands and the block for its configuration once, each
   with a copy button, and waits until the uploader has connected. Which calendars it uploads, you choose in the
-  uploader; disconnecting the device asks which of them to delete.
+  uploader; disconnecting the device asks which of them to delete. Its calendars are read-only in PractiCal: their
+  entries open for reading only, and their settings offer no import. If all your calendars are read-only (or you
+  have none yet), a new event asks you to create a calendar first and links to the calendar settings.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 

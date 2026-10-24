@@ -1067,6 +1067,9 @@ v-n-minutes = { $n ->
 js-yes = Oui
 js-no = Non
 js-close = Fermer
+js-nocal-ro = Tous tes calendriers sont en lecture seule : aucun nouvel événement ne peut y être créé. Crée ton propre calendrier dans les réglages.
+js-nocal-none = Tu n’as encore aucun calendrier pour les événements. Crées-en un dans les réglages.
+js-nocal-go = Créer un calendrier
 js-copied = Copié.
 js-copy-failed = Impossible de copier. Le mot de passe est affiché pour le recopier à la main.
 js-ok = OK
@@ -1959,6 +1962,7 @@ js-rm-failed = { $n ->
 
 # PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
 err-calendar-read-only = Ce calendrier est en lecture seule.
+err-no-writable-calendar = Aucun calendrier ne peut recevoir de nouveaux événements. Crée un calendrier dans les réglages.
 err-name-too-long = Le nom est trop long (60 caractères au plus).
 err-uploader-ics = Événement invalide dans l’envoi : { $uid }
 err-uploader-too-many = Trop de calendriers ou d’événements dans un envoi.

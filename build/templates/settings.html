@@ -163,13 +163,13 @@
 </section>
 
 {% for c in calendars %}
-{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str()), c.managed) %}
+{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str()), c.managed, c.read_only) %}
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
     {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}{% endcall %}
 {% endfor %}
 
 {% for a in addressbooks %}
-{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str()), false) %}{% endcall %}
+{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str()), false, false) %}{% endcall %}
 {% endfor %}
 
 <section class="page" id="new-calendar">

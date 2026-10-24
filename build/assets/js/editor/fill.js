@@ -35,6 +35,12 @@
   // `quiet`: a new form that is always on screen (the tasks page) must not take the focus when it appears
   // `only`: open a single card of an existing entry (a table cell that cannot be edited in place)
   async function openEditor(key, date, quiet, only) {
+    // a new event needs a calendar it may write into: with none (all read-only, or none at all) every create path
+    // (the + button, a day's +, …) ends in this dialog instead of a form that cannot be saved (events::create_event)
+    if (!key && !TASK && ![...f.calendar.options].some(o => !o.disabled)) {
+      if (await askChoice(tr(f.calendar.options.length ? 'js-nocal-ro' : 'js-nocal-none'), [['go', tr('js-nocal-go')]], tr('js-close')) === 'go') location.href = '/settings#new-calendar';
+      return;
+    }
     soloEnd();
     if (key) {
       const pre = await practical.prefetched(API + '/' + key); let d = null; try { d = pre && JSON.parse(pre); } catch (_) {} // the calendar's intent (calendar.js)

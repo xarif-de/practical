@@ -80,3 +80,33 @@ test('with the flag: set up, upload, entry read-only, disconnect with its calend
   await page.goto(`${LOGIN_BASE}/settings#trash`);
   await expect(page.locator('#trash')).toContainText('Arbeit E2E');
 });
+
+// No calendar to write into (only read-only ones, or none): every way to a new event — the + button, a day's + —
+// opens one dialog with the way to the calendar settings instead of a form that cannot be saved (editor fill.js
+// openEditor; the server says the same, it::uploader). The page here has writable calendars, so the test takes
+// the editor's choice away the way read-only calendars do: every option disabled.
+test('without a writable calendar a new event asks for a calendar first', async ({ page }) => {
+  const dialog = page.locator('.ask[role=alertdialog]');
+  const open = async () => { await page.goto(BASE + '/calendar?view=month&date=2026-11-10'); await page.locator('#ed-cal option').evaluateAll(os => os.forEach(o => { o.disabled = true; })); };
+  // desktop: a day's + in the month view
+  await open();
+  await page.locator('.v-month .day .add').first().evaluate(b => b.click());
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('schreibgeschützt');
+  await expect(page.locator('#ed')).toBeHidden(); // no form that cannot be saved
+  await expect(dialog.locator('.btn-primary')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  // phone: the round + button; the dialog's button leads to the calendar settings, where a calendar is made
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open();
+  await page.locator('#fab').click();
+  await expect(dialog).toBeVisible();
+  await dialog.locator('.btn-primary').click();
+  await expect(page).toHaveURL(/\/settings#new-calendar$/);
+  // no calendar at all: the dialog says so
+  await page.goto(BASE + '/calendar?view=month&date=2026-11-10');
+  await page.locator('#ed-cal option').evaluateAll(os => os.forEach(o => o.remove()));
+  await page.locator('#fab').click();
+  await expect(dialog).toContainText('noch keinen Kalender');
+});

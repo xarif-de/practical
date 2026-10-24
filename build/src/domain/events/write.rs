@@ -50,6 +50,11 @@ fn user_tz(input: &EventInput, default: chrono_tz::Tz) -> chrono_tz::Tz {
 }
 
 pub async fn create_event(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz) -> AppResult<String> {
+    // no calendar the user may write into (only read-only ones, or none): say so instead of a bare "not found" /
+    // "read-only" for whatever target the request names — the editor's dialog says the same (fill.js openEditor)
+    if !collections::calendars_for(state, user, false).await?.iter().any(|c| !c.read_only) {
+        return Err(AppError::bad("err-no-writable-calendar"));
+    }
     create_event_as(state, user, input, default_tz, None).await
 }
 

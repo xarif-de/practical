@@ -1062,6 +1062,9 @@ v-n-minutes = { $n ->
 js-yes = Ja
 js-no = Nein
 js-close = Schließen
+js-nocal-ro = Alle deine Kalender sind schreibgeschützt: darin können keine neuen Termine entstehen. Lege in den Einstellungen einen eigenen Kalender an.
+js-nocal-none = Du hast noch keinen Kalender für Termine. Lege in den Einstellungen einen an.
+js-nocal-go = Kalender anlegen
 js-copied = Kopiert.
 js-copy-failed = Kopieren ging nicht. Das Passwort steht jetzt zum Abschreiben da.
 js-ok = OK
@@ -1952,6 +1955,7 @@ js-rm-failed = { $n ->
 
 # PractiCalUploader (domain::uploader; only with PRACTICAL__UPLOADER=true)
 err-calendar-read-only = Dieser Kalender ist schreibgeschützt.
+err-no-writable-calendar = Es gibt keinen Kalender, in den neue Termine geschrieben werden können. Lege in den Einstellungen einen Kalender an.
 err-name-too-long = Der Name ist zu lang (höchstens 60 Zeichen).
 err-uploader-ics = Ungültiger Termin im Upload: { $uid }
 err-uploader-too-many = Zu viele Kalender oder Termine in einem Upload.
