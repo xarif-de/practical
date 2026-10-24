@@ -17,9 +17,10 @@ tests:
       # alpine + CA bundle + the static binary (stripped, LTO; assets, locales, templates and
       # region data embedded) + RustiCal's binary. Measured 33.6 MiB at v0.9.0 without RustiCal
       # (Forgejo run 75); RustiCal 0.16.4's binary is 35.3 MiB (36 972 208 bytes, its amd64
-      # image) → ~69 MiB. The limit catches unexpected growth, not features: raise it with a
-      # new measurement.
-      max_size: 80MiB
+      # image) → ~69 MiB. 0.25.0 (the uploader, read-only calendars): 80.3 MiB (Forgejo run 428,
+      # `e2e` profile; the release binary grew 1.2 % vs 0.24.1 in bench-compare). The limit catches
+      # unexpected growth, not features: raise it with a new measurement.
+      max_size: 84MiB
       labels:
         org.opencontainers.image.source: "https://gitlab.com/xarif/docker/practical"
 
