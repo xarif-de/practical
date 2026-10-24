@@ -31,6 +31,7 @@
 .wiz .dots span { margin-left: 8px; font-size: 12px; color: var(--fg-3); }
 .wiz .wz { background: var(--tile); border-radius: 16px; padding: 22px 18px; text-align: center; }
 .wiz .wz h1 { font: 700 21px/1.25 var(--font-display); letter-spacing: normal; margin: 10px 0 6px; } /* the page's one h1: the step's title */
+.wiz .wz h1[tabindex="-1"]:focus { outline: none; } /* focused by script when a wait ends (screen readers announce the step); a heading is no control, so no ring */
 .wiz .wz h1 + .oa { margin-top: 14px; }
 .wiz .lead { color: var(--fg-2); font-size: 14.5px; margin: 0 auto 16px; max-width: 460px; line-height: 1.5; } .wiz .lead.after { margin: 14px auto 4px; }
 .wiz .ic { display: grid; place-items: center; } /* the DAVx⁵ logo as published: no frame, no rounding of ours (docs/licensing.md) */
@@ -74,8 +75,9 @@
    a command or the connection block left-aligned in its row, the copy button beside it */
 #add-uploader .wz .group, #add-uploader-done .wz .group, .wiz .upl-copy { text-align: left; background: var(--bg); margin: 10px 0 0; }
 #add-uploader .wz .foot { text-align: left; }
-.wiz .upl-copy .cell { align-items: flex-start; }
+.wiz .upl-copy .cell { align-items: center; } .wiz .upl-copy .cell:has(pre) { align-items: flex-start; } /* one-line commands: text and copy button on one axis */
 .wiz .upl-copy code, .wiz .upl-copy pre { flex: 1; min-width: 0; margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.5; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.wiz .upl-copy pre { white-space: pre; overflow-wrap: normal; overflow-x: auto; } /* the block keeps its lines (a 64-char token split "token =" from its value); wider than the box: it scrolls */
 /* manual: a long address under its label, never over it (the old rows overlapped on a phone) */
 .set .cell.stack .k { display: block; font-size: 12px; color: var(--fg-3); }
 .set .cell.stack code { display: block; font-size: 13.5px; color: var(--fg); overflow-wrap: anywhere; }
