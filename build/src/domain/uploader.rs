@@ -102,6 +102,75 @@ fn device_of(r: sqlx::sqlite::SqliteRow) -> Device {
 /// [`authenticate`] verifies only the hashes of the user's devices with that prefix (its SQL has the 4 written out).
 const PREFIX: usize = 4;
 
+/// What every page needs of the two tables, read once and kept until one of them is written: the read-only
+/// calendars, (owner, calendar id) → the device that manages it, and the devices, id → (principal, owner).
+/// `collections::calendars_for` (every page) and `is_read_only` (every editor read) take it from here.
+#[derive(Default, Debug)]
+pub struct Index {
+    pub ro: HashMap<(String, String), Option<String>>,
+    pub devices: HashMap<String, (String, String)>,
+}
+
+/// [`Index`] and its generation: every write to `practical_readonly_calendars` / `practical_uploader_devices`
+/// (all in this module, plus `collections::delete_calendar`'s purge) bumps the generation after it ([`changed`]),
+/// and a kept index of an older generation is read anew. An index read while a write runs carries the generation
+/// from before it, so the next request reads again: never an answer from before a finished write. Only PractiCal
+/// writes these tables (RustiCal does not know them).
+#[derive(Default)]
+pub struct IndexCache {
+    generation: std::sync::atomic::AtomicU64,
+    kept: std::sync::Mutex<Option<(u64, std::sync::Arc<Index>)>>,
+}
+
+/// After a write to one of the two tables: the next [`index`] reads them anew.
+pub fn changed(state: &AppState) {
+    state.caches.uploader.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The current [`Index`]: no statement while nothing was written since the last read, else two.
+pub async fn index(state: &AppState) -> AppResult<std::sync::Arc<Index>> {
+    let c = &state.caches.uploader;
+    let generation = c.generation.load(std::sync::atomic::Ordering::SeqCst);
+    if let Some((g, i)) = c.kept.lock().unwrap().as_ref()
+        && *g == generation
+    {
+        return Ok(i.clone());
+    }
+    let ro = sqlx::query("SELECT principal, calendar_id, device_id FROM practical_readonly_calendars").fetch_all(&state.db).await?.into_iter().map(|r| ((r.get("principal"), r.get("calendar_id")), r.get("device_id"))).collect();
+    let devices = sqlx::query("SELECT id, principal, owner FROM practical_uploader_devices").fetch_all(&state.db).await?.into_iter().map(|r| (r.get("id"), (r.get("principal"), r.get("owner")))).collect();
+    let i = std::sync::Arc::new(Index { ro, devices });
+    *c.kept.lock().unwrap() = Some((generation, i.clone()));
+    Ok(i)
+}
+
+/// The calendars of `user`'s owners that a live device manages, as [`managed`] decides it, from [`index`]: no
+/// statement for a device of `user` themself, one principal lookup per other member whose device manages one of
+/// them. A device whose user is gone counts as dead here; [`live_devices`] (write paths, the hourly sweep) forgets it.
+pub async fn managed_for(state: &AppState, user: &Principal, owners: &HashSet<String>) -> AppResult<HashSet<(String, String)>> {
+    let idx = index(state).await?;
+    let mut users: HashMap<String, bool> = HashMap::new();
+    let mut out = HashSet::new();
+    for ((owner, cal), dev) in &idx.ro {
+        let Some((principal, dev_owner)) = dev.as_ref().and_then(|d| idx.devices.get(d)) else { continue };
+        if !owners.contains(owner) {
+            continue;
+        }
+        let live = if *principal == user.id {
+            collections::ensure_owner(user, dev_owner).is_ok()
+        } else if let Some(l) = users.get(principal) {
+            *l
+        } else {
+            let l = state.principals.get_principal(principal).await?.is_some_and(|p| collections::ensure_owner(&p, dev_owner).is_ok());
+            users.insert(principal.clone(), l);
+            l
+        };
+        if live {
+            out.insert((owner.clone(), cal.clone()));
+        }
+    }
+    Ok(out)
+}
+
 /// What the device page shows once after [`setup`].
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct Made {
@@ -142,6 +211,7 @@ pub async fn setup(state: &AppState, user: &Principal, name: &str, owner: &str) 
         .bind(&hash)
         .execute(&state.db)
         .await?;
+    changed(state);
     let token = format!("{}_{secret}", &id[..PREFIX]);
     Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token, device: id, name })
 }
@@ -191,6 +261,9 @@ pub async fn sweep(state: &AppState) -> AppResult<u64> {
     let n = sqlx::query("DELETE FROM practical_uploader_devices WHERE connected_at IS NULL AND created_at < ?").bind(&cutoff).execute(&state.db).await?.rows_affected();
     // a never-connected device uploaded nothing, so no calendar names it; unlink anyway rather than leave a dangling id
     sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE device_id IS NOT NULL AND device_id NOT IN (SELECT id FROM practical_uploader_devices)").execute(&state.db).await?;
+    changed(state);
+    // devices of deleted users (`live_devices` forgets them): here too, so one goes within the hour without a write
+    live_devices(state).await?;
     Ok(n)
 }
 
@@ -198,6 +271,7 @@ pub async fn sweep(state: &AppState) -> AppResult<u64> {
 async fn forget_device(state: &AppState, id: &str) -> AppResult<()> {
     sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE device_id = ?").bind(id).execute(&state.db).await?;
     sqlx::query("DELETE FROM practical_uploader_devices WHERE id = ?").bind(id).execute(&state.db).await?;
+    changed(state);
     Ok(())
 }
 
@@ -206,10 +280,12 @@ async fn forget_device(state: &AppState, id: &str) -> AppResult<()> {
 /// trash it again. Without a device it stays read-only and deletable; a device that sends its key again takes it over.
 pub async fn release(state: &AppState, owner: &str, cal: &str) -> AppResult<()> {
     sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE principal = ? AND calendar_id = ?").bind(owner).bind(cal).execute(&state.db).await?;
+    changed(state);
     Ok(())
 }
 
-/// The (owner, calendar id) pairs a live device manages: PractiCal refuses to delete them.
+/// The (owner, calendar id) pairs a live device manages: PractiCal refuses to delete them. For the delete decision
+/// (fresh rows, [`live_devices`]); pages mark calendars through [`index`] (`collections::calendars_for`).
 pub async fn managed(state: &AppState) -> AppResult<HashSet<(String, String)>> {
     let live = live_devices(state).await?;
     Ok(sqlx::query("SELECT principal, calendar_id, device_id FROM practical_readonly_calendars WHERE device_id IS NOT NULL")
@@ -357,6 +433,7 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
             Target::Known { cal, gone: true, .. } => {
                 // purged from the store since: the row only holds the key — start over
                 sqlx::query("DELETE FROM practical_readonly_calendars WHERE principal = ? AND calendar_id = ?").bind(owner).bind(&cal).execute(&state.db).await?;
+                changed(state);
                 create(state, user, owner, device, c).await?
             }
             Target::Known { cal, trashed, mine, .. } => {
@@ -365,6 +442,7 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
                 }
                 if !mine {
                     sqlx::query("UPDATE practical_readonly_calendars SET device_id = ? WHERE principal = ? AND calendar_id = ?").bind(&device.id).bind(owner).bind(&cal).execute(&state.db).await?;
+                    changed(state);
                 }
                 cal
             }
@@ -403,6 +481,7 @@ async fn create(state: &AppState, user: &Principal, owner: &str, device: &Device
         .bind(&device.id)
         .execute(&state.db)
         .await?;
+    changed(state);
     Ok(cal)
 }
 
@@ -500,6 +579,10 @@ fn utc(s: Option<String>) -> Option<DateTime<Utc>> {
 /// device for a group the user left lists no calendars: they are not the user's to send to the trash.
 pub async fn devices_of(state: &AppState, user: &Principal) -> AppResult<Vec<DeviceView>> {
     let mut out = vec![];
+    // the settings page asks on every view: a user without any device costs no statement ([`index`])
+    if !index(state).await?.devices.values().any(|(p, _)| *p == user.id) {
+        return Ok(out);
+    }
     let rows = sqlx::query("SELECT id, principal, owner, name, last_seen, created_at FROM practical_uploader_devices WHERE principal = ? AND connected_at IS NOT NULL").bind(&user.id).fetch_all(&state.db).await?;
     for r in rows {
         let (last_seen, created_at) = (utc(r.get("last_seen")), utc(r.get("created_at")));

@@ -77,7 +77,7 @@ async fn detail_of_the_full_demo_event_and_save_round_trip() {
     let cal = cals[0].id.clone();
     app.put_ics("alice", &cal, "demo", &fixture("demo-event-full.ics")).await;
     let user = app.principal("alice").await;
-    let d = get_event(&app.state, &user, "alice", &cal, "demo", berlin()).await.unwrap();
+    let d = get_event(&app.state, &user, "alice", &cal, "demo", berlin(), None).await.unwrap();
     let mut v = serde_json::to_value(&d).unwrap();
     v["etag"] = serde_json::json!("<etag>");
     v["cal_id"] = serde_json::json!("<cal>");
@@ -86,7 +86,7 @@ async fn detail_of_the_full_demo_event_and_save_round_trip() {
     let mut input: EventInput = serde_json::from_value(serde_json::to_value(&d).unwrap()).unwrap();
     input.timezone = Some("Europe/Berlin".into());
     update_event(&app.state, &user, "demo", input, Some(&d.etag), berlin()).await.unwrap();
-    let again = get_event(&app.state, &user, "alice", &cal, "demo", berlin()).await.unwrap();
+    let again = get_event(&app.state, &user, "alice", &cal, "demo", berlin(), None).await.unwrap();
     let strip = |x: &EventDetail| { let mut v = serde_json::to_value(x).unwrap(); v["etag"] = serde_json::json!(""); v };
     assert_eq!(strip(&again), strip(&d), "an unchanged save reads back the same");
     // a stale etag

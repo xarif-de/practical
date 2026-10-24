@@ -72,6 +72,8 @@ pub struct Caches {
     pub years: crate::routes::more::YearCache,
     /// the history document's changes and elements per user (`routes::history::HistoryCache`)
     pub history: crate::routes::history::HistoryCache,
+    /// the read-only calendars and uploader devices (`domain::uploader::index`), kept until a write to them
+    pub uploader: crate::domain::uploader::IndexCache,
 }
 
 /// Process-wide state of the HTTP layer; every part starts empty.

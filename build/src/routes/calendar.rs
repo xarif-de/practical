@@ -186,7 +186,8 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
                 if details.contains_key(&i.key()) {
                     continue;
                 }
-                if let Ok(d) = events::get_event(state, user, &i.principal, &i.cal_id, &i.object_id, vc.tz).await {
+                let ro = cals.iter().find(|c| c.principal == i.principal && c.id == i.cal_id).map(|c| c.read_only);
+                if let Ok(d) = events::get_event(state, user, &i.principal, &i.cal_id, &i.object_id, vc.tz, ro).await {
                     details.insert(i.key(), d);
                 }
             }

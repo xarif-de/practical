@@ -8,7 +8,7 @@ pub async fn create_event(State(state): State<SharedState>, user: Principal, Pag
 }
 
 pub(super) async fn get_event(State(state): State<SharedState>, user: Principal, PageView(_, vc): PageView, Path((p, c, id)): Path<(String, String, String)>) -> AppResult<Json<EventDetail>> {
-    let mut d = events::get_event(&state, &user, &p, &c, &id, vc.tz).await?;
+    let mut d = events::get_event(&state, &user, &p, &c, &id, vc.tz, None).await?;
     events::resolve_related(&state, &user, &mut d.related, vc.tz).await?;
     if d.organizer.is_some() || !d.attendees.is_empty() {
         let abs = crate::domain::collections::addressbooks_for(&state, &user, false).await?;

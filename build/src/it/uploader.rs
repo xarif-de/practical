@@ -554,3 +554,29 @@ async fn a_device_of_a_deleted_user_is_forgotten() {
     app.state.principals.add_membership("carol", "team").await.unwrap();
     refused(get_info(&app, "carol", &token).await);
 }
+
+/// `uploader::index` is kept between requests: each write to its tables shows on the next read (calendars_for
+/// marks read-only and managed from it).
+#[tokio::test]
+async fn the_read_only_index_follows_every_write() {
+    let app = app(true).await;
+    let alice = app.principal("alice").await;
+    let flags = |id: String| { let (st, u) = (app.state.clone(), alice.clone()); async move { crate::domain::collections::calendars_for(&st, &u, false).await.unwrap().into_iter().find(|c| c.id == id).map(|c| (c.read_only, c.managed)) } };
+    let mut c = app.login("alice").await;
+    let plain = app.calendar("alice", "Privat", "#000000", &["VEVENT"]).await;
+    assert_eq!(flags(plain.clone()).await, Some((false, false)), "kept: an index without it");
+    crate::domain::collections::set_read_only(&app.state, "alice", &plain, "uploader").await.unwrap();
+    assert_eq!(flags(plain.clone()).await, Some((true, false)));
+    let token = device(&mut c, "alice").await;
+    let j = put(&app, "alice", &token, vec![cal("k", "K", vec![])]).await.ok().json();
+    let k = j["calendars"][0]["calendar"].as_str().unwrap().to_string();
+    assert_eq!(flags(k.clone()).await, Some((true, true)), "made by the upload");
+    assert!(c.get("/settings").await.body.contains("#upl-del-"), "the device is listed");
+    let dev = sqlx::query_scalar::<_, String>("SELECT id FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap();
+    c.post_form(&format!("/settings/uploader/{dev}/delete"), &[]).await;
+    assert_eq!(flags(k.clone()).await, Some((true, false)), "its device is gone");
+    assert!(!c.get("/settings").await.body.contains("#upl-del-"));
+    c.post_form(&format!("/settings/calendars/alice/{k}/delete"), &[]).await;
+    c.post_form(&format!("/settings/calendars/alice/{k}/purge"), &[]).await;
+    assert!(!crate::domain::uploader::index(&app.state).await.unwrap().ro.contains_key(&("alice".to_string(), k)), "purged: its row is gone");
+}

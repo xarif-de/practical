@@ -46,7 +46,9 @@ pub struct EventDetail {
     pub read_only: bool,
 }
 
-pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz) -> AppResult<EventDetail> {
+/// `read_only`: the caller knows it already (`CalInfo::read_only`; the day view reads a detail per entry), else None
+/// and it is looked up (`collections::is_read_only`).
+pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
     collections::ensure_owner(user, principal)?;
     let obj = state.calendars.get_object(principal, cal_id, object_id, false).await?;
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
@@ -91,7 +93,7 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
         timezone,
-        read_only: collections::is_read_only(state, principal, cal_id).await?,
+        read_only: match read_only { Some(r) => r, None => collections::is_read_only(state, principal, cal_id).await? },
     })
 }
 
