@@ -210,7 +210,9 @@ With `PRACTICAL__UPLOADER=true`:
   ```
 
   `key` is the uploader's stable name for a calendar. Each `ics` holds one event with that UID (a series with its
-  exceptions). PractiCal checks everything first and writes nothing if one part is invalid. Then, per calendar, it
+  exceptions). PractiCal checks the whole request first and writes nothing if one part of it is invalid. The writes that follow
+  are not one transaction: if writing fails halfway (a full disk, say), calendars written before stay updated, and
+  the next upload brings the rest up to date. Per calendar, it
   creates and updates what changed, leaves identical events alone, and deletes events no longer sent, except those
   that ended before `window.start`. A calendar of this device that is missing from the list goes to the trash. A
   calendar another connected device manages answers 409. The answer lists per calendar its `key`, `calendar` (ID)

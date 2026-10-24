@@ -288,7 +288,7 @@ async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<Rem
     Ok(out)
 }
 
-async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<PageQuery>) -> AppResult<SettingsPage> {
+async fn page(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, crate::extract::Query(q): crate::extract::Query<PageQuery>) -> AppResult<Response> {
     let new_token: Option<String> = if session.get_value(SESSION_NEW_TOKEN).await?.is_some() { session.remove(SESSION_NEW_TOKEN).await? } else { None }; // no session write without one
     let new_uploader: Option<crate::domain::uploader::Made> = if state.config.uploader && session.get_value(SESSION_NEW_UPLOADER).await?.is_some() { session.remove(SESSION_NEW_UPLOADER).await? } else { None };
     let p = prefs::get(&state.db, &user.id).await?;
@@ -310,7 +310,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
     let abs_all = collections::addressbooks_for(&state, &user, false).await?;
     let remote_links = remote_rows(&state, &user).await?;
     let davx5_books: Vec<String> = abs_all.iter().map(|a| a.displayname.clone()).collect();
-    Ok(SettingsPage {
+    let page = SettingsPage {
         remote_sync: crate::domain::remote::sync_enabled(&state),
         remote_servers: crate::domain::remote::servers_of(&state, &user).await?,
         remote_links,
@@ -354,7 +354,15 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         vacation_calendar: if vac_kind == "calendar" { vac_value } else { String::new() },
         vacation_calendars: cals_all.iter().filter(|c| c.components.is_empty() || c.components.iter().any(|x| x == "VEVENT")).map(|c| (format!("{}/{}", c.principal, c.id), c.displayname.clone())).collect(),
         ctx,
-    })
+    };
+    // a password or a device secret shown once (new_token, new_uploader) never goes into a browser's cache: the default
+    // `private, no-cache` (main.rs) lets it keep the page on disk; as routes::connect `no_store`
+    let secret = page.new_token.is_some() || page.new_uploader.is_some();
+    let mut r = page.into_response();
+    if secret {
+        r.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static("no-store"));
+    }
+    Ok(r)
 }
 
 /// The IANA zones a person would pick, grouped by continent/ocean (legacy aliases such as

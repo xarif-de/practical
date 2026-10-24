@@ -101,6 +101,8 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
         // moving to another calendar = create there, delete here (one change: a move); the source is read
         // only after the owner check, and only in the version the editor showed
         crate::domain::collections::ensure_owner(&user, &p)?;
+        // before the copy: out of a read-only calendar the delete would fail after it, one more copy per retry
+        crate::domain::collections::ensure_writable(&state, &p, &c).await?;
         let (tp, tc) = (u.input.principal.clone(), u.input.cal_id.clone());
         let target = u.input.clone();
         let old = state.calendars.get_object(&p, &c, &id, false).await?;

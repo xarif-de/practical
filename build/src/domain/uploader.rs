@@ -196,6 +196,14 @@ async fn forget_device(state: &AppState, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// A calendar the user restores from the trash in PractiCal leaves its device: a device's calendar is in the trash
+/// only because the device deselected it (one it still sends is restored by the upload), so the next upload would
+/// trash it again. Without a device it stays read-only and deletable; a device that sends its key again takes it over.
+pub async fn release(state: &AppState, owner: &str, cal: &str) -> AppResult<()> {
+    sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE principal = ? AND calendar_id = ?").bind(owner).bind(cal).execute(&state.db).await?;
+    Ok(())
+}
+
 /// The (owner, calendar id) pairs a live device manages: PractiCal refuses to delete them.
 pub async fn managed(state: &AppState) -> AppResult<HashSet<(String, String)>> {
     let live = live_devices(state).await?;
@@ -304,6 +312,9 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
         }
         wants.push(want);
     }
+    // the lock before the lookup: an overlapping upload of the same new key waits here and then finds the calendar
+    // the first one made (it::uploader::overlapping_uploads_make_one_calendar)
+    let mut g = history::begin(state, Actor { src: SOURCE, who: user.id.clone(), label: None, reverts: None }).await;
     let live = live_devices(state).await?;
     let rows: Vec<(String, String, Option<String>)> = sqlx::query("SELECT calendar_id, source_key, device_id FROM practical_readonly_calendars WHERE principal = ? AND source = ? AND source_key IS NOT NULL")
         .bind(owner)
@@ -328,7 +339,6 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
         targets.push(t);
     }
 
-    let mut g = history::begin(state, Actor { src: SOURCE, who: user.id.clone(), label: None, reverts: None }).await;
     let mut out = Uploaded { calendars: vec![], trashed: vec![] };
     for ((c, want), t) in u.calendars.iter().zip(wants).zip(targets) {
         let cal = match t {

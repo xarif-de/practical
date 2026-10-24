@@ -304,7 +304,7 @@ pub async fn delete_calendar(state: &AppState, user: &Principal, owner: &str, id
 pub async fn restore_calendar(state: &AppState, user: &Principal, owner: &str, id: &str) -> AppResult<()> {
     ensure_owner(user, owner)?;
     state.calendars.restore_calendar(owner, id).await?;
-    Ok(())
+    crate::domain::uploader::release(state, owner, id).await
 }
 
 pub async fn create_addressbook(state: &AppState, user: &Principal, owner: &str, name: &str, color: &str, description: &str) -> AppResult<String> {

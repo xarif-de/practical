@@ -273,6 +273,7 @@ async fn a_read_only_calendar_takes_no_practical_write() {
     refused(c.json(Method::POST, "/api/events", json!({ "principal": "alice", "cal_id": cal, "summary": "Neu", "start": "2026-10-21T09:00:00", "end": "2026-10-21T10:00:00" })).await);
     let d = c.get_json(&path).await.json();
     refused(c.json(Method::PUT, &path, json!({ "principal": "alice", "cal_id": other, "summary": "Termin 2", "start": "2026-10-20T11:00:00", "end": "2026-10-20T12:00:00", "etag": d["etag"] })).await);
+    assert!(ids(&app, "alice", &other).await.is_empty(), "no copy left in the target");
     assert!(crate::domain::colors::set_object_color(&app.state, &app.principal("alice").await, "alice", &cal, "e", "#ff0000").await.is_err());
     assert!(crate::domain::transfer::import_calendar(&app.state, &app.principal("alice").await, "alice", &cal, vevent("i", "Import", "DTSTART:20261022T090000Z").as_bytes()).await.is_err());
     // the undo of the earlier update is blocked: no write access
@@ -450,4 +451,64 @@ async fn a_device_of_a_member_who_left_the_group_is_dead() {
     let mut bob = app.login("bob").await;
     bob.post_form(&format!("/settings/calendars/team/{t}/delete"), &[]).await;
     assert!(calendar(&app, "team", &t).await.deleted_at.is_some(), "bob may delete it");
+}
+
+/// Overlapping uploads of one device (a retry while the first still runs): the history lock is taken before the
+/// targets are looked up, so a later one finds the earlier one's calendar instead of making a second (old code:
+/// the UNIQUE (principal, source_key) index refused its row → 500 and a stray writable calendar; these 4 parallel
+/// uploads failed it in 5 of 5 runs, measured 2026-10-24).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn overlapping_uploads_make_one_calendar() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "alice").await;
+    let (user, dev) = crate::domain::uploader::authenticate(&app.state, "alice", &token).await.unwrap().unwrap();
+    let body = || serde_json::from_value::<crate::domain::uploader::Upload>(json!({ "calendars": [cal("k", "Kalender", vec![ev("e@x", "E", "20261020T090000Z")])] })).unwrap();
+    let runs: Vec<_> = (0..4).map(|_| { let (st, u, d, b) = (app.state.clone(), user.clone(), dev.clone(), body()); tokio::spawn(async move { crate::domain::uploader::upload(&st, &u, &d, b).await }) }).collect();
+    let mut cals = std::collections::HashSet::new();
+    for r in runs {
+        let out = r.await.unwrap().expect("every upload succeeds");
+        cals.insert(out.calendars[0].calendar.clone());
+    }
+    assert_eq!(cals.len(), 1, "one calendar for one key");
+    let n = crate::domain::collections::calendars_for(&app.state, &app.principal("alice").await, false).await.unwrap().len();
+    assert_eq!(n, 1, "no stray calendar");
+}
+
+#[tokio::test]
+async fn a_deselected_calendar_restored_in_practical_stays() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "alice").await;
+    let j = put(&app, "alice", &token, vec![cal("a", "A", vec![]), cal("b", "B", vec![ev("e@x", "E", "20261020T090000Z")])]).await.ok().json();
+    let b = j["calendars"][1]["calendar"].as_str().unwrap().to_string();
+    put(&app, "alice", &token, vec![cal("a", "A", vec![])]).await.ok();
+    assert!(calendar(&app, "alice", &b).await.deleted_at.is_some(), "deselected: in the trash");
+    c.post_form(&format!("/settings/calendars/alice/{b}/restore"), &[]).await;
+    assert!(calendar(&app, "alice", &b).await.deleted_at.is_none());
+    // the next upload (still without it) leaves it alone: read-only, without a device, deletable
+    assert_eq!(put(&app, "alice", &token, vec![cal("a", "A", vec![])]).await.ok().json()["trashed"], json!([]));
+    assert!(calendar(&app, "alice", &b).await.deleted_at.is_none(), "not trashed again");
+    assert!(crate::domain::collections::is_read_only(&app.state, "alice", &b).await.unwrap());
+    assert!(!crate::domain::uploader::managed(&app.state).await.unwrap().contains(&("alice".to_string(), b.clone())));
+    // selected again: the device takes it back, events and all
+    let j = put(&app, "alice", &token, vec![cal("a", "A", vec![]), cal("b", "B", vec![ev("e@x", "E", "20261020T090000Z")])]).await.ok().json();
+    assert_eq!(j["calendars"][1]["calendar"], json!(b));
+    assert!(crate::domain::uploader::managed(&app.state).await.unwrap().contains(&("alice".to_string(), b.clone())));
+}
+
+#[tokio::test]
+async fn a_page_with_a_secret_shown_once_is_never_cached() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let cc = |r: &Resp| r.headers.get("cache-control").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    c.post_form("/settings/uploader", &[("name", "PractiCalUploader"), ("owner", "alice")]).await;
+    let r = c.get("/settings").await;
+    assert!(r.body.contains("id=\"up-toml\""), "the block");
+    assert_eq!(cc(&r), "no-store");
+    assert_eq!(cc(&c.get("/settings").await), "private, no-cache", "without a secret: the default");
+    c.post_form("/settings/tokens", &[("name", "phone")]).await;
+    let r = c.get("/settings").await;
+    assert!(r.body.contains("id=\"new-token\""), "the app password");
+    assert_eq!(cc(&r), "no-store");
 }
