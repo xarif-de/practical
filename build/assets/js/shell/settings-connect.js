@@ -188,8 +188,8 @@
   if (upw) {
     const TRIES = 60 + 78, HERE = '#add-uploader-wait', wz = upw.closest('.wz'), gone = $('[data-upl-gone]', wz);
     let timer = 0, tries = 0, busy = false, done = false, over = false;
-    // the details are gone: every part of the step but its heading and the gone text hides
-    const end = () => { over = true; clearTimeout(timer); $('#up-toml', wz).textContent = ''; [...wz.children].forEach(e => { e.hidden = e.tagName !== 'H1' && e !== gone; }); };
+    // the details are gone: every part of the step but its heading (now upl-gone-title, its data-gone) and the gone text hides
+    const end = () => { over = true; clearTimeout(timer); $('#up-toml', wz).textContent = ''; const h = $('h1', wz); h.textContent = h.dataset.gone; [...wz.children].forEach(e => { e.hidden = e !== h && e !== gone; }); };
     const ask = async () => {
       clearTimeout(timer);
       if (busy || done || over || location.hash !== HERE || document.hidden || tries >= TRIES) return;

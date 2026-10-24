@@ -514,3 +514,43 @@ async fn a_page_with_a_secret_shown_once_is_never_cached() {
     assert!(r.body.contains("id=\"new-token\""), "the app password");
     assert_eq!(cc(&r), "no-store");
 }
+
+#[tokio::test]
+async fn failed_device_logins_are_throttled_before_any_hash_check() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "alice").await;
+    let (prefix, _) = token.split_once('_').unwrap();
+    // wrong secrets with the right prefix (each one a hash check) until the throttle shuts: then even the right
+    // secret is refused, so no request past that point reaches the hash check
+    for _ in 0..5 {
+        refused(get_info(&app, "alice", &format!("{prefix}_{}", "x".repeat(64))).await);
+    }
+    refused(get_info(&app, "alice", &token).await);
+    // another user name from the same client still gets its own tries
+    let mut b = app.login("bob").await;
+    let bobs = device(&mut b, "bob").await;
+    get_info(&app, "bob", &bobs).await.ok();
+}
+
+#[tokio::test]
+async fn a_device_of_a_deleted_user_is_forgotten() {
+    let app = app(true).await;
+    // carol owns nothing in RustiCal's store (its foreign keys would refuse her deletion): her device fills the group's calendar
+    app.user("carol", "Carol").await;
+    app.state.principals.add_membership("carol", "team").await.unwrap();
+    let mut c = app.login("carol").await;
+    let token = device(&mut c, "team").await;
+    let j = put(&app, "carol", &token, vec![cal("k", "Kalender", vec![])]).await.ok().json();
+    let k = j["calendars"][0]["calendar"].as_str().unwrap().to_string();
+    app.state.principals.remove_membership("carol", "team").await.unwrap();
+    app.state.principals.remove_principal("carol").await.unwrap();
+    crate::domain::uploader::live_devices(&app.state).await.unwrap();
+    assert_eq!(sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap(), 0, "row and secret gone");
+    let linked: Option<String> = sqlx::query_scalar("SELECT device_id FROM practical_readonly_calendars WHERE calendar_id = ?").bind(&k).fetch_one(&app.state.db).await.unwrap();
+    assert_eq!(linked, None, "its calendar is an orphan");
+    // an account made again under the same id does not inherit the device
+    app.user("carol", "Carol").await;
+    app.state.principals.add_membership("carol", "team").await.unwrap();
+    refused(get_info(&app, "carol", &token).await);
+}

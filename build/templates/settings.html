@@ -609,7 +609,7 @@
   {{ m::wiz_bars(3, 3, ctx.t("upl-wait-label")) }}
   <div class="wz">
     {% if let Some(u) = new_uploader %}
-    <h1 tabindex="-1">{{ ctx.t("upl-wait-title") }}</h1>
+    <h1 tabindex="-1" data-gone="{{ ctx.t("upl-gone-title") }}">{{ ctx.t("upl-wait-title") }}</h1>
     <p class="lead">{{ ctx.t("upl-wait-1") }}</p>
     <div class="group upl-copy"><div class="cell noic"><code id="upl-set">practicaluploader set connection</code><span class="val">{{ m::io_copy("upl-set", "practicaluploader set connection") }}</span></div></div>
     <p class="lead after">{{ ctx.t("upl-wait-2") }}</p>

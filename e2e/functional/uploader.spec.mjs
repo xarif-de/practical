@@ -107,6 +107,7 @@ test('step 3 says the details are gone when the device is', async ({ page }) => 
   await page.locator('#add-uploader button[type=submit]').click();
   await expect(page).toHaveURL(/#add-uploader-wait$/);
   await expect(page.locator('#add-uploader-wait [data-upl-gone]')).toBeVisible();
+  await expect(page.locator('#add-uploader-wait h1')).toHaveText(await page.locator('#add-uploader-wait h1').getAttribute('data-gone')); // the heading says so too
   await expect(page.locator('#add-uploader-wait [data-live]')).toBeHidden();
   await expect(page.locator('#up-toml')).toBeHidden();
   await expect(page.locator('#up-toml')).toHaveText('');

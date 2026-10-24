@@ -162,7 +162,8 @@ pub async fn connected(state: &AppState, user: &Principal, id: &str) -> AppResul
 /// The live devices, by id: those whose user still exists and may own the device's `owner` (a user who left the
 /// group: dead). A dead device's calendars count as orphaned, so the group's other members can delete them or
 /// their own device takes them over; its row stays for its user to delete (or for the user's return to the group).
-/// One principal lookup per device user.
+/// A device whose user is gone is forgotten here, secret and all: an account made later under the same id (OIDC
+/// creates one at the first login, auth.rs) must not inherit it. One principal lookup per device user.
 pub async fn live_devices(state: &AppState) -> AppResult<HashMap<String, Device>> {
     let rows: Vec<Device> = sqlx::query("SELECT id, principal, owner, name FROM practical_uploader_devices").fetch_all(&state.db).await?.into_iter().map(device_of).collect();
     let mut users: HashMap<String, Option<Principal>> = HashMap::new();
@@ -171,8 +172,12 @@ pub async fn live_devices(state: &AppState) -> AppResult<HashMap<String, Device>
         if !users.contains_key(&d.principal) {
             users.insert(d.principal.clone(), state.principals.get_principal(&d.principal).await?);
         }
-        if users[&d.principal].as_ref().is_some_and(|p| collections::ensure_owner(p, &d.owner).is_ok()) {
-            live.insert(d.id.clone(), d);
+        match &users[&d.principal] {
+            None => forget_device(state, &d.id).await?,
+            Some(p) if collections::ensure_owner(p, &d.owner).is_ok() => {
+                live.insert(d.id.clone(), d);
+            }
+            Some(_) => {}
         }
     }
     Ok(live)
@@ -216,6 +221,10 @@ pub async fn managed(state: &AppState) -> AppResult<HashSet<(String, String)>> {
         .collect())
 }
 
+/// Device-secret checks running at once ([`authenticate`]).
+const VERIFY_PERMITS: usize = 3;
+static VERIFY: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(VERIFY_PERMITS);
+
 /// The device and its user for HTTP Basic `user` + `token` (`<prefix>_<secret>`, the device's own secret); None for
 /// any other credentials (an app token, a password, a wrong secret, a deleted user).
 pub async fn authenticate(state: &AppState, user: &str, token: &str) -> AppResult<Option<(Principal, Device)>> {
@@ -224,7 +233,10 @@ pub async fn authenticate(state: &AppState, user: &str, token: &str) -> AppResul
     for r in rows {
         let hash: String = r.get("secret_hash");
         let s = secret.to_string();
-        // a hash check costs CPU time (argon2): off the async workers, as the password login does (auth.rs)
+        // a hash check costs CPU time and memory (argon2, ~19 MiB each): off the async workers, and at most
+        // VERIFY_PERMITS at once, so a flood of guesses cannot fill the blocking pool (the caller throttles too:
+        // `uploader_api::Device`)
+        let _permit = VERIFY.acquire().await.map_err(|e| AppError::Internal(e.to_string()))?;
         let ok = tokio::task::spawn_blocking(move || password_auth::verify_password(s, &hash).is_ok()).await.map_err(|e| AppError::Internal(e.to_string()))?;
         if ok {
             let Some(p) = state.principals.get_principal(user).await? else { return Ok(None) };
