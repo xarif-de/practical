@@ -17,6 +17,12 @@ ignore = [
   # happen here. No fixed release exists ("No safe upgrade is available"); RustiCal
   # itself ships the same crate. Re-check on every openidconnect bump.
   { id = "RUSTSEC-2023-0071", reason = "rsa used for public-key signature verification only (openidconnect ID tokens); no private-key operation in this binary" },
+  # Non-constant-time arithmetic in crypto-bigint, fixed only in 0.7.6. 0.5.5 comes in via
+  # elliptic-curve 0.13 ← p256/p384 0.13 ← openidconnect 4, which uses them ONLY as
+  # `ecdsa::VerifyingKey` (ES256/ES384 ID tokens, the IdP's PUBLIC key): no secret integer.
+  # The 0.7 line may carry one (p256 0.14 ← web-push, VAPID), so [bans] keeps 0.7 at
+  # >= 0.7.6 and this ignore cannot hide it. Drop when openidconnect moves to p256 0.14.
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 only verifies public-key signatures (openidconnect); the 0.7 line is held at >= 0.7.6 by [bans]" },
 ]
 
 [bans]
@@ -27,6 +33,7 @@ deny = [
   { crate = "arrayref:0.3.10", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.3.10" },
   { crate = "internment:0.8.7", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.8.7" },
   { crate = "append-only-vec:0.1.9", reason = "2026-08 crates.io supply-chain attack (Socket report): malicious code in 0.1.9" },
+  { crate = "crypto-bigint:>=0.6, <0.7.6", reason = "RUSTSEC-2026-0387 is ignored for the verify-only 0.5 line only (see [advisories])" },
 ]
 
 [sources]
