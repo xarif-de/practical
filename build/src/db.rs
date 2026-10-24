@@ -363,19 +363,16 @@ CREATE TABLE practical_holidays (
     ),
     (
         24,
-        // PractiCalUploader devices (`domain::uploader`): one per app token; `owner` (the user or a group) owns every
-        // calendar the device uploads. A calendar it manages carries the device and the uploader's key for it
-        // (`source_key`, unique per owner: a later device with the same key takes the calendar over)
-        "CREATE TABLE practical_uploader_devices (id TEXT PRIMARY KEY, principal TEXT NOT NULL, owner TEXT NOT NULL, token_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+        /* PractiCalUploader devices (`domain::uploader`): `principal` set it up and is its Basic user, `owner` (that
+           user or a group) owns every calendar the device uploads, `secret_hash` = password_auth hash of its own
+           secret (no RustiCal app token: it opens /api/uploader only). `connected_at` = its first request (the setup
+           wizard waits for it; never connected within a day → `uploader::sweep`), `last_seen` = its latest one.
+           A calendar it manages carries the device and the uploader's key for it (`source_key`, unique per owner:
+           a later device with the same key takes the calendar over) */
+        "CREATE TABLE practical_uploader_devices (id TEXT PRIMARY KEY, principal TEXT NOT NULL, owner TEXT NOT NULL, name TEXT NOT NULL, secret_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, connected_at TEXT, last_seen TEXT);
          ALTER TABLE practical_readonly_calendars ADD COLUMN source_key TEXT;
          ALTER TABLE practical_readonly_calendars ADD COLUMN device_id TEXT;
          CREATE UNIQUE INDEX practical_readonly_calendars_key ON practical_readonly_calendars (principal, source_key) WHERE source_key IS NOT NULL;",
-    ),
-    (
-        25,
-        // when an uploader device first reached `/api/uploader` with its token (`uploader::seen`): the setup wizard
-        // waits for it (`GET /settings/uploader/{id}/status`)
-        "ALTER TABLE practical_uploader_devices ADD COLUMN connected_at TEXT;",
     ),
 ];
 

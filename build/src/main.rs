@@ -22,7 +22,8 @@
 //!    [`csrf::origin_guard`] → the router.
 //! 4. The router: [`auth::router`] (`/login`, `/login/oidc*`, `/logout`), [`routes::connect::public_router`] (an
 //!    app's Login Flow v2 start and poll, the only POSTs the origin guard lets through without browser metadata;
-//!    `/connect/davx5`, an iPhone's profile link `/connect/apple/…`), [`routes::dev`] (`/dev/reload`,
+//!    `/connect/davx5`, an iPhone's profile link `/connect/apple/…`), [`routes::api::device_router`] (PractiCalUploader's
+//!    `/api/uploader`: its own device secret, no session, no app token), [`routes::dev`] (`/dev/reload`,
 //!    development only), `/` → `/calendar` ([`routes::pages`]), and the protected part:
 //!    [`auth::require_user`] → [`ctx::localize_errors`] → [`error::catch_panic`] → the page and API routers
 //!    [`routes::calendar`], [`routes::contacts`], [`routes::tasks`], [`routes::history`],
@@ -92,7 +93,7 @@
 //! |---|---|---|
 //! | [`tasks::spawn_change_poller`] | 2 s (`PRACTICAL__DEV_POLL_MS` in development) | reads the [`db::Watch`] stamp; only after a commit by another connection: [`domain::history::poll`] (ingest), then the calendar and address-book synctokens → [`state::ChangeEvent`] |
 //! | [`domain::push::spawn_reminder_loop`] | 60 s from start, first tick at once; only with a VAPID key | rebuilds its [`domain::push::Plan`] only when the stamp moved, a user's day changed or a retry is due (backoff 1…16 min); fire window [now−2 min, now+1 min] |
-//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions, app tokens that never connected within a day ([`domain::tokens::sweep`]) |
+//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions, app tokens and PractiCalUploader devices that never connected within a day ([`domain::tokens::sweep`], [`domain::uploader::sweep`]) |
 //! | [`domain::remote::sched::spawn`] | 60 s; a link runs when its own interval elapsed, and a local change pushes at once | one `sync-collection` per due link (zero responses when nothing changed), then the two directions |
 //! | [`tasks::spawn_holiday_coverage`] ([`domain::holidays::maintain`]) | 24 h; the first round only reads saved state | country coverage and CLDR release check, weekly (ETag, usually 304) |
 //! | [`tasks::spawn_dev_asset_watcher`] | 300 ms, development only | mtimes of `assets/**` → `dev_reload` → `/dev/reload` ([`routes::dev`]) |
@@ -323,6 +324,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .route("/", get(routes::pages::root))
         .merge(auth::router(state)?)
         .merge(routes::connect::public_router())
+        .merge(routes::api::device_router())
         .merge(routes::dev::router(state.config.dev_assets_dir.is_some()))
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))

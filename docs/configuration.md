@@ -182,7 +182,8 @@ With `PRACTICAL__UPLOADER=true`:
 
 - **Settings → Connected devices → Add a device** shows a **PractiCalUploader** tile ("Outlook for macOS"). Step 2
   links to the uploader's install instructions and asks for a device name and who owns the uploaded calendars: you
-  or one of your groups. That owner is fixed for the device. PractiCal creates a device password; step 3 shows, once,
+  or one of your groups. That owner is fixed for the device. PractiCal creates a device password. It works only for
+  `/api/uploader`: it is no app password, so CalDAV, CardDAV and the rest of PractiCal refuse it. Step 3 shows, once,
   the command `practicaluploader set connection`, the `[connection]` block to paste (address, user name, password)
   and `practicaluploader once`, each with a copy button, and waits until the device first reaches PractiCal (its
   first `GET` or `PUT /api/uploader`). Then it says the device is connected. No calendar is created yet.
@@ -192,12 +193,14 @@ With `PRACTICAL__UPLOADER=true`:
   editor opens them in view mode only. CalDAV apps are not blocked; the next upload overwrites what they change.
 - While the device manages a calendar, you cannot delete it in PractiCal. Remove it in the uploader instead (it goes
   to the trash), or disconnect the device.
+- A device that never connects within a day of its setup is removed by itself.
 - **Disconnecting the device** (Connected devices) lists its calendars. Ticked ones go to the trash. The others stay
   read-only without a device, and you can delete them like any calendar.
 - A device that sends a calendar again finds it: from the trash, or left behind by a disconnected device. So setting
   the uploader up anew keeps your names and colours.
 - The uploader sends its complete selection to `PUT /api/uploader` with HTTP Basic authentication (user name and
-  device password; the password also tells PractiCal which device it is):
+  device password; the password also tells PractiCal which device it is; a cookie session or an app password is
+  not accepted):
 
   ```json
   { "calendars": [
@@ -215,7 +218,7 @@ With `PRACTICAL__UPLOADER=true`:
   body may be up to 32 MiB, with up to 64 calendars of up to 20,000 events each.
 - `GET /api/uploader`, with the same authentication, changes nothing and answers the device's own view for
   `practicaluploader status`: `device` (name), `owner`, and `calendars` with `key`, `calendar` (ID), `name` (as in
-  PractiCal) and `trashed`. Another app password of the user answers 403, a wrong password 401 or 403.
+  PractiCal) and `trashed`. Any other credentials, an app password of the user too, answer 401.
 
 Without the setting, the tile is gone and the endpoint answers 404. Uploaded calendars stay read-only, and a device
 made earlier can still be disconnected.

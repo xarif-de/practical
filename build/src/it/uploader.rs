@@ -4,6 +4,7 @@
 
 use crate::testkit::{Client, Resp, TestApp, vevent};
 use axum::http::{Method, StatusCode};
+use rustical_store::auth::AuthenticationProvider;
 use serde_json::{Value, json};
 
 async fn app(on: bool) -> TestApp {
@@ -49,10 +50,9 @@ async fn put(app: &TestApp, user: &str, token: &str, cals: Vec<Value>) -> Resp {
     b.send(Method::PUT, "/api/uploader", &[("authorization", &auth), ("content-type", "application/json")], axum::body::Body::from(json!({ "calendars": cals }).to_string())).await
 }
 
-/// Refused credentials: 401 or 403, depending on which layer answers (measured: an unknown token of a known
-/// user gets 403).
+/// Refused credentials: /api/uploader checks them itself (`uploader_api::Device`) and answers 401.
 fn refused(r: Resp) {
-    assert!(matches!(r.status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN), "{} {}", r.status, r.body);
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{}", r.body);
 }
 
 async fn ids(app: &TestApp, owner: &str, cal: &str) -> Vec<String> {
@@ -86,7 +86,7 @@ async fn setup_shows_the_block_once_and_makes_no_calendar() {
     assert_eq!(crate::domain::collections::calendars_for(&app.state, &app.principal("alice").await, false).await.unwrap().len(), before);
     // a plain app token is no device; nobody else's either
     let mut b = app.basic("alice").await;
-    assert_eq!(b.json(Method::PUT, "/api/uploader", json!({ "calendars": [] })).await.status, StatusCode::NOT_FOUND);
+    refused(b.json(Method::PUT, "/api/uploader", json!({ "calendars": [] })).await);
     refused(put(&app, "bob", &token, vec![]).await);
     assert_eq!(app.anonymous().json(Method::PUT, "/api/uploader", json!({ "calendars": [] })).await.status, StatusCode::UNAUTHORIZED);
     assert_eq!(put(&app, "alice", &token, vec![]).await.ok().json(), json!({ "calendars": [], "trashed": [] }));
@@ -311,7 +311,7 @@ async fn the_device_reads_its_own_status() {
     // another app password of the user is no device; a wrong token is refused; without the flag: 404
     let r = c.post_form("/settings/tokens", &[("name", "phone")]).await;
     let other = code(&c.get("/settings").await.body, "new-token");
-    assert_eq!(get_info(&app, "alice", &other).await.status, StatusCode::FORBIDDEN, "{}", r.body);
+    assert_eq!(get_info(&app, "alice", &other).await.status, StatusCode::UNAUTHORIZED, "{}", r.body);
     refused(get_info(&app, "alice", "nope_nope").await);
     let off = self::app(false).await;
     let mut c = off.login("alice").await;
@@ -367,4 +367,87 @@ async fn without_a_writable_calendar_nothing_is_created_or_imported() {
     // a writable calendar again: creating works
     let other = app.calendar("alice", "Privat", "#000000", &["VEVENT"]).await;
     c.json(Method::POST, "/api/events", new(&other)).await.ok();
+}
+
+/// Sends `method path` with HTTP Basic `user:token` and nothing else (no cookie, no CSRF header).
+async fn basic_send(app: &TestApp, method: Method, path: &str, user: &str, token: &str, body: Option<Value>) -> Resp {
+    use base64ct::Encoding;
+    let auth = format!("Basic {}", base64ct::Base64::encode_string(format!("{user}:{token}").as_bytes()));
+    let mut b = Client::for_router(app.router.clone());
+    let body = body.map_or_else(axum::body::Body::empty, |v| axum::body::Body::from(v.to_string()));
+    b.send(method, path, &[("authorization", &auth), ("content-type", "application/json"), ("accept", "application/json")], body).await
+}
+
+#[tokio::test]
+async fn the_device_secret_opens_the_uploader_endpoint_and_nothing_else() {
+    let app = app(true).await;
+    let cal = app.calendar("alice", "Privat", "#000000", &["VEVENT"]).await;
+    app.put_ics("alice", &cal, "e", &vevent("e", "Termin", "DTSTART:20261020T090000Z\nDTEND:20261020T100000Z")).await;
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "alice").await;
+    // no RustiCal app token: CalDAV/CardDAV (same store) cannot accept it
+    assert!(app.state.principals.get_app_tokens("alice").await.unwrap().is_empty(), "no app token made");
+    assert!(app.state.principals.validate_app_token("alice", &token).await.unwrap().is_none());
+    // the rest of PractiCal's API refuses it, reads and writes alike
+    assert_eq!(basic_send(&app, Method::GET, "/api/history", "alice", &token, None).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(basic_send(&app, Method::GET, &format!("/api/events/alice/{cal}/e"), "alice", &token, None).await.status, StatusCode::UNAUTHORIZED);
+    let r = basic_send(&app, Method::DELETE, &format!("/api/events/alice/{cal}/e"), "alice", &token, None).await;
+    assert!(matches!(r.status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN), "{} {}", r.status, r.body);
+    assert_eq!(ids(&app, "alice", &cal).await, ["e"], "nothing deleted");
+    // the endpoint takes it; a cookie session alone does not count there, nor a user's app token
+    get_info(&app, "alice", &token).await.ok();
+    refused(c.send(Method::GET, "/api/uploader", &[("accept", "application/json")], axum::body::Body::empty()).await);
+    refused(c.json(Method::PUT, "/api/uploader", json!({ "calendars": [] })).await);
+    let app_token = crate::domain::tokens::create(&app.state, &app.principal("alice").await, "phone").await.unwrap();
+    refused(get_info(&app, "alice", &app_token).await);
+    refused(put(&app, "alice", &app_token, vec![]).await);
+    // the right secret under another user name, or a wrong secret with the right prefix: refused
+    refused(get_info(&app, "bob", &token).await);
+    let (prefix, _) = token.split_once('_').unwrap();
+    refused(get_info(&app, "alice", &format!("{prefix}_{}", "x".repeat(64))).await);
+}
+
+#[tokio::test]
+async fn a_device_that_never_connects_is_swept_after_a_day() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let used = device(&mut c, "alice").await;
+    get_info(&app, "alice", &used).await.ok();
+    let unused = device(&mut c, "alice").await;
+    // both made 25 h ago: only the one that never connected goes
+    sqlx::query("UPDATE practical_uploader_devices SET created_at = datetime('now', '-25 hours')").execute(&app.state.db).await.unwrap();
+    assert_eq!(crate::domain::uploader::sweep(&app.state).await.unwrap(), 1);
+    get_info(&app, "alice", &used).await.ok();
+    refused(get_info(&app, "alice", &unused).await);
+    // the connected one is listed with its last use, as a device row of its own
+    let page = c.get("/settings").await;
+    let dev = sqlx::query_scalar::<_, String>("SELECT id FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap();
+    assert!(page.body.contains("vor Kurzem") || page.body.contains("recently"), "its last use");
+    page.ok().has(&format!("href=\"#upl-del-{dev}\""));
+}
+
+#[tokio::test]
+async fn a_device_of_a_member_who_left_the_group_is_dead() {
+    let app = app(true).await;
+    app.state.principals.add_membership("bob", "team").await.unwrap();
+    let mut c = app.login("alice").await;
+    let token = device(&mut c, "team").await;
+    let j = put(&app, "alice", &token, vec![cal("t", "Team-Termine", vec![])]).await.ok().json();
+    let t = j["calendars"][0]["calendar"].as_str().unwrap().to_string();
+    let dev = sqlx::query_scalar::<_, String>("SELECT id FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap();
+    assert!(crate::domain::uploader::managed(&app.state).await.unwrap().contains(&("team".to_string(), t.clone())));
+    app.state.principals.remove_membership("alice", "team").await.unwrap();
+    // alice's device: no upload, no status, its page offers no group calendar, a forged tick trashes nothing
+    assert_eq!(put(&app, "alice", &token, vec![cal("t", "Team-Termine", vec![])]).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(get_info(&app, "alice", &token).await.status, StatusCode::FORBIDDEN);
+    let page = c.get("/settings").await;
+    page.ok().has(&format!("href=\"#upl-del-{dev}\""));
+    assert!(!page.body.contains(&format!("name=\"trash-{t}\"")), "not hers to trash");
+    c.post_form(&format!("/settings/uploader/{dev}/delete"), &[(&format!("trash-{t}"), "1")]).await;
+    assert!(calendar(&app, "team", &t).await.deleted_at.is_none(), "the group's calendar stays");
+    // the remaining member is not stuck with a calendar nobody can free
+    assert!(!crate::domain::uploader::managed(&app.state).await.unwrap().contains(&("team".to_string(), t.clone())));
+    let mut bob = app.login("bob").await;
+    bob.post_form(&format!("/settings/calendars/team/{t}/delete"), &[]).await;
+    assert!(calendar(&app, "team", &t).await.deleted_at.is_some(), "bob may delete it");
 }

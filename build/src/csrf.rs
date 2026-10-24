@@ -30,6 +30,10 @@ pub async fn origin_guard(State(state): State<SharedState>, request: Request, ne
     if crate::routes::connect::is_app_endpoint(m, request.uri().path()) {
         return next.run(request).await;
     }
+    // PractiCalUploader's PUT: only its Basic credentials authenticate it (routes::api::device_router)
+    if crate::routes::api::is_device_endpoint(request.uri().path()) {
+        return next.run(request).await;
+    }
     let fetch_site = request.headers().get("sec-fetch-site").and_then(|v| v.to_str().ok());
     let origin = request.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
     let ok = match (fetch_site, origin) {

@@ -144,6 +144,20 @@ pub fn router() -> Router<SharedState> {
         .route("/api/push/key", get(push_key))
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
         .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64
-        // after the layer above: a snapshot is bigger than an edit (uploader::MAX_BODY)
-        .route("/api/uploader", axum::routing::put(uploader_api::upload).layer(axum::extract::DefaultBodyLimit::max(crate::domain::uploader::MAX_BODY)).get(uploader_api::info))
+}
+
+/// PractiCalUploader's `/api/uploader` (`uploader_api`): merged OUTSIDE the session-guarded routes, as its device
+/// secret is no app token, so neither `auth::require_user` nor RustiCal's layer knows it; the route checks it itself.
+/// A snapshot is bigger than an edit (`uploader::MAX_BODY`).
+pub fn device_router() -> Router<SharedState> {
+    Router::new()
+        .route("/api/uploader", axum::routing::put(uploader_api::upload).get(uploader_api::info))
+        .layer(axum::extract::DefaultBodyLimit::max(crate::domain::uploader::MAX_BODY))
+        .route_layer(axum::middleware::from_fn(crate::error::catch_panic))
+}
+
+/// A request to [`device_router`]: authenticated by the device's Basic credentials alone, never by the cookie session,
+/// so the origin check has nothing to protect (`csrf::origin_guard`).
+pub fn is_device_endpoint(path: &str) -> bool {
+    path == "/api/uploader"
 }

@@ -1,9 +1,10 @@
 //! PractiCalUploader: a private companion tool that mirrors calendars PractiCal cannot reach itself (an Outlook
 //! store on a work laptop) into read-only calendars here. Only with `PRACTICAL__UPLOADER=true`.
 //!
-//! - A **device** ([`setup`]) is an app token plus a row of `practical_uploader_devices`: who set it up
-//!   (`principal`, the Basic user of its uploads) and who owns what it uploads (`owner`: that user or one of their
-//!   groups, fixed at setup). No calendar is made at setup.
+//! - A **device** ([`setup`]) is a row of `practical_uploader_devices`: who set it up (`principal`, the Basic user
+//!   of its uploads), who owns what it uploads (`owner`: that user or one of their groups, fixed at setup) and the
+//!   hash of its own secret. That secret is no RustiCal app token: it opens `/api/uploader` and nothing else
+//!   ([`authenticate`]; CalDAV/CardDAV and the rest of the API do not know it). No calendar is made at setup.
 //! - [`upload`]: `PUT /api/uploader` — the device's COMPLETE selection, one snapshot per calendar. Each entry is
 //!   found by the uploader's opaque `key` among the owner's calendars (`practical_readonly_calendars.source_key`):
 //!   created when new, taken over when its device is gone, restored when in the trash, refused (409) when another
@@ -89,13 +90,17 @@ pub struct Device {
     pub id: String,
     pub principal: String,
     pub owner: String,
-    pub token_id: String,
     pub name: String,
 }
 
+/// A device of a row with the columns `id, principal, owner, name`.
 fn device_of(r: sqlx::sqlite::SqliteRow) -> Device {
-    Device { id: r.get("id"), principal: r.get("principal"), owner: r.get("owner"), token_id: r.get("token_id"), name: r.get("name") }
+    Device { id: r.get("id"), principal: r.get("principal"), owner: r.get("owner"), name: r.get("name") }
 }
+
+/// Length of the device-id prefix in front of a token's secret (`<prefix>_<secret>`, as an app token shows it):
+/// [`authenticate`] verifies only the hashes of the user's devices with that prefix (its SQL has the 4 written out).
+const PREFIX: usize = 4;
 
 /// What the device page shows once after [`setup`].
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -126,50 +131,62 @@ pub async fn setup(state: &AppState, user: &Principal, name: &str, owner: &str) 
     }
     collections::ensure_owner(user, owner)?;
     let name = crate::domain::tokens::unique_name(state, user, name).await?;
-    let (token_id, token) = crate::domain::tokens::create_with_id(state, user, &name).await?;
     let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO practical_uploader_devices (id, principal, owner, token_id, name) VALUES (?, ?, ?, ?, ?)")
+    let secret = crate::domain::tokens::generate_secret();
+    let hash = { let s = secret.clone(); tokio::task::spawn_blocking(move || password_auth::generate_hash(s)).await.map_err(|e| AppError::Internal(e.to_string()))? };
+    sqlx::query("INSERT INTO practical_uploader_devices (id, principal, owner, name, secret_hash) VALUES (?, ?, ?, ?, ?)")
         .bind(&id)
         .bind(&user.id)
         .bind(owner)
-        .bind(&token_id)
         .bind(&name)
+        .bind(&hash)
         .execute(&state.db)
         .await?;
+    let token = format!("{}_{secret}", &id[..PREFIX]);
     Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token, device: id, name })
 }
 
-/// The device reached `/api/uploader` with its token: the first time is when it got connected (the wizard's wait).
+/// The device reached `/api/uploader`: the first time is when it got connected (the wizard's wait), every time
+/// is its last use (the device list).
 pub async fn seen(state: &AppState, device: &Device) -> AppResult<()> {
-    sqlx::query("UPDATE practical_uploader_devices SET connected_at = CURRENT_TIMESTAMP WHERE id = ? AND connected_at IS NULL").bind(&device.id).execute(&state.db).await?;
+    sqlx::query("UPDATE practical_uploader_devices SET connected_at = COALESCE(connected_at, CURRENT_TIMESTAMP), last_seen = CURRENT_TIMESTAMP WHERE id = ?").bind(&device.id).execute(&state.db).await?;
     Ok(())
 }
 
-/// Whether `user`'s device `id` has connected yet (None: no such live device of theirs) and its name.
+/// Whether `user`'s device `id` has connected yet (None: no such device of theirs) and its name.
 pub async fn connected(state: &AppState, user: &Principal, id: &str) -> AppResult<Option<(bool, String)>> {
-    let Some(d) = live_devices(state).await?.remove(id).filter(|d| d.principal == user.id) else { return Ok(None) };
-    let at: Option<String> = sqlx::query_scalar("SELECT connected_at FROM practical_uploader_devices WHERE id = ?").bind(&d.id).fetch_one(&state.db).await?;
-    Ok(Some((at.is_some(), d.name)))
+    let row = sqlx::query("SELECT connected_at, name FROM practical_uploader_devices WHERE id = ? AND principal = ?").bind(id).bind(&user.id).fetch_optional(&state.db).await?;
+    Ok(row.map(|r| (r.get::<Option<String>, _>("connected_at").is_some(), r.get("name"))))
 }
 
-/// Devices whose app token still exists, by id. A device whose token is gone (deleted elsewhere, or swept as
-/// never connected) is dead: its row is dropped here and its calendars count as orphaned.
+/// The live devices, by id: those whose user still exists and may own the device's `owner` (a user who left the
+/// group: dead). A dead device's calendars count as orphaned, so the group's other members can delete them or
+/// their own device takes them over; its row stays for its user to delete (or for the user's return to the group).
+/// One principal lookup per device user.
 pub async fn live_devices(state: &AppState) -> AppResult<HashMap<String, Device>> {
-    let rows: Vec<Device> = sqlx::query("SELECT id, principal, owner, token_id, name FROM practical_uploader_devices").fetch_all(&state.db).await?.into_iter().map(device_of).collect();
-    let mut tokens: HashMap<String, HashSet<String>> = HashMap::new();
+    let rows: Vec<Device> = sqlx::query("SELECT id, principal, owner, name FROM practical_uploader_devices").fetch_all(&state.db).await?.into_iter().map(device_of).collect();
+    let mut users: HashMap<String, Option<Principal>> = HashMap::new();
     let mut live = HashMap::new();
     for d in rows {
-        if !tokens.contains_key(&d.principal) {
-            let ids = state.principals.get_app_tokens(&d.principal).await?.into_iter().map(|t| t.id).collect();
-            tokens.insert(d.principal.clone(), ids);
+        if !users.contains_key(&d.principal) {
+            users.insert(d.principal.clone(), state.principals.get_principal(&d.principal).await?);
         }
-        if tokens[&d.principal].contains(&d.token_id) {
+        if users[&d.principal].as_ref().is_some_and(|p| collections::ensure_owner(p, &d.owner).is_ok()) {
             live.insert(d.id.clone(), d);
-        } else {
-            forget_device(state, &d.id).await?;
         }
     }
     Ok(live)
+}
+
+/// Deletes every device that never connected within [`crate::domain::tokens::CONNECT_GRACE`] (set up half-way, its
+/// block never pasted), as [`crate::domain::tokens::sweep`] does with app tokens. Returns how many.
+pub async fn sweep(state: &AppState) -> AppResult<u64> {
+    let cutoff = (chrono::Utc::now() - crate::domain::tokens::CONNECT_GRACE).format("%Y-%m-%d %H:%M:%S").to_string();
+    // one statement: a first request that lands meanwhile sets connected_at and keeps its device
+    let n = sqlx::query("DELETE FROM practical_uploader_devices WHERE connected_at IS NULL AND created_at < ?").bind(&cutoff).execute(&state.db).await?.rows_affected();
+    // a never-connected device uploaded nothing, so no calendar names it; unlink anyway rather than leave a dangling id
+    sqlx::query("UPDATE practical_readonly_calendars SET device_id = NULL WHERE device_id IS NOT NULL AND device_id NOT IN (SELECT id FROM practical_uploader_devices)").execute(&state.db).await?;
+    Ok(n)
 }
 
 /// Drops a device row and unlinks its calendars (they stay read-only, orphaned).
@@ -191,28 +208,22 @@ pub async fn managed(state: &AppState) -> AppResult<HashSet<(String, String)>> {
         .collect())
 }
 
-/// The device whose app token authenticated this request (`Authorization: Basic <user>:<token>`), else NotFound.
-/// Checked here, not taken from the principal extractor: RustiCal's layer keeps a cookie session's principal
-/// when the Basic credentials are wrong.
-pub async fn device_for(state: &AppState, user: &Principal, headers: &axum::http::HeaderMap) -> AppResult<Device> {
-    use base64ct::Encoding;
-    let basic = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Basic ")).ok_or(AppError::NotFound)?;
-    let raw = base64ct::Base64::decode_vec(basic.trim()).map_err(|_| AppError::NotFound)?;
-    let (u, token) = std::str::from_utf8(&raw).ok().and_then(|s| s.split_once(':')).ok_or(AppError::NotFound)?;
-    if u != user.id {
-        return Err(AppError::NotFound);
-    }
-    let (prefix, secret) = token.split_once('_').unwrap_or(("", token));
-    let live = live_devices(state).await?;
-    let tokens = state.principals.get_app_tokens(&user.id).await?;
-    for d in live.into_values().filter(|d| d.principal == user.id) {
-        if let Some(t) = tokens.iter().find(|t| t.id == d.token_id && t.id.starts_with(prefix))
-            && password_auth::verify_password(secret, t.token.as_ref()).is_ok()
-        {
-            return Ok(d);
+/// The device and its user for HTTP Basic `user` + `token` (`<prefix>_<secret>`, the device's own secret); None for
+/// any other credentials (an app token, a password, a wrong secret, a deleted user).
+pub async fn authenticate(state: &AppState, user: &str, token: &str) -> AppResult<Option<(Principal, Device)>> {
+    let Some((prefix, secret)) = token.split_once('_').filter(|(p, _)| p.len() == PREFIX) else { return Ok(None) };
+    let rows = sqlx::query("SELECT id, principal, owner, name, secret_hash FROM practical_uploader_devices WHERE principal = ? AND substr(id, 1, 4) = ?").bind(user).bind(prefix).fetch_all(&state.db).await?;
+    for r in rows {
+        let hash: String = r.get("secret_hash");
+        let s = secret.to_string();
+        // a hash check costs CPU time (argon2): off the async workers, as the password login does (auth.rs)
+        let ok = tokio::task::spawn_blocking(move || password_auth::verify_password(s, &hash).is_ok()).await.map_err(|e| AppError::Internal(e.to_string()))?;
+        if ok {
+            let Some(p) = state.principals.get_principal(user).await? else { return Ok(None) };
+            return Ok(Some((p, device_of(r))));
         }
     }
-    Err(AppError::NotFound)
+    Ok(None)
 }
 
 /// The object id of a UID: the UID itself when it is a plain path segment, else a digest of it (so one UID
@@ -426,7 +437,9 @@ pub struct ManagedCalendar {
     pub trashed: bool,
 }
 
-pub async fn info(state: &AppState, device: &Device) -> AppResult<DeviceInfo> {
+/// 403 when `user` may no longer own the device's `owner` (left the group).
+pub async fn info(state: &AppState, user: &Principal, device: &Device) -> AppResult<DeviceInfo> {
+    collections::ensure_owner(user, &device.owner)?;
     let rows: Vec<(String, String)> = sqlx::query("SELECT calendar_id, source_key FROM practical_readonly_calendars WHERE device_id = ? AND source_key IS NOT NULL")
         .bind(&device.id)
         .fetch_all(&state.db)
@@ -448,16 +461,28 @@ pub async fn info(state: &AppState, device: &Device) -> AppResult<DeviceInfo> {
 /// A device of `user` with its calendars (for the device list and its delete page).
 pub struct DeviceView {
     pub id: String,
-    pub token_id: String,
     pub name: String,
     /// (calendar id, display name), not in the trash
     pub calendars: Vec<(String, String)>,
+    /// its last request (`seen`)
+    pub last_seen: Option<DateTime<Utc>>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
+/// `YYYY-MM-DD HH:MM:SS` (SQLite's CURRENT_TIMESTAMP, UTC) as a time.
+fn utc(s: Option<String>) -> Option<DateTime<Utc>> {
+    s.and_then(|s| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").ok()).map(|n| n.and_utc())
+}
+
+/// The user's devices that have connected (one that never did is not listed, like an app token: [`sweep`]). A
+/// device for a group the user left lists no calendars: they are not the user's to send to the trash.
 pub async fn devices_of(state: &AppState, user: &Principal) -> AppResult<Vec<DeviceView>> {
     let mut out = vec![];
-    for d in live_devices(state).await?.into_values().filter(|d| d.principal == user.id) {
-        let ids: Vec<String> = sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await?;
+    let rows = sqlx::query("SELECT id, principal, owner, name, last_seen, created_at FROM practical_uploader_devices WHERE principal = ? AND connected_at IS NOT NULL").bind(&user.id).fetch_all(&state.db).await?;
+    for r in rows {
+        let (last_seen, created_at) = (utc(r.get("last_seen")), utc(r.get("created_at")));
+        let d = device_of(r);
+        let ids: Vec<String> = if collections::ensure_owner(user, &d.owner).is_ok() { sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await? } else { vec![] };
         let mut calendars = vec![];
         for id in ids {
             if let Ok(c) = state.calendars.get_calendar(&d.owner, &id, false).await {
@@ -465,26 +490,26 @@ pub async fn devices_of(state: &AppState, user: &Principal) -> AppResult<Vec<Dev
             }
         }
         calendars.sort_by(|a, b| a.1.cmp(&b.1));
-        out.push(DeviceView { id: d.id, token_id: d.token_id, name: d.name, calendars });
+        out.push(DeviceView { id: d.id, name: d.name, calendars, last_seen, created_at });
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
 }
 
-/// Deletes a device of `user`: its token goes, the calendars in `trash` go to the trash, the others stay
-/// read-only without a device. NotFound for another user's device.
+/// Deletes a device of `user` (its secret goes with the row), the calendars in `trash` go to the trash, the others
+/// stay read-only without a device. NotFound for another user's device.
 pub async fn delete_device(state: &AppState, user: &Principal, id: &str, trash: &HashSet<String>) -> AppResult<()> {
-    let d = sqlx::query("SELECT id, principal, owner, token_id, name FROM practical_uploader_devices WHERE id = ? AND principal = ?").bind(id).bind(&user.id).fetch_optional(&state.db).await?.map(device_of).ok_or(AppError::NotFound)?;
+    let d = sqlx::query("SELECT id, principal, owner, name FROM practical_uploader_devices WHERE id = ? AND principal = ?").bind(id).bind(&user.id).fetch_optional(&state.db).await?.map(device_of).ok_or(AppError::NotFound)?;
     let ids: Vec<String> = sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await?;
+    // only into the trash of an owner the user still is (a group they left: refused, nothing changes)
+    if ids.iter().any(|c| trash.contains(c)) {
+        collections::ensure_owner(user, &d.owner)?;
+    }
     for cal in ids.iter().filter(|c| trash.contains(*c)) {
         match state.calendars.delete_calendar(&d.owner, cal, true).await {
             Ok(()) | Err(rustical_store::Error::NotFound) => {}
             Err(e) => return Err(e.into()),
         }
-    }
-    match state.principals.remove_app_token(&user.id, &d.token_id).await {
-        Ok(()) | Err(rustical_store::Error::NotFound) => {}
-        Err(e) => return Err(e.into()),
     }
     forget_device(state, &d.id).await
 }

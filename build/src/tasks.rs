@@ -135,6 +135,11 @@ pub fn spawn_trash_purger(state: SharedState) {
                     Ok(n) => tracing::info!("device sweep: {n} token(s) never connected within a day"),
                     Err(e) => tracing::error!("device sweep: {e}"),
                 }
+                match crate::domain::uploader::sweep(&state).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!("device sweep: {n} PractiCalUploader device(s) never connected within a day"),
+                    Err(e) => tracing::error!("device sweep: {e}"),
+                }
             })
             .await;
         }

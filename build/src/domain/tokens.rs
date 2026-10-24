@@ -77,17 +77,13 @@ pub fn generate_secret() -> String {
 
 /// Returns the one-time visible token string.
 pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult<String> {
-    Ok(create_with_id(state, user, name).await?.1)
-}
-
-/// [`create`], also returning the token's id (what a record that belongs to the token keys on).
-pub async fn create_with_id(state: &AppState, user: &Principal, name: &str) -> AppResult<(String, String)> {
     if name.trim().is_empty() {
         return Err(AppError::bad("err-name-required"));
     }
     let secret = generate_secret();
-    let id = state.principals.add_app_token(&user.id, name.trim().to_string(), secret.clone()).await?;
-    Ok((id.clone(), format!("{}_{secret}", &id[..id.len().min(4)])))
+    let mut id = state.principals.add_app_token(&user.id, name.trim().to_string(), secret.clone()).await?;
+    id.truncate(4);
+    Ok(format!("{id}_{secret}"))
 }
 
 /// [`create`] under `name`, or "`name` (2)" and so on when a device of that name is connected already: two rows
@@ -98,12 +94,14 @@ pub async fn create_unique(state: &AppState, user: &Principal, name: &str) -> Ap
     Ok((name, token))
 }
 
-/// The name [`create_unique`] would give a new device called `name` (taken names get " (2)", " (3)" …). Names of
-/// tokens that never connected do not count: they are not listed and go with the next sweep, so an abandoned
-/// attempt must not push the device that connects to "iPhone (2)" (review 2026-10-16).
+/// The name [`create_unique`] would give a new device called `name` (taken names get " (2)", " (3)" …): taken are
+/// the user's listed devices, app tokens and PractiCalUploader devices (`uploader::devices_of`). Names of devices
+/// that never connected do not count: they are not listed and go with the next sweep, so an abandoned attempt must
+/// not push the device that connects to "iPhone (2)" (review 2026-10-16).
 pub async fn unique_name(state: &AppState, user: &Principal, name: &str) -> AppResult<String> {
     let since = since(state).await?;
-    let taken: Vec<String> = list(state, user).await?.into_iter().filter(|t| seen(t, since) != Seen::Never).map(|t| t.name).collect();
+    let mut taken: Vec<String> = list(state, user).await?.into_iter().filter(|t| seen(t, since) != Seen::Never).map(|t| t.name).collect();
+    taken.extend(sqlx::query_scalar::<_, String>("SELECT name FROM practical_uploader_devices WHERE principal = ? AND connected_at IS NOT NULL").bind(&user.id).fetch_all(&state.db).await?);
     Ok((1..).map(|n| if n == 1 { name.trim().to_string() } else { format!("{} ({n})", name.trim()) }).find(|n| !taken.contains(n)).unwrap_or_default())
 }
 

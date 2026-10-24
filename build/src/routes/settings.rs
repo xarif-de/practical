@@ -211,9 +211,16 @@ impl SettingsPage {
     /// the second line of a device's row: when it last connected (hour granularity: RustiCal records a use at
     /// most once per hour), or since when it is connected for a token from before uses were recorded
     pub fn device_seen(&self, t: &AppToken, seen: &tokens::Seen) -> String {
-        match seen {
-            tokens::Seen::At(at) => {
-                let hours = (chrono::Utc::now() - *at).num_hours().max(0);
+        self.seen_text(match seen { tokens::Seen::At(at) => Some(*at), _ => None }, t.created_at)
+    }
+    /// [`Self::device_seen`] of a PractiCalUploader device (its last request, `uploader::seen`)
+    pub fn uploader_seen(&self, u: &crate::domain::uploader::DeviceView) -> String {
+        self.seen_text(u.last_seen, u.created_at)
+    }
+    fn seen_text(&self, last: Option<chrono::DateTime<chrono::Utc>>, created: Option<chrono::DateTime<chrono::Utc>>) -> String {
+        match last {
+            Some(at) => {
+                let hours = (chrono::Utc::now() - at).num_hours().max(0);
                 // < 2 h is "recently": RustiCal writes a use at most once per hour and process, so a device that
                 // syncs all the time can read up to 2 h old
                 match hours {
@@ -222,12 +229,8 @@ impl SettingsPage {
                     _ => self.ctx.tn("devices-seen-days", "n", hours / 24),
                 }
             }
-            _ => t.created_at.map(|c| self.ctx.t1("devices-since", "date", c.format("%Y-%m-%d").to_string().as_str())).unwrap_or_default(),
+            None => created.map(|c| self.ctx.t1("devices-since", "date", c.format("%Y-%m-%d").to_string().as_str())).unwrap_or_default(),
         }
-    }
-    /// the PractiCalUploader device behind an app token: its row leads to the delete page (#upl-del-…)
-    pub fn uploader_device(&self, token_id: &str) -> Option<&crate::domain::uploader::DeviceView> {
-        self.uploader_devices.iter().find(|d| d.token_id == token_id)
     }
     /// the symbol of a connected device's row
     pub fn device_icon(&self, name: &str) -> &'static str {

@@ -336,20 +336,20 @@
   <div class="group" id="devices">
     {% for (t, seen) in tokens %}
     {% let when = self.device_seen(t, seen) %}
-    {% if let Some(u) = self.uploader_device(t.id.as_str()) %}
-    {#- an uploader takes its calendars along only if asked: its own page lists them (#upl-del-…) -#}
-    <div class="cell"><span class="swatch" style="background:var(--c{{ loop.index0 % 6 + 1 }})">{{ m::ico("briefcase") }}</span><span>{{ t.name }}<span class="sub">{{ ctx.tn("n-calendars", "n", u.calendars.len() as i64) }}{% if !when.is_empty() %} · {{ when }}{% endif %}</span></span><span class="val"><a class="link danger" href="#upl-del-{{ u.id }}">{{ ctx.t("device-disconnect") }}</a></span></div>
-    {% else %}
     <div class="cell"><span class="swatch" style="background:var(--c{{ loop.index0 % 6 + 1 }})">{{ m::ico(self.device_icon(t.name)) }}</span><span>{{ t.name }}{% if !when.is_empty() %}<span class="sub">{{ when }}</span>{% endif %}</span><span class="val"><form method="post" action="/settings/tokens/{{ t.id }}/delete" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-disconnect", "name", t.name) }}">{{ ctx.t("device-disconnect") }}</button></form></span></div>
-    {% endif %}
     {% endfor %}
-    {% if tokens.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("devices-none") }}</span></div>{% endif %}
+    {% for u in uploader_devices %}
+    {% let when = self.uploader_seen(u) %}
+    {#- a PractiCalUploader (its own secret, no app token: uploader::devices_of) takes its calendars along only if asked: its own page lists them (#upl-del-…) -#}
+    <div class="cell"><span class="swatch" style="background:var(--c{{ (tokens.len() + loop.index0) % 6 + 1 }})">{{ m::ico("briefcase") }}</span><span>{{ u.name }}<span class="sub">{{ ctx.tn("n-calendars", "n", u.calendars.len() as i64) }}{% if !when.is_empty() %} · {{ when }}{% endif %}</span></span><span class="val"><a class="link danger" href="#upl-del-{{ u.id }}">{{ ctx.t("device-disconnect") }}</a></span></div>
+    {% endfor %}
+    {% if tokens.is_empty() && uploader_devices.is_empty() %}<div class="cell noic"><span class="muted">{{ ctx.t("devices-none") }}</span></div>{% endif %}
   </div>
   <p class="foot">{{ ctx.t("devices-foot") }}</p>
 </section>
 
 {%- for u in uploader_devices %}
-{#- deleting a PractiCalUploader: its token goes; each ticked calendar goes to the trash, the others stay read-only without a device -#}
+{#- deleting a PractiCalUploader: its row (and secret) goes; each ticked calendar goes to the trash, the others stay read-only without a device -#}
 <section class="page" id="upl-del-{{ u.id }}">
   {{ m::back("#account", ctx.t("tab-account")) }}
   <h1>{{ ctx.t1("upl-del-title", "name", u.name) }}</h1>
@@ -583,7 +583,7 @@
 </section>
 
 {% if uploader %}
-{# PractiCalUploader (domain::uploader, only with PRACTICAL__UPLOADER), 3 steps: name and owner (→ app token + device), the
+{# PractiCalUploader (domain::uploader, only with PRACTICAL__UPLOADER), 3 steps: name and owner (→ device + its secret), the
    connection details — shown once, right after the POST (SESSION_NEW_UPLOADER) — with a wait for the device's first
    request (settings-connect.js, `GET /settings/uploader/{id}/status`), then done #}
 <section class="page wiz" id="add-uploader">
