@@ -1994,4 +1994,3 @@ upl-del-hint = Les calendriers cochés vont à la corbeille. Les autres restent 
 upl-del-go = Déconnecter l’appareil
 upl-managed-hint = Un PractiCalUploader gère ce calendrier. Retire-le dans l’uploader (désélectionne-le) ou avec l’appareil sous « Appareils connectés ».
 ed-read-only = Calendrier en lecture seule · affichage uniquement
-cal-read-only = lecture seule

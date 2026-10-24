@@ -30,7 +30,7 @@
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     if (!old && f.calendar.selectedOptions[0] && f.calendar.selectedOptions[0].disabled) { const o = [...f.calendar.options].find(x => !x.disabled); if (o) f.calendar.value = o.value; } // a new entry never lands in a read-only calendar
-    locInit(); syncDot(); mode(old ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(old ? 'open' : 'new'); baseline = adjusted ? pre : serialize(); updateButtons();
+    locInit(); syncDot(); mode(old ? 'view' : 'edit'); const pre = serialize(); const adjusted = rulesApply(old ? 'open' : 'new'); baseline = adjusted && !(old && d.read_only) ? pre : serialize(); updateButtons(); // a read-only entry cannot be saved: what a lock rule adjusted shows, but is no change that Close then asks to discard
   }
   // `quiet`: a new form that is always on screen (the tasks page) must not take the focus when it appears
   // `only`: open a single card of an existing entry (a table cell that cannot be edited in place)
@@ -49,7 +49,8 @@
     } else fill(null, date);
     if (key && only) soloStart(only);
     const was = ed.hidden; if (was) opener = document.activeElement; ed.hidden = false;
-    // the focus moves into the dialog: a new entry's title, an existing one's unlock button (Enter edits)
-    if (!key && !quiet) f.summary.focus(); else if (key && was && !ed.contains(document.activeElement)) $('#ed-lock').focus();
+    // the focus moves into the dialog: a new entry's title, an existing one's unlock button (Enter edits); a read-only
+    // entry has none (card-form.css `.cardform.ro #ed-lock`): its close button
+    if (!key && !quiet) f.summary.focus(); else if (key && was && !ed.contains(document.activeElement)) $(form.classList.contains('ro') ? '#ed-close' : '#ed-lock').focus();
     dayline();
   }

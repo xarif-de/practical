@@ -181,28 +181,34 @@
   /* The uploader's step 3 (#add-uploader-wait): waits for the device's first request to PractiCal (domain::uploader
      `seen` on GET/PUT /api/uploader; asked through `GET /settings/uploader/{id}/status`) → #add-uploader-done. The
      phones' rhythm above: every 2 s for two minutes, then every 10 s for 13 more, not while the page is hidden; then a
-     tap, a key or the page shown again waits on. */
+     tap, a key or the page shown again waits on. Leaving the step takes the block (it holds the device's secret) out
+     of the page; back on the step, or with the device gone (deleted, or swept as never connected), it says the
+     details are gone ([data-upl-gone]) instead of waiting. */
   const upw = settings && $('#add-uploader-wait [data-upl-device]', settings);
   if (upw) {
-    const TRIES = 60 + 78;
-    let timer = 0, tries = 0, busy = false, done = false;
+    const TRIES = 60 + 78, HERE = '#add-uploader-wait', wz = upw.closest('.wz'), gone = $('[data-upl-gone]', wz);
+    let timer = 0, tries = 0, busy = false, done = false, over = false;
+    // the details are gone: every part of the step but its heading and the gone text hides
+    const end = () => { over = true; clearTimeout(timer); $('#up-toml', wz).textContent = ''; [...wz.children].forEach(e => { e.hidden = e.tagName !== 'H1' && e !== gone; }); };
     const ask = async () => {
       clearTimeout(timer);
-      if (busy || done || location.hash !== '#add-uploader-wait' || document.hidden || tries >= TRIES) return;
+      if (busy || done || over || location.hash !== HERE || document.hidden || tries >= TRIES) return;
       busy = true;
       const r = await practical.req('/settings/uploader/' + encodeURIComponent(upw.dataset.uplDevice) + '/status');
       busy = false;
+      if (over || location.hash !== HERE) return; // left meanwhile: back on the step, it asks again
       if (r.ok && r.data.connected) {
         done = true;
         $$('[data-upl-name]', settings).forEach(e => { e.textContent = r.data.name; });
         location.replace('#add-uploader-done');
         return;
       }
-      if (r.kind === 'notfound') return; // the device was deleted meanwhile: nothing to wait for
+      if (r.kind === 'notfound') { end(); return; } // the device was deleted meanwhile: nothing to wait for
       timer = setTimeout(ask, ++tries < 60 ? 2000 : 10000);
     };
-    const wait = () => { if (location.hash === '#add-uploader-wait') { tries = 0; ask(); } };
+    const wait = () => { if (location.hash === HERE) { tries = 0; ask(); } };
     addEventListener('hashchange', () => {
+      if (location.hash !== HERE && !over) end(); // the secret does not stay in the page once the step is left
       if (location.hash === '#add-uploader-done' && done) $('#add-uploader-done h1', settings).focus(); // the page changed by itself: say so
       else wait();
     });

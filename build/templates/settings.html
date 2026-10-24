@@ -617,6 +617,7 @@
     <p class="lead after">{{ ctx.t("upl-wait-3") }}</p>
     <div class="group upl-copy"><div class="cell noic"><code id="upl-once">practicaluploader once</code><span class="val">{{ m::io_copy("upl-once", "practicaluploader once") }}</span></div></div>
     <div class="live" data-live data-upl-device="{{ u.device }}"><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
+    <p class="lead" data-upl-gone hidden>{{ ctx.t("upl-gone-text") }}</p>
     {% else %}
     <h1 tabindex="-1">{{ ctx.t("upl-gone-title") }}</h1>
     <p class="lead">{{ ctx.t("upl-gone-text") }}</p>

@@ -282,8 +282,10 @@ async fn a_read_only_calendar_takes_no_practical_write() {
     let plan = c.get_json(&format!("/api/history/{n}/plan")).await.ok().json();
     assert_eq!(plan["ok"], false, "{plan}");
     assert_eq!(c.get_json(&path).await.json()["summary"], "Termin 2", "nothing changed");
-    // the editor's calendar picker offers it disabled, the calendar page marks it for calendar.js
+    // the editor's calendar picker offers it disabled, the calendar page marks it for calendar.js, and so does a
+    // swapped view: a calendar that turns read-only meanwhile reaches the page with the next fragment
     c.get("/calendar").await.ok().has(&format!("data-ro=\"alice/{cal}\""));
+    c.get("/calendar?fragment=1").await.ok().has(&format!("<div class=\"toolbar\" data-ro=\"alice/{cal}\">"));
 }
 
 async fn get_info(app: &TestApp, user: &str, token: &str) -> Resp {

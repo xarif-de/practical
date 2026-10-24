@@ -68,6 +68,8 @@ pub struct CalendarPage {
     pub today: NaiveDate,
     pub view_label: String,
     pub in_more: bool,
+    /// [`read_only_cals`] (the included fragment's toolbar)
+    pub ro: String,
     /// reminder presets of the event editor; `null` = the editor's defaults
     pub alarm_presets_json: String,
     /// snap points of the reminder strip (`events::AlarmSnaps`)
@@ -89,10 +91,12 @@ impl CalendarPage {
     pub fn has_shared(&self) -> bool {
         self.calendars.iter().any(|c| c.is_group)
     }
-    /// principal/id of the read-only calendars, comma-separated: calendar.js does not drag their entries
-    pub fn read_only_cals(&self) -> String {
-        self.calendars.iter().filter(|c| c.read_only).map(|c| format!("{}/{}", c.principal, c.id)).collect::<Vec<_>>().join(",")
-    }
+}
+
+/// principal/id of the read-only calendars, comma-separated: the fragment's toolbar carries them (`data-ro`), so a
+/// swapped view brings the current list along; calendar.js does not drag their entries.
+pub fn read_only_cals(cals: &[CalInfo]) -> String {
+    cals.iter().filter(|c| c.read_only).map(|c| format!("{}/{}", c.principal, c.id)).collect::<Vec<_>>().join(",")
 }
 
 #[derive(Template)]
@@ -105,6 +109,8 @@ pub struct CalendarFragment {
     pub body: String,
     pub view_label: String,
     pub in_more: bool,
+    /// [`read_only_cals`]
+    pub ro: String,
 }
 
 pub struct ViewCtx {
@@ -231,7 +237,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
     let (view_label, in_more) = view_label(&view, &vc.l);
     let cals_param = q.cals.clone().unwrap_or_default();
     if q.fragment.is_some() {
-        let f = CalendarFragment { ctx, view, date, title, body, view_label, in_more };
+        let f = CalendarFragment { ctx, view, date, title, body, view_label, in_more, ro: read_only_cals(&all_cals) };
         return Ok(Html(f.render().map_err(|e| crate::error::AppError::Internal(e.to_string()))?).into_response());
     }
     let density = events::month_density(&state, &cals, date.year(), vc.tz).await.unwrap_or([0; 12]);
@@ -247,6 +253,7 @@ async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, v
         pins: p.pins(),
         editor_kind: "event",
         ctx,
+        ro: read_only_cals(&all_cals),
         calendars: all_cals, // = routes::editor::calendars(&all_cals, "event"), without the copy
         view,
         date,

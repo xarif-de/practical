@@ -1992,4 +1992,3 @@ upl-del-hint = Los calendarios marcados van a la papelera. Los demás siguen de 
 upl-del-go = Desconectar dispositivo
 upl-managed-hint = Un PractiCalUploader gestiona este calendario. Quítalo en el uploader (deselecciónalo) o junto con el dispositivo en «Dispositivos conectados».
 ed-read-only = Calendario de solo lectura · solo vista
-cal-read-only = solo lectura

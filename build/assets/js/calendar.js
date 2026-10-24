@@ -3,7 +3,6 @@
 (function () {
   const root = document.getElementById('viewroot');
   if (!root) return;
-  const RO = new Set((root.dataset.ro || '').split(',').filter(Boolean)); // principal/calendar of the read-only calendars (routes::calendar)
   const { $, $$, esc, pad, ymd, parseYmd: parse } = practical;
   const MON = MONTHS;
   const DOW = WEEKDAYS;
@@ -551,7 +550,8 @@
   root.addEventListener('pointerdown', e => {
     if (e.button !== 0 || e.ctrlKey || e.pointerType === 'touch' || drag) return; // Ctrl+click: macOS's context menu takes the release
     const el = e.target.closest && e.target.closest('.ev[data-key]'), cell = el && el.closest(CELLS); if (!cell) return;
-    if (RO.has(el.dataset.key.split('/').slice(0, 2).join('/'))) return; // a read-only calendar's entry does not move (#viewroot data-ro)
+    // a read-only calendar's entry does not move: their principal/calendar list comes with each view swapped in (its toolbar's data-ro, routes::calendar read_only_cals)
+    if (($('.toolbar', root)?.dataset.ro || '').split(',').includes(el.dataset.key.split('/').slice(0, 2).join('/'))) return;
     const start = startOf(el);
     // data-at is the occurrence's start time on its start day (month.rs drag_attrs); the colour (inline, no style recalc) is read
     // now: a live reload may swap the chip before the drag starts; only this pointer drives the drag (a hovering pen does not)

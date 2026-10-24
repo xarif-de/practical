@@ -1990,4 +1990,3 @@ upl-del-hint = Ticked calendars go to the trash. The others stay read-only; you 
 upl-del-go = Disconnect device
 upl-managed-hint = A PractiCalUploader manages this calendar. Remove it in the uploader (deselect it) or together with the device under “Connected devices”.
 ed-read-only = Read-only calendar · view only
-cal-read-only = read-only

@@ -1987,4 +1987,3 @@ upl-del-hint = Angehakte Kalender kommen in den Papierkorb. Die anderen bleiben 
 upl-del-go = Gerät trennen
 upl-managed-hint = Diesen Kalender verwaltet ein PractiCalUploader. Entfernen kannst du ihn im Uploader (abwählen) oder zusammen mit dem Gerät unter „Verbundene Geräte“.
 ed-read-only = Schreibgeschützter Kalender · nur Ansicht
-cal-read-only = schreibgeschützt
