@@ -1,5 +1,6 @@
 // PractiCalUploader (PRACTICAL__UPLOADER; on for the login server only, lib/servers.mjs): no tile without the flag; with
-// it the setup (name + owner) shows only the config block, an upload makes a read-only calendar whose entry opens in
+// it the setup (name + owner, in the shared list-field rows) leads to step 3, which shows the commands and the config
+// block and waits for the device's first request before its done step; an upload makes a read-only calendar whose entry opens in
 // view mode only, and disconnecting the device asks which of its calendars go to the trash.
 import { test, expect } from '../lib/test.mjs';
 import { BASE, LOGIN_BASE } from '../lib/env.mjs';
@@ -21,9 +22,19 @@ test('with the flag: set up, upload, entry read-only, disconnect with its calend
   await page.locator('#add a[href="#add-uploader"]').click();
   // the owner: the user or one of their groups
   await expect(page.locator('#add-uploader select[name=owner] option[value="alice"]')).toHaveCount(1);
+  // the form is the settings' list rows (label left, field right), not loose fields
+  await expect(page.locator('#add-uploader .group label.cell input[name=name]')).toHaveCount(1);
   await page.locator('#add-uploader input[name=name]').fill('Uploader E2E');
   await page.locator('#add-uploader button[type=submit]').click();
+  // step 3: the two commands and the block, each with a copy button; it waits, no "connected" yet
+  await expect(page).toHaveURL(/#add-uploader-wait$/);
   await expect(page.locator('#up-toml')).toBeVisible();
+  await expect(page.locator('#up-toml')).toHaveCSS('text-align', 'left');
+  for (const id of ['upl-set', 'up-toml', 'upl-once']) await expect(page.locator(`#add-uploader-wait button[data-copy="#${id}"]`)).toHaveCount(1);
+  await expect(page.locator('#upl-set')).toHaveText('practicaluploader set connection');
+  await expect(page.locator('#upl-once')).toHaveText('practicaluploader once');
+  await expect(page.locator('#add-uploader-wait [data-live]')).toBeVisible();
+  await expect(page.locator('#add-uploader-done')).toBeHidden();
   const toml = await page.locator('#up-toml').textContent();
   expect(toml).not.toContain('calendar');
   const token = toml.match(/^token = "([^"]+)"/m)[1];
@@ -35,6 +46,9 @@ test('with the flag: set up, upload, entry read-only, disconnect with its calend
     data: { calendars: [{ key: 'e2e-key', name: 'Arbeit E2E', window: { start: '2026-01-01T00:00:00Z', end: '2028-01-01T00:00:00Z' }, events: [{ uid: 'e2e-upl@x', ics }] }] },
   });
   expect(r.status(), await r.text()).toBe(200);
+  // the device's first request ends the wait: the done step names it
+  await expect(page.locator('#add-uploader-done h1')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('#add-uploader-done [data-upl-name]')).toHaveText('Uploader E2E');
   const res = await r.json();
   expect(res.calendars[0]).toMatchObject({ key: 'e2e-key', created: 1 });
   const cal = res.calendars[0].calendar;

@@ -34,12 +34,28 @@ pub(super) async fn uploader_create(State(state): State<SharedState>, user: Prin
     if !state.config.uploader {
         return AppError::NotFound.into_response();
     }
-    form(&state, &session, &ctx, &f.csrf, "add-uploader", async {
-        let made = crate::domain::uploader::setup(&state, &user, &f.name, &f.owner).await?;
-        session.insert(SESSION_NEW_UPLOADER, made).await?;
-        Ok(None)
-    })
-    .await
+    // made: step 3 (the details, the wait); refused: the form again with the message
+    let r = match csrf::check(&session, &f.csrf).await {
+        Ok(()) => async {
+            let made = crate::domain::uploader::setup(&state, &user, &f.name, &f.owner).await?;
+            session.insert(SESSION_NEW_UPLOADER, made).await?;
+            Ok(None)
+        }
+        .await,
+        Err(e) => Err(e),
+    };
+    let back = if r.is_ok() { "/settings#add-uploader-wait" } else { "/settings#add-uploader" };
+    finish_here(&state, &session, &ctx, r, back).await
+}
+
+/// `GET /settings/uploader/{id}/status`: whether the user's device `id` has reached PractiCal yet — the setup
+/// wizard's step 3 waits for it (settings-connect.js). 404 for another user's device or without the flag.
+pub(super) async fn uploader_status(State(state): State<SharedState>, user: Principal, Path(id): Path<String>) -> AppResult<axum::Json<serde_json::Value>> {
+    if !state.config.uploader {
+        return Err(AppError::NotFound);
+    }
+    let (connected, name) = crate::domain::uploader::connected(&state, &user, &id).await?.ok_or(AppError::NotFound)?;
+    Ok(axum::Json(serde_json::json!({ "connected": connected, "name": name })))
 }
 
 /// Deletes an uploader device; every field `trash-<calendar id>` sends that calendar to the trash, the others

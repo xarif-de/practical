@@ -488,6 +488,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/uploader", post(uploader_create))
         .route("/settings/uploader/{id}/delete", post(uploader_delete))
+        .route("/settings/uploader/{id}/status", get(uploader_status))
         .route("/settings/prefs", post(prefs_save))
         .route("/settings/onboarding/lang", post(onboarding::lang_save))
         .route("/settings/onboarding/confirm", post(onboarding::confirm))

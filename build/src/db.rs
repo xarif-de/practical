@@ -371,6 +371,12 @@ CREATE TABLE practical_holidays (
          ALTER TABLE practical_readonly_calendars ADD COLUMN device_id TEXT;
          CREATE UNIQUE INDEX practical_readonly_calendars_key ON practical_readonly_calendars (principal, source_key) WHERE source_key IS NOT NULL;",
     ),
+    (
+        25,
+        // when an uploader device first reached `/api/uploader` with its token (`uploader::seen`): the setup wizard
+        // waits for it (`GET /settings/uploader/{id}/status`)
+        "ALTER TABLE practical_uploader_devices ADD COLUMN connected_at TEXT;",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

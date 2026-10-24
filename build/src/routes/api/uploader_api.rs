@@ -10,6 +10,7 @@ pub(super) async fn upload(State(state): State<SharedState>, user: Principal, he
         return Err(AppError::NotFound);
     }
     let device = uploader::device_for(&state, &user, &headers).await?;
+    uploader::seen(&state, &device).await?;
     Ok(axum::Json(uploader::upload(&state, &user, &device, u).await?))
 }
 
@@ -20,5 +21,6 @@ pub(super) async fn info(State(state): State<SharedState>, user: Principal, head
         return Err(AppError::NotFound);
     }
     let device = uploader::device_for(&state, &user, &headers).await.map_err(|e| if matches!(e, AppError::NotFound) { AppError::Forbidden } else { e })?;
+    uploader::seen(&state, &device).await?;
     Ok(axum::Json(uploader::info(&state, &device).await?))
 }

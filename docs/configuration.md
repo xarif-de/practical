@@ -180,10 +180,12 @@ itself, for example Outlook on a work computer. Most installations do not need i
 
 With `PRACTICAL__UPLOADER=true`:
 
-- **Settings → Connected devices → Add a device** shows a **PractiCalUploader** tile. It asks for a device name and
-  who owns the uploaded calendars: you or one of your groups. That owner is fixed for the device. PractiCal creates
-  a device password and shows once a `[connection]` block (address, user name, password) for
-  `practicaluploader set connection`. No calendar is created yet.
+- **Settings → Connected devices → Add a device** shows a **PractiCalUploader** tile ("Outlook for macOS"). Step 2
+  links to the uploader's install instructions and asks for a device name and who owns the uploaded calendars: you
+  or one of your groups. That owner is fixed for the device. PractiCal creates a device password; step 3 shows, once,
+  the command `practicaluploader set connection`, the `[connection]` block to paste (address, user name, password)
+  and `practicaluploader once`, each with a copy button, and waits until the device first reaches PractiCal (its
+  first `GET` or `PUT /api/uploader`). Then it says the device is connected. No calendar is created yet.
 - **The uploader decides which calendars.** On each upload PractiCal creates a calendar the device sends for the
   first time, named as the device names it. After that, name and colour are yours to change; uploads keep them.
 - Uploaded calendars are **read-only in PractiCal**: you cannot create, change, move or delete their events, and the

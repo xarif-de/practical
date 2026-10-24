@@ -583,29 +583,59 @@
 </section>
 
 {% if uploader %}
-{# PractiCalUploader (domain::uploader, only with PRACTICAL__UPLOADER): name it, get an app token and a read-only calendar;
-   the values show once, right after the POST (SESSION_NEW_UPLOADER) #}
+{# PractiCalUploader (domain::uploader, only with PRACTICAL__UPLOADER), 3 steps: name and owner (→ app token + device), the
+   connection details — shown once, right after the POST (SESSION_NEW_UPLOADER) — with a wait for the device's first
+   request (settings-connect.js, `GET /settings/uploader/{id}/status`), then done #}
 <section class="page wiz" id="add-uploader">
   {{ m::back("#add", ctx.t("wiz-back")) }}
-  {{ m::wiz_bars(2, 2, ctx.t("upl-label")) }}
+  {{ m::wiz_bars(2, 3, ctx.t("upl-label")) }}
+  <div class="wz">
+    <div class="ic"><img class="app-ico" src="{{ ctx.asset("uploader.svg") }}" alt="" width="56" height="56"></div>
+    <h1>{{ ctx.t("upl-title") }}</h1>
+    <p class="lead">{{ ctx.t("upl-text") }} <a href="https://git.xarif.de/tools/practicaluploader" target="_blank" rel="noopener">git.xarif.de/tools/practicaluploader</a>.</p>
+    <form id="upl-form" method="post" action="/settings/uploader">{{ m::csrf() }}
+      <div class="group">
+        <label class="cell noic"><span>{{ ctx.t("upl-device") }}</span><span class="val"><input type="text" name="name" value="PractiCalUploader" maxlength="60" required autocomplete="off"></span></label>
+        <label class="cell noic"><span>{{ ctx.t("upl-owner") }}</span><span class="val"><select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></span></label>
+      </div>
+      <p class="foot">{{ ctx.t("upl-owner-foot") }}</p>
+    </form>
+  </div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a><button class="btn btn-primary" type="submit" form="upl-form">{{ ctx.t("upl-create") }} ›</button></div>
+</section>
+
+<section class="page wiz" id="add-uploader-wait">
+  {{ m::back("#add", ctx.t("wiz-back")) }}
+  {{ m::wiz_bars(3, 3, ctx.t("upl-wait-label")) }}
   <div class="wz">
     {% if let Some(u) = new_uploader %}
-    <div class="ok-dot">{{ m::ico("check") }}</div>
-    <h1 tabindex="-1">{{ ctx.t("upl-done-title") }}</h1>
-    <p class="lead">{{ ctx.t("upl-done-text") }}</p>
-    <pre class="upl-toml"><code id="up-toml">{{ u.toml() }}</code></pre>
-    <button class="btn" type="button" data-copy="#up-toml">{{ m::ico("copy") }}<span>{{ ctx.t("copy") }}</span></button>
+    <h1 tabindex="-1">{{ ctx.t("upl-wait-title") }}</h1>
+    <p class="lead">{{ ctx.t("upl-wait-1") }}</p>
+    <div class="group upl-copy"><div class="cell noic"><code id="upl-set">practicaluploader set connection</code><span class="val">{{ m::io_copy("upl-set", "practicaluploader set connection") }}</span></div></div>
+    <p class="lead after">{{ ctx.t("upl-wait-2") }}</p>
+    <div class="group upl-copy"><div class="cell noic"><pre id="up-toml">{{ u.toml() }}</pre><span class="val">{{ m::io_copy("up-toml", ctx.t("upl-config")) }}</span></div></div>
+    <p class="lead after">{{ ctx.t("upl-wait-3") }}</p>
+    <div class="group upl-copy"><div class="cell noic"><code id="upl-once">practicaluploader once</code><span class="val">{{ m::io_copy("upl-once", "practicaluploader once") }}</span></div></div>
+    <div class="live" data-live data-upl-device="{{ u.device }}"><span class="dot"></span><span>{{ ctx.t("wiz-waiting") }}</span></div>
     {% else %}
-    <h1>{{ ctx.t("upl-title") }}</h1>
-    <p class="lead">{{ ctx.t("upl-text") }}</p>
-    <form method="post" action="/settings/uploader">{{ m::csrf() }}
-      <label class="field">{{ ctx.t("upl-device") }}<input type="text" name="name" value="PractiCalUploader" maxlength="60" required autocomplete="off"></label>
-      <label class="field">{{ ctx.t("upl-owner") }}<select name="owner">{% for o in owners %}<option value="{{ o.id }}">{{ o.label }}{% if o.is_group %} ({{ ctx.t("group") }}){% endif %}</option>{% endfor %}</select></label>
-      <button type="submit" class="btn btn-primary big wide">{{ ctx.t("upl-create") }}</button>
-    </form>
+    <h1 tabindex="-1">{{ ctx.t("upl-gone-title") }}</h1>
+    <p class="lead">{{ ctx.t("upl-gone-text") }}</p>
     {% endif %}
   </div>
-  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a>{% if new_uploader.is_some() %}<a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a>{% endif %}</div>
+  <div class="acts"><a class="muted" href="#add">‹ {{ ctx.t("wiz-back") }}</a></div>
+</section>
+
+<section class="page wiz" id="add-uploader-done">
+  {{ m::back("#account", ctx.t("tab-account")) }}
+  {{ m::wiz_bars(3, 3, "") }}
+  <div class="wz">
+    <div class="ok-dot">{{ m::ico("check") }}</div>
+    <h1 tabindex="-1">{{ ctx.t("upl-done-title") }}</h1>
+    <div class="group"><div class="cell"><img class="swatch" src="{{ ctx.asset("uploader.svg") }}" alt="" width="30" height="30"><span><span data-upl-name>{% if let Some(u) = new_uploader %}{{ u.name }}{% else %}PractiCalUploader{% endif %}</span><span class="sub">{{ ctx.t("wiz-done-just") }}</span></span><span class="val"><span class="tag">{{ ctx.t("wiz-new") }}</span></span></div></div>
+    <p class="lead after">{{ ctx.t("upl-done-text") }}</p>
+    <a class="another" href="#add">＋ {{ ctx.t("wiz-another") }}</a>
+  </div>
+  <div class="acts"><span></span><a class="btn btn-primary" href="/settings?done=1#account">{{ ctx.t("wiz-finish") }}</a></div>
 </section>
 {% endif %}
 

@@ -103,6 +103,9 @@ pub struct Made {
     pub url: String,
     pub user: String,
     pub token: String,
+    /// the device's id: the wizard's wait asks for it ([`connected`])
+    pub device: String,
+    pub name: String,
 }
 
 impl Made {
@@ -124,15 +127,29 @@ pub async fn setup(state: &AppState, user: &Principal, name: &str, owner: &str) 
     collections::ensure_owner(user, owner)?;
     let name = crate::domain::tokens::unique_name(state, user, name).await?;
     let (token_id, token) = crate::domain::tokens::create_with_id(state, user, &name).await?;
+    let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO practical_uploader_devices (id, principal, owner, token_id, name) VALUES (?, ?, ?, ?, ?)")
-        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(&id)
         .bind(&user.id)
         .bind(owner)
         .bind(&token_id)
         .bind(&name)
         .execute(&state.db)
         .await?;
-    Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token })
+    Ok(Made { url: state.config.public_url.clone(), user: user.id.clone(), token, device: id, name })
+}
+
+/// The device reached `/api/uploader` with its token: the first time is when it got connected (the wizard's wait).
+pub async fn seen(state: &AppState, device: &Device) -> AppResult<()> {
+    sqlx::query("UPDATE practical_uploader_devices SET connected_at = CURRENT_TIMESTAMP WHERE id = ? AND connected_at IS NULL").bind(&device.id).execute(&state.db).await?;
+    Ok(())
+}
+
+/// Whether `user`'s device `id` has connected yet (None: no such live device of theirs) and its name.
+pub async fn connected(state: &AppState, user: &Principal, id: &str) -> AppResult<Option<(bool, String)>> {
+    let Some(d) = live_devices(state).await?.remove(id).filter(|d| d.principal == user.id) else { return Ok(None) };
+    let at: Option<String> = sqlx::query_scalar("SELECT connected_at FROM practical_uploader_devices WHERE id = ?").bind(&d.id).fetch_one(&state.db).await?;
+    Ok(Some((at.is_some(), d.name)))
 }
 
 /// Devices whose app token still exists, by id. A device whose token is gone (deleted elsewhere, or swept as

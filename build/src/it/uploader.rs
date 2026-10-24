@@ -14,16 +14,21 @@ async fn app(on: bool) -> TestApp {
     app
 }
 
-/// The text of `<code id="{id}">…</code>` on a page.
+/// The text of `<code id="{id}">…</code>` (or `<pre id=…>`) on a page.
 fn code(body: &str, id: &str) -> String {
-    let at = body.find(&format!("<code id=\"{id}\">")).unwrap_or_else(|| panic!("no {id}")) + id.len() + 12;
-    body[at..at + body[at..].find("</code>").unwrap()].to_string()
+    for tag in ["code", "pre"] {
+        if let Some(at) = body.find(&format!("<{tag} id=\"{id}\">")) {
+            let at = at + id.len() + tag.len() + 8;
+            return body[at..at + body[at..].find(&format!("</{tag}>")).unwrap()].to_string();
+        }
+    }
+    panic!("no {id}")
 }
 
 /// Sets up a device of the logged-in user for `owner`; returns its token from the block shown once.
 async fn device(c: &mut Client, owner: &str) -> String {
     let r = c.post_form("/settings/uploader", &[("name", "PractiCalUploader"), ("owner", owner)]).await;
-    assert_eq!(r.location().as_deref(), Some("/settings#add-uploader"), "{}", r.body);
+    assert_eq!(r.location().as_deref(), Some("/settings#add-uploader-wait"), "{}", r.body);
     let toml = code(&c.get("/settings").await.body, "up-toml").replace("&#34;", "\"");
     assert!(!toml.contains("calendar"), "{toml}");
     toml.lines().find_map(|l| l.strip_prefix("token = \"")).map(|v| v.trim_end_matches('"').to_string()).unwrap()
@@ -312,4 +317,27 @@ async fn the_device_reads_its_own_status() {
     c.post_form("/settings/tokens", &[("name", "phone")]).await;
     let valid = code(&c.get("/settings").await.body, "new-token");
     assert_eq!(get_info(&off, "alice", &valid).await.status, StatusCode::NOT_FOUND, "the flag is off");
+}
+
+#[tokio::test]
+async fn the_wizard_waits_for_the_devices_first_request() {
+    let app = app(true).await;
+    let mut c = app.login("alice").await;
+    let r = c.post_form("/settings/uploader", &[("name", "Mac"), ("owner", "alice")]).await;
+    assert_eq!(r.location().as_deref(), Some("/settings#add-uploader-wait"));
+    let page = c.get("/settings").await;
+    let page = page.ok();
+    let toml = code(&page.body, "up-toml").replace("&#34;", "\"");
+    let token = toml.lines().find_map(|l| l.strip_prefix("token = \"")).map(|v| v.trim_end_matches('"').to_string()).unwrap();
+    let dev = page.body.split("data-upl-device=\"").nth(1).and_then(|s| s.split('"').next()).unwrap().to_string();
+    let path = format!("/settings/uploader/{dev}/status");
+    assert_eq!(c.get(&path).await.ok().json(), json!({ "connected": false, "name": "Mac" }), "not before its first request");
+    get_info(&app, "alice", &token).await.ok();
+    assert_eq!(c.get(&path).await.ok().json(), json!({ "connected": true, "name": "Mac" }), "after it");
+    // the details show once: a second view of step 3 says so instead
+    assert!(!c.get("/settings").await.body.contains(&token));
+    // another user cannot ask; a refused form goes back to the form, not to step 3
+    let mut b = app.login("bob").await;
+    assert_eq!(b.get(&format!("/settings/uploader/{dev}/status")).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(c.post_form("/settings/uploader", &[("name", " "), ("owner", "alice")]).await.location().as_deref(), Some("/settings#add-uploader"));
 }

@@ -178,3 +178,35 @@
       if (rows[0]) pick(rows[0]);
     }
   }
+  /* The uploader's step 3 (#add-uploader-wait): waits for the device's first request to PractiCal (domain::uploader
+     `seen` on GET/PUT /api/uploader; asked through `GET /settings/uploader/{id}/status`) → #add-uploader-done. The
+     phones' rhythm above: every 2 s for two minutes, then every 10 s for 13 more, not while the page is hidden; then a
+     tap, a key or the page shown again waits on. */
+  const upw = settings && $('#add-uploader-wait [data-upl-device]', settings);
+  if (upw) {
+    const TRIES = 60 + 78;
+    let timer = 0, tries = 0, busy = false, done = false;
+    const ask = async () => {
+      clearTimeout(timer);
+      if (busy || done || location.hash !== '#add-uploader-wait' || document.hidden || tries >= TRIES) return;
+      busy = true;
+      const r = await practical.req('/settings/uploader/' + encodeURIComponent(upw.dataset.uplDevice) + '/status');
+      busy = false;
+      if (r.ok && r.data.connected) {
+        done = true;
+        $$('[data-upl-name]', settings).forEach(e => { e.textContent = r.data.name; });
+        location.replace('#add-uploader-done');
+        return;
+      }
+      if (r.kind === 'notfound') return; // the device was deleted meanwhile: nothing to wait for
+      timer = setTimeout(ask, ++tries < 60 ? 2000 : 10000);
+    };
+    const wait = () => { if (location.hash === '#add-uploader-wait') { tries = 0; ask(); } };
+    addEventListener('hashchange', () => {
+      if (location.hash === '#add-uploader-done' && done) $('#add-uploader-done h1', settings).focus(); // the page changed by itself: say so
+      else wait();
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) wait(); });
+    ['pointerdown', 'keydown'].forEach(t => settings.addEventListener(t, () => { if (tries >= TRIES) wait(); }));
+    wait();
+  }

@@ -420,8 +420,9 @@ that device only. **Settings → Connected devices → Add a device** walks you 
   the page shows a QR code that opens the guide on the iPhone without signing in there.
 - **PractiCalUploader**, only where the server enables it (`PRACTICAL__UPLOADER`): a private companion tool that
   fills read-only calendars from another source, for example Outlook on a work computer. You name the device and
-  choose who owns its calendars; the assistant shows the block for its configuration once. Which calendars it
-  uploads, you choose in the uploader; disconnecting the device asks which of them to delete.
+  choose who owns its calendars; the assistant shows the commands and the block for its configuration once, each
+  with a copy button, and waits until the uploader has connected. Which calendars it uploads, you choose in the
+  uploader; disconnecting the device asks which of them to delete.
 - **Manual**, for any other app: the server address, your user name, the CalDAV and CardDAV addresses, and a button
   that creates a password for one device. PractiCal shows it exactly once, so copy it into the app right away.
 
