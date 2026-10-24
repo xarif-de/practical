@@ -103,7 +103,7 @@ test('without a writable calendar a new event asks for a calendar first', async 
   await page.locator('#fab').click();
   await expect(dialog).toBeVisible();
   await dialog.locator('.btn-primary').click();
-  await expect(page).toHaveURL(/\/settings#new-calendar$/);
+  await expect(page).toHaveURL(/\/settings#collections$/);
   // no calendar at all: the dialog says so
   await page.goto(BASE + '/calendar?view=month&date=2026-11-10');
   await page.locator('#ed-cal option').evaluateAll(os => os.forEach(o => o.remove()));
