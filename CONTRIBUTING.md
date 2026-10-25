@@ -192,6 +192,20 @@ builds the image and loads it into Docker as `xarif-practical`.
 
 Builds of `main` are never deployed. Only release tags are.
 
+Releases come two ways:
+
+- **By hand**, for features and fixes: bump the version, run the full local gate, tag `vX.Y.0` (or a patch).
+- **Automatically**, for dependency updates (policy since 2026-10-25). Every hour, the workflow
+  `.forgejo/workflows/release.yml` checks `main`. When `renovate-bot` changed something under `build/` since the
+  newest tag and the CI of `main` is green, it raises the patch version in `build/Cargo.toml` and `build/Cargo.lock`,
+  commits as `release-bot` and pushes the tag `vX.Y.(Z+1)`. Changes under `e2e/` only do not count: they do not
+  change the image. Whatever else is on `main` ships with it. The browser tests, the accessibility checks and the
+  benchmark run with the next release by hand.
+
+The logic is `.forgejo/release/auto-release.sh`; `mise run test-auto-release` tests it with throwaway repositories.
+The bot's token is the repository secret `RELEASE_BOT_TOKEN`. A failed or stalled release run and a tag without an
+image raise an alert (kubernetes/forgejo-pr-exporter `RELEASE_REPOS`).
+
 In the reference deployment, Renovate pins the new release in kubernetes/rustical. It opens a pull request, CI
 runs, and minor and patch updates merge automatically. ArgoCD then syncs the change, and the pod restarts with both
 containers on the new image.

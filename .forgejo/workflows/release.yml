@@ -1,0 +1,29 @@
+# Automatic patch release (CONTRIBUTING.md "Build versions and releases"): hourly, release-bot
+# runs .forgejo/release/auto-release.sh on main. It tags vX.Y.(Z+1) when renovate-bot changed
+# build/ since the newest tag and main's CI is green; the tag push then runs ci.yml (dist build)
+# and kubernetes/rustical's Renovate rolls it out.
+# Inline on purpose (no `uses:`): Forgejo DISABLES a scheduled workflow it cannot expand.
+# release-bot, not the job token: the job token cannot push to the protected main (pre-receive
+# 500, Actions user id -2) and its tag pushes start no workflow (both measured 2026-10-25).
+name: release
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: docker
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-22.04@sha256:f5f5c29208c4fd541704fe7b8df33d3bf620ce4ac46f36853b7abeb0159705c4
+    env:
+      TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+    steps:
+      - name: patch release when dependencies changed
+        run: |
+          set -eu
+          [ -n "$TOKEN" ] || { echo "secret RELEASE_BOT_TOKEN is missing"; exit 1; }
+          auth="Authorization: Basic $(printf 'release-bot:%s' "$TOKEN" | base64 | tr -d '\n')"
+          git -c http.extraHeader="$auth" clone -q --branch main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" /tmp/r
+          cd /tmp/r
+          git config http.extraHeader "$auth"
+          FORGEJO_API="$GITHUB_SERVER_URL/api/v1" REPOSITORY="$GITHUB_REPOSITORY" PUSH=1 bash .forgejo/release/auto-release.sh

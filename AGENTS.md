@@ -68,6 +68,9 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → CI builds `[profile.dist]`; kubernetes/rustical's
   Renovate follows exact `vX.Y.Z` tags only.
 - Pushes to `main` publish build versions (`e2e` profile, `:main` / `main-<sha8>`): never deployed.
+- Dependency updates release themselves: `.forgejo/workflows/release.yml` (hourly, `release-bot`) tags the next patch
+  when renovate-bot changed `build/` and main's CI is green (CONTRIBUTING.md "Build versions and releases"). So keep
+  `main` releasable: unfinished work stays on a branch. A release by hand still bumps `build/Cargo.toml` itself.
 
 ## Code rules
 - Behaviour and look stay unchanged unless the task says otherwise. Desktop UI must never break; phone must not regress.
