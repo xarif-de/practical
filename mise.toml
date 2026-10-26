@@ -157,10 +157,6 @@ npx playwright install chromium >/dev/null
 E2E_SUITE=a11y npx playwright test && exec node a11y-check.mjs
 '''
 
-[tasks.test-auto-release]
-description = "Behavioural test of the automatic patch release (.forgejo/release/auto-release.sh) with throwaway repos"
-run = "bash .forgejo/release/auto-release-test.sh"
-
 [tasks.gate-quick]
 description = "The cheapest gate: cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos and a11y"
 run = "e2e/gate.sh quick"

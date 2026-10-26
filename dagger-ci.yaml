@@ -9,3 +9,11 @@ image:
     release-build-args: [CARGO_PROFILE=dist]
 rust:
   source: build
+# Dependency updates release themselves as a patch (base/dagger-modules docs/release.md):
+# .forgejo/workflows/release.yml (templates/release.yml), release-bot, secret RELEASE_BOT_TOKEN.
+# build/ only: an e2e/ test dependency does not change the image.
+release:
+  version: cargo
+  manifest: build/Cargo.toml
+  paths: [build/]
+  name: PractiCal

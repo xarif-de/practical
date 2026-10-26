@@ -1,29 +1,45 @@
-# Automatic patch release (CONTRIBUTING.md "Build versions and releases"): hourly, release-bot
-# runs .forgejo/release/auto-release.sh on main. It tags vX.Y.(Z+1) when renovate-bot changed
-# build/ since the newest tag and main's CI is green; the tag push then runs ci.yml (dist build)
-# and kubernetes/rustical's Renovate rolls it out.
-# Inline on purpose (no `uses:`): Forgejo DISABLES a scheduled workflow it cannot expand.
-# release-bot, not the job token: the job token cannot push to the protected main (pre-receive
-# 500, Actions user id -2) and its tag pushes start no workflow (both measured 2026-10-25).
+# release for a repo that releases itself (docs/release.md): copy this file VERBATIM to
+# .forgejo/workflows/release.yml. Hourly, it runs `auto-release` with the repo's
+# `release:` section of dagger-ci.yaml: dependency updates by renovate-bot become a
+# patch release vX.Y.(Z+1); the tag push then runs ci.yml (image publish). Inline on
+# purpose: Forgejo disables a schedule for good when its workflow fails to expand at
+# schedule time, and a reusable `uses:` is expanded then. The install block is identical
+# to dagger-ci.yml's (tests/fork/workflows-tests.sh); refresh the copy when it changes.
+# Secret RELEASE_BOT_TOKEN: a PAT of release-bot with write on the repo (docs/release.md
+# "Set up a repo"); the job token cannot push to a protected branch.
 name: release
 on:
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
+    inputs:
+      DRY_RUN: { description: '1 = report what would be released, push nothing', required: false, default: '0' }
 jobs:
   release:
     runs-on: docker
     container:
       image: ghcr.io/catthehacker/ubuntu:act-22.04@sha256:f5f5c29208c4fd541704fe7b8df33d3bf620ce4ac46f36853b7abeb0159705c4
     env:
-      TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+      DAGGER_NO_NAG: '1'
+      RELEASE_BOT_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+      DRY_RUN: ${{ github.event.inputs.DRY_RUN }}
     steps:
-      - name: patch release when dependencies changed
+      - name: dagger call auto-release
         run: |
           set -eu
-          [ -n "$TOKEN" ] || { echo "secret RELEASE_BOT_TOKEN is missing"; exit 1; }
-          auth="Authorization: Basic $(printf 'release-bot:%s' "$TOKEN" | base64 | tr -d '\n')"
-          git -c http.extraHeader="$auth" clone -q --branch main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" /tmp/r
-          cd /tmp/r
-          git config http.extraHeader "$auth"
-          FORGEJO_API="$GITHUB_SERVER_URL/api/v1" REPOSITORY="$GITHUB_REPOSITORY" PUSH=1 bash .forgejo/release/auto-release.sh
+          [ -n "$RELEASE_BOT_TOKEN" ] || { echo "secret RELEASE_BOT_TOKEN is missing"; exit 1; }
+          # >>> dagger-install (identical in every workflow that calls dagger; tests/fork/workflows-tests.sh)
+          # CLI version = dagger.json engineVersion: one pin, Renovate-managed.
+          # Three tries: one dropped download (curl 56 from dl.dagger.io, 2026-10-24) failed
+          # the run before any check, and a red Renovate PR waits 6 h for its retry.
+          for i in 1 2 3; do
+            v=$(curl -fsS "$GITHUB_SERVER_URL/base/dagger-modules/raw/branch/main/dagger.json" |
+              sed -n 's/.*"engineVersion": *"v\{0,1\}\([0-9][0-9.]*\)".*/\1/p') && test -n "$v" &&
+              curl -fsSL https://dl.dagger.io/dagger/install.sh | DAGGER_VERSION="$v" BIN_DIR=/usr/local/bin sh && break
+            [ "$i" -lt 3 ] || exit 1
+            sleep $((i * 10))
+          done
+          # <<< dagger-install
+          dagger call --progress=plain -m "${GITHUB_SERVER_URL#https://}/base/dagger-modules.git@main" auto-release \
+            --server="$GITHUB_SERVER_URL" --repository="$GITHUB_REPOSITORY" --token=env://RELEASE_BOT_TOKEN \
+            --dry-run="$([ "${DRY_RUN:-0}" = 1 ] && echo true || echo false)"

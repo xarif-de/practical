@@ -202,9 +202,11 @@ Releases come two ways:
   change the image. Whatever else is on `main` ships with it. The browser tests, the accessibility checks and the
   benchmark run with the next release by hand.
 
-The logic is `.forgejo/release/auto-release.sh`; `mise run test-auto-release` tests it with throwaway repositories.
-The bot's token is the repository secret `RELEASE_BOT_TOKEN`. A failed or stalled release run and a tag without an
-image raise an alert (kubernetes/forgejo-pr-exporter `RELEASE_REPOS`).
+The mechanism is shared: base/dagger-modules `docs/release.md` (function `auto-release`, configured by the `release:`
+section of `dagger-ci.yaml`; the workflow is `templates/release.yml` verbatim). The bot's token is the repository
+secret `RELEASE_BOT_TOKEN`. A failed or stalled release run and a tag without an image raise an alert
+(kubernetes/forgejo-pr-exporter `RELEASE_REPOS`). To see what the next run would release, dispatch `release.yml`
+with `DRY_RUN=1`.
 
 In the reference deployment, Renovate pins the new release in kubernetes/rustical. It opens a pull request, CI
 runs, and minor and patch updates merge automatically. ArgoCD then syncs the change, and the pod restarts with both
