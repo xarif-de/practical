@@ -50,7 +50,8 @@ fn user_tz(input: &EventInput, default: chrono_tz::Tz) -> chrono_tz::Tz {
 }
 
 /// A sharee who writes an object it would then see shortened or not at all (its CLASS under the owner's
-/// policy) has to confirm it first (R2: it may; the editor asks). Own calendars: nothing to ask.
+/// policy) has to confirm it first (R2: it may; the editor asks). Own calendars: nothing to ask. Changing an
+/// object it sees only shortened is refused before (`Authorized::ensure_seen_whole`), so that is no question.
 pub(crate) fn confirm_visibility(cal: &crate::state::Authorized, obj: &CalendarObject, confirmed: bool) -> AppResult<()> {
     let level = cal.level(obj);
     if !cal.is_own() && !confirmed && level < crate::state::FULL_LEVEL {
@@ -97,6 +98,7 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     collections::ensure_writable(state, &cal).await?;
     let tz = user_tz(&input, default_tz);
     let existing = state.collections().object(&cal, object_id).await?;
+    cal.ensure_seen_whole(&existing)?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != existing.get_etag()

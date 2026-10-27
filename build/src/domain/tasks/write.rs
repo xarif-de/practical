@@ -240,6 +240,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
     let cal = collections::ensure_calendar(state, user, &i.principal, &i.cal_id, Need::Read).await?;
     collections::ensure_writable(state, &cal).await?;
     let existing = state.collections().object(&cal, object_id).await?;
+    cal.ensure_seen_whole(&existing)?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != existing.get_etag()

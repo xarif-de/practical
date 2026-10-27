@@ -360,6 +360,15 @@ impl Authorized {
             ResolvedKind::Copy { policy, .. } => Some(*policy),
         }
     }
+    /// A change to `object` through a share needs it seen whole: one seen shortened is refused as the share
+    /// would refuse it (`err-share-level`, 422), before any field of the shortened view is checked
+    pub fn ensure_seen_whole(&self, object: &CalendarObject) -> AppResult<()> {
+        if self.level(object) < FULL_LEVEL {
+            return Err(write_error(rustical_store::Error::CopyRule(CopyRule::Level)));
+        }
+        Ok(())
+    }
+
     /// The level an object has here ([`FULL_LEVEL`] in an own collection)
     pub fn level(&self, object: &CalendarObject) -> u8 {
         rustical_store::shared::level(&self.resolved, object)

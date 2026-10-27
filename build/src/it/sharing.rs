@@ -241,3 +241,31 @@ async fn history_names_the_sharee_and_tells_hidden_objects_to_nobody() {
     let h = erin.get_json("/api/history").await.ok().body.clone();
     assert!(!h.contains("Marker7") && !h.contains("Verborgen"), "{h}");
 }
+
+#[tokio::test]
+async fn personal_colour_actions_leave_a_shares_objects_alone() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    app.put_ics("bob", &w.team, "bunt", &crate::testkit::vevent("bunt", "Bunt", "DTSTART:20261022T100000Z\nDTEND:20261022T110000Z\nCOLOR:#112233")).await;
+    let mut erin = app.login("erin").await;
+    // the optimiser lists the object (it is in erin's view) but not as hers to recolour, and refuses a change to it
+    let src = erin.get_json("/api/colors").await.ok().json();
+    let it = src.as_array().or(src["sources"].as_array()).unwrap().iter().find(|s| s["key"].as_str().is_some_and(|k| k.ends_with("/bunt"))).cloned().unwrap_or_else(|| panic!("{src}"));
+    assert_eq!(it["editable"], false, "{it}");
+    let r = erin.json(Method::POST, "/api/colors/batch", json!({ "changes": [{ "kind": "event", "key": format!("group.team/{}/bunt", w.team_copy), "color": "#654321" }] })).await;
+    assert_eq!(r.ok().json(), json!({ "count": 0, "failed": 1 }));
+    assert!(stored(app, "bob", &w.team, "bunt").await.contains("COLOR:#112233"));
+}
+
+#[tokio::test]
+async fn a_shortened_object_is_refused_with_a_message_not_asked_about() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    app.put_ics("bob", &w.team, "ptask", &crate::testkit::vtodo("ptask", "Private Aufgabe", "CLASS:PRIVATE")).await;
+    let mut erin = app.login("erin").await;
+    // the tick box of the task list on a task erin sees only shortened: the share's rule, as a message
+    let r = erin.json(Method::PUT, &format!("/api/tasks/group.team/{}/ptask", w.team_copy), json!({ "principal": "group.team", "cal_id": w.team_copy, "summary": "", "completed": true })).await;
+    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.body);
+    assert!(!r.body.contains("confirm-visibility") && !r.body.is_empty(), "{}", r.body);
+    assert!(!stored(app, "bob", &w.team, "ptask").await.contains("COMPLETED"));
+}

@@ -77,7 +77,8 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
             key: format!("{}/{}/{}", cal.principal, cal.id, o.id),
             cal: Some(cal.displayname.clone()),
             cal_color: Some(cal.color.clone()),
-            editable: !cal.read_only,
+            // the optimiser recolours only the user's own calendars' objects (a share's are its owner's)
+            editable: !cal.read_only && !cal.view.is_copy(),
             cats: o.categories.iter().map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).collect(),
         });
     }
@@ -121,7 +122,11 @@ pub async fn apply(state: &AppState, user: &Principal, changes: &[Change]) -> Ap
         let parts: Vec<&str> = ch.key.split('/').collect();
         let ok = match (ch.kind.as_str(), parts.as_slice()) {
             ("calendar", [o, id]) => set_calendar_color(state, user, o, id, &color).await.is_ok(),
-            ("event" | "task", [o, cal, id]) => set_object_color(state, user, o, cal, id, &color).await.is_ok(),
+            // never an object of a share: a personal colour action changes only the user's own calendars
+            ("event" | "task", [o, cal, id]) => {
+                let own = collections::ensure_calendar(state, user, o, cal, Need::Read).await.is_ok_and(|a| a.is_own());
+                own && set_object_color(state, user, o, cal, id, &color).await.is_ok()
+            }
             ("category" | "category-task", _) if prefs::is_hex_color(&color) => {
                 let scope = if ch.kind == "category" { "event" } else { "task" };
                 if !rules.contains_key(scope) {

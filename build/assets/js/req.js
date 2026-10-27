@@ -99,20 +99,23 @@
           let r, tell = true;
           try {
             r = await fn();
-            while (r && !r.ok && r.kind === 'conflict' && o.conflict) {
-              set('conflict'); stop(); // the question waits for the user, not for the server
-              const a = await askYesNo(tr('js-req-conflict-ask'), tr('js-req-mine'), tr('js-req-theirs'), true);
-              if (a === null) break;
-              set('saving'); stop = P.progress(300);
-              if (!a) { await o.conflict.reload(); tell = false; break; }
-              r = await o.conflict.overwrite();
-            }
-            const vis = r && !r.ok && r.status === 422 && o.confirm ? confirmLevel(r.body) : null;
-            if (vis !== null) {
-              set('conflict'); stop();
-              const a = await askYesNo(tr(vis ? 'js-req-vis-shortened' : 'js-req-vis-gone'), tr('js-req-vis-save'), tr('js-req-vis-back'), true);
-              set('saving'); stop = P.progress(300);
-              if (a) r = await o.confirm(); else tell = false;
+            // each answer may ask again (a 409 after the confirmed write, a 422 after the overwrite)
+            while (r && !r.ok) {
+              const vis = r.status === 422 && o.confirm ? confirmLevel(r.body) : null;
+              if (r.kind === 'conflict' && o.conflict) {
+                set('conflict'); stop(); // the question waits for the user, not for the server
+                const a = await askYesNo(tr('js-req-conflict-ask'), tr('js-req-mine'), tr('js-req-theirs'), true);
+                if (a === null) break;
+                set('saving'); stop = P.progress(300);
+                if (!a) { await o.conflict.reload(); tell = false; break; }
+                r = await o.conflict.overwrite();
+              } else if (vis !== null) {
+                set('conflict'); stop();
+                const a = await askYesNo(tr(vis ? 'js-req-vis-shortened' : 'js-req-vis-gone'), tr('js-req-vis-save'), tr('js-req-vis-back'), true);
+                set('saving'); stop = P.progress(300);
+                if (!a) { tell = false; break; }
+                r = await o.confirm();
+              } else break;
             }
           } catch (e) { console.error(e); r = { ok: false, kind: 'server', status: 0, msg: tr('js-req-server'), body: '' }; }
           pending = null; stop();
