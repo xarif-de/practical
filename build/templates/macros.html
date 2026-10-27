@@ -164,17 +164,18 @@
   </div>
   {%- if c.shareable() %}
   {#- sharing (state::Collections): one line per share — who, the access (saves itself), the trash ending it (its own
-      form below the list: a form cannot hold another); then sharing anew. A group's note and members ride in the title -#}
+      form below the list: a form cannot hold another; its id carries the owner's length, so `a-b`/`c` and `a`/`b-c` differ);
+      then sharing anew. A group's note and members ride in the title -#}
   <div class="label">{{ ctx.t("share-title") }}</div>
   <div class="group{% if !shares.is_empty() %} shares{% endif %}">
     {%- for s in shares %}
-    <form class="cell noic share-row" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-autosave>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"><span class="who"{% if s.is_group %} title="{{ ctx.t("share-group-note") }}{% if let Some(m) = s.members %} {{ ctx.t1("share-members", "list", m.join(", ").as_str()) }}{% endif %}"{% endif %}>{{ s.label }}{% if s.is_group %} ({{ ctx.t("group") }}){% endif %}<span class="sub">{{ s.sharee }}</span></span>{{ access_seg(ctx.t1("share-access-of", "name", s.label), s.write) }}<span class="val end"><button class="btn icon-btn" type="submit" form="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}-{{ loop.index }}" title="{{ ctx.t("share-end") }}" aria-label="{{ ctx.t1("share-end-of", "name", s.label) }}" data-confirm="{{ ctx.t1("confirm-unshare", "name", s.label) }}">{{ ico("trash") }}</button></span></form>
+    <form class="cell noic share-row" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-autosave>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"><span class="who"{% if s.is_group %} title="{{ ctx.t("share-group-note") }}{% if let Some(m) = s.members %} {{ ctx.t1("share-members", "list", m.join(", ").as_str()) }}{% endif %}"{% endif %}>{{ s.label }}{% if s.is_group %} ({{ ctx.t("group") }}){% endif %}<span class="sub">{{ s.sharee }}</span></span>{{ access_seg(ctx.t1("share-access-of", "name", s.label), s.write) }}<span class="val end"><button class="btn icon-btn" type="submit" form="unshare-{{ pre }}-{{ c.principal.len() }}-{{ c.principal }}-{{ c.id }}-{{ loop.index }}" title="{{ ctx.t("share-end") }}" aria-label="{{ ctx.t1("share-end-of", "name", s.label) }}" data-confirm="{{ ctx.t1("confirm-unshare", "name", s.label) }}">{{ ico("trash") }}</button></span></form>
     {%- else %}
     <div class="cell noic"><span class="muted">{{ ctx.t("share-none") }}</span></div>
     {%- endfor %}
   </div>
   {%- for s in shares %}
-  <form id="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}-{{ loop.index }}" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/unshare" hidden>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"></form>
+  <form id="unshare-{{ pre }}-{{ c.principal.len() }}-{{ c.principal }}-{{ c.id }}-{{ loop.index }}" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/unshare" hidden>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"></form>
   {%- endfor %}
   <form class="group sp share-add" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-t-confirm="{{ ctx.t("js-share-confirm") }}" data-t-group="{{ ctx.t("share-group-note") }}" data-t-members="{{ ctx.t("js-share-members") }}">{{ csrf() }}
     {#- suggestions from two typed characters on (settings-sharing.js, share_forms::sharee_suggest) -#}

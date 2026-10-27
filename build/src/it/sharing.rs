@@ -320,13 +320,13 @@ async fn suggestions_only_by_what_people_let_others_find() {
     assert_eq!(values(bob.get_json("/api/sharee/suggest?q=erin%40ex").await.ok().json()), ["erin"]);
     assert!(values(bob.get_json("/api/sharee/suggest?q=bo").await.ok().json()).is_empty(), "not the user");
     assert!(values(bob.get_json("/api/sharee/suggest?q=gr").await.ok().json()).is_empty(), "no groups");
-    // erin keeps name and id out: found by the address only, which then goes into the field
+    // erin keeps name and id out: found by the address only, which then goes into the field and stands for the name
     let mut erin = app.login("erin").await;
     erin.post_form("/settings/privacy", &[("listed_by_email", "1")]).await;
     assert!(values(bob.get_json("/api/sharee/suggest?q=er").await.ok().json()) == ["erin@example.org"], "by the address prefix");
     assert!(values(bob.get_json("/api/sharee/suggest?q=Schr").await.ok().json()).is_empty(), "not by the name");
     let r = bob.get_json("/api/sharee/suggest?q=erin%40").await.ok().json();
-    assert_eq!(r, json!([{ "value": "erin@example.org", "name": "Erin Schreiber", "id": null, "email": "erin@example.org" }]));
+    assert_eq!(r, json!([{ "value": "erin@example.org", "name": "erin@example.org", "id": null, "email": "erin@example.org" }]));
     // and the address out as well: not suggested at all, yet sharing by the whole id still works
     erin.post_form("/settings/privacy", &[]).await;
     assert!(values(bob.get_json("/api/sharee/suggest?q=er").await.ok().json()).is_empty());

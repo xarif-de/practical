@@ -221,6 +221,8 @@ pub(super) async fn sharee_suggest(State(state): State<SharedState>, user: Princ
             continue;
         }
         let Some(value) = (if no_id { email.clone() } else { Some(p.id.clone()) }) else { continue };
+        // unlisted by name and id: neither shows, not even as the name (which falls back to the id)
+        let name = if no_id { value.clone() } else { name };
         out.push(Suggestion { value, name, id: (!no_id).then(|| p.id.clone()), email });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.value.cmp(&b.value)));

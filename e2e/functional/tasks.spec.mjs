@@ -415,3 +415,14 @@ test('a pinned filter star keeps the next task write in place (no page load)', a
   await star.click();
   expect((await unpin).ok()).toBe(true);
 });
+
+test('a private task shows its visibility in view mode too (a task has no status card)', async ({ page }) => {
+  const key = await seedTask(page, 'F3 Privat', { class: 'PRIVATE' });
+  await view(page, 'groups');
+  await item(page, key).click();
+  await expect(page.locator('#edh')).toHaveValue('F3 Privat');
+  await expect(page.locator('#edform')).toHaveClass(/mode-view/);
+  await expect(page.locator('#ed-vis')).toBeVisible();
+  await expect(page.locator('#ed-vis-out')).toHaveText('privat');
+  await expect(page.locator('#ed-gen-tiles .stile').first()).toBeHidden(); // the other tiles stay edit-only
+});

@@ -68,6 +68,9 @@
 .cardform .tags input { flex: 1; min-width: 120px; width: auto; }
 /* modes */
 .cardform.mode-view .edits { display: none !important; }
+/* a task has no status card whose view line names its CLASS: in view mode its tiles show the visibility tile alone */
+.cardform.mode-view #ed-gen-tiles:has(> #ed-vis:not([hidden])) { display: grid !important; }
+.cardform.mode-view #ed-gen-tiles > .st-dyn { display: none !important; }
 /* a read-only calendar's entry (`.ro`, editor/fill.js): no unlock, no delete; its hint replaces the view-mode one */
 .cardform.ro #ed-lock, .cardform.ro #ed-delete, .cardform.ro .vh { display: none; }
 .cardform:not(.ro) .ro-hint { display: none; }
