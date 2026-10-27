@@ -813,6 +813,11 @@ impl Collections<'_> {
         }
     }
 
+    /// The e-mail address a principal last logged in with (`auth`), by which others can share with it
+    pub async fn principal_email(&self, principal: &str) -> AppResult<Option<String>> {
+        Ok(self.0.shares.principal_email(principal).await?)
+    }
+
     /// How objects of an own calendar with CLASS:PRIVATE/CONFIDENTIAL appear in its shares (hidden, both, unless set)
     pub async fn visibility(&self, a: &Authorized) -> AppResult<Policy> {
         a.checked(Need::Own)?;

@@ -120,6 +120,9 @@ pub struct SettingsPage {
     pub share_rows: HashMap<String, Vec<ShareRow>>,
     /// the visibility levels of each shareable own calendar (`share_forms::cal_vis`), by `"<p>/<id>"`
     pub cal_vis: HashMap<String, CalVis>,
+    /// the user's id and the e-mail address of its last login: what #privacy lets others find it by
+    pub user_id: String,
+    pub own_email: Option<String>,
 }
 
 impl SettingsPage {
@@ -131,6 +134,16 @@ impl SettingsPage {
     /// No visibility levels (an address book: contacts are always shown in full)
     pub fn no_vis(&self) -> Option<&CalVis> {
         None
+    }
+
+    /// How others find the user among the sharing suggestions (#privacy, its row on the home page)
+    pub fn findable_key(&self) -> &'static str {
+        match (self.prefs.unlisted_by_id, self.prefs.unlisted_by_email) {
+            (false, false) => "privacy-find-both",
+            (false, true) => "privacy-find-id",
+            (true, false) => "privacy-find-email",
+            (true, true) => "privacy-find-none",
+        }
     }
 
     /// The visibility levels of a shareable own calendar
@@ -367,6 +380,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         prefs: p.clone(),
         share_rows: share_rows(&state, &user, &cals_all, &abs_all).await?,
         cal_vis: cal_vis(&state, &cals_all).await?,
+        user_id: user.id.clone(),
+        own_email: state.collections().principal_email(&user.id).await?,
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
@@ -531,6 +546,8 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/addressbooks/{owner}/{id}/unshare", post(unshare_addressbook))
         .route("/settings/calendars/{owner}/{id}/visibility", post(calendar_visibility))
         .route("/api/sharee", get(sharee))
+        .route("/api/sharee/suggest", get(sharee_suggest))
+        .route("/settings/privacy", post(privacy_save))
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/uploader", post(uploader_create))

@@ -9,7 +9,7 @@
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, [...sel.options].indexOf(stOpt(sel)))] || ic[0]; };
   const stText = sel => stOpt(sel) ? stOpt(sel).textContent : sel.value;
   function stRender() {
-    visRender(); // the CLASS select left the card for its own row (visibility.js); it renders with the others
+    visRender(); // the CLASS select is not a tile but the slider under them (visibility.js); it renders with them
     $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); box.innerHTML = sels.map(sel => `<button class="stile${stVal(sel) === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
     if (TASK) return;
     const t = SC.dataset, parts = [];

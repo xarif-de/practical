@@ -10,6 +10,7 @@
 .set .foot { font-size: 12.5px; color: var(--fg-3); margin: 6px 16px 0; line-height: 1.45; }
 /* the element stays (shell/settings-pages.js hides and shows #v-sources), but an empty one adds no gap */
 .set .foot:empty { display: none; }
+.set .foot a { color: var(--accent); text-decoration: none; } .set .foot a:hover { text-decoration: underline; }
 .set .scope { margin: 0 0 10px; }
 .set .cell { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 6px 14px; position: relative; font-size: 15px; color: var(--fg); box-sizing: border-box; width: 100%; }
 .set :is(button, summary, label).cell { font: inherit; font-size: 15px; background: none; border: 0; border-radius: 0; text-align: left; cursor: pointer; list-style: none; margin: 0; }
@@ -32,6 +33,17 @@
 .set .cell .val form.inline { display: inline; }
 .set .cell .val .link { font-size: 14px; padding: 2px 4px; cursor: pointer; list-style: none; } .set .cell .val summary.link::-webkit-details-marker { display: none; }
 .set .cell .val .danger-zone { display: inline; }
+/* a cell whose field takes the rest of the row (sharing: "Teilen mit"), so a long placeholder is not cut */
+.set .cell.noic.wide { grid-template-columns: auto minmax(0, 1fr); }
+.set .cell.wide .val { justify-self: stretch; }
+.set .cell.wide .val input[type=text] { max-width: none; }
+/* sharing suggestions (settings-sharing.js): under the field, as wide as it */
+.set .share-find { position: relative; }
+.set .share-sugg { position: absolute; right: 0; top: calc(100% + 6px); min-width: 100%; max-width: 360px; z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); padding: 4px; text-align: left; }
+.set .share-sugg button { all: unset; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; color: var(--fg); line-height: 1.3; }
+.set .share-sugg button small { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set .share-sugg button:hover, .set .share-sugg button[aria-selected=true] { background: var(--tile); }
+.set .share-sugg button:focus-visible { outline: revert; }
 .set .cell.link { cursor: pointer; } .set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
 .set .cell .chev { color: var(--fg-3); font-size: 20px; line-height: 1; margin-left: 2px; }
 .set .cell.btnrow { grid-template-columns: 1fr; color: var(--accent); cursor: pointer; }

@@ -303,3 +303,50 @@ async fn levels_belong_to_the_calendar_not_its_owner() {
     assert_eq!(dave.get_json(&format!("/api/events/dave/{arbeit_copy}/review")).await.status, StatusCode::OK);
     assert_eq!(dave.get_json(&format!("/api/events/dave/{}/zahnarzt", w.privat_copy)).await.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn suggestions_only_by_what_people_let_others_find() {
+    use rustical_store::auth::AuthenticationProvider;
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    app.state.principals().set_principal_email("erin", Some("erin@example.org")).await.unwrap();
+    let mut bob = app.login("bob").await;
+    let values = |r: serde_json::Value| r.as_array().unwrap().iter().map(|s| s["value"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    // from two characters on; by id, by a word of the name, by the address; never the user, never a group
+    assert_eq!(bob.get_json("/api/sharee/suggest?q=e").await.ok().json(), json!([]));
+    let r = bob.get_json("/api/sharee/suggest?q=er").await.ok().json();
+    assert_eq!(r, json!([{ "value": "erin", "name": "Erin Schreiber", "id": "erin", "email": "erin@example.org" }]));
+    assert_eq!(values(bob.get_json("/api/sharee/suggest?q=Schr").await.ok().json()), ["erin"]);
+    assert_eq!(values(bob.get_json("/api/sharee/suggest?q=erin%40ex").await.ok().json()), ["erin"]);
+    assert!(values(bob.get_json("/api/sharee/suggest?q=bo").await.ok().json()).is_empty(), "not the user");
+    assert!(values(bob.get_json("/api/sharee/suggest?q=gr").await.ok().json()).is_empty(), "no groups");
+    // erin keeps name and id out: found by the address only, which then goes into the field
+    let mut erin = app.login("erin").await;
+    erin.post_form("/settings/privacy", &[("listed_by_email", "1")]).await;
+    assert!(values(bob.get_json("/api/sharee/suggest?q=er").await.ok().json()) == ["erin@example.org"], "by the address prefix");
+    assert!(values(bob.get_json("/api/sharee/suggest?q=Schr").await.ok().json()).is_empty(), "not by the name");
+    let r = bob.get_json("/api/sharee/suggest?q=erin%40").await.ok().json();
+    assert_eq!(r, json!([{ "value": "erin@example.org", "name": "Erin Schreiber", "id": null, "email": "erin@example.org" }]));
+    // and the address out as well: not suggested at all, yet sharing by the whole id still works
+    erin.post_form("/settings/privacy", &[]).await;
+    assert!(values(bob.get_json("/api/sharee/suggest?q=er").await.ok().json()).is_empty());
+    assert_eq!(bob.get_json("/api/sharee?q=erin").await.ok().json()["id"], "erin");
+    // back on: the default
+    erin.post_form("/settings/privacy", &[("listed_by_id", "1"), ("listed_by_email", "1")]).await;
+    let p = crate::domain::prefs::get(&app.state.db, "erin").await.unwrap();
+    assert_eq!((p.unlisted_by_id, p.unlisted_by_email), (false, false));
+}
+
+#[tokio::test]
+async fn privacy_page_lists_each_calendars_levels() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let mut bob = app.login("bob").await;
+    let page = bob.get("/settings").await.ok().body.clone();
+    let privacy = &page[page.find("id=\"privacy\"").expect("the privacy page")..];
+    let privacy = &privacy[..privacy.find("</section>").unwrap()];
+    // Team is set to 1/0 (seed); the row leads to the calendar's page, where the levels are changed
+    assert!(privacy.contains(&format!("href=\"#cal-bob-{}\"", w.team)), "{privacy}");
+    assert!(privacy.contains("privat: Nur die Zeit · vertraulich: Gar nicht"), "{privacy}");
+    assert!(privacy.contains("name=\"listed_by_id\" value=\"1\" checked") && privacy.contains("name=\"listed_by_email\" value=\"1\" checked"), "both on by default");
+}

@@ -13,7 +13,7 @@
   const CTF = CTT.tFields.split('|');
   const FLD = { summary: ['title', 11], all_day: ['when', 0], calendar: ['when', 1], color: ['when', 2], location: ['where', 3], rrule: ['repeat', 5], status: ['status', 6], transp: ['status', 7], class: ['status', 8], priority: ['status', 9] };
   // the card a setting's footer row sits on: FLD[k][0] is also its group in the stored rule (catrules.rs StatusRule.class), which stays
-  const CARD_OF = k => k === 'class' ? 'when' : FLD[k][0];
+  const CARD_OF = k => k === 'class' && TASK ? 'when' : FLD[k][0]; // a task has no status card: its CLASS sits in the general one
   const SCALARS = Object.keys(FLD), WHEN_KEYS = ['all_day', 'calendar', 'color'], STATUS_KEYS = ['status', 'transp', 'class', 'priority'], RULE_CARDS = ['when', 'where', 'alarm', 'repeat', 'status', 'links'];
   const ruleSetting = (r, fld) => { if (fld === 'summary') { const st = r.title; return st && st.value ? { mode: st.mode, value: st.value } : null; } if (fld === 'location') { const p = r.where; return p && p.mode !== 'off' && (p.location || p.geo) ? { mode: p.mode, value: p.location || '', geo: p.geo } : null; } if (fld === 'rrule') { const p = r.repeat; return p && p.mode !== 'off' && p.rrule ? { mode: p.mode, value: p.rrule } : null; } const st = (r[FLD[fld][0]] || {})[fld]; return st && st.value != null && st.value !== '' ? { mode: st.mode, value: st.value } : null; };
   const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');

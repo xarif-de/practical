@@ -125,6 +125,10 @@
 
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
+{#- a share's access as two segments (eye: read, pencil: write) over the hidden field `access`; the shared
+    `.seg[data-field]` handler of settings-pages.js sets it and fires `change` (a row's form saves itself) -#}
+{%- macro access_seg(label, write) -%}<span class="val"><input type="hidden" name="access" value="{% if write %}write{% else %}read{% endif %}"><span class="seg" data-field="access" role="group" aria-label="{{ label }}"><button type="button" data-v="read" aria-pressed="{{ !write }}" title="{{ ctx.t("share-read") }}" aria-label="{{ ctx.t("share-read") }}">{{ ico("eye") }}</button><button type="button" data-v="write" aria-pressed="{{ write }}" title="{{ ctx.t("share-write") }}" aria-label="{{ ctx.t("share-write") }}">{{ ico("pencil") }}</button></span></span>{%- endmacro -%}
+
 {%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only, shares, vis) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
@@ -163,7 +167,7 @@
   <div class="label">{{ ctx.t("share-title") }}</div>
   <div class="group">
     {%- for s in shares %}
-    <form class="cell noic share-row" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-autosave>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"><label class="share-pick"><input type="checkbox" name="sharee" value="{{ s.sharee }}" form="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}" aria-label="{{ ctx.t1("share-select", "name", s.label) }}"></label><span>{{ s.label }}{% if s.is_group %} ({{ ctx.t("group") }}){% endif %}<span class="sub">{{ s.sharee }}</span>{% if s.is_group %}<span class="sub">{{ ctx.t("share-group-note") }}{% if let Some(m) = s.members %} {{ ctx.t1("share-members", "list", m.join(", ").as_str()) }}{% endif %}</span>{% endif %}</span><span class="val"><select name="access" aria-label="{{ ctx.t1("share-access-of", "name", s.label) }}"><option value="read"{% if !s.write %} selected{% endif %}>{{ ctx.t("share-read") }}</option><option value="write"{% if s.write %} selected{% endif %}>{{ ctx.t("share-write") }}</option></select></span></form>
+    <form class="cell noic share-row" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-autosave>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"><label class="share-pick"><input type="checkbox" name="sharee" value="{{ s.sharee }}" form="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}" aria-label="{{ ctx.t1("share-select", "name", s.label) }}"></label><span>{{ s.label }}{% if s.is_group %} ({{ ctx.t("group") }}){% endif %}<span class="sub">{{ s.sharee }}</span>{% if s.is_group %}<span class="sub">{{ ctx.t("share-group-note") }}{% if let Some(m) = s.members %} {{ ctx.t1("share-members", "list", m.join(", ").as_str()) }}{% endif %}</span>{% endif %}</span>{{ access_seg(ctx.t1("share-access-of", "name", s.label), s.write) }}</form>
     {%- else %}
     <div class="cell noic"><span class="muted">{{ ctx.t("share-none") }}</span></div>
     {%- endfor %}
@@ -172,8 +176,9 @@
   <form class="group sp" id="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/unshare">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t("confirm-unshare") }}">{{ ico("unlink") }}<span>{{ ctx.t("share-end") }}</span></button></form>
   {%- endif %}
   <form class="group share-add" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-t-confirm="{{ ctx.t("js-share-confirm") }}" data-t-group="{{ ctx.t("share-group-note") }}" data-t-members="{{ ctx.t("js-share-members") }}">{{ csrf() }}
-    <label class="cell noic"><span>{{ ctx.t("share-with") }}</span><span class="val"><input type="text" name="sharee" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}"></span></label>
-    <label class="cell noic"><span>{{ ctx.t("share-access") }}</span><span class="val"><select name="access"><option value="read">{{ ctx.t("share-read") }}</option><option value="write">{{ ctx.t("share-write") }}</option></select></span></label>
+    {#- suggestions from two typed characters on (settings-sharing.js, share_forms::sharee_suggest) -#}
+    <div class="cell noic wide"><span>{{ ctx.t("share-with") }}</span><span class="val share-find"><input type="text" name="sharee" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}" aria-label="{{ ctx.t("share-with") }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}"><span class="share-sugg" id="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}" role="listbox" aria-label="{{ ctx.t("share-sugg") }}" hidden></span></span></div>
+    <div class="cell noic"><span>{{ ctx.t("share-access") }}</span>{{ access_seg(ctx.t("share-access"), false) }}</div>
     <button class="cell btnrow" type="submit">{{ ico("users") }}<span>{{ ctx.t("share-go") }}</span></button>
   </form>
   <p class="foot">{% if managed %}{{ ctx.t("share-uploader-hint") }} {% endif %}{{ ctx.t("share-hint") }}</p>
@@ -250,3 +255,13 @@
   </form>
 </section>
 {%- endmacro %}
+
+{#- R11: the editor's visibility, the face of the hidden CLASS select (js/editor/visibility.js): its name and value,
+    the steps as symbols over the slider (a click sets one; the slider is what assistive tech uses), what sharees see.
+    In the status card of an event, in the general card of a task. The first step ("beliebig") only in rule mode. -#}
+{%- macro ed_vis() -%}<div class="vis" id="ed-vis" data-t-any="{{ ctx.t("ed-vis-any") }}" data-t-hint="{{ ctx.t1("ed-vis-hint", "what", "{what}") }}" data-t-levels="{{ ctx.t("vis-l0") }}|{{ ctx.t("vis-l1") }}|{{ ctx.t("vis-l2") }}|{{ ctx.t("vis-l3") }}|{{ ctx.t("vis-l4") }}"><small>
+{{- ctx.t("ed-class") }}</small><output id="ed-vis-out"></output><span class="vis-steps" aria-hidden="true"><button type="button" tabindex="-1" data-i="-1">{{ ico("prio-none") }}<small>{{ ctx.t("ed-vis-any") }}</small></button><button type="button" tabindex="-1" data-i="0">{{ ico("users") }}<small>
+{{- ctx.t("ed-class-public") }}</small></button><button type="button" tabindex="-1" data-i="1">{{ ico("user") }}<small>{{ ctx.t("ed-class-private") }}</small></button><button type="button" tabindex="-1" data-i="2">{{ ico("agent") }}<small>
+{{- ctx.t("ed-class-confidential") }}</small></button></span><input type="range" class="mirror" id="ed-vis-range" min="0" max="2" step="1" value="0" aria-label="{{ ctx.t("ed-class") }}"><select name="class" hidden><option value="">{{ ctx.t("ed-class-default") }}</option><option value="PUBLIC">
+{{- ctx.t("ed-class-public") }}</option><option value="PRIVATE">{{ ctx.t("ed-class-private") }}</option><option value="CONFIDENTIAL">{{ ctx.t("ed-class-confidential") }}</option></select><small class="vis-hint" id="ed-vis-hint" hidden></small></div>
+{%- endmacro -%}

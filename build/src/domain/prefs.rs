@@ -42,6 +42,9 @@ pub struct Prefs {
     /// filter rows pinned as quick switches next to the filter button: JSON array of `cal:<principal>/<id>`,
     /// `ab:<principal>/<id>`, `hol:public|school` (`routes::settings` `filter_pin_save`)
     pub filter_pins_json: Option<String>,
+    /// not among the sharing suggestions others get by name and id / by e-mail address (`unlisted`)
+    pub unlisted_by_id: bool,
+    pub unlisted_by_email: bool,
 }
 
 /// The choices of the search history's retention (days; 0 = off, -1 = unlimited).
@@ -109,7 +112,7 @@ pub fn pinned(pins: &[String], kind: &str, owner: &str, id: &str) -> bool {
 /// and after a column was dropped from the live table `SELECT *` read past the end of the shorter
 /// row — the panic that ended the push reminder loop on 2026-10-05 (perf-baseline.md §0).
 pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error> {
-    let row = sqlx::query("SELECT lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json FROM practical_user_settings WHERE principal = ?")
+    let row = sqlx::query("SELECT lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?;
@@ -136,6 +139,8 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             task_columns_json: r.get("task_columns_json"),
             search_history_days: r.get("search_history_days"),
             filter_pins_json: r.get("filter_pins_json"),
+            unlisted_by_id: r.get::<i64, _>("unlisted_by_id") != 0,
+            unlisted_by_email: r.get::<i64, _>("unlisted_by_email") != 0,
         },
     })
 }
@@ -162,8 +167,8 @@ pub struct Look {
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO practical_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO practical_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
            holiday_country=excluded.holiday_country, holiday_subdivision=excluded.holiday_subdivision,
@@ -171,7 +176,7 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
            holiday_color=excluded.holiday_color, school_color=excluded.school_color, vacation_days=excluded.vacation_days,
            vacation_rule_json=excluded.vacation_rule_json,
            contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
-           alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, search_history_days=excluded.search_history_days, filter_pins_json=excluded.filter_pins_json, updated_at=CURRENT_TIMESTAMP",
+           alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, search_history_days=excluded.search_history_days, filter_pins_json=excluded.filter_pins_json, unlisted_by_id=excluded.unlisted_by_id, unlisted_by_email=excluded.unlisted_by_email, updated_at=CURRENT_TIMESTAMP",
     )
     .bind(principal)
     .bind(&p.lang)
@@ -194,9 +199,17 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(&p.task_columns_json)
     .bind(p.search_history_days)
     .bind(&p.filter_pins_json)
+    .bind(i64::from(p.unlisted_by_id))
+    .bind(i64::from(p.unlisted_by_email))
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// Everyone who keeps out of the sharing suggestions, by principal: (by name and id, by e-mail address)
+pub async fn unlisted(db: &SqlitePool) -> Result<std::collections::HashMap<String, (bool, bool)>, sqlx::Error> {
+    let rows = sqlx::query("SELECT principal, unlisted_by_id, unlisted_by_email FROM practical_user_settings WHERE unlisted_by_id != 0 OR unlisted_by_email != 0").fetch_all(db).await?;
+    Ok(rows.into_iter().map(|r| (r.get("principal"), (r.get::<i64, _>("unlisted_by_id") != 0, r.get::<i64, _>("unlisted_by_email") != 0))).collect())
 }
 
 /// `#rrggbb` — the only colour form stored (it is written into a `<style>` block)

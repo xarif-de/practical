@@ -383,6 +383,13 @@ CREATE TABLE practical_holidays (
         "ALTER TABLE practical_trashed_groups ADD COLUMN claim TEXT;
          ALTER TABLE practical_trashed_groups ADD COLUMN claimed_at TEXT;",
     ),
+    (
+        26,
+        // whether others find the user among the sharing suggestions by name and id / by e-mail address
+        // (`prefs::Prefs::unlisted_by_id`, `unlisted_by_email`; 0 = listed, the default)
+        "ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_id INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_email INTEGER NOT NULL DEFAULT 0;",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

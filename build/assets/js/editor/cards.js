@@ -1,7 +1,8 @@
 // js/editor/cards.js — part of the editor IIFE (src/bundle.rs; shares its scope): card visibility, buttons, the "when" line, refresh, view/edit mode, task stamps and body
   // cards: the "when" card always, the others when they hold data or were added in edit mode
   // `.aux` inputs (rule interval, count, until, raw rule) only qualify the rule and never count as data on their own
-  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.pchips .pchip', card) || $$('.rows .row', card).length > 0;
+  // a CLASS other than the default (public) counts as data: the status card shows itself for it
+  const hasData = card => $$('input:not([type=hidden]):not(.aux):not(.mirror), textarea, select.dat', card).some(i => i.value.trim() !== '') || !!$('.pchips .pchip', card) || $$('.rows .row', card).length > 0 || (card.contains(f.class) && !['', 'PUBLIC'].includes(f.class.value));
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || (edit && c.hasAttribute('data-always-edit')) || hasData(c) || (edit && c.dataset.added)); });
     // a task that is simply open has no progress to show: STATUS:NEEDS-ACTION is the absence of one
     const pc = TASK && $('.card[data-card="progress"]', form);

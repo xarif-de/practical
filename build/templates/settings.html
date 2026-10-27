@@ -44,6 +44,10 @@
     {% call m::nav_cell("#groups", "var(--c5)", "users") %}<span>{{ ctx.t("tab-groups") }}</span><span class="val">{{ groups.len() }}{% endcall %}
     {% call m::nav_cell("#trash", "var(--fg-3)", "trash") %}<span>{{ ctx.t("tab-trash") }}</span><span class="val">{{ trashed.len() + deleted_calendars.len() + deleted_addressbooks.len() }}{% endcall %}
   </div>
+  <div class="label">{{ ctx.t("privacy-title") }}</div>
+  <div class="group">
+    {% call m::nav_cell("#privacy", "var(--c2)", "lock") %}<span>{{ ctx.t("privacy-sharing") }}</span><span class="val">{{ ctx.t(self.findable_key()) }}{% endcall %}
+  </div>
   {# first start again (domain::onboarding): the button belongs to the form after #prefs-form, because
      a form inside a form is invalid HTML #}
   <div class="group sp"><button class="cell btnrow" type="submit" form="onb-reopen">{{ m::ico("wand") }}<span>{{ ctx.t("onb-reopen") }}</span></button></div>
@@ -107,6 +111,26 @@
 </section>
 </form>
 <form id="onb-reopen" method="post" action="/settings/onboarding/reopen">{{ m::csrf() }}</form>
+
+<section class="page" id="privacy">
+  {{ m::back("#", ctx.t("nav-settings")) }}
+  <h1>{{ ctx.t("privacy-title") }}</h1>
+  {#- whether others find the user among the sharing suggestions (share_forms::sharee_suggest); a ticked switch posts "1" -#}
+  <div class="label">{{ ctx.t("privacy-find") }}</div>
+  <form class="group" id="privacy-form" method="post" action="/settings/privacy" data-autosave>{{ m::csrf() }}
+    <label class="cell noic"><span>{{ ctx.t("privacy-by-id") }}<span class="sub">{{ user_id }}</span></span><span class="val"><span class="toggle"><input type="checkbox" name="listed_by_id" value="1"{% if !prefs.unlisted_by_id %} checked{% endif %}><i></i></span></span></label>
+    <label class="cell noic"><span>{{ ctx.t("privacy-by-email") }}<span class="sub">{% if let Some(e) = own_email %}{{ e }}{% else %}{{ ctx.t("privacy-no-email") }}{% endif %}</span></span><span class="val"><span class="toggle"><input type="checkbox" name="listed_by_email" value="1"{% if !prefs.unlisted_by_email %} checked{% endif %}><i></i></span></span></label>
+  </form>
+  <p class="foot">{{ ctx.t("privacy-find-hint") }}</p>
+  {#- what sharees see of each own calendar's PRIVATE and CONFIDENTIAL events: set on the calendar's page only -#}
+  <div class="label">{{ ctx.t("vis-title") }}</div>
+  <div class="group">
+    {%- for c in calendars %}{% if let Some(v) = self.vis_of(c.principal.as_str(), c.id.as_str()) %}
+    <a class="cell link noic" href="#cal-{{ c.principal }}-{{ c.id }}"><span>{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}<span class="sub">{{ ctx.t("ed-class-private") }}: {{ ctx.t(self.level_key(&v.private)) }} · {{ ctx.t("ed-class-confidential") }}: {{ ctx.t(self.level_key(&v.confidential)) }}</span></span><span class="val"><span class="chev">›</span></span></a>
+    {%- endif %}{% endfor %}
+  </div>
+  <p class="foot">{{ ctx.t("privacy-vis-hint") }} <a href="#collections">{{ ctx.t("tab-collections") }}</a></p>
+</section>
 
 
 {# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}

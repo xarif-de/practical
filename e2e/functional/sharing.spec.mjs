@@ -2,7 +2,7 @@
 // before a write through a share after which its writer sees less (the 422 round trip). erin writes into
 // bob's "Team" through group.team (seed: bob → group.team, write); own data only ("F7 …" in November 2026).
 import { api, expect, loginAs, settle, test } from '../lib/test.mjs';
-import { answer, fillWhen, instances, openNew } from './_editor.mjs';
+import { addCard, answer, fillWhen, instances, keyOf, openEdit, openNew } from './_editor.mjs';
 
 test.afterEach(async ({ page }) => {
   expect(page.__dialogs, 'no alert() from the app').toEqual([]);
@@ -11,18 +11,23 @@ test.afterEach(async ({ page }) => {
 const teamCopy = page => page.locator('#ed-cal option[value^="group.team/"]').getAttribute('value');
 
 test('the slider sets CLASS; through a share it tells what sharees see and asks before hiding', async ({ page }) => {
+  // the slider sits in the status card, which shows itself only once added or for a CLASS other than public
   // Team's levels are not set (seed): private and confidential events are hidden from its sharees
   await loginAs(page, 'erin');
   await openNew(page, '2026-11-02');
   const cal = await teamCopy(page);
   expect(cal, 'erin has bob\'s Team as a copy').toBeTruthy();
   await fillWhen(page, { title: 'F7 Geteilt', from: '09:00', to: '10:00', cal });
+  await expect(page.locator('#ed-status-card')).toBeHidden();
+  await addCard(page, 'status');
   const vis = page.locator('#ed-vis'), out = vis.locator('#ed-vis-out'), hint = vis.locator('#ed-vis-hint');
   // untouched: shown as public, nothing set
   await expect(out).toHaveText('öffentlich');
   await expect(hint).toHaveText('Empfänger sehen: Alles');
   expect(await page.locator('#edform select[name="class"]').inputValue()).toBe('');
-  await vis.locator('#ed-vis-range').fill('1');
+  await vis.locator('.vis-steps button[data-i="1"]').click(); // a step's symbol moves the slider
+  await expect(vis.locator('#ed-vis-range')).toHaveValue('1');
+  await expect(vis.locator('.vis-steps button.on')).toHaveAttribute('data-i', '1');
   await expect(out).toHaveText('privat');
   await expect(hint).toHaveText('Empfänger sehen: Gar nicht');
   expect(await page.locator('#edform select[name="class"]').inputValue()).toBe('PRIVATE');
@@ -50,6 +55,7 @@ test('the slider sets CLASS; through a share it tells what sharees see and asks 
 test('an own calendar without shares: no hint, no question', async ({ page }) => {
   await openNew(page, '2026-11-03');
   await fillWhen(page, { title: 'F7 Eigen', from: '09:00', to: '10:00', cal: 'alice/5eed0000-0000-4000-8000-000000000001' });
+  await addCard(page, 'status');
   await expect(page.locator('#ed-vis-hint')).toBeHidden();
   await page.locator('#ed-vis-range').fill('2');
   await expect(page.locator('#ed-vis-out')).toHaveText('vertraulich');
@@ -59,17 +65,23 @@ test('an own calendar without shares: no hint, no question', async ({ page }) =>
   await settle(page);
   const e = (await instances(page, '2026-11-03', 'F7 Eigen'))[0];
   expect((await api(page, 'GET', `/api/events/${e.principal}/${e.cal_id}/${e.object_id}`)).class).toBe('CONFIDENTIAL');
+  // a CLASS other than public brings the status card along when the event opens again
+  await openEdit(page, keyOf(e), '2026-11-03', { edit: false });
+  await expect(page.locator('#ed-status-card')).toBeVisible();
+  await expect(page.locator('#ed-vis-out')).toHaveText('vertraulich');
 });
 
-test('rule mode: "beliebig" first, the setting off until its chip turns it on; the chip sits under the slider', async ({ page }) => {
+test('rule mode: "beliebig" first, the setting off until its chip turns it on; the chip sits in the status card', async ({ page }) => {
   await page.goto('/calendar?rule=Urlaub');
   await page.locator('#ed:not([hidden])').waitFor();
+  await expect(page.locator('#ed-status-card'), 'the Urlaub rule shows as free: its status card is there').toBeVisible();
   const range = page.locator('#ed-vis-range');
   await expect(page.locator('#ed-vis-out')).toHaveText('beliebig');
+  await expect(page.locator('#ed-vis .vis-steps button[data-i="-1"]')).toBeVisible();
   await expect(range).toBeDisabled();
-  const chip = page.locator('.rfoot[data-rfoot="when"] [data-rmode="class"]');
+  const chip = page.locator('.rfoot[data-rfoot="status"] [data-rmode="class"]');
   await expect(chip).toBeVisible();
-  await expect(page.locator('.rfoot[data-rfoot="status"] [data-rmode="class"]')).toHaveCount(0);
+  await expect(page.locator('.rfoot[data-rfoot="when"] [data-rmode="class"]')).toHaveCount(0);
   await chip.click();
   await page.locator('.rrpop button[data-v="default"]').click();
   await expect(range).toBeEnabled();

@@ -172,17 +172,18 @@ and a note.
 In edit mode, every property is an editable card. **Add card** adds the ones that the event does not have yet. These
 are the cards:
 
-- **When**: date, time, all-day, calendar, colour and visibility. Visibility is a slider: public, private or
-  confidential (unset counts as public). In a calendar that is shared, a line below it says what the people it is
-  shared with see of this event. If you write through a share and would afterwards see the event only shortened or
-  not at all, the editor asks before it saves.
+- **When**: date, time, all-day, calendar and colour.
 - **Location**: an address search with suggestions, and a map.
 - **People**: the organiser and the attendees.
 - **Reminders**: see [Reminders](#reminders).
 - **Repeat**: see [Repeating events](#repeating-events).
 - **Links and attachments**: web links, video-call links and files. Files up to 2 MB are embedded. For a larger
   file, add a cloud link instead.
-- **Flags**: status, free or busy and priority.
+- **Flags**: status, free or busy, priority and visibility. Visibility is a slider with a symbol over each step:
+  public, private or confidential (unset counts as public; a click on a symbol picks it too). The card shows itself
+  for an event that is private or confidential. In a calendar that is shared, a line below the slider says what the
+  people it is shared with see of this event. If you write through a share and would afterwards see the event only
+  shortened or not at all, the editor asks before it saves. A task has the slider in its general card.
 - **Notes**: free text with mentions. Type `@` for a contact, `#` for a category and `!` for an event.
 
 PractiCal keeps every iCalendar property that it does not show. If another calendar app wrote extra data into an
@@ -441,9 +442,14 @@ never finished leaves nothing behind. To lock out a lost device, disconnect it t
 
 You can share a calendar or an address book with another person or with a group, to **read** or to **write**. Open
 the calendar or address book in the settings; its **Sharing** block has **Share with**. Enter an account name, a group (`group.<name>`) or
-the e-mail address the person signs in with; PractiCal shows whom it found, and you confirm. A group's members are
-shown only to members of that group. The same block lists who has it, changes the access and ends shares, also
-several at once.
+the e-mail address the person signs in with. From two characters on, PractiCal suggests people by name, account name
+or address, but only by what each of them lets others find them by. It shows whom it found, and you confirm. A group's
+members are shown only to members of that group. The access is a switch: the eye reads, the pencil writes. The same
+block lists who has it, changes the access and ends shares, also several at once.
+
+**Settings › Privacy** says whether others find you among those suggestions by your name and account name and by your
+e-mail address (both on unless you turn them off); anyone who types your whole account name or address can still share
+with you. The page also lists what others see of each of your calendars; that is changed on the calendar itself.
 
 A shared calendar appears for its receivers with its own name and colour, which each of them may change; the
 settings show who shared it, and **Remove from my list** ends the share for them (the owner's calendar stays). It works in

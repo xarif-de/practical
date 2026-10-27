@@ -1,7 +1,8 @@
-//! Sharing on a collection's settings page: share (after `GET /api/sharee` named whom), change a share's
-//! access, end one or several shares; the owner's visibility levels (what sharees see of private and
-//! confidential events). All for the collection's managers (`state::Need::Own`); a sharee removes a share
-//! with the collection's own delete form (`collections::delete_calendar`).
+//! Sharing on a collection's settings page: suggestions while typing (`GET /api/sharee/suggest`), share
+//! (after `GET /api/sharee` named whom), change a share's access, end one or several shares; a calendar's
+//! visibility levels (what sharees see of private and confidential events). All for the collection's managers
+//! (`state::Need::Own`); a sharee removes a share with the collection's own delete form
+//! (`collections::delete_calendar`). Settings `#privacy`: whether the user is among others' suggestions.
 
 use super::*;
 use crate::state::{Access, Need, Policy};
@@ -183,4 +184,72 @@ pub(super) async fn sharee(State(state): State<SharedState>, user: Principal, cr
     let id = state.collections().resolve_sharee(&q.q).await?;
     let r = row(&state, &user, id, Access::Read).await?;
     Ok(axum::Json(Sharee { id: r.sharee, name: r.label, group: r.is_group, members: r.members }))
+}
+
+/// What `/api/sharee/suggest` offers per principal: `value` goes into the field (the id, or the address of
+/// someone not listed by id); `id` and `email` only where their owner lets others find them by it.
+#[derive(serde::Serialize)]
+pub(super) struct Suggestion {
+    value: String,
+    name: String,
+    id: Option<String>,
+    email: Option<String>,
+}
+
+/// The people whose name, id or e-mail address starts with what was typed (at least two characters; a name
+/// by any of its words), at most [`SUGGEST_MAX`], by name. Groups and the user are left out, and so is
+/// everyone by what they keep out of the suggestions (`prefs::unlisted`, settings `#privacy`): typing the
+/// whole id or address still shares (`sharee`).
+pub(super) async fn sharee_suggest(State(state): State<SharedState>, user: Principal, crate::extract::Query(q): crate::extract::Query<ShareeQuery>) -> AppResult<axum::Json<Vec<Suggestion>>> {
+    use rustical_store::auth::{AuthenticationProvider, PrincipalType};
+    let q = q.q.trim().to_lowercase();
+    if q.chars().count() < 2 {
+        return Ok(axum::Json(vec![]));
+    }
+    let unlisted = crate::domain::prefs::unlisted(&state.db).await?;
+    let mut out = vec![];
+    for p in state.principals().get_principals().await? {
+        if p.principal_type != PrincipalType::Individual || p.id == user.id {
+            continue;
+        }
+        let (no_id, no_email) = unlisted.get(&p.id).copied().unwrap_or_default();
+        let name = p.displayname.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| p.id.clone());
+        let by_id = !no_id && (p.id.to_lowercase().starts_with(&q) || name.to_lowercase().split_whitespace().any(|w| w.starts_with(&q)));
+        let email = if no_email { None } else { state.collections().principal_email(&p.id).await? };
+        let by_email = email.as_ref().is_some_and(|e| e.to_lowercase().starts_with(&q));
+        if !by_id && !by_email {
+            continue;
+        }
+        let Some(value) = (if no_id { email.clone() } else { Some(p.id.clone()) }) else { continue };
+        out.push(Suggestion { value, name, id: (!no_id).then(|| p.id.clone()), email });
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.value.cmp(&b.value)));
+    out.truncate(SUGGEST_MAX);
+    Ok(axum::Json(out))
+}
+
+/// The most suggestions one answer lists
+pub(super) const SUGGEST_MAX: usize = 8;
+
+#[derive(Deserialize)]
+pub(super) struct PrivacyForm {
+    pub(super) csrf: String,
+    /// a ticked switch posts "1"; an unticked one posts nothing
+    #[serde(default)]
+    pub(super) listed_by_id: Option<String>,
+    #[serde(default)]
+    pub(super) listed_by_email: Option<String>,
+}
+
+/// Whether others find the user among the sharing suggestions by name and id / by e-mail address.
+pub(super) async fn privacy_save(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<PrivacyForm>) -> Response {
+    form(&state, &session, &ctx, &f.csrf, "privacy", async {
+        let _lock = state.guards.prefs(&user.id).await; // until prefs::set: no lost update
+        let mut p = crate::domain::prefs::get(&state.db, &user.id).await?;
+        p.unlisted_by_id = f.listed_by_id.is_none();
+        p.unlisted_by_email = f.listed_by_email.is_none();
+        crate::domain::prefs::set(&state.db, &user.id, &p).await?;
+        Ok(Some("flash-saved"))
+    })
+    .await
 }
