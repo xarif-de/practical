@@ -23,12 +23,12 @@
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::ical;
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, Need};
 use caldata::component::{CalendarInnerData, Component, IcalEvent};
 use chrono::{Duration, NaiveDate, NaiveDateTime, TimeZone};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
-use rustical_store::{CalendarQuery, CalendarReadStore, CalendarWriteStore};
+use rustical_store::CalendarQuery;
 use std::collections::HashSet;
 
 mod detail;
@@ -227,7 +227,7 @@ pub async fn instances(state: &AppState, cals: &[CalInfo], start: NaiveDate, end
         }
         // views' windows only: a year or more has its own caches (density, mentions, search corpus)
         let cacheable = (end - start).num_days() <= INSTANCE_CACHE_MAX_DAYS;
-        let key: WinKey = (cal.principal.clone(), cal.id.clone(), cal.synctoken, tz, start, end);
+        let key: WinKey = (cal.auth.cache_key(), cal.synctoken, tz, start, end);
         let part = match state.caches.instances.get(&key).filter(|_| cacheable) {
             Some(p) => p,
             None => {
@@ -374,10 +374,7 @@ async fn expand(state: &AppState, cal: &CalInfo, start: NaiveDate, end: NaiveDat
     let win_start = start.and_time(chrono::NaiveTime::MIN);
     let win_end = end.and_time(chrono::NaiveTime::MIN);
     let mut out = vec![];
-    let objs = state
-        .calendars
-        .calendar_query(&cal.principal, &cal.id, CalendarQuery { time_start: Some(start), time_end: Some(end) })
-        .await?;
+    let objs = state.collections().query(&cal.auth, CalendarQuery { time_start: Some(start), time_end: Some(end) }).await?;
     for (id, obj) in objs {
         let key = format!("{}/{}/{id}", cal.principal, cal.id);
         if let Some(x) = extras.as_deref_mut() {
@@ -447,7 +444,8 @@ pub(crate) fn object_extra(obj: &CalendarObject, cal: &CalInfo, id: &str) -> Sea
     per_object(&format!("{}/{}/{id}", cal.principal, cal.id), || search_extra(obj)).unwrap_or_default()
 }
 
-type WinKey = (String, String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
+/// (calendar + view + path: `state::Authorized::cache_key`, synctoken, zone, window)
+type WinKey = (String, i64, chrono_tz::Tz, NaiveDate, NaiveDate);
 
 /// Expanded instances per (calendar, synctoken, zone, window): the calendar views, the endless lists
 /// and the reminder loop ask for the same windows again until something in the calendar changes —
@@ -494,11 +492,11 @@ impl InstanceCache {
         let mut g = self.0.lock().unwrap();
         let g = &mut *g;
         // a request that read the calendar before a write must not push out the newer token's windows
-        if g.map.keys().any(|o| o.0 == k.0 && o.1 == k.1 && o.2 > k.2) {
+        if g.map.keys().any(|o| o.0 == k.0 && o.1 > k.1) {
             return;
         }
         // older tokens of this calendar are dead
-        let stale: Vec<WinKey> = g.map.keys().filter(|o| o.0 == k.0 && o.1 == k.1 && o.2 < k.2).cloned().collect();
+        let stale: Vec<WinKey> = g.map.keys().filter(|o| o.0 == k.0 && o.1 < k.1).cloned().collect();
         for o in stale {
             g.bytes -= g.map.remove(&o).unwrap().1;
         }
@@ -588,18 +586,18 @@ pub async fn month_density(state: &AppState, cals: &[CalInfo], year: i32, tz: ch
 /// on every object write (store_sqlite calendar_store/mod.rs `log_object_operation`), and the counts
 /// depend on nothing else of the calendar. At most `DENSITY_KEEP` (zone, year) pairs per calendar.
 #[derive(Default)]
-pub struct DensityCache(std::sync::Mutex<std::collections::HashMap<(String, String), Vec<(i64, chrono_tz::Tz, i32, [usize; 12])>>>);
+pub struct DensityCache(std::sync::Mutex<std::collections::HashMap<String, Vec<(i64, chrono_tz::Tz, i32, [usize; 12])>>>);
 
 const DENSITY_KEEP: usize = 6;
 
 impl DensityCache {
     fn get(&self, cal: &CalInfo, tz: chrono_tz::Tz, year: i32) -> Option<[usize; 12]> {
         let m = self.0.lock().unwrap();
-        m.get(&(cal.principal.clone(), cal.id.clone()))?.iter().find(|e| e.0 == cal.synctoken && e.1 == tz && e.2 == year).map(|e| e.3)
+        m.get(&cal.auth.cache_key())?.iter().find(|e| e.0 == cal.synctoken && e.1 == tz && e.2 == year).map(|e| e.3)
     }
     fn put(&self, cal: &CalInfo, tz: chrono_tz::Tz, year: i32, counts: [usize; 12]) {
         let mut m = self.0.lock().unwrap();
-        let v = m.entry((cal.principal.clone(), cal.id.clone())).or_default();
+        let v = m.entry(cal.auth.cache_key()).or_default();
         // a request that read the calendar before a write must not push out the newer token's counts
         if v.iter().any(|e| e.0 > cal.synctoken) {
             return;

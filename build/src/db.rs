@@ -374,6 +374,15 @@ CREATE TABLE practical_holidays (
          ALTER TABLE practical_readonly_calendars ADD COLUMN device_id TEXT;
          CREATE UNIQUE INDEX practical_readonly_calendars_key ON practical_readonly_calendars (principal, source_key) WHERE source_key IS NOT NULL;",
     ),
+    (
+        25,
+        /* A trashed group's row is claimed before any step of trash, restore or purge (`groups::claim`): `claim` =
+           `trash:|restore:|purge:<uuid>` of the run that holds it, `claimed_at` its last renewal (RFC 3339 UTC from
+           `clock::now`). Two pods overlap during a rollout and the purger runs in both: only who holds the claim
+           acts; a claim not renewed for 10 min is taken over. */
+        "ALTER TABLE practical_trashed_groups ADD COLUMN claim TEXT;
+         ALTER TABLE practical_trashed_groups ADD COLUMN claimed_at TEXT;",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

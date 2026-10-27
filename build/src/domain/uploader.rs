@@ -22,7 +22,6 @@ use crate::state::AppState;
 use chrono::{DateTime, Utc};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::{AuthenticationProvider, Principal};
-use rustical_store::{CalendarReadStore, CalendarWriteStore};
 use sqlx::Row;
 use std::collections::{HashMap, HashSet};
 
@@ -160,7 +159,7 @@ pub async fn managed_for(state: &AppState, user: &Principal, owners: &HashSet<St
         } else if let Some(l) = users.get(principal) {
             *l
         } else {
-            let l = state.principals.get_principal(principal).await?.is_some_and(|p| collections::ensure_owner(&p, dev_owner).is_ok());
+            let l = state.principals().get_principal(principal).await?.is_some_and(|p| collections::ensure_owner(&p, dev_owner).is_ok());
             users.insert(principal.clone(), l);
             l
         };
@@ -240,7 +239,7 @@ pub async fn live_devices(state: &AppState) -> AppResult<HashMap<String, Device>
     let mut live = HashMap::new();
     for d in rows {
         if !users.contains_key(&d.principal) {
-            users.insert(d.principal.clone(), state.principals.get_principal(&d.principal).await?);
+            users.insert(d.principal.clone(), state.principals().get_principal(&d.principal).await?);
         }
         match &users[&d.principal] {
             None => forget_device(state, &d.id).await?,
@@ -315,7 +314,7 @@ pub async fn authenticate(state: &AppState, user: &str, token: &str) -> AppResul
         let _permit = VERIFY.acquire().await.map_err(|e| AppError::Internal(e.to_string()))?;
         let ok = tokio::task::spawn_blocking(move || password_auth::verify_password(s, &hash).is_ok()).await.map_err(|e| AppError::Internal(e.to_string()))?;
         if ok {
-            let Some(p) = state.principals.get_principal(user).await? else { return Ok(None) };
+            let Some(p) = state.principals().get_principal(user).await? else { return Ok(None) };
             return Ok(Some((p, device_of(r))));
         }
     }
@@ -365,10 +364,10 @@ enum Target {
 
 /// (in the trash, gone from the store) of a calendar of `owner`.
 async fn whereabouts(state: &AppState, owner: &str, cal: &str) -> AppResult<(bool, bool)> {
-    match state.calendars.get_calendar(owner, cal, true).await {
-        Ok(c) => Ok((c.deleted_at.is_some(), false)),
-        Err(rustical_store::Error::NotFound) => Ok((false, true)),
-        Err(e) => Err(e.into()),
+    match state.collections().own_calendar(owner, cal, true).await {
+        Ok((_, c)) => Ok((c.deleted_at.is_some(), false)),
+        Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound)) => Ok((false, true)),
+        Err(e) => Err(e),
     }
 }
 
@@ -438,7 +437,8 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
             }
             Target::Known { cal, trashed, mine, .. } => {
                 if trashed {
-                    state.calendars.restore_calendar(owner, &cal).await?;
+                    let (a, _) = state.collections().own_calendar(owner, &cal, true).await?;
+                    state.collections().restore_calendar(&a).await?;
                 }
                 if !mine {
                     sqlx::query("UPDATE practical_readonly_calendars SET device_id = ? WHERE principal = ? AND calendar_id = ?").bind(&device.id).bind(owner).bind(&cal).execute(&state.db).await?;
@@ -454,7 +454,8 @@ pub async fn upload(state: &AppState, user: &Principal, device: &Device, u: Uplo
     // calendars of this device that are no longer selected go to the trash (restored when selected again)
     for (cal, key, d) in &rows {
         if d.as_deref() == Some(device.id.as_str()) && !keys.contains(key.as_str()) && whereabouts(state, owner, cal).await? == (false, false) {
-            state.calendars.delete_calendar(owner, cal, true).await?;
+            let (a, _) = state.collections().own_calendar(owner, cal, false).await?;
+            state.collections().delete_calendar(&a, false).await?;
             out.trashed.push(cal.clone());
         }
     }
@@ -488,7 +489,9 @@ async fn create(state: &AppState, user: &Principal, owner: &str, device: &Device
 /// One calendar's snapshot: put what is new or changed (by bytes), leave identical objects alone, delete what
 /// is no longer there unless it ends before the window.
 async fn apply(state: &AppState, owner: &str, cal: &str, window: &Window, want: HashMap<String, CalendarObject>, g: &mut history::Guard<'_>) -> AppResult<Counts> {
-    let have: HashMap<String, CalendarObject> = state.calendars.get_objects(owner, cal).await?.into_iter().collect();
+    // the device's own calendar of its owner (`upload` checked the owner)
+    let (a, _) = state.collections().own_calendar(owner, cal, false).await?;
+    let have: HashMap<String, CalendarObject> = state.collections().objects(&a).await?.into_iter().collect();
     let mut n = Counts::default();
     let mut puts = vec![];
     for (id, obj) in want.iter() {
@@ -512,10 +515,10 @@ async fn apply(state: &AppState, owner: &str, cal: &str, window: &Window, want: 
         g.object(Store::Cal, owner, cal, id);
     }
     for chunk in puts.chunks(crate::domain::transfer::IMPORT_CHUNK) {
-        state.calendars.put_objects(owner, cal, chunk.to_vec(), true).await?;
+        state.collections().put_objects(&a, chunk.to_vec(), true).await?;
     }
     for id in gone {
-        state.calendars.delete_object(owner, cal, id, true).await?;
+        state.collections().delete_object(&a, id, None).await?;
         n.deleted += 1;
     }
     Ok(n)
@@ -551,7 +554,7 @@ pub async fn info(state: &AppState, user: &Principal, device: &Device) -> AppRes
     let mut calendars = vec![];
     for (calendar, key) in rows {
         // a calendar purged from the store since keeps only its key row: not reported
-        if let Ok(c) = state.calendars.get_calendar(&device.owner, &calendar, true).await {
+        if let Ok((_, c)) = state.collections().own_calendar(&device.owner, &calendar, true).await {
             calendars.push(ManagedCalendar { key, name: c.meta.displayname.clone().unwrap_or_default(), trashed: c.deleted_at.is_some(), calendar });
         }
     }
@@ -590,7 +593,7 @@ pub async fn devices_of(state: &AppState, user: &Principal) -> AppResult<Vec<Dev
         let ids: Vec<String> = if collections::ensure_owner(user, &d.owner).is_ok() { sqlx::query_scalar("SELECT calendar_id FROM practical_readonly_calendars WHERE device_id = ?").bind(&d.id).fetch_all(&state.db).await? } else { vec![] };
         let mut calendars = vec![];
         for id in ids {
-            if let Ok(c) = state.calendars.get_calendar(&d.owner, &id, false).await {
+            if let Ok((_, c)) = state.collections().own_calendar(&d.owner, &id, false).await {
                 calendars.push((id, c.meta.displayname.unwrap_or_default()));
             }
         }
@@ -611,9 +614,10 @@ pub async fn delete_device(state: &AppState, user: &Principal, id: &str, trash: 
         collections::ensure_owner(user, &d.owner)?;
     }
     for cal in ids.iter().filter(|c| trash.contains(*c)) {
-        match state.calendars.delete_calendar(&d.owner, cal, true).await {
-            Ok(()) | Err(rustical_store::Error::NotFound) => {}
-            Err(e) => return Err(e.into()),
+        match state.collections().own_calendar(&d.owner, cal, false).await {
+            Ok((a, _)) => state.collections().delete_calendar(&a, false).await?,
+            Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound)) => {}
+            Err(e) => return Err(e),
         }
     }
     forget_device(state, &d.id).await

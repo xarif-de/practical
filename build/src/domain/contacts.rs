@@ -13,13 +13,12 @@
 use crate::domain::collections::{self, AbInfo};
 use crate::domain::ical;
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, Authorized, Need};
 use caldata::VcardParser;
 use caldata::component::{Component, VcardContact};
 use chrono::{Datelike, NaiveDate};
 use rustical_ical::AddressObject;
 use rustical_store::auth::Principal;
-use rustical_store::{AddressbookReadStore, AddressbookWriteStore};
 
 mod vcard;
 mod write;
@@ -287,10 +286,11 @@ pub struct AbContacts {
 /// a page load no longer parses every vCard twice and hashes it (≈ 300 contacts: 9 → 1 ms per /contacts
 /// on the synthetic DB).
 #[derive(Default)]
-pub struct ContactCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<AbContacts>>>);
+pub struct ContactCache(std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<AbContacts>>>);
 
 async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<AbContacts>> {
-    let k = (ab.principal.clone(), ab.id.clone());
+    // the address book, its view and its path (`state::Authorized::cache_key`)
+    let k = ab.auth.cache_key();
     let cached = state.caches.contacts.0.lock().unwrap().get(&k).cloned();
     if let Some(c) = &cached
         && c.token >= ab.synctoken
@@ -301,10 +301,10 @@ async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<
     // a changed card the store cannot parse fails its whole change list (store_sqlite `_sync_changes`):
     // then the book is read anew, which takes such a card from the table (`unparsed_cards`)
     let changes = match &cached {
-        Some(c) => match AddressbookReadStore::sync_changes(&*state.addressbooks, &ab.principal, &ab.id, c.token).await {
+        Some(c) => match state.collections().address_sync_changes(&ab.auth, c.token).await {
             Ok(ch) => Some(ch),
-            Err(rustical_store::Error::IcalError(_)) => None,
-            Err(e) => return Err(e.into()),
+            Err(AppError::Store(rustical_store::Error::IcalError(_))) => None,
+            Err(e) => return Err(e),
         },
         None => None,
     };
@@ -323,10 +323,10 @@ async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<
             AbContacts { token: ab.synctoken, contacts }
         }
         _ => {
-            let objs = AddressbookReadStore::get_objects(&*state.addressbooks, &ab.principal, &ab.id).await?;
+            let objs = state.collections().address_objects(&ab.auth).await?;
             let mut contacts: std::collections::BTreeMap<String, Contact> = objs.into_iter().filter_map(|(id, obj)| cached_contact(ab, &id, obj.get_vcf(), obj.get_etag()).map(|c| (id, c))).collect();
             let n_store = contacts.len();
-            for (id, vcf) in unparsed_cards(state, &ab.principal, &ab.id, &|id| contacts.contains_key(id), n_store).await? {
+            for (id, vcf) in unparsed_cards(state, &ab.auth, &|id| contacts.contains_key(id), n_store).await? {
                 if let Some(c) = cached_contact(ab, &id, &vcf, etag_of(&vcf)) {
                     contacts.insert(id, c);
                 }
@@ -343,17 +343,18 @@ async fn ab_contacts(state: &AppState, ab: &AbInfo) -> AppResult<std::sync::Arc<
 }
 
 pub async fn get_contact(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<Contact> {
-    collections::ensure_owner(user, principal)?;
-    let ab_row = state.addressbooks.get_addressbook(principal, ab_id, false).await?;
-    let ab = AbInfo { color: String::new(), principal: principal.into(), owner_label: String::new(), is_group: principal.starts_with("group."), id: ab_id.into(), displayname: ab_row.displayname.unwrap_or_default(), description: String::new(), deleted_at: None, synctoken: 0 };
-    let (vcf, etag) = stored_card(state, principal, ab_id, object_id).await?;
+    let (auth, ab_row) = state.collections().ensure_addressbook(user, principal, ab_id, Need::Read, false).await?;
+    let mut ab = AbInfo::bare(auth);
+    ab.is_group = principal.starts_with("group.");
+    ab.displayname = ab_row.displayname.unwrap_or_default();
+    let (vcf, etag) = stored_card(state, &ab.auth, object_id).await?;
     Ok(contact_from(&parse_vcf(&vcf)?, &raw_lines(&vcf), &ab, object_id, etag))
 }
 
 /// The stored vCard text of one contact (download button).
 pub async fn get_vcf(state: &AppState, user: &Principal, principal: &str, ab_id: &str, object_id: &str) -> AppResult<String> {
-    collections::ensure_owner(user, principal)?;
-    Ok(stored_card(state, principal, ab_id, object_id).await?.0)
+    let ab = collections::ensure_addressbook(state, user, principal, ab_id, Need::Read).await?;
+    Ok(stored_card(state, &ab, object_id).await?.0)
 }
 
 #[cfg(test)]

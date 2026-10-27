@@ -160,11 +160,12 @@ pub(super) fn etag_of(vcf: &str) -> String {
 
 /// The stored text and ETag of one card. A card caldata rejects (`bare_params_as_type`) has no
 /// `AddressObject` — the store answers its parse error — and is read from the table as RustiCal stored it.
-pub async fn stored_card(state: &AppState, principal: &str, ab_id: &str, object_id: &str) -> AppResult<(String, String)> {
-    match AddressbookReadStore::get_object(&*state.addressbooks, principal, ab_id, object_id, false).await {
+pub async fn stored_card(state: &AppState, ab: &Authorized, object_id: &str) -> AppResult<(String, String)> {
+    match state.collections().address_object(ab, object_id).await {
         Ok(obj) => Ok((obj.get_vcf().to_string(), obj.get_etag())),
-        Err(rustical_store::Error::IcalError(_)) => {
-            let row = sqlx::query("SELECT vcf FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND id = ? AND deleted_at IS NULL").bind(principal).bind(ab_id).bind(object_id).fetch_optional(&state.db).await?;
+        Err(AppError::Store(rustical_store::Error::IcalError(_))) => {
+            // the address book itself (`(owner, id)`), never the path of a share
+            let row = sqlx::query("SELECT vcf FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND id = ? AND deleted_at IS NULL").bind(ab.owner()).bind(ab.id()).bind(object_id).fetch_optional(&state.db).await?;
             let vcf: String = sqlx::Row::get(&row.ok_or(AppError::NotFound)?, "vcf");
             let etag = etag_of(&vcf);
             Ok((vcf, etag))
@@ -176,7 +177,8 @@ pub async fn stored_card(state: &AppState, principal: &str, ab_id: &str, object_
 /// The cards of an address book the store left out of `get_objects` (with skip_broken, every card caldata
 /// rejects): (id, stored text) of each live object whose id is not in `have`. One count query when none is
 /// missing.
-pub(super) async fn unparsed_cards(state: &AppState, principal: &str, ab_id: &str, have: &(dyn Fn(&str) -> bool + Sync), n_have: usize) -> AppResult<Vec<(String, String)>> {
+pub(super) async fn unparsed_cards(state: &AppState, ab: &Authorized, have: &(dyn Fn(&str) -> bool + Sync), n_have: usize) -> AppResult<Vec<(String, String)>> {
+    let (principal, ab_id) = (ab.owner(), ab.id());
     let n: i64 = sqlx::Row::get(&sqlx::query("SELECT count(*) AS n FROM addressobjects WHERE principal = ? AND addressbook_id = ? AND deleted_at IS NULL").bind(principal).bind(ab_id).fetch_one(&state.db).await?, "n");
     if usize::try_from(n).unwrap_or(0) <= n_have {
         return Ok(vec![]);
@@ -186,10 +188,10 @@ pub(super) async fn unparsed_cards(state: &AppState, principal: &str, ab_id: &st
 }
 
 /// Every card of an address book as (id, stored text): the store's, plus those it hides (`unparsed_cards`).
-pub async fn ab_cards(state: &AppState, principal: &str, ab_id: &str) -> AppResult<Vec<(String, String)>> {
-    let mut out: Vec<(String, String)> = AddressbookReadStore::get_objects(&*state.addressbooks, principal, ab_id).await?.into_iter().map(|(id, o)| (id, o.get_vcf().to_string())).collect();
+pub async fn ab_cards(state: &AppState, ab: &Authorized) -> AppResult<Vec<(String, String)>> {
+    let mut out: Vec<(String, String)> = state.collections().address_objects(ab).await?.into_iter().map(|(id, o)| (id, o.get_vcf().to_string())).collect();
     let have: std::collections::HashSet<String> = out.iter().map(|(id, _)| id.clone()).collect();
-    out.extend(unparsed_cards(state, principal, ab_id, &|id| have.contains(id), have.len()).await?);
+    out.extend(unparsed_cards(state, ab, &|id| have.contains(id), have.len()).await?);
     Ok(out)
 }
 

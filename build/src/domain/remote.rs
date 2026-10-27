@@ -468,7 +468,7 @@ pub async fn may_write(state: &AppState, link: &Link) -> AppResult<()> {
     if link.owner == link.principal {
         return Ok(());
     }
-    if state.principals.get_principal(&link.principal).await?.is_some_and(|u| u.is_principal(&link.owner)) {
+    if state.principals().get_principal(&link.principal).await?.is_some_and(|u| u.is_principal(&link.owner)) {
         return Ok(());
     }
     drop_link(state, link).await?;

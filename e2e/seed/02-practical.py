@@ -243,11 +243,28 @@ def seed_through_http():
     last = max(c["id"] for c in h["changes"])
     ok(req("POST", f"/api/history/{last}/undo", {"confirm": True}), "undo")
     ok(req("POST", "/settings/tokens", accept="application/json", form={"name": "Kalender-App"}), "token via UI")
+    # ---- a read share through the settings route (bob's write share: seed_as_bob)
+    ok(req("POST", f"/settings/calendars/alice/{privat}/share", accept="application/json", form={"sharee": "dave", "access": "read"}), "share Privat → dave")
     return {"Arbeit": work, "Privat": privat, "Aufgaben": tasks, "Familienkalender": fam, "Altes Projekt": old, "Freunde": ab1, "Familie Adressen": ab2}
 
 
+def seed_as_bob():
+    """bob's own calendar, shared with group.team for writing (erin's copy). A process of its own: the
+    development login signs in one fixed user. Returns {label: collection id}."""
+    global CSRF, op
+    op = urllib.request.build_opener(NOPROXY, urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    ok(req("GET", "/login"), "dev login bob")
+    CSRF = re.search(r'<meta name="csrf" content="([^"]+)"', ok(req("GET", "/settings", accept="text/html"), "settings bob")).group(1)
+    team = import_new("bob", "Team", "#5856d6", "VEVENT,VTODO", ics(
+        vevent("teamplan@seed", "Teamplanung", "20261015T100000", "20261015T110000", ALARM15),
+        vevent("teamintern@seed", "Teamintern", "20261016T100000", "20261016T110000", "CLASS:PRIVATE\r\nLOCATION:Besprechungsraum\r\n"),
+        vtodo("t-team@seed", "Protokoll schreiben", "DUE;VALUE=DATE:20261016\r\n"), name="Team"))
+    ok(req("POST", f"/settings/calendars/bob/{team}/share", accept="application/json", form={"sharee": "group.team", "access": "write"}), "share Team → group.team")
+    return {"Team": team}
+
+
 # fixed ids, in the shape of the uuid4 the app makes (same length on every page)
-COLL_IDS = {"Arbeit": 1, "Privat": 2, "Aufgaben": 3, "Familienkalender": 4, "Altes Projekt": 5, "Freunde": 11, "Familie Adressen": 12}
+COLL_IDS = {"Arbeit": 1, "Privat": 2, "Aufgaben": 3, "Familienkalender": 4, "Altes Projekt": 5, "Team": 6, "Freunde": 11, "Familie Adressen": 12}
 
 
 def fixed_uuid(group, n):
@@ -299,6 +316,8 @@ def pin(con, ids):
         con.execute("UPDATE practical_search_history SET used_at = ? WHERE id = ?", (fmt(FROZEN - dt.timedelta(hours=2 + k)), rid))
     con.execute("UPDATE practical_trashed_groups SET deleted_at = '2026-10-10T09:00:00+00:00'")
     con.execute("UPDATE calendars SET deleted_at = '2026-10-11 09:00:00' WHERE deleted_at IS NOT NULL")
+    con.execute("UPDATE calendar_shares SET created_at = '2026-10-12 09:00:00'")
+    con.execute("UPDATE addressbook_shares SET created_at = '2026-10-12 09:00:00'")
     stamp = fmt(FROZEN - dt.timedelta(days=1))
     for t, c in (("calendarobjects", "updated_at"), ("addressobjects", "updated_at"), ("calendarobjectchangelog", "created_at"), ("addressobjectchangelog", "created_at"),
                  ("practical_user_settings", "updated_at"), ("practical_category_rules", "updated_at"), ("practical_migrations", "applied_at"), ("_sqlx_migrations", "installed_on")):
@@ -324,6 +343,13 @@ def main():
     try:
         ids = seed_through_http()
         time.sleep(2.5)  # one round of the change poller (tasks.rs, 2 s): its cursors catch up before the stop
+    finally:
+        stop(p)
+    ENV["PRACTICAL__DEV_LOGIN"] = "bob"
+    p = start("3")
+    try:
+        ids.update(seed_as_bob())
+        time.sleep(2.5)
     finally:
         stop(p)
 

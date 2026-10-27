@@ -75,7 +75,7 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<St
     };
     let mut people: BTreeMap<String, Value> = BTreeMap::new();
     for w in &part.whos {
-        let name = state.principals.get_principal(w).await.ok().flatten().and_then(|p| p.displayname).unwrap_or_else(|| w.clone());
+        let name = state.principals().get_principal(w).await.ok().flatten().and_then(|p| p.displayname).unwrap_or_else(|| w.clone());
         let ini: String = name.split_whitespace().filter_map(|x| x.chars().next()).take(2).collect::<String>();
         let ini = if ini.chars().count() < 2 { name.chars().take(2).collect() } else { ini };
         people.insert(w.clone(), json!({ "name": name, "ini": ini.to_uppercase() }));

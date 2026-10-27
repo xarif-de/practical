@@ -43,6 +43,9 @@ pub struct TaskInput {
     pub links: Vec<Link>,
     #[serde(default)]
     pub related: Vec<Related>,
+    /// the writer has confirmed that it will see the task only shortened or not at all afterwards (a share)
+    #[serde(default)]
+    pub confirm_visibility: bool,
 }
 fn yes() -> bool {
     true
@@ -219,23 +222,24 @@ fn has_tzid(l: &str) -> bool {
 }
 
 pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, tz: chrono_tz::Tz) -> AppResult<String> {
-    collections::ensure_owner(user, &i.principal)?;
-    collections::ensure_writable(state, &i.principal, &i.cal_id).await?;
+    let cal = collections::ensure_calendar(state, user, &i.principal, &i.cal_id, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
     normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
     let vtz = lines.iter().any(|l| has_tzid(l)).then(|| ical::vtimezone(tz.name())).flatten();
     let obj = CalendarObject::import(&ical::assemble(vtz, "VTODO", lines, &[]), None)?;
-    state.calendars.put_object(&i.principal, &i.cal_id, &uid, obj, false).await?;
+    events::confirm_visibility(&cal, &obj, i.confirm_visibility)?;
+    state.collections().put_object(&cal, &uid, obj, false, None).await?;
     Ok(uid)
 }
 
 /// Rewrites the task from the input. Everything this editor does not model — recurrence,
 /// attendees, foreign X-properties — is carried over from the stored object.
 pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mut i: TaskInput, expected_etag: Option<&str>, tz: chrono_tz::Tz) -> AppResult<()> {
-    collections::ensure_owner(user, &i.principal)?;
-    collections::ensure_writable(state, &i.principal, &i.cal_id).await?;
-    let existing = state.calendars.get_object(&i.principal, &i.cal_id, object_id, false).await?;
+    let cal = collections::ensure_calendar(state, user, &i.principal, &i.cal_id, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
+    let existing = state.collections().object(&cal, object_id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != existing.get_etag()
@@ -259,7 +263,8 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
         if blocks.is_empty() { ical::vtimezone(tz.name()) } else { Some(blocks.join("\r\n")) }
     };
     let obj = CalendarObject::import(&ical::assemble(vtz, "VTODO", lines, &extra), None)?;
-    state.calendars.put_object(&i.principal, &i.cal_id, object_id, obj, true).await?;
+    events::confirm_visibility(&cal, &obj, i.confirm_visibility)?;
+    state.collections().put_object(&cal, object_id, obj, true, Some(&existing.get_etag())).await?;
     Ok(())
 }
 
@@ -287,6 +292,7 @@ pub async fn set_completed(state: &AppState, user: &Principal, principal: &str, 
         geo: d.geo,
         alarms: d.alarms,
         links: d.links,
+        confirm_visibility: false,
         related: d.related,
     };
     update_task(state, user, object_id, i, Some(&etag), tz).await

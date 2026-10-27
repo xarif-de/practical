@@ -73,15 +73,18 @@
   P.guard = fn => dirt.push(fn);
   addEventListener('beforeunload', e => { if (!P.leaving && dirt.some(fn => fn())) { e.preventDefault(); e.returnValue = ''; } });
 
-  /* the write cycle of an editor or a form: w = practical.writer(box, { buttons, error, conflict, idle }).
+  /* the write cycle of an editor or a form: w = practical.writer(box, { buttons, error, conflict, confirm, idle }).
      w.run(fn) — fn() → a req() answer — runs one write at a time: called again while one is pending (a double click,
      Enter and a click) it returns the pending one; run(fn, true) instead runs fn once more after it (an autosave: the
      newest state wins). Meanwhile box[data-state=saving][aria-busy=true] and buttons() are disabled; afterwards idle()
      (else each button gets its own state back). A failed answer: 'auth' → nothing (the page leaves for the login);
      'conflict' with conflict = { overwrite, reload } → the question "keep mine / load theirs" (Escape: back to the
-     editing, the message stays); else its message into `error` (an element) or a toast. Slower than 300 ms: the
+     editing, the message stays); a 422 {code:"confirm-visibility",level} (a write through a share after which its
+     writer sees the object shortened, level 1–3, or not at all, 0) with confirm(): asks, and on "yes" its answer
+     (the write again, confirmed), on "no" nothing more; else its message into `error` (an element) or a toast. Slower than 300 ms: the
      progress line too. box[data-state]: saving | conflict | error, none once done — the editor's own states (closed,
      view, edit, dirty) live in its classes. */
+  const confirmLevel = body => { try { const j = JSON.parse(body); return j && j.code === 'confirm-visibility' ? +j.level : null; } catch (_) { return null; } };
   P.writer = (box, o = {}) => {
     let pending = null, queued = null;
     const set = s => { if (s) box.dataset.state = s; else delete box.dataset.state; if (s === 'saving') box.setAttribute('aria-busy', 'true'); else box.removeAttribute('aria-busy'); };
@@ -103,6 +106,13 @@
               set('saving'); stop = P.progress(300);
               if (!a) { await o.conflict.reload(); tell = false; break; }
               r = await o.conflict.overwrite();
+            }
+            const vis = r && !r.ok && r.status === 422 && o.confirm ? confirmLevel(r.body) : null;
+            if (vis !== null) {
+              set('conflict'); stop();
+              const a = await askYesNo(tr(vis ? 'js-req-vis-shortened' : 'js-req-vis-gone'), tr('js-req-vis-save'), tr('js-req-vis-back'), true);
+              set('saving'); stop = P.progress(300);
+              if (a) r = await o.confirm(); else tell = false;
             }
           } catch (e) { console.error(e); r = { ok: false, kind: 'server', status: 0, msg: tr('js-req-server'), body: '' }; }
           pending = null; stop();

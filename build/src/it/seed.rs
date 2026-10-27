@@ -53,3 +53,56 @@ pub async fn seed() -> Seed {
     crate::domain::prefs::set(&app.state.db, "alice", &p).await.unwrap();
     Seed { app, arbeit, privat, aufgaben, familie, freunde }
 }
+
+/// [`seed`] plus sharing: alice shares her Privat with dave (read); bob shares his calendar Team and his address
+/// book Teamkontakte with `group.team` = {erin} (write), through the settings routes. Team holds a public event
+/// with bob's reminder, a private one (sharees see only its time under bob's default levels) and a confidential
+/// one (hidden from them), each hidden part carrying the word "Marker7"; and a task.
+pub struct SharedSeed {
+    pub s: Seed,
+    pub team: String,
+    pub team_ab: String,
+    /// the names of the copies in their sharees' homes
+    pub privat_copy: String,
+    pub team_copy: String,
+    pub team_ab_copy: String,
+}
+
+pub async fn seed_shared() -> SharedSeed {
+    let s = seed().await;
+    let app = &s.app;
+    app.user("dave", "Dave Leser").await;
+    app.user("erin", "Erin Schreiber").await;
+    app.group("group.team", "Team", &["erin"]).await;
+    let team = app.calendar("bob", "Team", "#5856d6", &["VEVENT", "VTODO"]).await;
+    let team_ab = app.addressbook("bob", "Teamkontakte", "#34c759").await;
+    app.put_ics("bob", &team, "plan", &vevent("plan", "Teamplan", "DTSTART;TZID=Europe/Berlin:20261014T100000\nDTEND;TZID=Europe/Berlin:20261014T110000\nBEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Bobalarm\nTRIGGER:-PT15M\nEND:VALARM")).await;
+    app.put_ics("bob", &team, "busy", &vevent("busy", "Geheimprojekt Marker7", "DTSTART;TZID=Europe/Berlin:20261015T100000\nDTEND;TZID=Europe/Berlin:20261015T110000\nLOCATION:Marker7-Keller\nCLASS:PRIVATE")).await;
+    app.put_ics("bob", &team, "gone", &vevent("gone", "Verborgen Marker7", "DTSTART;TZID=Europe/Berlin:20261016T100000\nDTEND;TZID=Europe/Berlin:20261016T110000\nCLASS:CONFIDENTIAL")).await;
+    app.put_ics("bob", &team, "todo", &vtodo("todo", "Teamaufgabe", "DUE;VALUE=DATE:20261020")).await;
+    app.put_vcf("bob", &team_ab, "tina", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:tina\r\nFN:Tina Team\r\nN:Team;Tina;;;\r\nEMAIL:tina@example.org\r\nEND:VCARD\r\n").await;
+    let mut bob = app.login("bob").await;
+    let r = bob.post_form(&format!("/settings/calendars/bob/{team}/share"), &[("sharee", "group.team"), ("access", "write")]).await;
+    assert_eq!(r.status, axum::http::StatusCode::SEE_OTHER, "{}", r.body);
+    bob.post_form(&format!("/settings/addressbooks/bob/{team_ab}/share"), &[("sharee", "group.team"), ("access", "write")]).await;
+    let mut alice = app.login("alice").await;
+    alice.post_form(&format!("/settings/calendars/alice/{}/share", s.privat), &[("sharee", "dave"), ("access", "read")]).await;
+    // the names of the copies as their owners' share lists give them
+    let names = |owner: &'static str, id: String, ab: bool| async move {
+        let o = app.principal(owner).await;
+        let c = app.state.collections();
+        let v: Vec<String> = if ab {
+            let a = crate::domain::collections::ensure_addressbook(&app.state, &o, owner, &id, crate::state::Need::Own).await.unwrap();
+            c.addressbook_shares(&a).await.unwrap().into_iter().map(|x| x.name).collect()
+        } else {
+            let a = crate::domain::collections::ensure_calendar(&app.state, &o, owner, &id, crate::state::Need::Own).await.unwrap();
+            c.calendar_shares(&a).await.unwrap().into_iter().map(|x| x.name).collect()
+        };
+        assert_eq!(v.len(), 1, "{owner}/{id}: {v:?}");
+        v.into_iter().next().unwrap()
+    };
+    let team_copy = names("bob", team.clone(), false).await;
+    let team_ab_copy = names("bob", team_ab.clone(), true).await;
+    let privat_copy = names("alice", s.privat.clone(), false).await;
+    SharedSeed { s, team, team_ab, privat_copy, team_copy, team_ab_copy }
+}

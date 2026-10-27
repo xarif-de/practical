@@ -145,10 +145,9 @@ impl Runner {
 }
 
 async fn current_token(state: &AppState, link: &Link) -> AppResult<i64> {
-    use rustical_store::{AddressbookReadStore, CalendarReadStore};
     Ok(match link.kind {
-        super::dav::Kind::Cal => state.calendars.get_calendar(&link.owner, &link.local_id, false).await?.synctoken,
-        super::dav::Kind::Ab => state.addressbooks.get_addressbook(&link.owner, &link.local_id, false).await?.synctoken,
+        super::dav::Kind::Cal => state.collections().own_calendar(&link.owner, &link.local_id, false).await?.1.synctoken,
+        super::dav::Kind::Ab => state.collections().own_addressbook(&link.owner, &link.local_id, false).await?.1.synctoken,
     })
 }
 

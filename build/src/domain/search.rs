@@ -33,7 +33,7 @@ use crate::domain::collections;
 use crate::domain::contacts;
 use crate::domain::events::{self, Instance};
 use crate::domain::tasks;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime};
 use rustical_store::auth::Principal;

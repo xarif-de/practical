@@ -125,15 +125,20 @@
 
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
-{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only, shares) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
     {{ csrf() }}
     <label class="cell noic"><span>{{ ctx.t("col-name") }}</span><span class="val"><input type="text" name="name" value="{{ c.displayname }}" required></span></label>
     <label class="cell noic"><span>{{ ctx.t("col-color") }}</span><span class="val"><input type="hidden" name="color" value="{{ c.color }}"><button type="button" class="cpk-btn" data-cpk-for="color" data-cpk-kind="{{ kind }}" data-cpk-key="{{ c.principal }}/{{ c.id }}" data-cpk-title="{{ c.displayname }}" aria-label="{{ ctx.t("col-color") }}"><i></i><span></span></button></span></label>
+    {%- if c.view.is_copy() %}
+    {#- a share: name and colour are the user's own view of it; the rest is the owner's -#}
+    <div class="cell noic"><span>{{ ctx.t("share-shared-by") }}</span><span class="val">{% if let Some(o) = c.shared_by %}{{ o }}{% endif %} · {% if c.view == crate::domain::collections::View::Write %}{{ ctx.t("share-write") }}{% else %}{{ ctx.t("share-read") }}{% endif %}</span></div>
+    {%- else %}
     <label class="cell noic"><span>{{ ctx.t("col-description") }}</span><span class="val"><input type="text" name="description" value="{{ c.description }}" placeholder="–"></span></label>
-    <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>{{ caller() }}
+    <div class="cell noic"><span>{{ ctx.t("col-owner") }}</span><span class="val">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}</span></div>
+    {%- endif %}{{ caller() }}
   </form>
   <p class="foot">ID <code>{{ c.id }}</code></p>
   {%- if let Some(l) = link %}
@@ -153,9 +158,32 @@
     <label class="cell btnrow">{{ ctx.t("set-import") }}<input type="file" accept="{{ accept }}" hidden data-import="/settings/import/{{ kinds }}/{{ c.principal }}/{{ c.id }}"></label>
     {%- endif %}
   </div>
+  {%- if c.shareable() %}
+  {#- sharing (state::Collections): with whom, the access of each, ending one or several; then sharing anew -#}
+  <div class="label">{{ ctx.t("share-title") }}</div>
+  <div class="group">
+    {%- for s in shares %}
+    <form class="cell noic share-row" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-autosave>{{ csrf() }}<input type="hidden" name="sharee" value="{{ s.sharee }}"><label class="share-pick"><input type="checkbox" name="sharee" value="{{ s.sharee }}" form="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}" aria-label="{{ ctx.t1("share-select", "name", s.label) }}"></label><span>{{ s.label }}{% if s.is_group %} ({{ ctx.t("group") }}){% endif %}<span class="sub">{{ s.sharee }}</span>{% if s.is_group %}<span class="sub">{{ ctx.t("share-group-note") }}{% if let Some(m) = s.members %} {{ ctx.t1("share-members", "list", m.join(", ").as_str()) }}{% endif %}</span>{% endif %}</span><span class="val"><select name="access" aria-label="{{ ctx.t1("share-access-of", "name", s.label) }}"><option value="read"{% if !s.write %} selected{% endif %}>{{ ctx.t("share-read") }}</option><option value="write"{% if s.write %} selected{% endif %}>{{ ctx.t("share-write") }}</option></select></span></form>
+    {%- else %}
+    <div class="cell noic"><span class="muted">{{ ctx.t("share-none") }}</span></div>
+    {%- endfor %}
+  </div>
+  {%- if !shares.is_empty() %}
+  <form class="group sp" id="unshare-{{ pre }}-{{ c.principal }}-{{ c.id }}" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/unshare">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t("confirm-unshare") }}">{{ ico("unlink") }}<span>{{ ctx.t("share-end") }}</span></button></form>
+  {%- endif %}
+  <form class="group share-add" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-t-confirm="{{ ctx.t("js-share-confirm") }}" data-t-group="{{ ctx.t("share-group-note") }}" data-t-members="{{ ctx.t("js-share-members") }}">{{ csrf() }}
+    <label class="cell noic"><span>{{ ctx.t("share-with") }}</span><span class="val"><input type="text" name="sharee" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}"></span></label>
+    <label class="cell noic"><span>{{ ctx.t("share-access") }}</span><span class="val"><select name="access"><option value="read">{{ ctx.t("share-read") }}</option><option value="write">{{ ctx.t("share-write") }}</option></select></span></label>
+    <button class="cell btnrow" type="submit">{{ ico("users") }}<span>{{ ctx.t("share-go") }}</span></button>
+  </form>
+  <p class="foot">{% if managed %}{{ ctx.t("share-uploader-hint") }} {% endif %}{{ ctx.t("share-hint") }}</p>
+  {%- endif %}
   {%- if managed %}
   {#- a PractiCalUploader device manages it: removed there, or with the device (uploader::managed) -#}
   <p class="foot">{{ ctx.t("upl-managed-hint") }}</p>
+  {%- else if c.view.is_copy() %}
+  {#- a share: ends it for the user's home; the owner keeps the collection -#}
+  <form class="group sp" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/delete">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-share-remove", "name", c.displayname) }}">{{ ctx.t("share-remove") }}</button></form>
   {%- else %}
   <form class="group sp" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/delete">{{ csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-trash-collection", "name", c.displayname) }}">{{ ctx.t("group-delete-confirm") }}</button></form>
   {%- endif %}

@@ -11,10 +11,9 @@
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::{catrules, events, prefs};
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, Need};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
-use rustical_store::{CalendarReadStore, CalendarWriteStore};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Source {
@@ -87,11 +86,12 @@ async fn object_sources(state: &AppState, cal: &CalInfo) -> AppResult<Vec<Source
 
 /// Events (scope "event") or tasks ("task") carrying category `name` and the colour `from` — the ones a
 /// changed category colour should follow; an object someone gave another colour is left alone. Objects of
-/// subscribed calendars are skipped (read-only). Returns principal/calendar/object keys.
+/// subscribed calendars are skipped (read-only), and so are shares: a personal colour action changes only
+/// the user's own calendars. Returns principal/calendar/object keys.
 pub async fn category_objects(state: &AppState, user: &Principal, scope: &str, name: &str, from: &str) -> AppResult<Vec<String>> {
     let (name, from) = (name.trim(), from.trim().to_lowercase());
     let mut out = vec![];
-    for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| !c.read_only) {
+    for cal in collections::calendars_for(state, user, false).await?.iter().filter(|c| !c.read_only && !c.view.is_copy()) {
         for o in events::object_meta(state, cal).await?.objs.iter().filter(|o| o.event == (scope == "event") && matches!(scope, "event" | "task")) {
             if o.color.as_deref().is_some_and(|c| c.trim().to_lowercase() == from) && o.categories.iter().any(|c| c.trim() == name) {
                 out.push(format!("{}/{}/{}", cal.principal, cal.id, o.id));
@@ -159,31 +159,29 @@ pub async fn apply(state: &AppState, user: &Principal, changes: &[Change]) -> Ap
 }
 
 pub async fn set_calendar_color(state: &AppState, user: &Principal, owner: &str, id: &str, color: &str) -> AppResult<()> {
-    collections::ensure_owner(user, owner)?;
+    // own: the calendar's colour; a share: the sharee's own colour of it
+    let cal = collections::ensure_calendar(state, user, owner, id, Need::Read).await?;
     if !prefs::is_hex_color(color) {
         return Err(AppError::bad("err-color"));
     }
-    let mut c = state.calendars.get_calendar(owner, id, false).await?;
-    c.meta.color = Some(color.to_lowercase());
-    state.calendars.update_calendar(owner, id, c).await?;
-    Ok(())
+    state.collections().update_calendar(&cal, None, Some(color.to_lowercase()), None).await
 }
 
 /// An event's or task's own colour: `color` "" removes it (the calendar's shows again). Only the
 /// COLOR line of the master component changes; every other line keeps its bytes.
 pub async fn set_object_color(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, color: &str) -> AppResult<()> {
-    collections::ensure_owner(user, principal)?;
+    let cal = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
     if !color.is_empty() && !prefs::is_hex_color(color) {
         return Err(AppError::bad("err-color-or-empty"));
     }
-    state.calendars.get_calendar(principal, cal_id, false).await?;
-    collections::ensure_writable(state, principal, cal_id).await?;
-    let existing = state.calendars.get_object(principal, cal_id, object_id, false).await?;
+    collections::ensure_writable(state, &cal).await?;
+    let existing = state.collections().object(&cal, object_id).await?;
     let Some(ics) = with_color(&existing.get_ics(), &color.to_lowercase()) else {
         return Err(AppError::bad("err-no-event-or-task"));
     };
     let obj = CalendarObject::import(&ics, None)?;
-    state.calendars.put_object(principal, cal_id, object_id, obj, true).await?;
+    // through a share the owner's alarms stay (the view has none to carry)
+    state.collections().put_object(&cal, object_id, obj, true, Some(&existing.get_etag())).await?;
     Ok(())
 }
 

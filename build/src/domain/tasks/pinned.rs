@@ -2,6 +2,7 @@
 //! writes, the reminder anchors, and the per-calendar cache through the real store.
 
 use super::*;
+use rustical_store::CalendarReadStore;
 use crate::testkit::{TestApp, date, vtodo};
 
 fn tz() -> chrono_tz::Tz {
@@ -167,7 +168,7 @@ async fn a_task_without_status_is_listed_open_and_saved_without_one() {
     assert_eq!(d.status, "", "the editor sees what is stored");
     let i = TaskInput { principal: "alice".into(), cal_id: cal.clone(), summary: "Ohne, umbenannt".into(), due: d.due, due_all_day: true, status: d.status, ..Default::default() };
     update_task(&app.state, &user, "n", i, Some(&d.etag), tz()).await.unwrap();
-    let obj = app.state.calendars.get_object("alice", &cal, "n", false).await.unwrap();
+    let obj = app.state.raw().calendars.get_object("alice", &cal, "n", false).await.unwrap();
     let ics = obj.get_ics();
     assert!(ics.contains("SUMMARY:Ohne\\, umbenannt") && !ics.contains("STATUS"), "a save adds no STATUS the user did not pick:\n{ics}");
 }

@@ -87,9 +87,9 @@ pub struct CalendarPage {
 }
 
 impl CalendarPage {
-    /// a group calendar is in the filter: only then does "only mine" differ from "all"
+    /// a group calendar or a share is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
-        self.calendars.iter().any(|c| c.is_group)
+        self.calendars.iter().any(|c| c.is_group || c.view.is_copy())
     }
 }
 

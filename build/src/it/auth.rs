@@ -114,29 +114,29 @@ async fn sign_up_creates_the_principal_only_when_it_is_switched_on() {
     let app = TestApp::new().await;
     app.user("alice", "Alice Beispiel").await;
     app.group("group.familie", "Familie", &["alice"]).await;
-    let off = SignInStore { principals: app.state.principals.clone(), allow_sign_up: false };
-    let on = SignInStore { principals: app.state.principals.clone(), allow_sign_up: true };
+    let off = SignInStore { principals: app.state.principals().clone(), allow_sign_up: false };
+    let on = SignInStore { principals: app.state.principals().clone(), allow_sign_up: true };
 
     // an existing user is found by both, and neither writes to it
     assert!(off.user_exists("alice").await.unwrap() && on.user_exists("alice").await.unwrap());
-    on.ensure_user("alice", &[]).await.unwrap();
+    on.ensure_user("alice", &[], None).await.unwrap();
     let alice = app.principal("alice").await;
     assert_eq!((alice.displayname.as_deref(), alice.password.is_some()), (Some("Alice Beispiel"), true), "an existing account is never overwritten");
 
     // sign-up off: an unknown name stays unknown and the browser is told so on the login page
     assert!(!off.user_exists("mallory").await.unwrap());
-    let e = off.ensure_user("mallory", &[]).await.unwrap_err();
+    let e = off.ensure_user("mallory", &[], None).await.unwrap_err();
     assert!(matches!(&e, SignInError::NoAccount));
     assert_eq!(location(e), "/login?error=3");
-    assert!(app.state.principals.get_principal("mallory").await.unwrap().is_none());
+    assert!(app.state.principals().get_principal("mallory").await.unwrap().is_none());
 
     // sign-up on: the principal appears, as an individual without a password, and the second sign-in
     // of the same person creates nothing more
-    on.ensure_user("mallory", &[]).await.unwrap();
+    on.ensure_user("mallory", &[], None).await.unwrap();
     let fresh = app.principal("mallory").await;
     assert_eq!((fresh.principal_type, fresh.displayname.clone(), fresh.password.is_some(), fresh.memberships.clone()), (PrincipalType::Individual, None, false, vec![]));
-    on.ensure_user("mallory", &[]).await.unwrap();
-    assert_eq!(app.state.principals.get_principals().await.unwrap().iter().filter(|p| p.id == "mallory").count(), 1);
+    on.ensure_user("mallory", &[], None).await.unwrap();
+    assert_eq!(app.state.principals().get_principals().await.unwrap().iter().filter(|p| p.id == "mallory").count(), 1);
 
     // A group is no account to sign in to: users and groups share one table, and RustiCal's
     // authentication middleware signs in whatever the session names (middleware.rs:77). `rustical
@@ -146,15 +146,15 @@ async fn sign_up_creates_the_principal_only_when_it_is_switched_on() {
     app.group("verein", "Verein", &[]).await;
     for g in ["group.familie", "verein"] {
         assert!(!on.user_exists(g).await.unwrap(), "{g}");
-        assert_eq!(location(on.ensure_user(g, &[]).await.unwrap_err()), "/login?error=4", "{g}");
+        assert_eq!(location(on.ensure_user(g, &[], None).await.unwrap_err()), "/login?error=4", "{g}");
         assert_eq!(app.principal(g).await.principal_type, PrincipalType::Group, "{g} is untouched");
     }
 
     // an id that cannot be a principal, or a path segment, is refused instead of written
     for bad in ["", "group.neu", "a:b", "a$b", "a/b", "a b", "a?b", "a#b", "a%b", "a\\b", "a\nb"] {
-        let e = on.ensure_user(bad, &[]).await.unwrap_err();
+        let e = on.ensure_user(bad, &[], None).await.unwrap_err();
         assert!(matches!(&e, SignInError::IdRejected), "{bad:?}");
-        assert!(app.state.principals.get_principal(bad).await.unwrap().is_none(), "{bad:?}");
+        assert!(app.state.principals().get_principal(bad).await.unwrap().is_none(), "{bad:?}");
     }
 }
 

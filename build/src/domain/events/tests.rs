@@ -56,6 +56,7 @@ fn allday_series_instance_is_one_day() {
         synctoken: 0,
         read_only: false,
         managed: false,
+        ..CalInfo::bare(crate::state::Authorized::test_own("p", "c"))
     };
     let ws = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
     let we = ical::to_utc(NaiveDate::from_ymd_opt(2026, 9, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), tz);
@@ -98,6 +99,7 @@ fn build_and_reparse_event() {
         links: vec![],
         related: vec![],
         timezone: None,
+        confirm_visibility: false,
     };
     let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
     let ics = ical::assemble(ical::vtimezone("Europe/Berlin"), "VEVENT", lines, &[]);
@@ -107,7 +109,7 @@ fn build_and_reparse_event() {
     assert_eq!(alarm_offsets(main), vec![15]);
     let ex = main.expand_recurrence(None, None, overrides);
     assert_eq!(ex.len(), 3);
-    let cal = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: "Test".into(), color: "#000".into(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false };
+    let cal = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: "Test".into(), color: "#000".into(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false, ..CalInfo::bare(crate::state::Authorized::test_own("p", "c")) };
     let i = instance_from(&ex[1], &cal, "uid-1", tz, true, alarm_offsets(main));
     assert_eq!(i.start.date().day(), 10);
     assert_eq!(&*i.summary, "Zahnarzt, Kontrolle");
@@ -240,6 +242,7 @@ fn unchanged_save_keeps_every_property() {
         links: links_of(&raw.props),
         related: related_of(&raw.props),
         timezone: Some("Europe/Berlin".into()),
+        confirm_visibility: false,
     };
     assert_eq!(input.links.iter().map(|l| (l.kind.as_str(), l.embedded)).collect::<Vec<_>>(), vec![("url", false), ("conference", false), ("attach", false), ("attach", true)]);
     assert_eq!(input.links[1].features, vec!["AUDIO", "VIDEO"]);
@@ -348,7 +351,7 @@ fn light_expansion_equals_the_full_one() {
     files.push(cal(master("") + &over("20261010T090000", ";RANGE=THISANDFUTURE", "Ab hier anders")));
     files.push(cal(master("TRANSP:TRANSPARENT\r\n").replace("Europe/Berlin", "W. Europe Standard Time")).replace("BEGIN:VCALENDAR\r\n", "BEGIN:VCALENDAR\r\n").replacen(&ical::vtimezone("Europe/Berlin").unwrap(), &ical::vtimezone("Europe/Berlin").unwrap().replace("TZID:Europe/Berlin", "TZID:W. Europe Standard Time"), 1));
     let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
-    let ci = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: String::new(), color: "#000".into(), description: String::new(), components: vec!["VEVENT".into()], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false };
+    let ci = CalInfo { principal: "p".into(), owner_label: String::new(), is_group: false, id: "c".into(), displayname: String::new(), color: "#000".into(), description: String::new(), components: vec!["VEVENT".into()], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false, ..CalInfo::bare(crate::state::Authorized::test_own("p", "c")) };
     let (start, end) = (NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 1).unwrap());
     let ws = ical::to_utc(start.and_time(chrono::NaiveTime::MIN), tz) - Duration::days(1);
     let we = ical::to_utc(end.and_time(chrono::NaiveTime::MIN), tz) + Duration::days(1);

@@ -297,7 +297,7 @@ async fn params_round_trip_and_crlf_stays_inside_its_line() {
     let path = format!("/api/events/alice/{}/quoted", s.arbeit);
     let d = c.get_json(&path).await.ok().json();
     c.json(Method::PUT, &path, d).await.ok();
-    let stored = s.app.state.calendars.get_object("alice", &s.arbeit, "quoted", false).await.unwrap().get_ics().replace("\r\n ", "");
+    let stored = s.app.state.raw().calendars.get_object("alice", &s.arbeit, "quoted", false).await.unwrap().get_ics().replace("\r\n ", "");
     assert!(stored.contains("URL;X-Q=\"a:b;c\":https://example.org/q"), "{stored}");
     assert!(stored.contains("CN=\"Doe, John\"") && stored.contains("DELEGATED-FROM=\"mailto:a@example.org\",\"mailto:b@example.org\""), "{stored}");
     let again = c.get_json(&path).await.ok().json();
@@ -310,7 +310,7 @@ async fn params_round_trip_and_crlf_stays_inside_its_line() {
         "alarms": [{ "action": "EMAIL", "minutes": 5, "attendees": ["m@x.de\r\nRRULE:FREQ=SECONDLY"] }]
     })).await;
     let id = r.ok().json()["id"].as_str().unwrap().to_string();
-    let stored = s.app.state.calendars.get_object("alice", &s.arbeit, &id, false).await.unwrap().get_ics().to_string();
+    let stored = s.app.state.raw().calendars.get_object("alice", &s.arbeit, &id, false).await.unwrap().get_ics().to_string();
     let vevent = &stored[stored.find("BEGIN:VEVENT").unwrap()..];
     assert!(!vevent.split("\r\n").any(|l| l.starts_with("RRULE") || l.starts_with("X-INJ")), "{stored}");
     assert_eq!(c.get_json(&format!("/api/events/alice/{}/{id}", s.arbeit)).await.ok().json()["rrule"], json!(null));
@@ -349,13 +349,14 @@ async fn imports_are_bounded_and_atomic() {
     let r = c.post_raw(&format!("/settings/import/addressbooks/alice/{}", s.freunde), vcf).await;
     assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
     for id in ["imp-ok-1", "imp-ok-2"] {
-        assert!(crate::domain::contacts::stored_card(&s.app.state, "alice", &s.freunde, id).await.is_err(), "{id} was stored");
+        let (ab, _) = s.app.state.collections().own_addressbook("alice", &s.freunde, false).await.unwrap();
+        assert!(crate::domain::contacts::stored_card(&s.app.state, &ab, id).await.is_err(), "{id} was stored");
     }
     // the same for a calendar file whose last object is broken
     let cal = ics("BEGIN:VEVENT\nUID:i1\nDTSTAMP:20260101T000000Z\nDTSTART:20261020T100000Z\nSUMMARY:eins\nEND:VEVENT\nBEGIN:VEVENT\nUID:i2\nDTSTAMP:20260101T000000Z\nDTSTART:garbage\nSUMMARY:zwei\nEND:VEVENT");
     let r = c.post_raw(&format!("/settings/import/calendars/alice/{}", s.arbeit), &cal).await;
     assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
-    assert!(s.app.state.calendars.get_object("alice", &s.arbeit, "i1", false).await.is_err());
+    assert!(s.app.state.raw().calendars.get_object("alice", &s.arbeit, "i1", false).await.is_err());
     // the object limit answers before anything is parsed
     let many: String = (0..=crate::domain::transfer::IMPORT_MAX_OBJECTS).map(|i| format!("BEGIN:VTODO\nUID:m{i}\nSUMMARY:m\nEND:VTODO\n")).collect();
     let r = c.post_raw("/settings/import/calendars?owner=alice&name=Viele", &ics(&many)).await;
@@ -390,7 +391,7 @@ async fn a_large_import_is_chunked() {
     assert_eq!(r.unwrap(), n + 1);
     // the route (history guard, JSON answer) on top: a second import of the same file overwrites
     assert_eq!(c.post_raw(&format!("/settings/import/calendars/alice/{cal}"), &file).await.ok().json()["imported"], n + 1);
-    let series = s.app.state.calendars.get_object("alice", &cal, "series", false).await.unwrap();
+    let series = s.app.state.raw().calendars.get_object("alice", &cal, "series", false).await.unwrap();
     assert!(series.get_ics().contains("RECURRENCE-ID"), "the override joined its master");
     assert!(peak < 12 * MIB, "peak {} KiB for a {} KiB file", peak / 1024, file.len() / 1024);
 }

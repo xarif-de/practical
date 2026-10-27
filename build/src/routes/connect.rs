@@ -305,7 +305,7 @@ async fn apple_manual(State(state): State<SharedState>, ctx: PageCtx, Path(id): 
     let Some(user) = state.connect.links.open_manual(&id, chrono::Utc::now()) else {
         return Ok(apple_gone(&state, ctx, id));
     };
-    let principal = state.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?;
+    let principal = state.principals().get_principal(&user).await?.ok_or(AppError::NotFound)?;
     let groups = crate::domain::groups::list_for_user(&state, &principal).await?.into_iter().filter(GroupInfo::needs_cal_account).map(|g| (g.displayname, format!("{user}${}", g.id))).collect();
     Ok(ConfirmPage { account: user, dav: state.config.public_dav_url.clone(), groups, ..ConfirmPage::new(ctx, id, "apple-manual", connect::host_of(&state.config.public_url)) }.into_response())
 }
@@ -340,7 +340,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
     let task = tokio::spawn(async move {
         let made = match profile {
             true => make_profile(&st, &user, name, &description).await,
-            false => async { tokens::create_unique(&st, &st.principals.get_principal(&user).await?.ok_or(AppError::NotFound)?, name).await }.await,
+            false => async { tokens::create_unique(&st, &st.principals().get_principal(&user).await?.ok_or(AppError::NotFound)?, name).await }.await,
         };
         st.connect.links.made(&id, made.as_ref().ok().map(|(_, p)| p.as_str()), chrono::Utc::now());
         if let Ok((name, _)) = &made {
@@ -358,7 +358,7 @@ async fn apple_download(State(state): State<SharedState>, ctx: PageCtx, headers:
 /// The profile of `user`'s accounts with a new app token ([`tokens::create_unique`] of `name`). Returns (the
 /// token's name, the profile); the token is made last: nothing can fail after it.
 async fn make_profile(state: &SharedState, user: &str, name: &str, description: &str) -> AppResult<(String, String)> {
-    let user = state.principals.get_principal(user).await?.ok_or(AppError::NotFound)?;
+    let user = state.principals().get_principal(user).await?.ok_or(AppError::NotFound)?;
     let mut accounts = vec![connect::AppleAccount { carddav: false, principal: user.id.clone(), description: "PractiCal".into() }, connect::AppleAccount { carddav: true, principal: user.id.clone(), description: "PractiCal".into() }];
     // a group's calendars need an account of their own (connect::apple_profile); its address books do not:
     // Apple's Contacts follows every addressbook-home-set entry (macOS 26.2 fetched the group principals,

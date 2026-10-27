@@ -12,6 +12,8 @@
   let CATS = [], CT_IDX = null, ctPop = null, RFX = {}, RFXL = { alarms: [], links: [] }, RLOCK = new Set(), ruleMode = null, ruleBack = null, ruleReturn = null, RM = {};
   const CTF = CTT.tFields.split('|');
   const FLD = { summary: ['title', 11], all_day: ['when', 0], calendar: ['when', 1], color: ['when', 2], location: ['where', 3], rrule: ['repeat', 5], status: ['status', 6], transp: ['status', 7], class: ['status', 8], priority: ['status', 9] };
+  // the card a setting's footer row sits on: FLD[k][0] is also its group in the stored rule (catrules.rs StatusRule.class), which stays
+  const CARD_OF = k => k === 'class' ? 'when' : FLD[k][0];
   const SCALARS = Object.keys(FLD), WHEN_KEYS = ['all_day', 'calendar', 'color'], STATUS_KEYS = ['status', 'transp', 'class', 'priority'], RULE_CARDS = ['when', 'where', 'alarm', 'repeat', 'status', 'links'];
   const ruleSetting = (r, fld) => { if (fld === 'summary') { const st = r.title; return st && st.value ? { mode: st.mode, value: st.value } : null; } if (fld === 'location') { const p = r.where; return p && p.mode !== 'off' && (p.location || p.geo) ? { mode: p.mode, value: p.location || '', geo: p.geo } : null; } if (fld === 'rrule') { const p = r.repeat; return p && p.mode !== 'off' && p.rrule ? { mode: p.mode, value: p.rrule } : null; } const st = (r[FLD[fld][0]] || {})[fld]; return st && st.value != null && st.value !== '' ? { mode: st.mode, value: st.value } : null; };
   const alarmKey = a => [a.action || 'DISPLAY', a.related_end ? 1 : 0, a.at || '', a.minutes ?? ''].join('|');
@@ -113,7 +115,7 @@
       add('where', CTF[3], chip('location', RM.location || 'off'));
       ALARMS.forEach(a => add('alarm', alarmText(a), chip('alarm:' + a._id, a._mode || 'off')));
       add('repeat', CTF[5], chip('rrule', RM.rrule || 'off'));
-      STATUS_KEYS.forEach(k => add('status', CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
+      STATUS_KEYS.filter(k => f[k]).forEach(k => add(CARD_OF(k), CTF[FLD[k][1]], chip(k, RM[k] || 'off')));
       LK.links.forEach((l, i) => { if (!l.embedded) add('links', lkTitle(l), chip('link:' + i, l._mode || 'off')); });
     } else {
       const fx = RFX, entry = (e, present) => ruleBadgeHtml(e, '', !present && e.mode === 'default');
@@ -122,7 +124,7 @@
       if (fx.location) add('where', CTF[3], ruleBadge('location', f.location.value.trim()));
       RFXL.alarms.forEach(e => add('alarm', alarmText(e.entry), entry(e, ALARMS.some(x => alarmKey(x) === alarmKey(e.entry)))));
       if (fx.rrule) add('repeat', CTF[5], ruleBadge('rrule', rrBuild() || ''));
-      STATUS_KEYS.forEach(k => { if (fx[k]) add('status', CTF[FLD[k][1]], ruleBadge(k, f[k].value)); });
+      STATUS_KEYS.forEach(k => { if (fx[k]) add(CARD_OF(k), CTF[FLD[k][1]], ruleBadge(k, f[k].value)); });
       RFXL.links.forEach(e => add('links', e.entry.label || lkHost(e.entry.uri) || e.entry.uri, entry(e, LK.links.some(x => x.uri === e.entry.uri))));
     }
     ['title', ...RULE_CARDS].forEach(c => { $x(`.rfoot[data-rfoot="${c}"]`, form).innerHTML = (foot[c] || []).join(''); });

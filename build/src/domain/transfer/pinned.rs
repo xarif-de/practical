@@ -1,6 +1,7 @@
 //! Characterisation of import and export on the real store.
 
 use super::*;
+use rustical_store::CalendarReadStore;
 use crate::testkit::{TestApp, ics, vevent, vtodo};
 
 #[tokio::test]
@@ -11,9 +12,9 @@ async fn new_calendar_from_a_file() {
     let n = collections::NewCalendar { owner: "alice".into(), name: " Import ".into(), color: "#010203".into(), description: String::new(), components: vec![CalendarObjectType::Journal], timezone: "Nowhere/Land".into() };
     let (id, count) = import_new_calendar(&app.state, &alice, n, file.as_bytes()).await.unwrap();
     assert_eq!(count, 3, "the UID with a slash is skipped");
-    let cal = app.state.calendars.get_calendar("alice", &id, false).await.unwrap();
+    let cal = app.state.raw().calendars.get_calendar("alice", &id, false).await.unwrap();
     assert_eq!((cal.meta.displayname.as_deref(), cal.timezone_id.as_deref(), cal.components.iter().map(|c| c.as_str()).collect::<Vec<_>>()), (Some("Import"), None, vec!["VEVENT", "VTODO", "VJOURNAL"]), "the store keeps its own order");
-    let a = app.state.calendars.get_object("alice", &id, "a", false).await.unwrap().get_ics().to_string();
+    let a = app.state.raw().calendars.get_object("alice", &id, "a", false).await.unwrap().get_ics().to_string();
     assert!(!a.contains("X-WR-CALNAME"), "calendar-level lines stay out of the objects: {a}");
     let (name, out) = export_calendar(&app.state, &alice, "alice", &id).await.unwrap();
     assert_eq!(name, "Import");
@@ -23,7 +24,7 @@ async fn new_calendar_from_a_file() {
     // merge into an existing calendar: same UID replaces
     let merged = import_calendar(&app.state, &alice, "alice", &id, vtodo("t", "T neu", "").as_bytes()).await.unwrap();
     assert_eq!(merged, 1);
-    assert!(app.state.calendars.get_object("alice", &id, "t", false).await.unwrap().get_ics().contains("SUMMARY:T neu"));
+    assert!(app.state.raw().calendars.get_object("alice", &id, "t", false).await.unwrap().get_ics().contains("SUMMARY:T neu"));
     assert!(matches!(import_calendar(&app.state, &alice, "alice", "missing", vtodo("t", "T", "").as_bytes()).await, Err(AppError::Store(_))));
     let bob = app.user("bob", "Bob").await;
     assert!(matches!(import_calendar(&app.state, &bob, "alice", &id, vtodo("t", "T", "").as_bytes()).await, Err(AppError::Forbidden)));
@@ -57,7 +58,7 @@ async fn a_sloppy_ics_gets_its_required_properties() {
     let no_prodid = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:np\r\nDTSTAMP:20261001T080000Z\r\nDTSTART:20261102T080000Z\r\nSUMMARY:Ohne PRODID\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
     assert!(rustical_ical::CalendarObject::from_ics(CalendarObject::from(IcalParser::from_slice(no_prodid.as_bytes()).next().unwrap().unwrap().into_objects().unwrap().remove(0)).get_ics().to_string()).is_err(), "what the old import stored");
     assert_eq!(import_calendar(&app.state, &alice, "alice", &cal, no_prodid.as_bytes()).await.unwrap(), 1);
-    let stored = app.state.calendars.get_objects("alice", &cal).await.unwrap();
+    let stored = app.state.raw().calendars.get_objects("alice", &cal).await.unwrap();
     assert_eq!(stored.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), ["np"], "stored and readable");
     assert!(stored[0].1.get_ics().contains(&format!("PRODID:{PRODID}")));
     // no VERSION, no UID, no DTSTAMP, lower-case names: supplied; the VALARM gets none of them
@@ -66,7 +67,7 @@ async fn a_sloppy_ics_gets_its_required_properties() {
     assert!(done.starts_with(&format!("BEGIN:VCALENDAR\r\nPRODID:{PRODID}\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:")) && done.matches("DTSTAMP:").count() == 2 && done.matches("UID:").count() == 2, "{done}");
     let (id, n) = import_new_calendar(&app.state, &alice, collections::NewCalendar { owner: "alice".into(), name: "Lose".into(), color: String::new(), description: String::new(), components: vec![], timezone: String::new() }, sloppy.as_bytes()).await.unwrap();
     assert_eq!(n, 2);
-    assert_eq!(app.state.calendars.get_objects("alice", &id).await.unwrap().len(), 2, "the count is what got stored");
+    assert_eq!(app.state.raw().calendars.get_objects("alice", &id).await.unwrap().len(), 2, "the count is what got stored");
     // a complete file is handed on untouched
     let full = ics(&vevent("x", "X", "DTSTART:20261001T100000Z"));
     assert!(matches!(complete_ics(&full), std::borrow::Cow::Borrowed(_)));

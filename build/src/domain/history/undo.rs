@@ -237,15 +237,19 @@ pub async fn plan(state: &AppState, user: &Principal, c: &Change, all: &[Change]
     Ok(Plan { now: nows, ok, why: (!ok).then(|| skips.first().map(|s| s.why).unwrap_or("same")), warns, skips, ops })
 }
 
+// Undo acts on own collections only: `plan` skips every item whose collection the user is not (or is no
+// member of), so `(p, c)` is a collection of the user's or of one of their groups.
 async fn put_text(state: &AppState, (store, p, c, id): &ObjKey, text: &str, overwrite: bool) -> AppResult<()> {
     match store {
         Store::Cal => {
             let obj = CalendarObject::import(text, None)?;
-            state.calendars.put_object(p, c, id, obj, overwrite).await?;
+            let (a, _) = state.collections().own_calendar(p, c, false).await?;
+            state.collections().put_object(&a, id, obj, overwrite, None).await?;
         }
         Store::Ab => {
             let obj = AddressObject::from_vcf(text.to_string())?;
-            AddressbookWriteStore::put_object(&*state.addressbooks, p, c, id, obj, overwrite).await?;
+            let (a, _) = state.collections().own_addressbook(p, c, false).await?;
+            state.collections().put_address_object(&a, id, obj, overwrite, None).await?;
         }
     }
     Ok(())
@@ -253,8 +257,14 @@ async fn put_text(state: &AppState, (store, p, c, id): &ObjKey, text: &str, over
 
 async fn delete_obj(state: &AppState, (store, p, c, id): &ObjKey) -> AppResult<()> {
     match store {
-        Store::Cal => state.calendars.delete_object(p, c, id, true).await?,
-        Store::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, p, c, id, true).await?,
+        Store::Cal => {
+            let (a, _) = state.collections().own_calendar(p, c, false).await?;
+            state.collections().delete_object(&a, id, None).await?
+        }
+        Store::Ab => {
+            let (a, _) = state.collections().own_addressbook(p, c, false).await?;
+            state.collections().delete_address_object(&a, id).await?
+        }
     }
     Ok(())
 }

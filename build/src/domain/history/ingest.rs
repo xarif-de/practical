@@ -231,7 +231,9 @@ fn merge_moves(recs: Vec<Rec>) -> Vec<Rec> {
         if r.act == "delete" { dels.push(r) } else { out.push(r) }
     }
     for d in dels {
-        match out.iter_mut().find(|c| c.act == "create" && c.from.is_none() && c.store == d.store && c.uid == d.uid && (c.principal != d.principal || c.coll != d.coll)) {
+        // only within one principal: across principals a pairing would hand the source's whole text to the
+        // target's readers (`read::visible` shows a move's `before`), so there it stays a delete and a create
+        match out.iter_mut().find(|c| c.act == "create" && c.from.is_none() && c.store == d.store && c.uid == d.uid && c.principal == d.principal && c.coll != d.coll) {
             Some(c) => {
                 c.act = "move";
                 c.from = Some((d.principal, d.coll, d.object_id));

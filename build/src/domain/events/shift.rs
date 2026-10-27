@@ -424,12 +424,12 @@ pub fn shift_ics(ics: &str, days: i64, one: Option<(When, Duration)>, tz: chrono
 /// Moves a stored event by `days` (module doc): `at` = the local start (user's zone) of the occurrence to move alone;
 /// without it, or for an event without a rule, the whole event moves. `expected_etag` as in `update_event`.
 pub async fn move_event(state: &AppState, user: &Principal, p: &str, c: &str, id: &str, days: i64, at: Option<NaiveDateTime>, expected_etag: Option<&str>, tz: chrono_tz::Tz) -> AppResult<()> {
-    collections::ensure_owner(user, p)?;
-    collections::ensure_writable(state, p, c).await?;
+    let cal = collections::ensure_calendar(state, user, p, c, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
     if days == 0 || days.unsigned_abs() > 10_000 * 366 { // beyond `ical::YEARS` anyway; Duration::days panics far past it
         return Err(AppError::bad("err-date-range"));
     }
-    let existing = state.calendars.get_object(p, c, id, false).await?;
+    let existing = state.collections().object(&cal, id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != existing.get_etag()
@@ -459,7 +459,8 @@ pub async fn move_event(state: &AppState, user: &Principal, p: &str, c: &str, id
     };
     let ics = shift_ics(&existing.get_ics(), days, one, tz)?;
     let obj = CalendarObject::import(&ics, None)?;
-    state.calendars.put_object(p, c, id, obj, true).await?;
+    // the owner's alarms of a shared event stay as they are (`state::Collections::put_object`)
+    state.collections().put_object(&cal, id, obj, true, Some(&existing.get_etag())).await?;
     Ok(())
 }
 

@@ -35,11 +35,13 @@ mod collection_forms;
 mod onboarding;
 mod token_forms;
 mod pref_forms;
+mod share_forms;
 mod transfer;
 use group_forms::*;
 use collection_forms::*;
 use token_forms::*;
 use pref_forms::*;
+use share_forms::*;
 use transfer::*;
 
 pub(crate) const SESSION_NEW_TOKEN: &str = "new_token";
@@ -114,6 +116,22 @@ pub struct SettingsPage {
     /// this server's host as a user types it on the other device ("plan.example.org")
     pub plan_host: String,
     pub stores: &'static [crate::domain::connect::Store],
+    /// the shares of the user's own collections (`share_forms::share_rows`), by `"cal:<p>/<id>"` / `"ab:<p>/<id>"`
+    pub share_rows: HashMap<String, Vec<ShareRow>>,
+    /// the visibility levels of the user and each group (`share_forms::vis_rows`)
+    pub vis: Vec<VisRow>,
+}
+
+impl SettingsPage {
+    /// The message key of a visibility level (0 hidden … 4 everything)
+    pub fn level_key(&self, level: &u8) -> &'static str {
+        ["vis-l0", "vis-l1", "vis-l2", "vis-l3", "vis-l4"][usize::from((*level).min(4))]
+    }
+
+    /// The shares of one collection (`kind` "cal" / "ab"), none when it has none
+    pub fn shares_of(&self, kind: &str, principal: &str, id: &str) -> &[ShareRow] {
+        self.share_rows.get(&format!("{kind}:{principal}/{id}")).map_or(&[], Vec::as_slice)
+    }
 }
 
 #[derive(Deserialize)]
@@ -337,6 +355,8 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         new_uploader,
         uploader_devices: crate::domain::uploader::devices_of(&state, &user).await?,
         prefs: p.clone(),
+        share_rows: share_rows(&state, &user, &cals_all, &abs_all).await?,
+        vis: vis_rows(&state, &collections::owners(&state, &user).await?).await?,
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
@@ -495,6 +515,12 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/addressbooks/{owner}/{id}/delete", post(addressbook_delete))
         .route("/settings/addressbooks/{owner}/{id}/restore", post(addressbook_restore))
         .route("/settings/addressbooks/{owner}/{id}/purge", post(addressbook_purge))
+        .route("/settings/calendars/{owner}/{id}/share", post(share_calendar))
+        .route("/settings/calendars/{owner}/{id}/unshare", post(unshare_calendar))
+        .route("/settings/addressbooks/{owner}/{id}/share", post(share_addressbook))
+        .route("/settings/addressbooks/{owner}/{id}/unshare", post(unshare_addressbook))
+        .route("/settings/visibility", post(visibility_save))
+        .route("/api/sharee", get(sharee))
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))
         .route("/settings/uploader", post(uploader_create))

@@ -43,9 +43,9 @@ async fn groups_life_cycle() {
     c.get("/settings").await.has("toast ok");
     // purge needs the id typed
     c.post_form("/settings/trash/groups/group.verein-sport/purge", &[("confirm", "Verein")]).await;
-    assert!(s.app.state.principals.get_principal_opt("group.verein-sport").await);
+    assert!(s.app.state.principals().get_principal_opt("group.verein-sport").await);
     c.post_form("/settings/trash/groups/group.verein-sport/purge", &[("confirm", "group.verein-sport")]).await;
-    assert!(!s.app.state.principals.get_principal_opt("group.verein-sport").await);
+    assert!(!s.app.state.principals().get_principal_opt("group.verein-sport").await);
 }
 
 #[tokio::test]
@@ -113,7 +113,7 @@ async fn app_tokens_are_shown_once() {
     let (prefix, secret) = token.split_once('_').unwrap();
     assert_eq!((prefix.len(), secret.len()), (4, 64));
     assert!(!c.get("/settings").await.body.contains("new-token\">"), "only once");
-    let tokens = s.app.state.principals.get_app_tokens("alice").await.unwrap();
+    let tokens = s.app.state.principals().get_app_tokens("alice").await.unwrap();
     let t = tokens.iter().find(|t| t.name == "Thunderbird").unwrap();
     assert!(t.id.starts_with(prefix));
     // it authenticates
@@ -126,7 +126,7 @@ async fn app_tokens_are_shown_once() {
     let r = c.post_form_json("/settings/tokens/not-mine/delete", &[]).await;
     assert_eq!(r.json(), json!({ "ok": false, "msg": "Nicht gefunden." }));
     c.post_form(&format!("/settings/tokens/{}/delete", t.id), &[]).await;
-    assert!(!s.app.state.principals.get_app_tokens("alice").await.unwrap().iter().any(|x| x.id == t.id));
+    assert!(!s.app.state.principals().get_app_tokens("alice").await.unwrap().iter().any(|x| x.id == t.id));
     assert_eq!(s.app.anonymous().send(Method::GET, "/api/colors", &[("authorization", &h)], axum::body::Body::empty()).await.status, StatusCode::UNAUTHORIZED);
 }
 
@@ -136,8 +136,8 @@ async fn a_device_shows_once_it_connected_and_one_that_never_did_is_swept() {
     let s = seed().await;
     let st = &s.app.state;
     let mut c = s.app.login("alice").await;
-    let alice = st.principals.get_principal("alice").await.unwrap().unwrap();
-    let named = |n: &'static str| async move { tokens::devices(st, &st.principals.get_principal("alice").await.unwrap().unwrap()).await.unwrap().into_iter().find(|(t, _)| t.name == n) };
+    let alice = st.principals().get_principal("alice").await.unwrap().unwrap();
+    let named = |n: &'static str| async move { tokens::devices(st, &st.principals().get_principal("alice").await.unwrap().unwrap()).await.unwrap().into_iter().find(|(t, _)| t.name == n) };
     // made, not yet used: no connected device
     c.post_form("/settings/tokens", &[("name", "Thunderbird")]).await;
     let token = c.get("/settings").await.body.split("<code id=\"new-token\">").nth(1).map(|r| r[..r.find('<').unwrap()].to_string()).expect("token shown");
@@ -160,7 +160,7 @@ async fn a_device_shows_once_it_connected_and_one_that_never_did_is_swept() {
         sqlx::query(q).bind(n).execute(&st.db).await.unwrap();
     }
     assert_eq!(tokens::sweep(st).await.unwrap(), 1);
-    let left: Vec<String> = st.principals.get_app_tokens("alice").await.unwrap().into_iter().map(|t| t.name).collect();
+    let left: Vec<String> = st.principals().get_app_tokens("alice").await.unwrap().into_iter().map(|t| t.name).collect();
     assert!(!left.contains(&"Halbfertig".to_string()) && ["Thunderbird", "Alt", "Frisch"].iter().all(|n| left.contains(&n.to_string())), "{left:?}");
     assert!(matches!(named("Alt").await, Some((_, Seen::Unknown))), "made before uses were recorded: shown, nothing known");
     assert!(c.get("/settings").await.body.contains("verbunden seit"));
@@ -342,7 +342,7 @@ async fn settings_page_reflects_the_vacation_rule() {
 
 impl crate::state::AppState {
     async fn principals_list(&self, gid: &str) -> Vec<String> {
-        let mut m = self.principals.list_members(gid).await.unwrap();
+        let mut m = self.principals().list_members(gid).await.unwrap();
         m.sort();
         m
     }

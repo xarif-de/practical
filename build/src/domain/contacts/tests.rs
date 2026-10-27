@@ -56,7 +56,7 @@ fn vcard_roundtrip() {
     let vcf = build_vcf("u1", &i, &["PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ".to_string(), "X-FOO:bar".to_string()]).unwrap();
     assert!(vcf.contains("X-FOO:bar"), "preserved lines are written back");
     let vc = parse_vcf(&vcf).unwrap();
-    let ab = AbInfo { color: String::new(), principal: "p".into(), owner_label: String::new(), is_group: false, id: "a".into(), displayname: "Privat".into(), description: String::new(), deleted_at: None, synctoken: 0 };
+    let ab = AbInfo { color: String::new(), principal: "p".into(), owner_label: String::new(), is_group: false, id: "a".into(), displayname: "Privat".into(), description: String::new(), deleted_at: None, synctoken: 0, ..AbInfo::bare(crate::state::Authorized::test_own("p", "a")) };
     let c = contact_from(&vc, &raw_lines(&vcf), &ab, "u1", String::new());
     assert_eq!(c.full_name, "Christin Lang");
     assert_eq!(c.family, "Lang");

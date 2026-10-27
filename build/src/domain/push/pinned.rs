@@ -159,3 +159,18 @@ async fn a_sent_reminder_is_not_sent_again() {
     let mut restarted = Plan::default();
     assert!(tick(&app.state, &mut restarted, None, t("2026-10-14T09:51:30Z")).await.unwrap().0.is_empty());
 }
+
+/// A share's reminders are its owner's: the sharee gets none of them, nor any word of the hidden parts. Two lines
+/// hold this: `plan_for` skips copies, and a view carries no VALARM anyway; either alone keeps the test green.
+#[tokio::test]
+async fn no_reminders_from_a_share() {
+    let w = crate::it::seed::seed_shared().await;
+    let state = &w.s.app.state;
+    let now = chrono::DateTime::parse_from_rfc3339("2026-10-14T07:40:00Z").unwrap().with_timezone(&Utc);
+    let sub = || vec![Sub { endpoint: "https://push.example.org/x".into(), p256dh: String::new(), auth: String::new() }];
+    let (bob, _) = plan_for(state, now, "bob".into(), sub()).await.unwrap();
+    assert!(bob.unwrap().fires.iter().any(|f| f.object_id == "plan"), "the owner's reminder");
+    let (erin, _) = plan_for(state, now, "erin".into(), sub()).await.unwrap();
+    let fires = erin.map(|p| p.fires).unwrap_or_default();
+    assert!(fires.iter().all(|f| f.object_id != "plan" && !f.title.contains("Marker7") && !f.body.contains("Marker7")), "{} fire(s)", fires.len());
+}

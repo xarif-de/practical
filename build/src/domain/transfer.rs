@@ -12,30 +12,29 @@
 
 use crate::domain::collections;
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, Need};
 use caldata::component::{Component, ComponentMut, IcalCalendar};
 use caldata::generator::Emitter;
 use caldata::parser::{ContentLine, ParserOptions};
 use caldata::{IcalParser, VcardParser};
 use rustical_ical::{AddressObject, CalendarObject, CalendarObjectType};
 use rustical_store::auth::Principal;
-use rustical_store::{Addressbook, AddressbookReadStore, AddressbookWriteStore, Calendar, CalendarMetadata, CalendarReadStore, CalendarWriteStore};
+use rustical_store::{Addressbook, Calendar, CalendarMetadata};
 
 pub async fn export_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str) -> AppResult<(String, String)> {
-    collections::ensure_owner(user, principal)?;
-    let cal = state.calendars.get_calendar(principal, cal_id, false).await?;
-    let objects = state.calendars.get_objects(principal, cal_id).await?;
+    let (auth, cal) = state.collections().ensure_calendar(user, principal, cal_id, Need::Read, false).await?;
+    // a share exports the sharee's views
+    let objects = state.collections().objects(&auth).await?;
     let ical = IcalCalendar::from_objects(PRODID.to_string(), objects.into_iter().map(|(_, o)| o.into()).collect(), vec![]);
     let name = cal.meta.displayname.clone().unwrap_or_else(|| cal_id.to_string());
     Ok((name, ical.generate()))
 }
 
 pub async fn export_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str) -> AppResult<(String, String)> {
-    collections::ensure_owner(user, principal)?;
-    let ab = state.addressbooks.get_addressbook(principal, ab_id, false).await?;
+    let (auth, ab) = state.collections().ensure_addressbook(user, principal, ab_id, Need::Read, false).await?;
     // every card as stored, those the store cannot parse too (`contacts::ab_cards`)
     let mut out = String::new();
-    for (_, vcf) in crate::domain::contacts::ab_cards(state, principal, ab_id).await? {
+    for (_, vcf) in crate::domain::contacts::ab_cards(state, &auth).await? {
         out.push_str(vcf.trim_end());
         out.push_str("\r\n");
     }
@@ -298,15 +297,23 @@ fn store_chunk(chunk: &[(String, String)]) -> AppResult<Vec<(String, CalendarObj
 /// calendar; objects with a known UID are overwritten (merge). Written in chunks of `IMPORT_CHUNK` objects (one
 /// transaction each, so other users' saves get the write lock in between) after the whole file was checked.
 pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<usize> {
-    collections::ensure_owner(user, principal)?;
-    state.calendars.get_calendar(principal, cal_id, false).await?;
-    collections::ensure_writable(state, principal, cal_id).await?;
+    let cal = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
     let (objects, _) = file_objects(ics, false).await?;
     if objects.is_empty() {
         return Err(AppError::bad("err-no-calendar-objects"));
     }
+    if cal.is_own() {
+        for chunk in objects.chunks(IMPORT_CHUNK) {
+            state.collections().put_objects(&cal, store_chunk(chunk)?, true).await?;
+        }
+        return Ok(objects.len());
+    }
+    // through a share a known UID is replaced under the name it has (a new name with it would be refused)
+    let known: std::collections::HashMap<String, String> = state.collections().objects(&cal).await?.into_iter().map(|(id, o)| (o.get_uid().to_string(), id)).collect();
     for chunk in objects.chunks(IMPORT_CHUNK) {
-        state.calendars.put_objects(principal, cal_id, store_chunk(chunk)?, true).await?;
+        let chunk = store_chunk(chunk)?.into_iter().map(|(uid, o)| (known.get(&uid).cloned().unwrap_or(uid), o)).collect();
+        state.collections().put_objects(&cal, chunk, true).await?;
     }
     Ok(objects.len())
 }
@@ -350,9 +357,10 @@ pub async fn import_new_calendar(state: &AppState, user: &Principal, n: collecti
     };
     let mut chunks = objects.chunks(IMPORT_CHUNK);
     let first = chunks.next().map(store_chunk).transpose()?.unwrap_or_default();
-    state.calendars.import_calendar(cal, first.into_iter().map(|(_, o)| o).collect(), false).await?;
+    state.collections().import_calendar(user, cal, first.into_iter().map(|(_, o)| o).collect(), false).await?;
+    let (auth, _) = state.collections().ensure_calendar(user, &n.owner, &id, Need::Write, false).await?;
     for chunk in chunks {
-        state.calendars.put_objects(&n.owner, &id, store_chunk(chunk)?, false).await?;
+        state.collections().put_objects(&auth, store_chunk(chunk)?, false).await?;
     }
     Ok((id, count))
 }
@@ -409,7 +417,7 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
         synctoken: 0,
         push_topic: uuid::Uuid::new_v4().to_string(),
     };
-    state.addressbooks.import_addressbook(ab, objects, false).await?;
+    state.collections().import_addressbook(user, ab, objects).await?;
     collections::set_addressbook_color_checked(state, user, owner, &id, color).await?;
     Ok((id, count))
 }
@@ -417,15 +425,14 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
 /// Merges a .vcf file into an existing address book (a known UID is overwritten). Every card is parsed first;
 /// the store has no batch write for cards, so they are then written one by one.
 pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str, vcf: &[u8]) -> AppResult<usize> {
-    collections::ensure_owner(user, principal)?;
-    state.addressbooks.get_addressbook(principal, ab_id, false).await?;
+    let ab = collections::ensure_addressbook(state, user, principal, ab_id, Need::Write).await?;
     let cards = file_cards(vcf)?;
     if cards.is_empty() {
         return Err(AppError::bad("err-no-vcards"));
     }
     let n = cards.len();
     for (id, obj) in cards {
-        AddressbookWriteStore::put_object(&*state.addressbooks, principal, ab_id, &id, obj, true).await?;
+        state.collections().put_address_object(&ab, &id, obj, true, None).await?;
     }
     Ok(n)
 }

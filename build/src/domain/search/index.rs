@@ -96,10 +96,11 @@ pub(super) fn fingerprint(cals: &[crate::domain::collections::CalInfo], abs: &[c
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (today, tz.name(), lang).hash(&mut h);
     for c in cals {
-        (&c.principal, &c.id, c.synctoken, &c.displayname, &c.color).hash(&mut h);
+        // the calendar, its view and its path (`state::Authorized::cache_key`)
+        (c.auth.cache_key(), c.synctoken, &c.displayname, &c.color).hash(&mut h);
     }
     for a in abs {
-        ("ab", &a.principal, &a.id, a.synctoken, &a.displayname).hash(&mut h);
+        ("ab", a.auth.cache_key(), a.synctoken, &a.displayname).hash(&mut h);
     }
     h.finish()
 }
@@ -164,7 +165,8 @@ pub(super) async fn index(state: &AppState, user: &Principal, today: NaiveDate, 
     let (from, to) = (today - Duration::days(730), today + Duration::days(730));
     let mut parts: HashMap<String, Arc<CalPart>> = HashMap::new();
     for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
-        let ck = format!("{}/{}", cal.principal, cal.id);
+        // the calendar, its view and its path: a share's part is never another view's
+        let ck = cal.auth.cache_key();
         let prev = old.as_ref().and_then(|o| o.cals.get(&ck)).filter(|p| p.name == cal.displayname && p.color == cal.color);
         let part = match prev {
             Some(p) if p.token == cal.synctoken => p.clone(),
@@ -176,7 +178,7 @@ pub(super) async fn index(state: &AppState, user: &Principal, today: NaiveDate, 
     let tasks = tasks::tasks_for(state, &cals, tz).await?;
     // the corpus' order: as a full read sorted by start lists the objects' first occurrences (calendars in
     // their order, then the object id where all else is equal)
-    let cal_pos: HashMap<String, usize> = cals.iter().enumerate().map(|(n, c)| (format!("{}/{}", c.principal, c.id), n)).collect();
+    let cal_pos: HashMap<String, usize> = cals.iter().enumerate().map(|(n, c)| (c.auth.cache_key(), n)).collect();
     let mut order: Vec<(&ObjPart, usize, &str)> = parts.iter().flat_map(|(ck, p)| p.objs.iter().map(|(id, o)| (o, cal_pos[ck], id.as_str()))).collect();
     let sort_key = |k: &(NaiveDateTime, bool, String)| (k.0, k.1, k.2.clone());
     // RELATED-TO names the other side by UID: its title is what can be searched (the title of the UID's
@@ -266,9 +268,10 @@ async fn cal_part(state: &AppState, lang: &str, cal: &crate::domain::collections
 /// `prev` brought to the calendar's synctoken now: only the objects the change log names since `prev.token`
 /// are read again (a change of name or colour reads the whole calendar: `cal_part`).
 async fn cal_part_update(state: &AppState, lang: &str, cal: &crate::domain::collections::CalInfo, prev: &CalPart, from: NaiveDate, to: NaiveDate, tz: chrono_tz::Tz) -> AppResult<CalPart> {
+    // the calendar itself (`(owner, id)`), never the path of a share; what is read below is its view
     let changed: Vec<String> = sqlx::query("SELECT DISTINCT object_id FROM calendarobjectchangelog WHERE principal = ? AND cal_id = ? AND synctoken > ?")
-        .bind(&cal.principal)
-        .bind(&cal.id)
+        .bind(cal.auth.owner())
+        .bind(cal.auth.id())
         .bind(prev.token)
         .fetch_all(&state.db)
         .await?
@@ -279,15 +282,14 @@ async fn cal_part_update(state: &AppState, lang: &str, cal: &crate::domain::coll
     if changed.len() > 64 + prev.objs.len() / 4 {
         return cal_part(state, lang, cal, from, to, tz).await;
     }
-    use rustical_store::CalendarReadStore;
     let mut objs = prev.objs.clone();
     for id in changed {
         objs.remove(&id);
-        let obj = match state.calendars.get_object(&cal.principal, &cal.id, &id, false).await {
+        let obj = match state.collections().object(&cal.auth, &id).await {
             Ok(o) => o,
-            // gone, or unreadable (a full read skips a broken object too)
-            Err(rustical_store::Error::NotFound | rustical_store::Error::IcalError(_)) => continue,
-            Err(e) => return Err(e.into()),
+            // gone, hidden by a share, or unreadable (a full read skips a broken object too)
+            Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound | rustical_store::Error::IcalError(_))) => continue,
+            Err(e) => return Err(e),
         };
         let mut insts = events::object_instances(&obj, cal, &id, from, to, tz);
         if insts.is_empty() {

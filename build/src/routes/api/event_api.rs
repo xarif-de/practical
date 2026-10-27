@@ -40,10 +40,11 @@ pub struct MentionEvent { pub summary: String, pub key: String, pub uid: String,
 #[derive(Default)]
 pub struct MentionCache(std::sync::Mutex<std::collections::HashMap<String, (MentionKey, std::sync::Arc<Vec<MentionEvent>>)>>);
 
-pub(super) type MentionKey = (chrono_tz::Tz, chrono::NaiveDate, Vec<(String, String, i64, bool)>);
+pub(super) type MentionKey = (chrono_tz::Tz, chrono::NaiveDate, Vec<(String, i64, bool)>);
 
 async fn mention_events(state: &SharedState, user: &Principal, cals: &[crate::domain::collections::CalInfo], vc: &crate::routes::calendar::ViewCtx) -> AppResult<std::sync::Arc<Vec<MentionEvent>>> {
-    let key: MentionKey = (vc.tz, vc.today, cals.iter().map(|c| (c.principal.clone(), c.id.clone(), c.synctoken, c.components.iter().any(|x| x == "VEVENT"))).collect());
+    // per calendar its view and path too (`state::Authorized::cache_key`): a share shows other objects
+    let key: MentionKey = (vc.tz, vc.today, cals.iter().map(|c| (c.auth.cache_key(), c.synctoken, c.components.iter().any(|x| x == "VEVENT"))).collect());
     if let Some((k, v)) = state.caches.mentions.0.lock().unwrap().get(&user.id)
         && *k == key
     {
@@ -76,8 +77,9 @@ pub(super) async fn mentions(State(state): State<SharedState>, user: Principal, 
 /// The n-th embedded (base64) ATTACH of an event as a download.
 pub(super) async fn event_attachment(State(state): State<SharedState>, user: Principal, Path((p, c, id, n)): Path<(String, String, String, usize)>) -> AppResult<axum::response::Response> {
     use axum::response::IntoResponse;
-    crate::domain::collections::ensure_owner(&user, &p)?;
-    let obj = state.calendars.get_object(&p, &c, &id, false).await?;
+    let cal = crate::domain::collections::ensure_calendar(&state, &user, &p, &c, crate::state::Need::Read).await?;
+    // the sharee's view: below full visibility no ATTACH is in it
+    let obj = state.collections().object(&cal, &id).await?;
     let (raw, _) = events::split_ics(&obj.get_ics());
     let (fmt, name, bytes) = events::embedded_attachment(&raw.props, n).ok_or(AppError::NotFound)?;
     let safe: String = name.chars().filter(|ch| ch.is_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ')).collect();
@@ -100,12 +102,16 @@ pub(super) async fn update_event(State(state): State<SharedState>, user: Princip
     if u.input.principal != p || u.input.cal_id != c {
         // moving to another calendar = create there, delete here (one change: a move); the source is read
         // only after the owner check, and only in the version the editor showed
-        crate::domain::collections::ensure_owner(&user, &p)?;
+        let source = crate::domain::collections::ensure_calendar(&state, &user, &p, &c, crate::state::Need::Read).await?;
         // before the copy: out of a read-only calendar the delete would fail after it, one more copy per retry
-        crate::domain::collections::ensure_writable(&state, &p, &c).await?;
+        crate::domain::collections::ensure_writable(&state, &source).await?;
         let (tp, tc) = (u.input.principal.clone(), u.input.cal_id.clone());
         let target = u.input.clone();
-        let old = state.calendars.get_object(&p, &c, &id, false).await?;
+        let old = state.collections().object(&source, &id).await?;
+        // a sharee moves only what it sees in full (the delete below would refuse the rest after the copy)
+        if source.level(&old) < crate::state::FULL_LEVEL {
+            return Err(AppError::Rejected(axum::http::StatusCode::UNPROCESSABLE_ENTITY, crate::error::Msg { key: "err-share-level", args: vec![] }));
+        }
         if old.get_etag() != etag {
             return Err(AppError::conflict("err-changed-event"));
         }

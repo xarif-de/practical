@@ -93,7 +93,7 @@
 //! |---|---|---|
 //! | [`tasks::spawn_change_poller`] | 2 s (`PRACTICAL__DEV_POLL_MS` in development) | reads the [`db::Watch`] stamp; only after a commit by another connection: [`domain::history::poll`] (ingest), then the calendar and address-book synctokens → [`state::ChangeEvent`] |
 //! | [`domain::push::spawn_reminder_loop`] | 60 s from start, first tick at once; only with a VAPID key | rebuilds its [`domain::push::Plan`] only when the stamp moved, a user's day changed or a retry is due (backoff 1…16 min); fire window [now−2 min, now+1 min] |
-//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS`, push sent-log older than 30 days, expired sessions, app tokens and PractiCalUploader devices that never connected within a day ([`domain::tokens::sweep`], [`domain::uploader::sweep`]) |
+//! | [`tasks::spawn_trash_purger`] | 1 h, first round at start | history past `HISTORY_RETENTION_DAYS`, trashed groups past `TRASH_RETENTION_DAYS` (not in the first 15 min after the start: [`tasks::GROUP_PURGE_DELAY`]), push sent-log older than 30 days, expired sessions, app tokens and PractiCalUploader devices that never connected within a day ([`domain::tokens::sweep`], [`domain::uploader::sweep`]) |
 //! | [`domain::remote::sched::spawn`] | 60 s; a link runs when its own interval elapsed, and a local change pushes at once | one `sync-collection` per due link (zero responses when nothing changed), then the two directions |
 //! | [`tasks::spawn_holiday_coverage`] ([`domain::holidays::maintain`]) | 24 h; the first round only reads saved state | country coverage and CLDR release check, weekly (ETag, usually 304) |
 //! | [`tasks::spawn_dev_asset_watcher`] | 300 ms, development only | mtimes of `assets/**` → `dev_reload` → `/dev/reload` ([`routes::dev`]) |
@@ -186,7 +186,6 @@ use axum::http::header;
 use axum::routing::get;
 use config::Config;
 use rustical_store::auth::middleware::AuthenticationLayer;
-use rustical_store_sqlite::{SqliteAddressbookStore, SqliteCalendarStore, SqlitePrincipalStore};
 use state::{AppState, SharedState};
 use std::sync::Arc;
 use std::time::Duration;
@@ -328,7 +327,7 @@ fn build_router_with(state: &SharedState, session_store: sessions::DbStore) -> R
         .merge(routes::dev::router(state.config.dev_assets_dir.is_some()))
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::origin_guard))
-        .layer(AuthenticationLayer::new(state.principals.clone()))
+        .layer(AuthenticationLayer::new(state.principals().clone()))
         .layer(axum::middleware::from_fn_with_state(activity, sessions::activity))
         .layer(session_layer)
         // inside the compression: the tag is taken of the identity body (and br made of it), the 304 has none
@@ -387,37 +386,23 @@ async fn serve() -> Result<(), String> {
         tracing::error!("schema drift (the service runs; a repair is a migration): {d}");
     }
 
-    let (cal_tx, _cal_rx) = tokio::sync::mpsc::channel(64);
-    let (ab_tx, _ab_rx) = tokio::sync::mpsc::channel(64);
     let vapid = match &config.vapid_private_key_pem {
         Some(pem) => Some(rustical_dav_push::VapidKeypair::from_pem(pem).map_err(|e| format!("VAPID key: {e}"))?),
         None => None,
     };
     let (changes, _) = tokio::sync::broadcast::channel(256);
     let (dev_reload, _) = tokio::sync::broadcast::channel(16);
-    let state: SharedState = Arc::new(AppState {
-        principals: Arc::new(SqlitePrincipalStore::new(db.clone())),
-        calendars: Arc::new(SqliteCalendarStore::new(db.clone(), cal_tx, true)),
-        addressbooks: Arc::new(SqliteAddressbookStore::new(db.clone(), ab_tx, true)),
+    let state: SharedState = Arc::new(AppState::new(state::StateParts {
         i18n: i18n::I18n::load(),
         changes,
         dev_reload,
         http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap(),
         remote_http: crate::domain::remote::client(&config.remote_private_origins),
-        remote_logins: Arc::new(crate::domain::remote::login::Logins::default()),
-        connect: Default::default(),
-        remote_runner: Arc::new(crate::domain::remote::sched::Runner::default()),
-        geo: Default::default(),
-        search_index: Default::default(),
-        task_cache: Default::default(),
-        caches: Default::default(),
-        history: Default::default(),
         vapid,
         started_at: chrono::Utc::now(),
-        guards: Default::default(),
         db,
         config,
-    });
+    }));
     let app = build_router(&state)?;
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());

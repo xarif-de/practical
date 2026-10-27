@@ -83,9 +83,20 @@ pub async fn visible(state: &AppState, user: &Principal) -> AppResult<Vec<Change
         });
     }
     for r in sqlx::query("SELECT change_id, store, principal, coll, object_id, uid, kind, act, from_principal, from_coll, from_object, before_hash, after_hash, title, attrs FROM practical_history_items ORDER BY change_id, idx").fetch_all(&state.db).await? {
-        let it = row_item(&r);
-        if !user.is_principal(&it.principal) && !it.from.as_ref().is_some_and(|f| user.is_principal(&f.0)) {
+        let mut it = row_item(&r);
+        let (to, from) = (user.is_principal(&it.principal), it.from.as_ref().is_some_and(|f| user.is_principal(&f.0)));
+        if !to && !from {
             continue;
+        }
+        // a move between principals (recorded before moves paired within one principal only): each side
+        // reads only its own half
+        if it.from.is_some() && !from {
+            it.before = None;
+            it.attrs.iter_mut().for_each(|(_, old, _)| old.clear());
+        }
+        if !to {
+            it.after = None;
+            it.attrs.iter_mut().for_each(|(_, _, new)| new.clear());
         }
         if let Some(c) = by_id.get_mut(&r.get::<i64, _>("change_id")) {
             c.items.push(it);

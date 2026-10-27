@@ -6,7 +6,8 @@
 set -eu
 OUT=$1
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-IMG="$(sed -n 's/^COPY --from=\(registry\.gitlab\.com\/xarif\/docker\/rustical:[^ ]*\) .*/\1/p' "$REPO/build/Dockerfile")"
+# PRACTICAL_E2E_RUSTICAL_IMAGE: another RustiCal image (a local build of a change to the crates), else the pinned one
+IMG="${PRACTICAL_E2E_RUSTICAL_IMAGE:-$(sed -n 's/^COPY --from=\(registry\.gitlab\.com\/xarif\/docker\/rustical:[^ ]*\) .*/\1/p' "$REPO/build/Dockerfile")}"
 [ -n "$IMG" ] || { echo "no rustical image in build/Dockerfile" >&2; exit 1; }
 VOL=practical-e2e-seed-$$
 CP=practical-e2e-seedcp-$$
@@ -17,9 +18,14 @@ r() { docker run --rm -u 0 -v "$VOL:/var/lib/rustical" "$IMG" /usr/local/bin/rus
 r principals create alice -n "Alice Beispiel" --for-testing-password-from-arg devpass >/dev/null
 r principals create bob   -n "Bob Muster"     --for-testing-password-from-arg devpass >/dev/null
 r principals create carol -n "Carol Test"     --for-testing-password-from-arg devpass >/dev/null
+r principals create dave  -n "Dave Leser"     --for-testing-password-from-arg devpass >/dev/null
+r principals create erin  -n "Erin Schreiber" --for-testing-password-from-arg devpass >/dev/null
 r principals create group.familie -p group -n "Familie" >/dev/null
 r principals membership assign alice --to group.familie >/dev/null
 r principals membership assign bob   --to group.familie >/dev/null
+# sharing (stage 2 shares through PractiCal): alice → dave read, bob → group.team write
+r principals create group.team -p group -n "Team" >/dev/null
+r principals membership assign erin  --to group.team >/dev/null
 : > "$OUT/tokens.txt"
 for name in "Thunderbird Laptop" "DAVx5 Handy" "seed"; do
   printf '%s\t%s\n' "$name" "$(r principals app-token create --name "$name" alice | tail -1)" >> "$OUT/tokens.txt"

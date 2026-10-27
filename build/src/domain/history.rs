@@ -30,7 +30,6 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use rustical_ical::{AddressObject, CalendarObject};
 use rustical_store::auth::Principal;
-use rustical_store::{AddressbookWriteStore, CalendarWriteStore};
 use sha2::{Digest, Sha256};
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -118,7 +117,18 @@ impl Guard<'_> {
     /// Records the write as one change attributed to the [`Actor`], then releases the lock; the id of its
     /// change, if anything changed. A failing history is logged and never fails the write.
     pub async fn commit(self) -> Option<i64> {
-        match ingest(self.state, Some((&self.actor, &self.objects, &self.colls))).await {
+        // a write through a share is a change of the owner's collection: the owner's history attributes it to
+        // the actor (the routes name the path, i.e. the share's home and name)
+        let (mut objects, mut colls) = (HashSet::new(), HashSet::new());
+        for (store, p, c, id) in self.objects {
+            let (p, c) = self.state.collections().history_key(store == Store::Ab, &p, &c).await;
+            objects.insert((store, p, c, id));
+        }
+        for (store, p, c) in self.colls {
+            let (p, c) = self.state.collections().history_key(store == Store::Ab, &p, &c).await;
+            colls.insert((store, p, c));
+        }
+        match ingest(self.state, Some((&self.actor, &objects, &colls))).await {
             Ok(id) => id,
             Err(e) => {
                 tracing::warn!("history: {e}");

@@ -318,11 +318,12 @@ where
 
 /// One subscriber's reminders; the error of a calendar that could not be read rides along.
 async fn plan_for(state: &AppState, now: chrono::DateTime<Utc>, principal: String, subs: Vec<Sub>) -> Result<(Option<Planned>, Option<String>), String> {
-    let Some(user) = state.principals.get_principal(&principal).await.map_err(|e| e.to_string())? else { return Ok((None, None)) };
+    let Some(user) = state.principals().get_principal(&principal).await.map_err(|e| e.to_string())? else { return Ok((None, None)) };
     let p = prefs::get(&state.db, &principal).await.map_err(|e| e.to_string())?;
     let tz: chrono_tz::Tz = p.timezone.as_deref().and_then(|t| t.parse().ok()).unwrap_or_else(|| state.config.default_timezone.parse().unwrap_or(chrono_tz::Europe::Berlin));
     let today: NaiveDate = now.with_timezone(&tz).date_naive();
-    let cals = collections::calendars_for(state, &user, false).await.map_err(|e| e.to_string())?;
+    // never from a share: its alarms are the owner's (a view carries none anyway)
+    let cals: Vec<_> = collections::calendars_for(state, &user, false).await.map_err(|e| e.to_string())?.into_iter().filter(|c| !c.view.is_copy()).collect();
     // a reminder can only fire in the next minutes if its anchor is within a few days
     let from = today - Duration::days(1);
     let to = today + Duration::days(4);

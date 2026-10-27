@@ -29,7 +29,6 @@ use crate::extract::{Json, Path, Query};
 use futures_util::StreamExt;
 use futures_util::stream::Stream;
 use rustical_store::auth::Principal;
-use rustical_store::CalendarReadStore;
 use serde::Deserialize;
 use std::convert::Infallible;
 use tower_sessions::Session;

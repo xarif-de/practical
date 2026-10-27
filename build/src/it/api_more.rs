@@ -164,29 +164,17 @@ async fn push_with_vapid() {
     let pem = kp.to_pem().unwrap();
     let app = TestApp::new().await;
     // the keypair lives in the state, not in the config: rebuild the state around it
-    let state = std::sync::Arc::new(crate::state::AppState {
+    let state = std::sync::Arc::new(crate::state::AppState::new(crate::state::StateParts {
         remote_http: crate::domain::remote::client(&[]),
-        remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
-        connect: Default::default(),
-        remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
         config: app.state.config.clone(),
         db: app.state.db.clone(),
-        principals: app.state.principals.clone(),
-        calendars: app.state.calendars.clone(),
-        addressbooks: app.state.addressbooks.clone(),
         i18n: app.state.i18n.clone(),
         changes: app.state.changes.clone(),
         dev_reload: app.state.dev_reload.clone(),
         http: app.state.http.clone(),
-        geo: Default::default(),
-        search_index: Default::default(),
-        task_cache: Default::default(),
-        caches: Default::default(),
-        history: Default::default(),
         vapid: Some(rustical_dav_push::VapidKeypair::from_pem(&pem).unwrap()),
         started_at: app.state.started_at,
-        guards: Default::default(),
-    });
+    }));
     let router = crate::build_router(&state).unwrap();
     app.user("alice", "Alice").await;
     let mut c = crate::testkit::Client::for_router(router);
@@ -301,7 +289,7 @@ async fn a_card_with_bare_parameters_shows_everywhere() {
     let v21 = "BEGIN:VCARD\r\nVERSION:2.1\r\nUID:otto\r\nN:Alt;Otto;;;\r\nFN:Otto Alt\r\nTEL;CELL;VOICE:0151 222\r\nEMAIL;INTERNET:otto@example.org\r\nBDAY:1972-02-29\r\nEND:VCARD\r\n";
     s.app.put_vcf("alice", &s.freunde, "otto", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:otto\r\nFN:Otto\r\nEND:VCARD\r\n").await;
     sqlx::query("UPDATE addressobjects SET vcf = ? WHERE id = 'otto'").bind(v21).execute(&s.app.state.db).await.unwrap();
-    assert!(rustical_store::AddressbookReadStore::get_objects(&*s.app.state.addressbooks, "alice", &s.freunde).await.unwrap().iter().all(|(id, _)| id != "otto"), "the store alone leaves it out");
+    assert!(rustical_store::AddressbookReadStore::get_objects(s.app.state.raw().addressbooks, "alice", &s.freunde).await.unwrap().iter().all(|(id, _)| id != "otto"), "the store alone leaves it out");
     // list, table, search, the birthdays of the year views, the detail, the download
     c.get("/contacts").await.ok().has("Otto Alt").has("29.02.1972");
     c.get("/contacts?view=table").await.ok().has("0151 222").has("otto@example.org");

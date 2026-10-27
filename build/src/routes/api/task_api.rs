@@ -31,8 +31,8 @@ pub(super) async fn update_task(State(state): State<SharedState>, user: Principa
         // the tick box: "done"/"open" whatever else changed meanwhile; a version, when given, must match
         Some(done) => {
             if let Ok(etag) = precondition(u.etag.as_deref(), &headers) {
-                crate::domain::collections::ensure_owner(&user, &p)?;
-                if state.calendars.get_object(&p, &c, &id, false).await?.get_etag() != etag {
+                let cal = crate::domain::collections::ensure_calendar(&state, &user, &p, &c, crate::state::Need::Read).await?;
+                if state.collections().object(&cal, &id).await?.get_etag() != etag {
                     return Err(AppError::conflict("err-changed-task"));
                 }
             }

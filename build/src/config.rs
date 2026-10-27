@@ -165,7 +165,7 @@ impl Config {
                     issuer,
                     client_id: var("OIDC__CLIENT_ID").ok_or("PRACTICAL__OIDC__CLIENT_ID missing")?,
                     client_secret: var("OIDC__CLIENT_SECRET"),
-                    scopes: var_or("OIDC__SCOPES", "openid profile groups").split_whitespace().map(str::to_string).collect(),
+                    scopes: var_or("OIDC__SCOPES", "openid profile email groups").split_whitespace().map(str::to_string).collect(),
                     allow_sign_up: var_bool("OIDC__ALLOW_SIGN_UP", false)?,
                     claim_userid,
                 })

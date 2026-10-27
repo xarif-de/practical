@@ -121,6 +121,7 @@ fn cal() -> CalInfo {
         synctoken: 0,
         read_only: false,
         managed: false,
+        ..CalInfo::bare(crate::state::Authorized::test_own("p", "c"))
     }
 }
 fn with(extra: &str) -> String {

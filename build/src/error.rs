@@ -31,6 +31,11 @@ pub enum AppError {
     /// 428 write without the version it is based on).
     #[error("{1}")]
     Rejected(StatusCode, Msg),
+    /// A write through a share after which its writer would see the object only at this visibility level (or not
+    /// at all): 422 with the JSON `{"code":"confirm-visibility","level":n}`, which the editor's writer turns into a
+    /// question (req.js `o.confirm`) and sends again with `confirm_visibility`
+    #[error("confirm the visibility (level {0})")]
+    ConfirmVisibility(u8),
 }
 
 /// A message for a user: a Fluent key and its arguments. PractiCal's own errors (BadRequest, Conflict) carry
@@ -85,6 +90,8 @@ impl AppError {
     pub fn user_text(&self) -> Option<Msg> {
         let key = match self {
             Self::BadRequest(m) | Self::Conflict(m) | Self::Rejected(_, m) => return Some(m.clone()),
+            // a question, not a message: its JSON body must reach the editor unchanged (`ctx::localize_errors`)
+            Self::ConfirmVisibility(_) => return None,
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => "flash-not-found",
             Self::Forbidden | Self::Store(rustical_store::Error::ReadOnly) => "flash-forbidden",
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
@@ -122,6 +129,9 @@ impl AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        if let Self::ConfirmVisibility(level) = self {
+            return (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(serde_json::json!({ "code": "confirm-visibility", "level": level }))).into_response();
+        }
         let status = match &self {
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => StatusCode::NOT_FOUND,
             Self::Forbidden => StatusCode::FORBIDDEN,

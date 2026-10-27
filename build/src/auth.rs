@@ -106,7 +106,19 @@ impl UserStore for SignInStore {
         Ok(self.individual(id).await?.is_some())
     }
 
-    async fn ensure_user(&self, id: &str, _memberships: &[&str]) -> Result<(), SignInError> {
+    async fn ensure_user(&self, id: &str, _memberships: &[&str], email: Option<&str>) -> Result<(), SignInError> {
+        self.ensure_individual(id).await?;
+        // the identity provider's (verified) address: others share by it. RustiCal's own store of it, the one
+        // writer of `principal_emails` besides its share store (an address someone else had moves here)
+        if let Some(email) = email {
+            self.principals.set_principal_email(id, Some(email)).await?;
+        }
+        Ok(())
+    }
+}
+
+impl SignInStore {
+    async fn ensure_individual(&self, id: &str) -> Result<(), SignInError> {
         if self.individual(id).await?.is_some() {
             return Ok(());
         }
@@ -137,9 +149,7 @@ impl UserStore for SignInStore {
         tracing::info!("sign-up: created RustiCal principal {id:?}");
         Ok(())
     }
-}
 
-impl SignInStore {
     /// The principal under `id`, if it is a user. A group or a resource is no account to sign in to.
     async fn individual(&self, id: &str) -> Result<Option<Principal>, SignInError> {
         let found = self.principals.get_principal(id).await?;
@@ -196,7 +206,7 @@ pub fn router(state: &SharedState) -> Result<Router<SharedState>, String> {
                     session_key_user_id: SESSION_USER,
                     callback_path: OIDC_CALLBACK_PATH,
                 },
-                SignInStore { principals: state.principals.clone(), allow_sign_up: o.allow_sign_up },
+                SignInStore { principals: state.principals().clone(), allow_sign_up: o.allow_sign_up },
             )
             .layer(axum::middleware::from_fn(cycle_on_login)),
         );
@@ -260,7 +270,7 @@ pub async fn get_login(State(state): State<SharedState>, session: Session, ctx: 
         return Redirect::to("/calendar").into_response();
     }
     if let (Some(id), Some(_)) = (&state.config.dev_login, &state.config.dev_assets_dir)
-        && let Ok(Some(user)) = state.principals.get_principal(id).await
+        && let Ok(Some(user)) = state.principals().get_principal(id).await
     {
         tracing::warn!("development auto-login as {}", user.id);
         let _ = session.insert(SESSION_USER, user.id).await;
@@ -322,7 +332,7 @@ pub async fn post_login(State(state): State<SharedState>, session: Session, head
         tracing::warn!("password login as {:?}: too many failed attempts", f.username);
         return Ok(Redirect::to(&format!("/login?error=2&redirect_uri={}", urlenc(&target))).into_response());
     }
-    match state.principals.validate_password(&f.username, &f.password).await? {
+    match state.principals().validate_password(&f.username, &f.password).await? {
         Some(user) => {
             session.cycle_id().await?;
             session.insert(SESSION_USER, user.id).await?;
@@ -332,7 +342,7 @@ pub async fn post_login(State(state): State<SharedState>, session: Session, head
         None => {
             // an unknown user (or one without a password) costs one hash check too: the answer time tells
             // nothing about which names exist (RustiCal returns at once for them)
-            if state.principals.get_principal(&f.username).await?.is_none_or(|p| p.password.is_none()) {
+            if state.principals().get_principal(&f.username).await?.is_none_or(|p| p.password.is_none()) {
                 let pw = f.password.clone();
                 let _ = tokio::task::spawn_blocking(move || password_auth::verify_password(pw, dummy_hash())).await;
             }

@@ -54,9 +54,9 @@ pub struct ContactsPage {
 }
 
 impl ContactsPage {
-    /// a group address book is in the filter: only then does "only mine" differ from "all"
+    /// a group address book or a share is in the filter: only then does "only mine" differ from "all"
     pub fn has_shared(&self) -> bool {
-        self.addressbooks.iter().any(|a| a.is_group)
+        self.addressbooks.iter().any(|a| a.is_group || a.view.is_copy())
     }
     pub fn col(&self, name: &str) -> bool {
         self.columns.iter().any(|c| c == name)

@@ -66,7 +66,7 @@ async fn category_title_and_colour_scans_follow_writes() {
     let user = app.principal("alice").await;
     crate::domain::collections::update_calendar(&app.state, &user, "alice", &a, "Büro", "#0a84ff", "").await.unwrap();
     assert_eq!(colours(c.get_json("/api/colors").await.ok().json()), ["event Schwimmen navy Büro", "task Schuhe kaufen gold Büro"]);
-    app.state.calendars.delete_object("alice", &a, "e0", true).await.unwrap();
+    app.state.raw().calendars.delete_object("alice", &a, "e0", true).await.unwrap();
     assert_eq!(cats(c.get_json("/api/categories?scope=event").await.ok().json()), ["Rad:1"]);
     assert_eq!(colours(c.get_json("/api/colors").await.ok().json()), ["task Schuhe kaufen gold Büro"]);
     // the colour optimiser's category count reads the same records
@@ -89,7 +89,7 @@ async fn contacts_follow_writes_and_address_book_renames() {
     assert_eq!(read().await, ["Anna (Freunde, #0a84ff)", "Bert (Freunde, #0a84ff)"]);
     assert_eq!(read().await, ["Anna (Freunde, #0a84ff)", "Bert (Freunde, #0a84ff)"]);
     app.put_vcf("alice", &ab, "c1", &vcf("c1", "Zora")).await;
-    AddressbookWriteStore::delete_object(&*app.state.addressbooks, "alice", &ab, "c2", true).await.unwrap();
+    AddressbookWriteStore::delete_object(app.state.raw().addressbooks, "alice", &ab, "c2", true).await.unwrap();
     app.put_vcf("alice", &ab, "c3", &vcf("c3", "Carl")).await;
     assert_eq!(read().await, ["Carl (Freunde, #0a84ff)", "Zora (Freunde, #0a84ff)"]);
     // name and colour change without the synctoken
@@ -114,7 +114,7 @@ async fn mention_events_follow_writes_and_the_zone() {
     assert_eq!(events(c.get_json("/api/mentions").await.ok().json()), [format!("Treffen {}", d(3))]);
     app.put_ics("alice", &a, "m2", &vevent("m2", "Kino", &format!("DTSTART;VALUE=DATE:{}", at(1)))).await;
     assert_eq!(events(c.get_json("/api/mentions").await.ok().json()), [format!("Kino {}", d(1)), format!("Treffen {}", d(3))]);
-    app.state.calendars.delete_object("alice", &a, "m1", true).await.unwrap();
+    app.state.raw().calendars.delete_object("alice", &a, "m1", true).await.unwrap();
     assert_eq!(events(c.get_json("/api/mentions").await.ok().json()), [format!("Kino {}", d(1))]);
     // 23:30 UTC the day after tomorrow is the next day in Berlin, the same day in New York
     app.put_ics("alice", &a, "m3", &vevent("m3", "Spät", &format!("DTSTART:{}T233000Z", at(2)))).await;
@@ -204,7 +204,7 @@ async fn instances_follow_writes_renames_recolours_and_zones() {
     assert_eq!(read(chrono_tz::America::New_York).await, ["Eigenfarbe 05 03:00 Büro tomato false", "Kalenderfarbe 06 03:00 Büro #ff9f0a false", "Spät 06 19:30 Privat #30b46c false"]);
     // a write in one calendar; an edit that drops the own colour; a deletion
     app.put_ics("alice", &a, "i1", &vevent("i1", "Ohne Farbe", "DTSTART;TZID=Europe/Berlin:20261005T080000\nDTEND;TZID=Europe/Berlin:20261005T090000")).await;
-    app.state.calendars.delete_object("alice", &b, "i3", true).await.unwrap();
+    app.state.raw().calendars.delete_object("alice", &b, "i3", true).await.unwrap();
     assert_eq!(read(berlin).await, ["Ohne Farbe 05 08:00 Büro #ff9f0a false", "Kalenderfarbe 06 09:00 Büro #ff9f0a false"]);
 }
 
@@ -252,7 +252,7 @@ async fn year_views_follow_writes_renames_recolours_and_zones() {
     let ny = both(&app, &mut c, &views).await;
     assert_ne!(ny[4], renamed[4]);
     // a deletion
-    app.state.calendars.delete_object("alice", &b, "y2", true).await.unwrap();
+    app.state.raw().calendars.delete_object("alice", &b, "y2", true).await.unwrap();
     let gone = both(&app, &mut c, &views).await;
     assert!(!gone[2].contains("Urlaub Meer"));
 }
@@ -323,7 +323,7 @@ async fn history_document_follows_every_change() {
     app.put_ics("group.familie", &s.familie, "fam1", &vevent("fam1", "Grillen", "DTSTART;VALUE=DATE:20261025\nDTEND;VALUE=DATE:20261026")).await;
     crate::domain::history::poll(&app.state).await;
     check(app, &mut carol, "carol, group change").await;
-    rustical_store::auth::AuthenticationProvider::add_membership(&*app.state.principals, "carol", "group.familie").await.unwrap();
+    rustical_store::auth::AuthenticationProvider::add_membership(&**app.state.principals(), "carol", "group.familie").await.unwrap();
     let mut carol = app.login("carol").await;
     assert!(check(app, &mut carol, "carol joined").await["changes"].as_array().unwrap().iter().any(|x| x["items"][0]["title"] == "Grillen"));
     // zone and language
@@ -387,7 +387,7 @@ async fn search_corpus_follows_writes_per_object() {
     let over = "BEGIN:VEVENT\nUID:standup\nDTSTAMP:20260901T000000Z\nRECURRENCE-ID;TZID=Europe/Berlin:20261021T090000\nSUMMARY:Standup im Garten\nDTSTART;TZID=Europe/Berlin:20261021T100000\nDTEND;TZID=Europe/Berlin:20261021T101500\nEND:VEVENT";
     app.put_ics("alice", &s.arbeit, "standup", &crate::testkit::ics(&format!("{series}\n{over}"))).await;
     both(app, &mut c, &queries, "override").await;
-    app.state.calendars.delete_object("alice", &s.privat, "zahnarzt", true).await.unwrap();
+    app.state.raw().calendars.delete_object("alice", &s.privat, "zahnarzt", true).await.unwrap();
     both(app, &mut c, &queries, "deletion").await;
     // a rename moves no synctoken; a contact; another zone
     let user = app.principal("alice").await;

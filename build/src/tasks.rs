@@ -77,6 +77,12 @@ async fn poll_changes(state: &SharedState, seen: &mut HashMap<(String, String, S
             let tok: i64 = r.get("synctoken");
             let prev = seen.insert(key.clone(), tok);
             if !first && prev != Some(tok) {
+                // also to every share of it: the SSE stream sends an event only for a home its user may use
+                if let Ok(homes) = state.collections().copy_homes(kind, &key.1, &key.2).await {
+                    for (home, name) in homes {
+                        let _ = state.changes.send(ChangeEvent { kind, principal: home, id: name, synctoken: tok });
+                    }
+                }
                 let _ = state.changes.send(ChangeEvent { kind, principal: key.1, id: key.2, synctoken: tok });
             }
         }
@@ -108,8 +114,19 @@ pub fn spawn_remote_login_reaper(state: SharedState) {
 
 /// Final deletion of trashed groups after the retention period, the change history's,
 /// the push sent-log's and the expired sessions' housekeeping.
+/// How long after the start the purger leaves trashed groups alone: longer than a rollout's overlap, while the old
+/// pod (which knows no group-trash claims) may still restore or purge the same group
+pub(crate) const GROUP_PURGE_DELAY: Duration = Duration::from_secs(15 * 60);
+
+/// Whether this round purges trashed groups ([`GROUP_PURGE_DELAY`]). `tokio::time::Instant` keeps running in
+/// development and e2e, where `crate::clock` is frozen.
+pub(crate) fn group_purge_due(started: tokio::time::Instant, now: tokio::time::Instant) -> bool {
+    now.duration_since(started) >= GROUP_PURGE_DELAY
+}
+
 pub fn spawn_trash_purger(state: SharedState) {
     tokio::spawn(async move {
+        let started = tokio::time::Instant::now();
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
         loop {
             tick.tick().await;
@@ -119,7 +136,7 @@ pub fn spawn_trash_purger(state: SharedState) {
                     Ok(n) => tracing::info!("history purge: {n} change(s) past the retention"),
                     Err(e) => tracing::error!("history purge: {e}"),
                 }
-                match crate::domain::groups::purge_expired(&state).await {
+                match if group_purge_due(started, tokio::time::Instant::now()) { crate::domain::groups::purge_expired(&state).await } else { Ok(0) } {
                     Ok(0) => {}
                     Ok(n) => tracing::info!("trash purge: {n} group(s) deleted"),
                     Err(e) => tracing::error!("trash purge: {e}"),
@@ -204,4 +221,30 @@ pub fn spawn_holiday_coverage(state: SharedState) {
             first = false;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A change in a shared calendar reaches its sharees' homes too (the SSE stream lets through only a home
+    /// its user may use: erin's group gets it, dave nothing of bob's)
+    #[tokio::test]
+    async fn a_change_fans_out_to_the_shares() {
+        let w = crate::it::seed::seed_shared().await;
+        let state = w.s.app.state.clone();
+        let mut rx = state.changes.subscribe();
+        let mut seen = HashMap::new();
+        assert!(poll_changes(&state, &mut seen, true).await);
+        w.s.app.put_ics("bob", &w.team, "neu", &crate::testkit::vevent("neu", "Neu", "DTSTART:20261020T100000Z\nDTEND:20261020T110000Z")).await;
+        assert!(poll_changes(&state, &mut seen, false).await);
+        let mut got = vec![];
+        while let Ok(ev) = rx.try_recv() {
+            got.push((ev.kind, ev.principal, ev.id));
+        }
+        got.sort();
+        let mut want = vec![("calendar", "bob".to_string(), w.team.clone()), ("calendar", "group.team".to_string(), w.team_copy.clone())];
+        want.sort();
+        assert_eq!(got, want);
+    }
 }

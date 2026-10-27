@@ -56,13 +56,13 @@ fn refused(r: Resp) {
 }
 
 async fn ids(app: &TestApp, owner: &str, cal: &str) -> Vec<String> {
-    let mut v: Vec<String> = rustical_store::CalendarReadStore::get_objects(&*app.state.calendars, owner, cal).await.unwrap().into_iter().map(|(id, _)| id).collect();
+    let mut v: Vec<String> = rustical_store::CalendarReadStore::get_objects(app.state.raw().calendars, owner, cal).await.unwrap().into_iter().map(|(id, _)| id).collect();
     v.sort();
     v
 }
 
 async fn calendar(app: &TestApp, owner: &str, id: &str) -> rustical_store::Calendar {
-    rustical_store::CalendarReadStore::get_calendar(&*app.state.calendars, owner, id, true).await.unwrap()
+    rustical_store::CalendarReadStore::get_calendar(app.state.raw().calendars, owner, id, true).await.unwrap()
 }
 
 #[tokio::test]
@@ -164,7 +164,7 @@ async fn deselected_calendars_go_to_the_trash_and_come_back() {
     // deselected and purged from the trash: selecting it again starts a new calendar
     put(&app, "alice", &token, vec![cal("a", "A", vec![])]).await.ok();
     c.post_form(&format!("/settings/calendars/alice/{b}/purge"), &[]).await;
-    assert!(rustical_store::CalendarReadStore::get_calendar(&*app.state.calendars, "alice", &b, true).await.is_err(), "purged");
+    assert!(rustical_store::CalendarReadStore::get_calendar(app.state.raw().calendars, "alice", &b, true).await.is_err(), "purged");
     let j = put(&app, "alice", &token, vec![cal("a", "A", vec![]), cal("b", "B", vec![])]).await.ok().json();
     assert_ne!(j["calendars"][1]["calendar"], json!(b));
     assert_eq!(j["calendars"][1]["created"], 0);
@@ -389,8 +389,8 @@ async fn the_device_secret_opens_the_uploader_endpoint_and_nothing_else() {
     let mut c = app.login("alice").await;
     let token = device(&mut c, "alice").await;
     // no RustiCal app token: CalDAV/CardDAV (same store) cannot accept it
-    assert!(app.state.principals.get_app_tokens("alice").await.unwrap().is_empty(), "no app token made");
-    assert!(app.state.principals.validate_app_token("alice", &token).await.unwrap().is_none());
+    assert!(app.state.principals().get_app_tokens("alice").await.unwrap().is_empty(), "no app token made");
+    assert!(app.state.principals().validate_app_token("alice", &token).await.unwrap().is_none());
     // the rest of PractiCal's API refuses it, reads and writes alike
     assert_eq!(basic_send(&app, Method::GET, "/api/history", "alice", &token, None).await.status, StatusCode::UNAUTHORIZED);
     assert_eq!(basic_send(&app, Method::GET, &format!("/api/events/alice/{cal}/e"), "alice", &token, None).await.status, StatusCode::UNAUTHORIZED);
@@ -432,14 +432,14 @@ async fn a_device_that_never_connects_is_swept_after_a_day() {
 #[tokio::test]
 async fn a_device_of_a_member_who_left_the_group_is_dead() {
     let app = app(true).await;
-    app.state.principals.add_membership("bob", "team").await.unwrap();
+    app.state.principals().add_membership("bob", "team").await.unwrap();
     let mut c = app.login("alice").await;
     let token = device(&mut c, "team").await;
     let j = put(&app, "alice", &token, vec![cal("t", "Team-Termine", vec![])]).await.ok().json();
     let t = j["calendars"][0]["calendar"].as_str().unwrap().to_string();
     let dev = sqlx::query_scalar::<_, String>("SELECT id FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap();
     assert!(crate::domain::uploader::managed(&app.state).await.unwrap().contains(&("team".to_string(), t.clone())));
-    app.state.principals.remove_membership("alice", "team").await.unwrap();
+    app.state.principals().remove_membership("alice", "team").await.unwrap();
     // alice's device: no upload, no status, its page offers no group calendar, a forged tick trashes nothing
     assert_eq!(put(&app, "alice", &token, vec![cal("t", "Team-Termine", vec![])]).await.status, StatusCode::FORBIDDEN);
     assert_eq!(get_info(&app, "alice", &token).await.status, StatusCode::FORBIDDEN);
@@ -538,20 +538,20 @@ async fn a_device_of_a_deleted_user_is_forgotten() {
     let app = app(true).await;
     // carol owns nothing in RustiCal's store (its foreign keys would refuse her deletion): her device fills the group's calendar
     app.user("carol", "Carol").await;
-    app.state.principals.add_membership("carol", "team").await.unwrap();
+    app.state.principals().add_membership("carol", "team").await.unwrap();
     let mut c = app.login("carol").await;
     let token = device(&mut c, "team").await;
     let j = put(&app, "carol", &token, vec![cal("k", "Kalender", vec![])]).await.ok().json();
     let k = j["calendars"][0]["calendar"].as_str().unwrap().to_string();
-    app.state.principals.remove_membership("carol", "team").await.unwrap();
-    app.state.principals.remove_principal("carol").await.unwrap();
+    app.state.principals().remove_membership("carol", "team").await.unwrap();
+    app.state.principals().remove_principal("carol").await.unwrap();
     crate::domain::uploader::live_devices(&app.state).await.unwrap();
     assert_eq!(sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM practical_uploader_devices").fetch_one(&app.state.db).await.unwrap(), 0, "row and secret gone");
     let linked: Option<String> = sqlx::query_scalar("SELECT device_id FROM practical_readonly_calendars WHERE calendar_id = ?").bind(&k).fetch_one(&app.state.db).await.unwrap();
     assert_eq!(linked, None, "its calendar is an orphan");
     // an account made again under the same id does not inherit the device
     app.user("carol", "Carol").await;
-    app.state.principals.add_membership("carol", "team").await.unwrap();
+    app.state.principals().add_membership("carol", "team").await.unwrap();
     refused(get_info(&app, "carol", &token).await);
 }
 

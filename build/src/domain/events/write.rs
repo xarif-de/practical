@@ -49,6 +49,16 @@ fn user_tz(input: &EventInput, default: chrono_tz::Tz) -> chrono_tz::Tz {
     input.timezone.as_deref().and_then(ical::parse_tz).unwrap_or(default)
 }
 
+/// A sharee who writes an object it would then see shortened or not at all (its CLASS under the owner's
+/// policy) has to confirm it first (R2: it may; the editor asks). Own calendars: nothing to ask.
+pub(crate) fn confirm_visibility(cal: &crate::state::Authorized, obj: &CalendarObject, confirmed: bool) -> AppResult<()> {
+    let level = cal.level(obj);
+    if !cal.is_own() && !confirmed && level < crate::state::FULL_LEVEL {
+        return Err(AppError::ConfirmVisibility(level));
+    }
+    Ok(())
+}
+
 pub async fn create_event(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz) -> AppResult<String> {
     // no calendar the user may write into (only read-only ones, or none): say so instead of a bare "not found" /
     // "read-only" for whatever target the request names — the editor's dialog says the same (fill.js openEditor)
@@ -61,20 +71,21 @@ pub async fn create_event(state: &AppState, user: &Principal, input: EventInput,
 /// `keep_uid`: a move to another calendar keeps the event's UID (as a CalDAV MOVE does), so
 /// clients and the change history see the same event; a live object with it there gets a new one.
 pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz, keep_uid: Option<&str>) -> AppResult<String> {
-    collections::ensure_owner(user, &input.principal)?;
-    collections::ensure_writable(state, &input.principal, &input.cal_id).await?;
+    let cal = collections::ensure_calendar(state, user, &input.principal, &input.cal_id, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
     let tz = user_tz(&input, default_tz);
     let keep = match keep_uid {
-        Some(u) if state.calendars.get_object(&input.principal, &input.cal_id, u, false).await.is_err() => Some(u.to_string()),
+        Some(u) if state.collections().object(&cal, u).await.is_err() => Some(u.to_string()),
         _ => None,
     };
     let uid = keep.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let lines = build_vevent(&uid, 0, &input, tz, None)?;
     let ics = ical::assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, "VEVENT", lines, &[]);
     let obj = CalendarObject::import(&ics, None)?;
+    confirm_visibility(&cal, &obj, input.confirm_visibility)?;
     let object_id = uid.clone();
-    // overwrite only replaces a trashed copy of a kept UID (a move there and back)
-    state.calendars.put_object(&input.principal, &input.cal_id, &object_id, obj, keep.is_some()).await?;
+    // overwrite only replaces a trashed copy of a kept UID (a move there and back; never through a share)
+    state.collections().put_object(&cal, &object_id, obj, keep.is_some(), None).await?;
     Ok(object_id)
 }
 
@@ -82,10 +93,10 @@ pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInp
 /// model; RECURRENCE-ID overrides written by other clients are carried over untouched
 /// (raw blocks), so "edit the series" never silently drops a moved single occurrence.
 pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, input: EventInput, expected_etag: Option<&str>, default_tz: chrono_tz::Tz) -> AppResult<()> {
-    collections::ensure_owner(user, &input.principal)?;
-    collections::ensure_writable(state, &input.principal, &input.cal_id).await?;
+    let cal = collections::ensure_calendar(state, user, &input.principal, &input.cal_id, Need::Read).await?;
+    collections::ensure_writable(state, &cal).await?;
     let tz = user_tz(&input, default_tz);
-    let existing = state.calendars.get_object(&input.principal, &input.cal_id, object_id, false).await?;
+    let existing = state.collections().object(&cal, object_id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != existing.get_etag()
@@ -101,6 +112,8 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     let lines = build_vevent(&uid, sequence, &input, tz, Some(&raw))?;
     let ics = ical::assemble(if input.all_day { None } else { ical::vtimezone(tz.name()) }, "VEVENT", lines, &extra);
     let obj = CalendarObject::import(&ics, None)?;
-    state.calendars.put_object(&input.principal, &input.cal_id, object_id, obj, true).await?;
+    confirm_visibility(&cal, &obj, input.confirm_visibility)?;
+    // the version the editor showed: through a share checked again in the write's transaction
+    state.collections().put_object(&cal, object_id, obj, true, Some(&existing.get_etag())).await?;
     Ok(())
 }

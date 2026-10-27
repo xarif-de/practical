@@ -15,12 +15,11 @@ use crate::domain::collections::{self, CalInfo};
 use crate::domain::events::{self, Alarm, Link, Related};
 use crate::domain::ical;
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, Need};
 use caldata::component::{CalendarInnerData, Component};
 use chrono::{NaiveDate, NaiveDateTime};
 use rustical_ical::CalendarObject;
 use rustical_store::auth::Principal;
-use rustical_store::{CalendarReadStore, CalendarWriteStore};
 
 mod write;
 mod reminders;
@@ -237,7 +236,7 @@ fn task_of(principal: &str, cal_id: &str, id: String, obj: &CalendarObject, tz: 
 /// ≈ 0.9 s per /tasks in a debug build). A moved token is caught up through the store's change
 /// log (`sync_changes`), so an edit re-parses only what changed.
 #[derive(Default)]
-pub struct TaskCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<CalTasks>>>);
+pub struct TaskCache(std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<CalTasks>>>);
 
 #[cfg(test)]
 impl TaskCache {
@@ -256,7 +255,8 @@ pub struct CalTasks {
 }
 
 async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppResult<std::sync::Arc<CalTasks>> {
-    let k = (cal.principal.clone(), cal.id.clone());
+    // the calendar, its view and its path (`state::Authorized::cache_key`)
+    let k = cal.auth.cache_key();
     let cached = state.task_cache.0.lock().unwrap().get(&k).cloned().filter(|c| c.tz == tz);
     if let Some(c) = &cached
         && c.token == cal.synctoken
@@ -265,7 +265,7 @@ async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppRes
     }
     let fresh = match cached {
         Some(c) => {
-            let (changed, deleted, token) = state.calendars.sync_changes(&cal.principal, &cal.id, c.token).await?;
+            let (changed, deleted, token) = state.collections().sync_changes(&cal.auth, c.token).await?;
             let (mut tasks, mut seeds) = (c.tasks.clone(), c.seeds.clone());
             for id in deleted {
                 tasks.remove(&id);
@@ -285,8 +285,8 @@ async fn cal_tasks(state: &AppState, cal: &CalInfo, tz: chrono_tz::Tz) -> AppRes
         }
         None => {
             // the token first: a write racing the read is then caught up next time, never lost
-            let token = state.calendars.get_calendar(&cal.principal, &cal.id, false).await?.synctoken;
-            let objects = state.calendars.get_objects(&cal.principal, &cal.id).await?;
+            let token = state.collections().calendar_token(&cal.auth).await?;
+            let objects = state.collections().objects(&cal.auth).await?;
             let (mut tasks, mut seeds) = (std::collections::HashMap::new(), std::collections::HashMap::new());
             for (id, obj) in objects {
                 if let Some((t, seed)) = events::per_object(&format!("{}/{}/{id}", cal.principal, cal.id), || task_of(&cal.principal, &cal.id, id.clone(), &obj, tz)).flatten() {
@@ -328,8 +328,8 @@ pub async fn tasks_for(state: &AppState, cals: &[CalInfo], tz: chrono_tz::Tz) ->
 
 /// One task with everything the editor needs. Fails for a calendar the user does not own.
 pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz) -> AppResult<TaskDetail> {
-    collections::ensure_owner(user, principal)?;
-    let obj = state.calendars.get_object(principal, cal_id, object_id, false).await?;
+    let auth = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
+    let obj = state.collections().object(&auth, object_id).await?;
     let CalendarInnerData::Todo(t, _) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
@@ -363,7 +363,8 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
         etag: obj.get_etag().to_string(),
         timezone: tz.name().to_string(),
         has_rrule: first(p, "RRULE").is_some(),
-        read_only: collections::is_read_only(state, principal, cal_id).await?,
+        // through a share also: read access, or less than full visibility
+        read_only: collections::is_read_only(state, auth.owner(), auth.id()).await? || !auth.allows(Need::Write) || auth.level(&obj) < crate::state::FULL_LEVEL,
     })
 }
 

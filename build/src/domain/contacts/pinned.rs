@@ -4,7 +4,7 @@
 use super::*;
 
 fn ab() -> AbInfo {
-    AbInfo { color: "#ff2d55".into(), principal: "p".into(), owner_label: String::new(), is_group: true, id: "a".into(), displayname: "Freunde".into(), description: String::new(), deleted_at: None, synctoken: 0 }
+    AbInfo { color: "#ff2d55".into(), principal: "p".into(), owner_label: String::new(), is_group: true, id: "a".into(), displayname: "Freunde".into(), description: String::new(), deleted_at: None, synctoken: 0, ..AbInfo::bare(crate::state::Authorized::test_own("p", "a")) }
 }
 
 fn read(vcf: &str) -> Contact {

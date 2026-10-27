@@ -172,14 +172,17 @@ and a note.
 In edit mode, every property is an editable card. **Add card** adds the ones that the event does not have yet. These
 are the cards:
 
-- **When**: date, time, all-day, calendar and colour.
+- **When**: date, time, all-day, calendar, colour and visibility. Visibility is a slider: public, private or
+  confidential (unset counts as public). In a calendar that is shared, a line below it says what the people it is
+  shared with see of this event. If you write through a share and would afterwards see the event only shortened or
+  not at all, the editor asks before it saves.
 - **Location**: an address search with suggestions, and a map.
 - **People**: the organiser and the attendees.
 - **Reminders**: see [Reminders](#reminders).
 - **Repeat**: see [Repeating events](#repeating-events).
 - **Links and attachments**: web links, video-call links and files. Files up to 2 MB are embedded. For a larger
   file, add a cloud link instead.
-- **Flags**: status, free or busy, visibility and priority.
+- **Flags**: status, free or busy and priority.
 - **Notes**: free text with mentions. Type `@` for a contact, `#` for a category and `!` for an event.
 
 PractiCal keeps every iCalendar property that it does not show. If another calendar app wrote extra data into an
@@ -433,6 +436,30 @@ that device only. **Settings → Connected devices → Add a device** walks you 
 A device is listed under **My connected devices** once it has connected for the first time, with the time it
 last connected (to the hour). A password that no device used within 24 hours is deleted again, so a setup that was
 never finished leaves nothing behind. To lock out a lost device, disconnect it there.
+
+### Sharing
+
+You can share a calendar or an address book with another person or with a group, to **read** or to **write**. Open
+the calendar or address book in the settings; its **Sharing** block has **Share with**. Enter an account name, a group (`group.<name>`) or
+the e-mail address the person signs in with; PractiCal shows whom it found, and you confirm. A group's members are
+shown only to members of that group. The same block lists who has it, changes the access and ends shares, also
+several at once.
+
+A shared calendar appears for its receivers with its own name and colour, which each of them may change; the
+settings show who shared it, and **Remove from my list** ends the share for them (the owner's calendar stays). It works in
+PractiCal and in every CalDAV/CardDAV app. Phones and Apple devices see a calendar shared with a group through the
+group's account, as the group's own calendars.
+
+What others see of private and confidential events is set once per owner, in **Settings → What others see**: for
+you and for each of your groups, from "everything" down to "not at all". Confidential never shows more than
+private. Public events are always shown in full, contacts always in full. Someone who may write changes only the
+events they see in full; your reminders stay yours and are never sent to them. A calendar that the
+PractiCalUploader fills should only be shared to read: each upload overwrites what others change.
+
+When a group goes to the trash, its shares rest, both those of its calendars and those made with it; a restore
+brings them back.
+
+The RustiCal command line can share too (`rustical share …`); it does not know the uploader's read-only flag.
 
 ### Trash
 

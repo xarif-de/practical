@@ -33,7 +33,6 @@ use crate::domain::history_text::Store;
 use crate::domain::history;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use rustical_store::{AddressbookReadStore, AddressbookWriteStore, CalendarReadStore, CalendarWriteStore};
 use std::collections::{HashMap, HashSet};
 
 /// What a round did, for the UI and the log.
@@ -62,17 +61,27 @@ impl Report {
 /// The local side of a round: (object id, text) changed, and the ids deleted.
 type LocalChanges = (Vec<(String, String)>, Vec<String>, i64);
 
+/// The link's local collection: always an own one of `link.owner` (a link creates it; `may_write` checks
+/// that its user still may act as the owner before a round)
+async fn local(state: &AppState, link: &Link) -> AppResult<crate::state::Authorized> {
+    Ok(match link.kind {
+        Kind::Cal => state.collections().own_calendar(&link.owner, &link.local_id, false).await?.0,
+        Kind::Ab => state.collections().own_addressbook(&link.owner, &link.local_id, false).await?.0,
+    })
+}
+
 async fn local_changes(state: &AppState, link: &Link) -> AppResult<LocalChanges> {
+    let a = local(state, link).await?;
     match link.kind {
         Kind::Cal => {
             // the token first, for the reason in this module's header
-            let before = state.calendars.get_calendar(&link.owner, &link.local_id, false).await?.synctoken;
-            let (changed, gone, _) = state.calendars.sync_changes(&link.owner, &link.local_id, link.local_token).await?;
+            let before = state.collections().calendar_token(&a).await?;
+            let (changed, gone, _) = state.collections().sync_changes(&a, link.local_token).await?;
             Ok((changed.into_iter().map(|(id, o)| (id, o.get_ics().to_string())).collect(), gone, before))
         }
         Kind::Ab => {
-            let before = state.addressbooks.get_addressbook(&link.owner, &link.local_id, false).await?.synctoken;
-            let (changed, gone, _) = AddressbookReadStore::sync_changes(&*state.addressbooks, &link.owner, &link.local_id, link.local_token).await?;
+            let before = state.collections().own_addressbook(&link.owner, &link.local_id, false).await?.1.synctoken;
+            let (changed, gone, _) = state.collections().address_sync_changes(&a, link.local_token).await?;
             Ok((changed.into_iter().map(|(id, o)| (id, o.get_vcf().to_string())).collect(), gone, before))
         }
     }
@@ -81,9 +90,10 @@ async fn local_changes(state: &AppState, link: &Link) -> AppResult<LocalChanges>
 /// The text RustiCal currently holds for one object, or None when it has none. Also the conditional
 /// check of step 4: if this differs from the recorded `mine`, the object changed during the round.
 async fn stored(state: &AppState, link: &Link, object_id: &str) -> Option<String> {
+    let a = local(state, link).await.ok()?;
     match link.kind {
-        Kind::Cal => state.calendars.get_object(&link.owner, &link.local_id, object_id, false).await.ok().map(|o| o.get_ics().to_string()),
-        Kind::Ab => AddressbookReadStore::get_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, false).await.ok().map(|o| o.get_vcf().to_string()),
+        Kind::Cal => state.collections().object(&a, object_id).await.ok().map(|o| o.get_ics().to_string()),
+        Kind::Ab => state.collections().address_object(&a, object_id).await.ok().map(|o| o.get_vcf().to_string()),
     }
 }
 
@@ -92,19 +102,20 @@ async fn stored(state: &AppState, link: &Link, object_id: &str) -> Option<String
 async fn put_local(state: &AppState, link: &Link, object_id: &str, text: &str) -> AppResult<String> {
     let mut g = history::begin(state, history::Actor::sync(&link.principal)).await;
     g.object(store_of(link.kind), &link.owner, &link.local_id, object_id);
+    let a = local(state, link).await?;
     let fp = match link.kind {
         Kind::Cal => {
             let normalised = crate::domain::transfer::complete_ics(text);
             let o = rustical_ical::CalendarObject::import(&normalised, Some(super::parser_options()))?;
             let fp = o.get_etag();
-            state.calendars.put_object(&link.owner, &link.local_id, object_id, o, true).await?;
+            state.collections().put_object(&a, object_id, o, true, None).await?;
             fp
         }
         Kind::Ab => {
             let normalised = crate::domain::contacts::bare_params_as_type(text);
             let o = rustical_ical::AddressObject::from_vcf(normalised.into_owned())?;
             let fp = o.get_etag();
-            AddressbookWriteStore::put_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, o, true).await?;
+            state.collections().put_address_object(&a, object_id, o, true, None).await?;
             fp
         }
     };
@@ -115,10 +126,11 @@ async fn put_local(state: &AppState, link: &Link, object_id: &str, text: &str) -
 async fn del_local(state: &AppState, link: &Link, object_id: &str) -> AppResult<()> {
     let mut g = history::begin(state, history::Actor::sync(&link.principal)).await;
     g.object(store_of(link.kind), &link.owner, &link.local_id, object_id);
-    // use_trashbin = true: a remote deletion stays recoverable through the change history's undo
+    // into the trash bin: a remote deletion stays recoverable through the change history's undo
+    let a = local(state, link).await?;
     match link.kind {
-        Kind::Cal => state.calendars.delete_object(&link.owner, &link.local_id, object_id, true).await?,
-        Kind::Ab => AddressbookWriteStore::delete_object(&*state.addressbooks, &link.owner, &link.local_id, object_id, true).await?,
+        Kind::Cal => state.collections().delete_object(&a, object_id, None).await?,
+        Kind::Ab => state.collections().delete_address_object(&a, object_id).await?,
     }
     g.commit().await;
     Ok(())

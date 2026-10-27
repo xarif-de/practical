@@ -165,20 +165,20 @@ pub async fn create_contact(state: &AppState, user: &Principal, i: ContactInput)
 
 /// `keep_uid`: a move to another address book keeps the UID (see `events::create_event_as`).
 pub async fn create_contact_as(state: &AppState, user: &Principal, i: ContactInput, keep_uid: Option<&str>) -> AppResult<String> {
-    collections::ensure_owner(user, &i.principal)?;
+    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Write).await?;
     let keep = match keep_uid {
-        Some(u) if matches!(stored_card(state, &i.principal, &i.ab_id, u).await, Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound))) => Some(u.to_string()),
+        Some(u) if matches!(stored_card(state, &ab, u).await, Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound))) => Some(u.to_string()),
         _ => None,
     };
     let uid = keep.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let obj = AddressObject::from_vcf(build_vcf(&uid, &i, &[])?)?;
-    state.addressbooks.put_object(&i.principal, &i.ab_id, &uid, obj, keep.is_some()).await?;
+    state.collections().put_address_object(&ab, &uid, obj, keep.is_some(), None).await?;
     Ok(uid)
 }
 
 pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str, i: ContactInput, expected_etag: Option<&str>) -> AppResult<()> {
-    collections::ensure_owner(user, &i.principal)?;
-    let (existing, etag) = stored_card(state, &i.principal, &i.ab_id, object_id).await?;
+    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Write).await?;
+    let (existing, etag) = stored_card(state, &ab, object_id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()
         && e != etag
@@ -189,6 +189,6 @@ pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str,
     // the lines kept as written: a bare parameter among them as TYPE, or caldata rejects the saved card
     let keep = preserved_lines(&bare_params_as_type(&existing));
     let obj = AddressObject::from_vcf(build_vcf(&uid, &i, &keep)?)?;
-    state.addressbooks.put_object(&i.principal, &i.ab_id, object_id, obj, true).await?;
+    state.collections().put_address_object(&ab, object_id, obj, true, Some(&etag)).await?;
     Ok(())
 }

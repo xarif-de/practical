@@ -28,7 +28,7 @@ fn lookbacks_and_order() {
 
 #[test]
 fn calendar_filter() {
-    let cal = |p: &str, id: &str, comps: &[&str]| CalInfo { principal: p.into(), owner_label: String::new(), is_group: false, id: id.into(), displayname: id.into(), color: String::new(), description: String::new(), components: comps.iter().map(|c| c.to_string()).collect(), timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false };
+    let cal = |p: &str, id: &str, comps: &[&str]| CalInfo { principal: p.into(), owner_label: String::new(), is_group: false, id: id.into(), displayname: id.into(), color: String::new(), description: String::new(), components: comps.iter().map(|c| c.to_string()).collect(), timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false, ..CalInfo::bare(crate::state::Authorized::test_own(p, id)) };
     let all = vec![cal("a", "1", &["VEVENT"]), cal("a", "2", &["VTODO"]), cal("g", "3", &["VEVENT", "VTODO"])];
     let ids = |v: Vec<CalInfo>| v.into_iter().map(|c| c.id).collect::<Vec<_>>();
     assert_eq!(ids(pick_calendars(&all, None)), ["2", "3"]);

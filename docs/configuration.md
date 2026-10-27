@@ -46,7 +46,7 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 | `OIDC__CLIENT_ID` | – | The client ID at the identity provider. Required when `OIDC__ISSUER` is set. |
 | `OIDC__CLIENT_SECRET` | – | The client secret. |
 | `OIDC__NAME` | `SSO` | The label of the login button. |
-| `OIDC__SCOPES` | `openid profile groups` | The scopes that PractiCal asks for, separated by spaces. |
+| `OIDC__SCOPES` | `openid profile email groups` | The scopes that PractiCal asks for, separated by spaces. With `email`, each login stores the account's e-mail address, by which others can share with it. The IdP must allow every scope asked for, or the login fails (`invalid_scope`). |
 | `OIDC__ALLOW_SIGN_UP` | `false` | Creates the RustiCal account at a user's first sign-in. Without it, only people who already have an account can sign in. |
 | `OIDC__CLAIM_USERID` | `preferred_username` | The claim that carries the account name: `sub`, `preferred_username` or `email`. Must be the same as RustiCal's `RUSTICAL_OIDC__CLAIM_USERID`. |
 | `LOGOUT_URL` | – | The identity provider's logout URL. `{url}` in it is replaced by the URL-encoded `PUBLIC_URL`. |
@@ -56,7 +56,7 @@ All keys below are written without the `PRACTICAL__` prefix. For example, `BIND`
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `TRASH_RETENTION_DAYS` | `90` | How long deleted groups stay restorable. RustiCal's `maintenance.trash_retention_days` must be at least this long. |
+| `TRASH_RETENTION_DAYS` | `90` | How long deleted groups stay restorable. RustiCal's `maintenance.trash_retention_days` must be at least this long. Expired groups are purged hourly, but never in the first 15 minutes after a start (an old and a new pod may overlap during a rollout). |
 | `HISTORY_RETENTION_DAYS` | `90` | How long the change history keeps changes, and so how long they can be undone. |
 
 ### Push reminders
@@ -235,7 +235,7 @@ These RustiCal variables go on the `rustical` container:
 | `RUSTICAL_MAINTENANCE__TRASH_RETENTION_DAYS` | By default, RustiCal never purges its trash. If you set it, make it at least PractiCal's `TRASH_RETENTION_DAYS`. Otherwise a restored group could come back empty. |
 | `RUSTICAL_HTTP__PAYLOAD_LIMIT_MB` | The default is 4 MB. vCards with photos and `.ics` files with attachments can be larger. |
 | `RUSTICAL_FRONTEND__ALLOW_PASSWORD_LOGIN` | Password login on RustiCal's own frontend. Set it to `false` when OIDC is the only login. |
-| `RUSTICAL_OIDC__*` | SSO for RustiCal's own frontend, and sign-up of new principals. |
+| `RUSTICAL_OIDC__*` | SSO for RustiCal's own frontend, and sign-up of new principals. Add `email` to `RUSTICAL_OIDC__SCOPES` so a login there stores the e-mail address too. |
 | `NO_COLOR=1` | Plain log lines without colour codes. Both programs log through the `tracing` library. |
 
 > [!warning]

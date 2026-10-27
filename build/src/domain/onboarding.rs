@@ -176,17 +176,18 @@ pub async fn view(state: &crate::state::SharedState, principal: &str, rec: &Reco
 /// own pays nothing more. Takes the preferences the caller has read, so no page view reads that row
 /// twice.
 pub async fn facts(state: &crate::state::SharedState, principal: &str, p: &crate::domain::prefs::Prefs) -> Facts {
-    use rustical_store::{AddressbookReadStore, CalendarReadStore, auth::AuthenticationProvider};
-    let mut calendars = state.calendars.get_calendars(principal).await.map_or(0, |v| v.len());
-    let mut addressbooks = state.addressbooks.get_addressbooks(principal).await.map_or(0, |v| v.len());
+    use rustical_store::auth::AuthenticationProvider;
+    // own collections only (a share is someone else's): counts, no content
+    let (mut calendars, mut addressbooks) = state.collections().own_counts(principal).await;
     if calendars == 0 || addressbooks == 0 {
-        let user = state.principals.get_principal(principal).await.ok().flatten();
+        let user = state.principals().get_principal(principal).await.ok().flatten();
         for g in user.iter().flat_map(|u| u.memberships_without_self()).filter(|g| *g != principal) {
+            let (c, a) = state.collections().own_counts(g).await;
             if calendars == 0 {
-                calendars = state.calendars.get_calendars(g).await.map_or(0, |v| v.len());
+                calendars = c;
             }
             if addressbooks == 0 {
-                addressbooks = state.addressbooks.get_addressbooks(g).await.map_or(0, |v| v.len());
+                addressbooks = a;
             }
         }
     }

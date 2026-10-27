@@ -11,7 +11,6 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use rustical_store::auth::{AuthenticationProvider, Principal, PrincipalType};
 use rustical_store::{AddressbookWriteStore, CalendarWriteStore};
-use rustical_store_sqlite::{SqliteAddressbookStore, SqliteCalendarStore, SqlitePrincipalStore};
 use sqlx::Row;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -258,14 +257,9 @@ impl TestApp {
         crate::db::migrate(&db).await.expect("practical migrations");
         let mut config = config(&db_path);
         tweak(&mut config);
-        let (cal_tx, _) = tokio::sync::mpsc::channel(64);
-        let (ab_tx, _) = tokio::sync::mpsc::channel(64);
         let (changes, _) = tokio::sync::broadcast::channel(256);
         let (dev_reload, _) = tokio::sync::broadcast::channel(16);
-        let state: SharedState = Arc::new(AppState {
-            principals: Arc::new(SqlitePrincipalStore::new(db.clone())),
-            calendars: Arc::new(SqliteCalendarStore::new(db.clone(), cal_tx, true)),
-            addressbooks: Arc::new(SqliteAddressbookStore::new(db.clone(), ab_tx, true)),
+        let state: SharedState = Arc::new(AppState::new(crate::state::StateParts {
             i18n: crate::i18n::I18n::load(),
             changes,
             dev_reload,
@@ -273,20 +267,11 @@ impl TestApp {
             http: reqwest::Client::builder().proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(std::time::Duration::from_secs(2)).build().unwrap(),
             // a test dials only what it starts itself; no proxy, so a stub on 127.0.0.1 is reachable
             remote_http: crate::domain::remote::client(&[]),
-            remote_logins: std::sync::Arc::new(crate::domain::remote::login::Logins::default()),
-            connect: Default::default(),
-            remote_runner: std::sync::Arc::new(crate::domain::remote::sched::Runner::default()),
-            geo: Default::default(),
-            search_index: Default::default(),
-            task_cache: Default::default(),
-            caches: Default::default(),
-            history: Default::default(),
             vapid: None,
             started_at: chrono::DateTime::from_timestamp(1_791_964_800, 0).unwrap(),
-            guards: Default::default(),
             db,
             config,
-        });
+        }));
         for lang in ["de", "en"] {
             for kind in ["public", "school"] {
                 let list: Vec<serde_json::Value> = HOLIDAYS_SN_2026
@@ -322,24 +307,24 @@ impl TestApp {
     /// hasher, which the password check verifies too).
     pub async fn user(&self, id: &str, name: &str) -> Principal {
         let p = Principal { id: id.into(), displayname: Some(name.into()), principal_type: PrincipalType::Individual, password: None, memberships: vec![] };
-        self.state.principals.insert_principal(p, false).await.unwrap();
-        let tid = self.state.principals.add_app_token(id, "pw".into(), PASSWORD.into()).await.unwrap();
+        self.state.principals().insert_principal(p, false).await.unwrap();
+        let tid = self.state.principals().add_app_token(id, "pw".into(), PASSWORD.into()).await.unwrap();
         let hash: String = sqlx::query("SELECT token FROM app_tokens WHERE id = ?").bind(&tid).fetch_one(&self.state.db).await.unwrap().get("token");
-        self.state.principals.remove_app_token(id, &tid).await.unwrap();
+        self.state.principals().remove_app_token(id, &tid).await.unwrap();
         sqlx::query("UPDATE principals SET password_hash = ? WHERE id = ?").bind(hash).bind(id).execute(&self.state.db).await.unwrap();
         self.principal(id).await
     }
 
     pub async fn group(&self, id: &str, name: &str, members: &[&str]) {
         let p = Principal { id: id.into(), displayname: Some(name.into()), principal_type: PrincipalType::Group, password: None, memberships: vec![] };
-        self.state.principals.insert_principal(p, false).await.unwrap();
+        self.state.principals().insert_principal(p, false).await.unwrap();
         for m in members {
-            self.state.principals.add_membership(m, id).await.unwrap();
+            self.state.principals().add_membership(m, id).await.unwrap();
         }
     }
 
     pub async fn principal(&self, id: &str) -> Principal {
-        self.state.principals.get_principal(id).await.unwrap().unwrap()
+        self.state.principals().get_principal(id).await.unwrap().unwrap()
     }
 
     pub async fn calendar(&self, owner: &str, name: &str, color: &str, comps: &[&str]) -> String {
@@ -368,12 +353,12 @@ impl TestApp {
     /// Stores a calendar object as a DAV client would (object id = `id`).
     pub async fn put_ics(&self, owner: &str, cal: &str, id: &str, ics: &str) {
         let obj = rustical_ical::CalendarObject::import(ics, None).unwrap_or_else(|e| panic!("{id}: {e}"));
-        self.state.calendars.put_object(owner, cal, id, obj, true).await.unwrap();
+        self.state.raw().calendars.put_object(owner, cal, id, obj, true).await.unwrap();
     }
 
     pub async fn put_vcf(&self, owner: &str, ab: &str, id: &str, vcf: &str) {
         let obj = rustical_ical::AddressObject::from_vcf(vcf.to_string()).unwrap_or_else(|e| panic!("{id}: {e}"));
-        AddressbookWriteStore::put_object(&*self.state.addressbooks, owner, ab, id, obj, true).await.unwrap();
+        AddressbookWriteStore::put_object(self.state.raw().addressbooks, owner, ab, id, obj, true).await.unwrap();
     }
 
     /// A browser session: logs in through the login form (CSRF token from the page, then the POST).

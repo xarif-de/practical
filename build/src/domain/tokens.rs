@@ -38,7 +38,7 @@ pub async fn since(state: &AppState) -> AppResult<Option<DateTime<Utc>>> {
 /// The user's connected devices: every token except those that never connected, newest use first.
 pub async fn devices(state: &AppState, user: &Principal) -> AppResult<Vec<(AppToken, Seen)>> {
     let since = since(state).await?;
-    let mut d: Vec<(AppToken, Seen)> = state.principals.get_app_tokens(&user.id).await?.into_iter().map(|t| { let s = seen(&t, since); (t, s) }).filter(|(_, s)| *s != Seen::Never).collect();
+    let mut d: Vec<(AppToken, Seen)> = state.principals().get_app_tokens(&user.id).await?.into_iter().map(|t| { let s = seen(&t, since); (t, s) }).filter(|(_, s)| *s != Seen::Never).collect();
     d.sort_by_key(|(t, s)| std::cmp::Reverse((match s { Seen::At(at) => Some(*at), _ => t.created_at }, t.created_at)));
     Ok(d)
 }
@@ -48,13 +48,13 @@ pub async fn sweep(state: &AppState) -> AppResult<usize> {
     let since = since(state).await?;
     let cutoff = Utc::now() - CONNECT_GRACE;
     let mut n = 0;
-    for p in state.principals.get_principals().await? {
-        for t in state.principals.get_app_tokens(&p.id).await? {
+    for p in state.principals().get_principals().await? {
+        for t in state.principals().get_app_tokens(&p.id).await? {
             if seen(&t, since) == Seen::Never && t.created_at.is_some_and(|c| c < cutoff) {
                 // read again right before the delete: a first use that landed since the list must keep the token
-                let fresh = state.principals.get_app_tokens(&p.id).await?.into_iter().find(|x| x.id == t.id);
+                let fresh = state.principals().get_app_tokens(&p.id).await?.into_iter().find(|x| x.id == t.id);
                 if fresh.is_some_and(|x| x.last_used.is_none()) {
-                    state.principals.remove_app_token(&p.id, &t.id).await?;
+                    state.principals().remove_app_token(&p.id, &t.id).await?;
                     n += 1;
                 }
             }
@@ -64,7 +64,7 @@ pub async fn sweep(state: &AppState) -> AppResult<usize> {
 }
 
 pub async fn list(state: &AppState, user: &Principal) -> AppResult<Vec<AppToken>> {
-    let mut t = state.principals.get_app_tokens(&user.id).await?;
+    let mut t = state.principals().get_app_tokens(&user.id).await?;
     t.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(t)
 }
@@ -81,7 +81,7 @@ pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult
         return Err(AppError::bad("err-name-required"));
     }
     let secret = generate_secret();
-    let mut id = state.principals.add_app_token(&user.id, name.trim().to_string(), secret.clone()).await?;
+    let mut id = state.principals().add_app_token(&user.id, name.trim().to_string(), secret.clone()).await?;
     id.truncate(4);
     Ok(format!("{id}_{secret}"))
 }
@@ -107,10 +107,10 @@ pub async fn unique_name(state: &AppState, user: &Principal, name: &str) -> AppR
 
 pub async fn delete(state: &AppState, user: &Principal, id: &str) -> AppResult<()> {
     // the store scopes by (principal, id); verify ownership explicitly anyway
-    if !state.principals.get_app_tokens(&user.id).await?.iter().any(|t| t.id == id) {
+    if !state.principals().get_app_tokens(&user.id).await?.iter().any(|t| t.id == id) {
         return Err(AppError::NotFound);
     }
-    state.principals.remove_app_token(&user.id, id).await?;
+    state.principals().remove_app_token(&user.id, id).await?;
     Ok(())
 }
 

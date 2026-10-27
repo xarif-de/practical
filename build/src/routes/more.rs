@@ -52,7 +52,8 @@ struct YearObj {
     categories: Vec<String>,
 }
 
-type YearKey = (String, String, i64, chrono_tz::Tz, i32);
+/// (calendar + view + path: `state::Authorized::cache_key`, synctoken, zone, year)
+type YearKey = (String, i64, chrono_tz::Tz, i32);
 
 /// The year views' expansions per (calendar, synctoken, zone, year): a year is outside `InstanceCache`'s
 /// windows, so every planner/weekends/vacation/countdown/numbers request and every live-change refetch read
@@ -113,10 +114,10 @@ impl YearCache {
         let mut g = self.0.lock().unwrap();
         let g = &mut *g;
         // a request that read the calendar before a write must not push out the newer token's entries
-        if g.0.keys().any(|o| o.0 == k.0 && o.1 == k.1 && o.2 > k.2) {
+        if g.0.keys().any(|o| o.0 == k.0 && o.1 > k.1) {
             return;
         }
-        let stale: Vec<YearKey> = g.0.keys().filter(|o| o.0 == k.0 && o.1 == k.1 && o.2 < k.2).cloned().collect();
+        let stale: Vec<YearKey> = g.0.keys().filter(|o| o.0 == k.0 && o.1 < k.1).cloned().collect();
         for o in stale {
             g.1 -= g.0.remove(&o).unwrap().1;
         }
@@ -146,7 +147,7 @@ async fn year_instances(state: &SharedState, cals: &[CalInfo], (start, end): (Na
     let mut out = vec![];
     let empty = events::Text::from("");
     for cal in cals.iter().filter(|c| c.components.iter().any(|c| c == "VEVENT")) {
-        let key: YearKey = (cal.principal.clone(), cal.id.clone(), cal.synctoken, tz, year);
+        let key: YearKey = (cal.auth.cache_key(), cal.synctoken, tz, year);
         let part = match state.caches.years.get(&key) {
             Some(p) => p,
             None => {

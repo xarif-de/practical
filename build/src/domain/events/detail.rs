@@ -49,12 +49,12 @@ pub struct EventDetail {
 /// `read_only`: the caller knows it already (`CalInfo::read_only`; the day view reads a detail per entry), else None
 /// and it is looked up (`collections::is_read_only`).
 pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
-    collections::ensure_owner(user, principal)?;
-    let obj = state.calendars.get_object(principal, cal_id, object_id, false).await?;
+    let auth = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
+    let obj = state.collections().object(&auth, object_id).await?;
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
-    let cal = CalInfo { principal: principal.into(), owner_label: String::new(), is_group: false, id: cal_id.into(), displayname: String::new(), color: String::new(), description: String::new(), components: vec![], timezone_id: String::new(), subscription_url: None, deleted_at: None, synctoken: 0, read_only: false, managed: false };
+    let cal = CalInfo::bare(auth.clone());
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
     let (raw, _) = split_ics(&obj.get_ics());
     let rrule = main.get_property("RRULE").map(|p| ical::rrule_canon(&p.value));
@@ -93,7 +93,8 @@ pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_
         etag: obj.get_etag(),
         has_overrides: !overrides.is_empty(),
         timezone,
-        read_only: match read_only { Some(r) => r, None => collections::is_read_only(state, principal, cal_id).await? },
+        // through a share also: read access, or less than full visibility (a sharee changes only what it sees whole)
+        read_only: match read_only { Some(r) => r, None => collections::is_read_only(state, auth.owner(), auth.id()).await? } || !auth.allows(Need::Write) || auth.level(&obj) < crate::state::FULL_LEVEL,
     })
 }
 
@@ -144,6 +145,9 @@ pub struct EventInput {
     pub related: Vec<Related>,
     #[serde(default)]
     pub timezone: Option<String>,
+    /// the writer has confirmed that it will see the event only shortened or not at all afterwards (a share)
+    #[serde(default)]
+    pub confirm_visibility: bool,
 }
 
 /// RELATED-TO: a link to another event or task by UID; `target` is resolved for the editor
@@ -286,10 +290,11 @@ pub struct CalMeta {
 /// (`sync_changes`, as `tasks::TaskCache` does), so an edit re-reads only what changed. Size: one
 /// small record per object of the calendars someone looked at.
 #[derive(Default)]
-pub struct ObjMetaCache(std::sync::Mutex<std::collections::HashMap<(String, String), std::sync::Arc<CalMeta>>>);
+pub struct ObjMetaCache(std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<CalMeta>>>);
 
 pub async fn object_meta(state: &AppState, cal: &CalInfo) -> AppResult<std::sync::Arc<CalMeta>> {
-    let k = (cal.principal.clone(), cal.id.clone());
+    // the calendar, its view and its path: a share shows other objects than the calendar itself
+    let k = cal.auth.cache_key();
     let cached = state.caches.obj_meta.0.lock().unwrap().get(&k).cloned();
     if let Some(c) = &cached
         && c.token >= cal.synctoken
@@ -300,7 +305,7 @@ pub async fn object_meta(state: &AppState, cal: &CalInfo) -> AppResult<std::sync
     // `cal.synctoken` was read before the objects: a write racing this read is applied again next time
     let fresh = match cached {
         Some(c) => {
-            let (changed, deleted, _) = state.calendars.sync_changes(&cal.principal, &cal.id, c.token).await?;
+            let (changed, deleted, _) = state.collections().sync_changes(&cal.auth, c.token).await?;
             let gone: HashSet<&str> = deleted.iter().map(String::as_str).chain(changed.iter().map(|(id, _)| id.as_str())).collect();
             let mut objs: Vec<ObjMeta> = c.objs.iter().filter(|o| !gone.contains(o.id.as_str())).cloned().collect();
             for (id, obj) in changed {
@@ -312,7 +317,7 @@ pub async fn object_meta(state: &AppState, cal: &CalInfo) -> AppResult<std::sync
             CalMeta { token: cal.synctoken, objs }
         }
         None => {
-            let mut objs: Vec<ObjMeta> = state.calendars.get_objects(&cal.principal, &cal.id).await?.into_iter().filter_map(|(id, obj)| meta_of(id, &obj)).collect();
+            let mut objs: Vec<ObjMeta> = state.collections().objects(&cal.auth).await?.into_iter().filter_map(|(id, obj)| meta_of(id, &obj)).collect();
             // collected in place from the parsed objects' buffer: release what the records do not need
             objs.shrink_to_fit();
             CalMeta { token: cal.synctoken, objs }
@@ -336,7 +341,7 @@ pub async fn resolve_related(state: &AppState, user: &Principal, related: &mut [
     }
     let mut found: std::collections::HashMap<String, RelatedTarget> = std::collections::HashMap::new();
     for cal in visible_calendars(state, user, None).await? {
-        for (id, obj) in state.calendars.get_objects(&cal.principal, &cal.id).await? {
+        for (id, obj) in state.collections().objects(&cal.auth).await? {
             let uid = obj.get_uid().to_string();
             if !wanted.contains(&uid) || found.contains_key(&uid) {
                 continue;

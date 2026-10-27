@@ -64,7 +64,7 @@ async fn group_rules() {
     let alice = app.principal("alice").await;
     purge_by_member(&app.state, &alice, &gid).await.unwrap();
     assert!(trashed_for_user(&app.state, &alice).await.unwrap().is_empty());
-    assert!(app.state.principals.get_principal(&gid).await.unwrap().is_none());
+    assert!(app.state.principals().get_principal(&gid).await.unwrap().is_none());
     // nothing expired yet
     assert_eq!(purge_expired(&app.state).await.unwrap(), 0);
 }
@@ -78,7 +78,7 @@ async fn expired_trash_is_purged() {
     trash(&app.state, &alice, &gid, None).await.unwrap();
     sqlx::query("UPDATE practical_trashed_groups SET deleted_at = '2020-01-01T00:00:00+00:00'").execute(&app.state.db).await.unwrap();
     assert_eq!(purge_expired(&app.state).await.unwrap(), 1);
-    assert!(app.state.principals.get_principal(&gid).await.unwrap().is_none());
+    assert!(app.state.principals().get_principal(&gid).await.unwrap().is_none());
 }
 
 #[tokio::test]
