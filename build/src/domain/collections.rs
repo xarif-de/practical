@@ -335,10 +335,10 @@ pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) ->
             c.vis = c.auth.policy().map(|p| (p.private, p.confidential));
         } else {
             c.managed = managed.contains(&key);
-            if !deleted && !colls.calendar_shares(&c.auth).await?.is_empty() {
+            let h = colls.share_hint(&c.owner).await?;
+            if !deleted && h.calendars.contains(c.auth.id()) {
                 c.has_shares = true;
-                let p = colls.visibility(&c.owner).await?;
-                c.vis = Some((p.private, p.confidential));
+                c.vis = Some((h.policy.private, h.policy.confidential));
             }
         }
         out.push(c);
@@ -367,7 +367,7 @@ pub async fn addressbooks_for(state: &AppState, user: &Principal, deleted: bool)
         if copy {
             a.shared_by = Some(label_of(state, &mut labels, &a.owner).await);
         } else if !deleted {
-            a.has_shares = !colls.addressbook_shares(&a.auth).await?.is_empty();
+            a.has_shares = colls.share_hint(&a.owner).await?.addressbooks.contains(a.auth.id());
         }
         out.push(a);
     }

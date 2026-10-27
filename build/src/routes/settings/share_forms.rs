@@ -20,21 +20,26 @@ pub struct ShareRow {
 pub(super) async fn share_rows(state: &SharedState, user: &Principal, cals: &[CalInfo], abs: &[AbInfo]) -> AppResult<HashMap<String, Vec<ShareRow>>> {
     let mut out = HashMap::new();
     let colls = state.collections();
-    for c in cals.iter().filter(|c| c.has_shares) {
+    // the settings list the shares as they are now, not the lists' hints (`CalInfo::has_shares`, up to 30 s old)
+    for c in cals.iter().filter(|c| c.shareable()) {
         let shares = colls.calendar_shares(&c.auth).await?;
         let mut rows = vec![];
         for s in shares {
             rows.push(row(state, user, s.sharee, s.access).await?);
         }
-        out.insert(format!("cal:{}/{}", c.principal, c.id), rows);
+        if !rows.is_empty() {
+            out.insert(format!("cal:{}/{}", c.principal, c.id), rows);
+        }
     }
-    for a in abs.iter().filter(|a| a.has_shares) {
+    for a in abs.iter().filter(|a| a.shareable()) {
         let shares = colls.addressbook_shares(&a.auth).await?;
         let mut rows = vec![];
         for s in shares {
             rows.push(row(state, user, s.sharee, s.access).await?);
         }
-        out.insert(format!("ab:{}/{}", a.principal, a.id), rows);
+        if !rows.is_empty() {
+            out.insert(format!("ab:{}/{}", a.principal, a.id), rows);
+        }
     }
     Ok(out)
 }

@@ -50,7 +50,14 @@ pub struct EventDetail {
 /// and it is looked up (`collections::is_read_only`).
 pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
     let auth = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
-    let obj = state.collections().object(&auth, object_id).await?;
+    event_detail(state, &auth, object_id, tz, read_only).await
+}
+
+/// [`get_event`] in a calendar already resolved for this user (the day view holds its `CalInfo`s: one
+/// resolution per page, not one per entry)
+pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
+    let (principal, cal_id) = (auth.home(), auth.name());
+    let obj = state.collections().object(auth, object_id).await?;
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
