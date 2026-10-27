@@ -450,9 +450,9 @@ settings show who shared it, and **Remove from my list** ends the share for them
 PractiCal and in every CalDAV/CardDAV app. Phones and Apple devices see a calendar shared with a group through the
 group's account, as the group's own calendars.
 
-What others see of private and confidential events is set once per owner, in **Settings → What others see**: for
-you and for each of your groups, from "everything" down to "not at all". Confidential never shows more than
-private. Public events are always shown in full, contacts always in full. Someone who may write changes only the
+What others see of private and confidential events is set per calendar, in its **Sharing** block under
+**What others see**, from "everything" down to "not at all"; unless set, both are hidden. Confidential never shows
+more than private. Public events are always shown in full, contacts always in full. Someone who may write changes only the
 events they see in full; your reminders stay yours and are never sent to them. A calendar that the
 PractiCalUploader fills should only be shared to read: each upload overwrites what others change.
 

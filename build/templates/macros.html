@@ -125,7 +125,7 @@
 
 {#- settings: the page of one calendar or address book (multi-line: indentation as on the page); `caller()` adds
     the calendar's own rows to the form -#}
-{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only, shares) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
+{%- macro coll_page(kinds, kind, pre, c, export_label, accept, link, managed, read_only, shares, vis) -%}<section class="page" id="{{ pre }}-{{ c.principal }}-{{ c.id }}">
   {{ back("#collections", ctx.t("tab-collections")) }}
   <h1>{{ c.displayname }}</h1>
   <form class="group" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/update" data-autosave data-reload>
@@ -177,6 +177,16 @@
     <button class="cell btnrow" type="submit">{{ ico("users") }}<span>{{ ctx.t("share-go") }}</span></button>
   </form>
   <p class="foot">{% if managed %}{{ ctx.t("share-uploader-hint") }} {% endif %}{{ ctx.t("share-hint") }}</p>
+  {%- if let Some(v) = vis %}
+  {#- a calendar's PRIVATE and CONFIDENTIAL events as its sharees see them, in every app (hidden unless set);
+      CONFIDENTIAL never shows more than PRIVATE (also refused by the store and the table) -#}
+  <div class="label">{{ ctx.t("vis-title") }}</div>
+  <form class="group vis-form" method="post" action="/settings/calendars/{{ c.principal }}/{{ c.id }}/visibility" data-autosave>{{ csrf() }}
+    <label class="cell noic"><span>{{ ctx.t("ed-class-private") }}</span><span class="val"><select name="private" aria-label="{{ ctx.t1("vis-of", "kind", ctx.t("ed-class-private").as_str()) }}">{% for l in 0..5 %}<option value="{{ l }}"{% if l == v.private %} selected{% endif %}>{{ ctx.t(self.level_key(l)) }}</option>{% endfor %}</select></span></label>
+    <label class="cell noic"><span>{{ ctx.t("ed-class-confidential") }}</span><span class="val"><select name="confidential" aria-label="{{ ctx.t1("vis-of", "kind", ctx.t("ed-class-confidential").as_str()) }}">{% for l in 0..5 %}<option value="{{ l }}"{% if l == v.confidential %} selected{% endif %}{% if l > v.private %} disabled{% endif %}>{{ ctx.t(self.level_key(l)) }}</option>{% endfor %}</select></span></label>
+  </form>
+  <p class="foot">{{ ctx.t("vis-hint") }} {{ ctx.t("vis-apps-hint") }}</p>
+  {%- endif %}
   {%- endif %}
   {%- if managed %}
   {#- a PractiCalUploader device manages it: removed there, or with the device (uploader::managed) -#}

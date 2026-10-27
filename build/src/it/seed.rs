@@ -56,7 +56,7 @@ pub async fn seed() -> Seed {
 
 /// [`seed`] plus sharing: alice shares her Privat with dave (read); bob shares his calendar Team and his address
 /// book Teamkontakte with `group.team` = {erin} (write), through the settings routes. Team holds a public event
-/// with bob's reminder, a private one (sharees see only its time under bob's default levels) and a confidential
+/// with bob's reminder, a private one (sharees see only its time: Team's levels are set to 1/0) and a confidential
 /// one (hidden from them), each hidden part carrying the word "Marker7"; and a task.
 pub struct SharedSeed {
     pub s: Seed,
@@ -104,5 +104,9 @@ pub async fn seed_shared() -> SharedSeed {
     let team_copy = names("bob", team.clone(), false).await;
     let team_ab_copy = names("bob", team_ab.clone(), true).await;
     let privat_copy = names("alice", s.privat.clone(), false).await;
+    // Team's levels: private events show their time (every calendar hides both unless set)
+    let bob = app.principal("bob").await;
+    let a = crate::domain::collections::ensure_calendar(&app.state, &bob, "bob", &team, crate::state::Need::Own).await.unwrap();
+    app.state.collections().set_visibility(&a, crate::state::Policy::new(1, 0).unwrap()).await.unwrap();
     SharedSeed { s, team, team_ab, privat_copy, team_copy, team_ab_copy }
 }

@@ -80,7 +80,7 @@ pub struct CalInfo {
     pub owner: String,
     /// own and shared with someone
     pub has_shares: bool,
-    /// the owner's visibility levels (private, confidential) when sharees are involved (own with shares, or a share)
+    /// the calendar's visibility levels (private, confidential) when sharees are involved (own with shares, or a share)
     pub vis: Option<(u8, u8)>,
 }
 
@@ -336,9 +336,9 @@ pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) ->
         } else {
             c.managed = managed.contains(&key);
             let h = colls.share_hint(&c.owner).await?;
-            if !deleted && h.calendars.contains(c.auth.id()) {
+            if let Some(p) = h.calendars.get(c.auth.id()).filter(|_| !deleted) {
                 c.has_shares = true;
-                c.vis = Some((h.policy.private, h.policy.confidential));
+                c.vis = Some((p.private, p.confidential));
             }
         }
         out.push(c);

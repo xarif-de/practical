@@ -52,19 +52,18 @@ async fn row(state: &SharedState, user: &Principal, sharee: String, access: Acce
     Ok(ShareRow { label: p.and_then(|p| p.displayname).unwrap_or_else(|| sharee.clone()), sharee, is_group, members, write: access == Access::Write })
 }
 
-/// The visibility levels of the user and each of their groups (settings "Teilen")
-pub struct VisRow {
-    pub owner: String,
-    pub label: String,
+/// A calendar's visibility levels (settings, its sharing block)
+pub struct CalVis {
     pub private: u8,
     pub confidential: u8,
 }
 
-pub(super) async fn vis_rows(state: &SharedState, owners: &[Owner]) -> AppResult<Vec<VisRow>> {
-    let mut out = vec![];
-    for o in owners {
-        let p = state.collections().visibility(&o.id).await?;
-        out.push(VisRow { owner: o.id.clone(), label: o.label.clone(), private: p.private, confidential: p.confidential });
+/// The visibility levels of each shareable own calendar, by `"<p>/<id>"` (as they are now: the lists' hints may be older)
+pub(super) async fn cal_vis(state: &SharedState, cals: &[CalInfo]) -> AppResult<HashMap<String, CalVis>> {
+    let mut out = HashMap::new();
+    for c in cals.iter().filter(|c| c.shareable()) {
+        let p = state.collections().visibility(&c.auth).await?;
+        out.insert(format!("{}/{}", c.principal, c.id), CalVis { private: p.private, confidential: p.confidential });
     }
     Ok(out)
 }
@@ -149,16 +148,16 @@ async fn unshare(State(state): State<SharedState>, user: Principal, session: Ses
 #[derive(Deserialize)]
 pub(super) struct VisibilityForm {
     pub(super) csrf: String,
-    pub(super) owner: String,
     pub(super) private: u8,
     pub(super) confidential: u8,
 }
 
-/// The owner's levels; confidential never above private (refused, as the store and the table refuse it).
-pub(super) async fn visibility_save(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Form(f): Form<VisibilityForm>) -> Response {
-    form(&state, &session, &ctx, &f.csrf, "sharing", async {
+/// A calendar's levels; confidential never above private (refused, as the store and the table refuse it).
+pub(super) async fn calendar_visibility(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, Form(f): Form<VisibilityForm>) -> Response {
+    form(&state, &session, &ctx, &f.csrf, &format!("cal-{owner}-{id}"), async {
         let policy = Policy::new(f.private, f.confidential).ok_or_else(|| AppError::bad("err-visibility"))?;
-        state.collections().set_visibility(&user, &f.owner, policy).await?;
+        let a = collections::ensure_calendar(&state, &user, &owner, &id, Need::Own).await?;
+        state.collections().set_visibility(&a, policy).await?;
         Ok(Some("flash-saved"))
     })
     .await

@@ -118,14 +118,24 @@ pub struct SettingsPage {
     pub stores: &'static [crate::domain::connect::Store],
     /// the shares of the user's own collections (`share_forms::share_rows`), by `"cal:<p>/<id>"` / `"ab:<p>/<id>"`
     pub share_rows: HashMap<String, Vec<ShareRow>>,
-    /// the visibility levels of the user and each group (`share_forms::vis_rows`)
-    pub vis: Vec<VisRow>,
+    /// the visibility levels of each shareable own calendar (`share_forms::cal_vis`), by `"<p>/<id>"`
+    pub cal_vis: HashMap<String, CalVis>,
 }
 
 impl SettingsPage {
     /// The message key of a visibility level (0 hidden … 4 everything)
     pub fn level_key(&self, level: &u8) -> &'static str {
         ["vis-l0", "vis-l1", "vis-l2", "vis-l3", "vis-l4"][usize::from((*level).min(4))]
+    }
+
+    /// No visibility levels (an address book: contacts are always shown in full)
+    pub fn no_vis(&self) -> Option<&CalVis> {
+        None
+    }
+
+    /// The visibility levels of a shareable own calendar
+    pub fn vis_of(&self, principal: &str, id: &str) -> Option<&CalVis> {
+        self.cal_vis.get(&format!("{principal}/{id}"))
     }
 
     /// The shares of one collection (`kind` "cal" / "ab"), none when it has none
@@ -356,7 +366,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         uploader_devices: crate::domain::uploader::devices_of(&state, &user).await?,
         prefs: p.clone(),
         share_rows: share_rows(&state, &user, &cals_all, &abs_all).await?,
-        vis: vis_rows(&state, &collections::owners(&state, &user).await?).await?,
+        cal_vis: cal_vis(&state, &cals_all).await?,
         owners: collections::owners(&state, &user).await?,
         palette: PALETTE.iter().map(|s| s.to_string()).collect(),
         retention_days: state.config.trash_retention_days,
@@ -519,7 +529,7 @@ pub fn router() -> Router<SharedState> {
         .route("/settings/calendars/{owner}/{id}/unshare", post(unshare_calendar))
         .route("/settings/addressbooks/{owner}/{id}/share", post(share_addressbook))
         .route("/settings/addressbooks/{owner}/{id}/unshare", post(unshare_addressbook))
-        .route("/settings/visibility", post(visibility_save))
+        .route("/settings/calendars/{owner}/{id}/visibility", post(calendar_visibility))
         .route("/api/sharee", get(sharee))
         .route("/settings/tokens", post(token_create))
         .route("/settings/tokens/{id}/delete", post(token_delete))

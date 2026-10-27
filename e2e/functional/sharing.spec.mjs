@@ -11,6 +11,7 @@ test.afterEach(async ({ page }) => {
 const teamCopy = page => page.locator('#ed-cal option[value^="group.team/"]').getAttribute('value');
 
 test('the slider sets CLASS; through a share it tells what sharees see and asks before hiding', async ({ page }) => {
+  // Team's levels are not set (seed): private and confidential events are hidden from its sharees
   await loginAs(page, 'erin');
   await openNew(page, '2026-11-02');
   const cal = await teamCopy(page);
@@ -23,23 +24,27 @@ test('the slider sets CLASS; through a share it tells what sharees see and asks 
   expect(await page.locator('#edform select[name="class"]').inputValue()).toBe('');
   await vis.locator('#ed-vis-range').fill('1');
   await expect(out).toHaveText('privat');
-  await expect(hint).toHaveText('Empfänger sehen: Nur die Zeit');
+  await expect(hint).toHaveText('Empfänger sehen: Gar nicht');
   expect(await page.locator('#edform select[name="class"]').inputValue()).toBe('PRIVATE');
   // "back to editing": nothing saved, the dialog stays with its work
   await page.locator('#ed-save').click();
-  await expect(page.locator('.ask')).toContainText('gekürzt');
+  await expect(page.locator('.ask')).toContainText('gar nicht mehr');
   await answer(page, false);
   await expect(page.locator('#ed')).toBeVisible();
   await expect(page.locator('#ed-error')).toHaveText('');
   expect(await instances(page, '2026-11-02', 'F7 Geteilt')).toHaveLength(0);
-  // "save anyway": written, and erin sees it shortened from now on
+  // "save anyway": written, and erin no longer sees it
   await page.locator('#ed-save').click();
   await answer(page, true);
   await expect(page.locator('#ed')).toBeHidden();
   await settle(page);
   const day = await api(page, 'GET', '/api/events?start=2026-11-02&end=2026-11-03');
   expect(day.filter(e => e.summary === 'F7 Geteilt')).toHaveLength(0);
-  expect(day.filter(e => `${e.principal}/${e.cal_id}` === cal), 'still there, as a time').toHaveLength(1);
+  expect(day.filter(e => `${e.principal}/${e.cal_id}` === cal), 'hidden from its writer too').toHaveLength(0);
+  // it is there for its owner
+  await loginAs(page, 'bob');
+  await page.goto('/calendar');
+  expect(await instances(page, '2026-11-02', 'F7 Geteilt')).toHaveLength(1);
 });
 
 test('an own calendar without shares: no hint, no question', async ({ page }) => {

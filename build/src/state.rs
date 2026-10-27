@@ -74,8 +74,8 @@ pub struct AppState {
 
 pub type SharedState = Arc<AppState>;
 
-/// What the lists show of an owner's shared collections: whether an own collection is shared, and the owner's
-/// levels (the editor's hint, the settings' rows). Display only — what anyone may read or write always comes
+/// What the lists show of an owner's shared collections: whether an own collection is shared, and a shared
+/// calendar's levels (the editor's hint). Display only — what anyone may read or write always comes
 /// from `ensure`/the listings, never from here. Kept [`SHARE_HINT_TTL`] (shares and levels changed through
 /// RustiCal show by then), cleared by every change made through [`Collections`].
 #[derive(Default)]
@@ -83,11 +83,10 @@ struct ShareHints(std::sync::Mutex<std::collections::HashMap<String, (std::time:
 
 const SHARE_HINT_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// One owner's [`ShareHints`] entry
+/// One owner's [`ShareHints`] entry: its shared calendars with their levels, its shared address books
 pub struct ShareHint {
-    pub calendars: std::collections::HashSet<String>,
+    pub calendars: std::collections::HashMap<String, Policy>,
     pub addressbooks: std::collections::HashSet<String>,
-    pub policy: Policy,
 }
 
 impl ShareHints {
@@ -814,21 +813,20 @@ impl Collections<'_> {
         }
     }
 
-    /// How objects of `owner` with CLASS:PRIVATE/CONFIDENTIAL appear in its shares (no content: readable by all).
-    pub async fn visibility(&self, owner: &str) -> AppResult<Policy> {
-        Ok(self.0.shares.get_visibility(owner).await?)
+    /// How objects of an own calendar with CLASS:PRIVATE/CONFIDENTIAL appear in its shares (hidden, both, unless set)
+    pub async fn visibility(&self, a: &Authorized) -> AppResult<Policy> {
+        a.checked(Need::Own)?;
+        Ok(self.0.shares.get_visibility(a.owner(), a.id()).await?)
     }
 
-    /// Sets the policy of `owner`, which `user` must be or be a member of.
-    pub async fn set_visibility(&self, user: &Principal, owner: &str, policy: Policy) -> AppResult<()> {
-        if !access::may_use_home(user, owner) {
-            return Err(AppError::Forbidden);
-        }
+    /// Sets the policy of an own calendar.
+    pub async fn set_visibility(&self, a: &Authorized, policy: Policy) -> AppResult<()> {
+        a.checked(Need::Own)?;
         self.0.share_hints.clear();
-        self.0.shares.set_visibility(owner, policy).await.map_err(write_error)
+        self.0.shares.set_visibility(a.owner(), a.id(), policy).await.map_err(write_error)
     }
 
-    /// [`ShareHints`] of `owner`: its live own collections that are shared, and its levels
+    /// [`ShareHints`] of `owner`: its live own collections that are shared, a calendar with its levels
     pub async fn share_hint(&self, owner: &str) -> AppResult<Arc<ShareHint>> {
         let s = self.0;
         if let Some((at, h)) = s.share_hints.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(owner)
@@ -836,10 +834,11 @@ impl Collections<'_> {
         {
             return Ok(h.clone());
         }
-        let mut calendars = std::collections::HashSet::new();
+        let mut calendars = std::collections::HashMap::new();
         for c in s.calendars.get_calendars(owner).await? {
             if !s.shares.list_calendar_shares(owner, &c.id).await?.is_empty() {
-                calendars.insert(c.id);
+                let policy = s.shares.get_visibility(owner, &c.id).await?;
+                calendars.insert(c.id, policy);
             }
         }
         let mut addressbooks = std::collections::HashSet::new();
@@ -848,7 +847,7 @@ impl Collections<'_> {
                 addressbooks.insert(a.id);
             }
         }
-        let h = Arc::new(ShareHint { calendars, addressbooks, policy: s.shares.get_visibility(owner).await? });
+        let h = Arc::new(ShareHint { calendars, addressbooks });
         s.share_hints.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(owner.to_string(), (std::time::Instant::now(), h.clone()));
         Ok(h)
     }

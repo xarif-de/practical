@@ -42,7 +42,6 @@
     {% call m::nav_cell("#collections", "#5856d6", "calendar") %}<span>{{ ctx.t("tab-collections") }}</span><span class="val">{{ calendars.len() + addressbooks.len() }}{% endcall %}
     {% call m::nav_cell("#categories", "var(--c4)", "tag") %}<span>{{ ctx.t("tab-categories") }}</span><span class="val"><span id="cat-total"></span>{% endcall %}
     {% call m::nav_cell("#groups", "var(--c5)", "users") %}<span>{{ ctx.t("tab-groups") }}</span><span class="val">{{ groups.len() }}{% endcall %}
-    {% call m::nav_cell("#sharing", "var(--c2)", "user") %}<span>{{ ctx.t("vis-title") }}</span><span class="val">{% endcall %}
     {% call m::nav_cell("#trash", "var(--fg-3)", "trash") %}<span>{{ ctx.t("tab-trash") }}</span><span class="val">{{ trashed.len() + deleted_calendars.len() + deleted_addressbooks.len() }}{% endcall %}
   </div>
   {# first start again (domain::onboarding): the button belongs to the form after #prefs-form, because
@@ -109,21 +108,6 @@
 </form>
 <form id="onb-reopen" method="post" action="/settings/onboarding/reopen">{{ m::csrf() }}</form>
 
-<section class="page" id="sharing">
-  {{ m::back("#", ctx.t("nav-settings")) }}
-  <h1>{{ ctx.t("vis-title") }}</h1>
-  <p class="foot">{{ ctx.t("vis-hint") }}</p>
-  {%- for v in vis %}
-  {#- per owner (the user, each group): its PRIVATE and CONFIDENTIAL events as sharees see them, in every app;
-      CONFIDENTIAL never shows more than PRIVATE (also refused by the store and the table) -#}
-  <div class="label">{{ v.label }}</div>
-  <form class="group vis-form" method="post" action="/settings/visibility" data-autosave>{{ m::csrf() }}<input type="hidden" name="owner" value="{{ v.owner }}">
-    <label class="cell noic"><span>{{ ctx.t("ed-class-private") }}</span><span class="val"><select name="private" aria-label="{{ ctx.t1("vis-of", "kind", ctx.t("ed-class-private").as_str()) }}">{% for l in 0..5 %}<option value="{{ l }}"{% if l == v.private %} selected{% endif %}>{{ ctx.t(self.level_key(l)) }}</option>{% endfor %}</select></span></label>
-    <label class="cell noic"><span>{{ ctx.t("ed-class-confidential") }}</span><span class="val"><select name="confidential" aria-label="{{ ctx.t1("vis-of", "kind", ctx.t("ed-class-confidential").as_str()) }}">{% for l in 0..5 %}<option value="{{ l }}"{% if l == v.confidential %} selected{% endif %}{% if l > v.private %} disabled{% endif %}>{{ ctx.t(self.level_key(l)) }}</option>{% endfor %}</select></span></label>
-  </form>
-  {%- endfor %}
-  <p class="foot">{{ ctx.t("vis-apps-hint") }}</p>
-</section>
 
 {# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}
 {% for kind in ["public", "school"] %}
@@ -180,13 +164,13 @@
 </section>
 
 {% for c in calendars %}
-{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str()), c.managed, c.read_only, self.shares_of("cal", c.principal.as_str(), c.id.as_str())) %}
+{% call m::coll_page("calendars", "calendar", "cal", c, ctx.t("set-export-ics"), ".ics,text/calendar", self.link_for("cal", c.principal.as_str(), c.id.as_str()), c.managed, c.read_only, self.shares_of("cal", c.principal.as_str(), c.id.as_str()), self.vis_of(c.principal.as_str(), c.id.as_str())) %}
     <div class="cell noic"><span>{{ ctx.t("col-components") }}</span><span class="val">{{ self.comps(c.components) }}</span></div>
     {% if let Some(u) = c.subscription_url %}<div class="cell noic"><span>{{ ctx.t("subscription") }}</span><span class="val mono">{{ u }}</span></div>{% endif %}{% endcall %}
 {% endfor %}
 
 {% for a in addressbooks %}
-{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str()), false, a.view == crate::domain::collections::View::Read, self.shares_of("ab", a.principal.as_str(), a.id.as_str())) %}{% endcall %}
+{% call m::coll_page("addressbooks", "addressbook", "ab", a, ctx.t("set-export-vcf"), ".vcf,text/vcard", self.link_for("ab", a.principal.as_str(), a.id.as_str()), false, a.view == crate::domain::collections::View::Read, self.shares_of("ab", a.principal.as_str(), a.id.as_str()), self.no_vis()) %}{% endcall %}
 {% endfor %}
 
 <section class="page" id="new-calendar">

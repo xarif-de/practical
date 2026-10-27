@@ -168,15 +168,25 @@ async fn settings_share_unshare_and_levels() {
     let r = bob.get_json("/api/sharee?q=group.team").await.ok().json();
     assert_eq!((r["group"].as_bool(), r["members"].clone()), (Some(true), json!(null)));
     assert_eq!(bob.get_json("/api/sharee?q=nobody").await.status, StatusCode::BAD_REQUEST, "nobody by that name: told, not shared");
-    // bob lowers his levels: private now hidden too; confidential above private is refused
-    bob.post_form("/settings/visibility", &[("owner", "bob"), ("private", "0"), ("confidential", "0")]).await;
+    // the levels are the calendar's: bob lowers Team's, private now hidden too; confidential above private is refused
+    let levels = format!("/settings/calendars/bob/{}/visibility", w.team);
+    let team_levels = || async {
+        let bob = app.principal("bob").await;
+        let a = crate::domain::collections::ensure_calendar(&app.state, &bob, "bob", &w.team, crate::state::Need::Own).await.unwrap();
+        app.state.collections().visibility(&a).await.unwrap()
+    };
+    bob.get("/settings").await.ok().has(&format!("action=\"{levels}\""));
+    bob.post_form(&levels, &[("private", "0"), ("confidential", "0")]).await;
     let busy = format!("/api/events/group.team/{}/busy", w.team_copy);
     assert_eq!(erin.get_json(&busy).await.status, StatusCode::NOT_FOUND);
-    bob.post_form("/settings/visibility", &[("owner", "bob"), ("private", "1"), ("confidential", "3")]).await;
-    assert_eq!(app.state.collections().visibility("bob").await.unwrap(), crate::state::Policy::new(0, 0).unwrap());
-    // nobody sets another's levels
-    erin.post_form("/settings/visibility", &[("owner", "bob"), ("private", "4"), ("confidential", "4")]).await;
-    assert_eq!(app.state.collections().visibility("bob").await.unwrap(), crate::state::Policy::new(0, 0).unwrap());
+    bob.post_form(&levels, &[("private", "1"), ("confidential", "3")]).await;
+    assert_eq!(team_levels().await, crate::state::Policy::new(0, 0).unwrap());
+    // nobody sets another's levels, and a calendar without a setting hides both
+    erin.post_form(&levels, &[("private", "4"), ("confidential", "4")]).await;
+    assert_eq!(team_levels().await, crate::state::Policy::new(0, 0).unwrap());
+    let alice_p = app.principal("alice").await;
+    let arbeit = crate::domain::collections::ensure_calendar(&app.state, &alice_p, "alice", &w.s.arbeit, crate::state::Need::Own).await.unwrap();
+    assert_eq!(app.state.collections().visibility(&arbeit).await.unwrap(), crate::state::Policy::new(0, 0).unwrap());
     // unshare: the copy is gone for its sharee
     let mut alice = app.login("alice").await;
     alice.post_form(&format!("/settings/calendars/alice/{}/unshare", w.s.privat), &[("sharee", "dave")]).await;
@@ -215,7 +225,7 @@ async fn caches_follow_writes_on_both_sides_and_the_owners_levels() {
     assert_eq!(erin.get_json("/api/search?q=teamplan").await.ok().json()["totals"]["events"], 0);
     // a change of the owner's levels changes what the cached views show
     assert!(!erin.get_json(WINDOW).await.ok().body.contains("Geheimprojekt"));
-    bob.post_form("/settings/visibility", &[("owner", "bob"), ("private", "2"), ("confidential", "0")]).await;
+    bob.post_form(&format!("/settings/calendars/bob/{}/visibility", w.team), &[("private", "2"), ("confidential", "0")]).await;
     let win = erin.get_json(WINDOW).await.ok().body.clone();
     assert!(win.contains("Geheimprojekt Marker7") && !win.contains("Marker7-Keller"), "time and title, not the place: {win}");
 }
@@ -268,4 +278,28 @@ async fn a_shortened_object_is_refused_with_a_message_not_asked_about() {
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.body);
     assert!(!r.body.contains("confirm-visibility") && !r.body.is_empty(), "{}", r.body);
     assert!(!stored(app, "bob", &w.team, "ptask").await.contains("COMPLETED"));
+}
+
+#[tokio::test]
+async fn levels_belong_to_the_calendar_not_its_owner() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let mut alice = app.login("alice").await;
+    alice.post_form(&format!("/settings/calendars/alice/{}/share", w.s.arbeit), &[("sharee", "dave"), ("access", "read")]).await;
+    alice.post_form(&format!("/settings/calendars/alice/{}/visibility", w.s.arbeit), &[("private", "2"), ("confidential", "1")]).await;
+    // the editor's hint per calendar: Arbeit as set, Privat (shared too) hidden
+    let a = app.principal("alice").await;
+    let cals = crate::domain::collections::calendars_for(&app.state, &a, false).await.unwrap();
+    let vis = |id: &str| cals.iter().find(|c| c.id == id).unwrap().vis;
+    assert_eq!((vis(&w.s.arbeit), vis(&w.s.privat)), (Some((2, 1)), Some((0, 0))));
+    // what dave sees follows each calendar: the confidential review shows its time, the private dentist nothing
+    let mut dave = app.login("dave").await;
+    let win = dave.get_json(WINDOW).await.ok().body.clone();
+    assert!(!win.contains("Zahnarzt") && !win.contains("Quartalsreview"), "{win}");
+    let arbeit_copy: String = {
+        let d = app.principal("dave").await;
+        crate::domain::collections::calendars_for(&app.state, &d, false).await.unwrap().into_iter().find(|c| c.owner == "alice" && c.auth.id() == w.s.arbeit).unwrap().id
+    };
+    assert_eq!(dave.get_json(&format!("/api/events/dave/{arbeit_copy}/review")).await.status, StatusCode::OK);
+    assert_eq!(dave.get_json(&format!("/api/events/dave/{}/zahnarzt", w.privat_copy)).await.status, StatusCode::NOT_FOUND);
 }
