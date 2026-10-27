@@ -74,7 +74,7 @@
 .ed .cardform .ct-in input { width: 100%; }
 .ed .cardform .ct-cloud { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 26px; margin-top: 8px; }
 .ed .cardform .ct-cloud:empty { display: none; }
-.ed .cardform .ct-tag { all: unset; cursor: pointer; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--fg-2); background: var(--tile); display: inline-flex; gap: 5px; align-items: center; }
+.ed .cardform .ct-tag { all: unset; cursor: pointer; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; min-height: 24px; box-sizing: border-box; color: var(--fg-2); background: var(--tile); display: inline-flex; gap: 5px; align-items: center; }
 .ed .cardform .ct-tag small { color: var(--fg-3); font-size: 10.5px; }
 .ed .cardform .ct-tag:hover { border-color: var(--accent); }
 .rrpop .ct-hit small { color: var(--fg-3); margin-left: 8px; font-size: 11px; }
