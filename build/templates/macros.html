@@ -182,7 +182,9 @@
     <div class="cell noic"><span>{{ ctx.t("share-access") }}</span>{{ access_seg(ctx.t("share-access"), false) }}</div>
     <button class="cell btnrow" type="submit">{{ ico("users") }}<span>{{ ctx.t("share-go") }}</span></button>
   </form>
-  <p class="foot">{% if managed %}{{ ctx.t("share-uploader-hint") }} {% endif %}{{ ctx.t("share-hint") }}</p>
+  {%- if managed %}
+  <p class="foot">{{ ctx.t("share-uploader-hint") }}</p>
+  {%- endif %}
   {%- if let Some(v) = vis %}
   {#- a calendar's PRIVATE and CONFIDENTIAL events as its sharees see them, in every app (hidden unless set);
       CONFIDENTIAL never shows more than PRIVATE (also refused by the store and the table) -#}

@@ -129,7 +129,7 @@
     <a class="cell link noic" href="#cal-{{ c.principal }}-{{ c.id }}"><span>{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}<span class="sub">{{ ctx.t("ed-class-private") }}: {{ ctx.t(self.level_key(&v.private)) }} · {{ ctx.t("ed-class-confidential") }}: {{ ctx.t(self.level_key(&v.confidential)) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {%- endif %}{% endfor %}
   </div>
-  <p class="foot">{{ ctx.t("privacy-vis-hint") }} <a href="#collections">{{ ctx.t("tab-collections") }}</a></p>
+  <p class="foot">{{ ctx.t("privacy-vis-hint") }} <a href="#collections">{{ ctx.t("tab-collections") }} ›</a></p>
 </section>
 
 
