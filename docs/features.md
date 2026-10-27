@@ -445,7 +445,7 @@ the calendar or address book in the settings; its **Sharing** block has **Share 
 the e-mail address the person signs in with. From two characters on, PractiCal suggests people by name, account name
 or address, but only by what each of them lets others find them by. It shows whom it found, and you confirm. A group's
 members are shown only to members of that group. The access is a switch: the eye reads, the pencil writes. The same
-block lists who has it, changes the access and ends shares, also several at once.
+block lists who has it, one line each, with that switch and a trash button that ends the share after asking.
 
 **Settings › Privacy** says whether others find you among those suggestions by your name and account name and by your
 e-mail address (both on unless you turn them off); anyone who types your whole account name or address can still share

@@ -33,6 +33,15 @@
 .set .cell .val form.inline { display: inline; }
 .set .cell .val .link { font-size: 14px; padding: 2px 4px; cursor: pointer; list-style: none; } .set .cell .val summary.link::-webkit-details-marker { display: none; }
 .set .cell .val .danger-zone { display: inline; }
+/* the shares of a collection, one line each: who (left), the access right after it — the same column in every row
+   (subgrid) —, the trash at the far right */
+.set .group.shares { display: grid; grid-template-columns: minmax(0, max-content) auto 1fr auto; }
+.set .group.shares > .share-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.set .share-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set .share-row .who .sub { display: inline; font-size: 13px; margin-left: 8px; }
+.set .share-row .val { justify-self: start; }
+.set .share-row .val.end { grid-column: 4; justify-self: end; }
+.set .share-row .val.end .btn.icon-btn:hover { color: var(--today); }
 /* a cell whose field takes the rest of the row (sharing: "Teilen mit"), so a long placeholder is not cut */
 .set .cell.noic.wide { grid-template-columns: auto minmax(0, 1fr); }
 .set .cell.wide .val { justify-self: stretch; }

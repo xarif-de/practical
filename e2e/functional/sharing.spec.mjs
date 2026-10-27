@@ -89,3 +89,23 @@ test('rule mode: "beliebig" first, the setting off until its chip turns it on; t
   await range.fill('-1');
   await expect(page.locator('#ed-vis-out')).toHaveText('beliebig');
 });
+
+test('the shares of a calendar: one line each, the access switch saves, the trash ends one after asking', async ({ page }) => {
+  // seed: alice shares "Privat" with dave to read
+  await page.goto('/settings#cal-alice-5eed0000-0000-4000-8000-000000000002');
+  const row = page.locator('[id="cal-alice-5eed0000-0000-4000-8000-000000000002"] .share-row', { hasText: 'dave' });
+  await expect(row).toHaveCount(1);
+  const box = await row.boundingBox();
+  expect(box.height, 'one line').toBeLessThan(60);
+  await expect(row.locator('.seg button[data-v="read"]')).toHaveAttribute('aria-pressed', 'true');
+  await row.locator('.seg button[data-v="write"]').click();
+  await expect(page.locator('.toast')).toBeVisible();
+  expect(await (await page.request.get('/settings')).text(), 'saved: the page from the server says write').toContain('data-v="write" aria-pressed="true"');
+  // the trash asks; "no" keeps it, "yes" ends it
+  await row.locator('.val.end button').click();
+  await answer(page, false);
+  await expect(row).toHaveCount(1);
+  await row.locator('.val.end button').click();
+  await answer(page, true);
+  await expect(page.locator('[id="cal-alice-5eed0000-0000-4000-8000-000000000002"] .share-row')).toHaveCount(0);
+});

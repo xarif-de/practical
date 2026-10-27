@@ -9,13 +9,14 @@
   const stIcon = sel => { const ic = sel.dataset.icons.split('|'); if (sel.name === 'priority' && sel.value !== '') { const n = +sel.value; return n === 0 ? ic[0] : n <= 4 ? ic[1] : n === 5 ? ic[2] : ic[3]; } return ic[Math.max(0, [...sel.options].indexOf(stOpt(sel)))] || ic[0]; };
   const stText = sel => stOpt(sel) ? stOpt(sel).textContent : sel.value;
   function stRender() {
-    visRender(); // the CLASS select is not a tile but the slider under them (visibility.js); it renders with them
-    $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); box.innerHTML = sels.map(sel => `<button class="stile${stVal(sel) === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
+    visRender(); // the CLASS select's tile is the slider (visibility.js), after the ones drawn here; it renders with them
+    $$('.stiles', form).forEach(box => { const sels = $$('select.dat', box.closest('.card')); ($(':scope > .st-dyn', box) || box).innerHTML = sels.map(sel => `<button class="stile${stVal(sel) === '' ? ' off' : ''}${RLOCK.has(sel.name) ? ' locked' : ''}" type="button" data-sel="${sel.name}" title="${esc(sel.dataset.label)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#${stIcon(sel)}"/></svg><small>${esc(sel.dataset.label)}</small><b>${esc(stText(sel))}</b></button>`).join('') });
     if (TASK) return;
     const t = SC.dataset, parts = [];
     if (f.status.value) parts.push(stText(f.status));
     if (f.transp.value) parts.push(f.transp.value === 'OPAQUE' ? t.tViewOpaque : t.tViewTransparent);
     if (f.priority.value) parts.push(t.tViewPrio.replace('{n}', stText(f.priority)));
+    if (f.class.value) parts.push(stText(f.class)); // view mode hides the tiles, the slider too
     $('#ed-status-text').textContent = parts.join(' · ');
   }
   form.addEventListener('click', e => { const b = e.target.closest('.stile'); if (!b || !form.contains(b)) return; if (!b || b.classList.contains('locked')) return; const sel = f[b.dataset.sel];
