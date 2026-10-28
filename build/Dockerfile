@@ -26,9 +26,10 @@ COPY locales ./locales
 COPY templates ./templates
 # `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): same step, AFTER the release build, own
 # target/ (dev profile, own cache id). Not a stage: dagger v0.21.10 evaluates stages one after another anyway. Not
-# beside the build: the two compiles' memory would add up, and in the 8 GiB CI dind an OOM wipes the whole engine
-# cache. CARGO_BUILD_JOBS=2 bounds the cold test compile (at 4 its own memory reached the release build's peak: no margin;
-# 2 only slows a cold run). Measured at 4 jobs 2026-10-07, local engine (12 CPUs), a one-line
+# beside the build: the two compiles' memory would add up, and in the CI dind (12 GiB, shared by up to two CI jobs
+# since 2026-10-28) an OOM wipes the whole engine cache. CARGO_BUILD_JOBS=2 bounds the cold test compile (at 4 its
+# own memory reached the release build's peak: no margin; 2 only slows a cold run). Measured at 4 jobs 2026-10-07,
+# local engine (12 CPUs), a one-line
 # change: step 172 s (release 146 + tests 26) vs 150-157 s without, cgroup peak 2.14 GB with and without; both
 # targets cold: release 336 s + tests 133 s, peak 3.59 GB in the release build, 5.03 GB in the tests incl. >= 1.46 GB
 # page cache the build left (tests' own anon <= 3.57 GB). No `-D warnings` (e2e/cargo.sh adds it locally): a
