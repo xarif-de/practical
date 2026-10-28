@@ -192,30 +192,50 @@ pub(crate) fn one_of<'a>(v: &str, allowed: &[&'a str]) -> Option<&'a str> {
 /// The CLASS values the editor models
 pub const CLASSES: [&str; 3] = ["PUBLIC", "PRIVATE", "CONFIDENTIAL"];
 
-/// A CLASS value as read and written: a modelled one upper-case, any other iana-token / x-name (RFC 5545 §3.8.1.3:
-/// `1*(ALPHA / DIGIT / "-")`, e.g. `X-SECRET` of another client) verbatim; `None` for an empty or malformed one. An
-/// unknown class must survive a save: RustiCal shows it to sharees as PRIVATE (rustical_ical visibility.rs
-/// `class_level`), and dropping it made the object PUBLIC (test `it::sharing::an_unknown_class_survives_every_save`).
+/// A CLASS value as written (`None`: "" from the editor, no CLASS line): a modelled one upper-case, any other
+/// iana-token / x-name (RFC 5545 §3.8.1.3: `1*(ALPHA / DIGIT / "-")`, e.g. `X-SECRET` of another client) verbatim,
+/// anything else (`X_SECRET`, `x secret`) PRIVATE. RustiCal shows every value but PUBLIC to sharees as PRIVATE
+/// (rustical_ical visibility.rs `class_level`): an unknown class must survive a save, and a malformed one must not
+/// turn the object PUBLIC (tests `it::sharing::an_unknown_class_survives_every_save`, `events::pinned::class_values`).
 pub fn class_value(v: &str) -> Option<String> {
     let v = v.trim();
+    if v.is_empty() {
+        return None;
+    }
     if let Some(k) = one_of(v, &CLASSES) {
         return Some(k.to_string());
     }
-    (!v.is_empty() && v.len() <= 64 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')).then(|| v.to_string())
+    Some(if v.len() <= 64 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') { v.to_string() } else { "PRIVATE".into() })
 }
 
-/// How strict a CLASS is for sharees: 0 public or none, 1 PRIVATE or unknown (RustiCal's reading), 2 CONFIDENTIAL
-/// (never shown above PRIVATE: `Policy::new`)
+/// The CLASS a stored object carries as the editor reads it: "" without a CLASS line, else [`class_value`] of its
+/// value, an empty one PRIVATE (RustiCal's reading of it)
+pub fn stored_class(v: Option<&str>) -> String {
+    v.map(|v| class_value(v).unwrap_or_else(|| "PRIVATE".into())).unwrap_or_default()
+}
+
+/// The CLASS a list shows (task rows, the day view's mark): "" without one, PUBLIC and CONFIDENTIAL as they are,
+/// every other value PRIVATE, as RustiCal treats it for sharees
+pub fn shown_class(v: Option<&str>) -> String {
+    match v.map(|v| v.trim().to_ascii_uppercase()) {
+        None => String::new(),
+        Some(v) if v == "PUBLIC" || v == "CONFIDENTIAL" => v,
+        Some(_) => "PRIVATE".into(),
+    }
+}
+
+/// How strict a present CLASS is for sharees: 0 PUBLIC, 2 CONFIDENTIAL (never shown above PRIVATE: `Policy::new`),
+/// 1 everything else — PRIVATE, an unknown, a malformed or an empty value (RustiCal's `class_level`)
 fn class_rank(v: &str) -> u8 {
     match v.trim().to_ascii_uppercase().as_str() {
-        "" | "PUBLIC" => 0,
+        "PUBLIC" => 0,
         "CONFIDENTIAL" => 2,
         _ => 1,
     }
 }
 
-/// The strictest CLASS among RECURRENCE-ID override blocks (`split_component`): "" (none or all public), PRIVATE (an
-/// unknown one counts as that) or CONFIDENTIAL. RustiCal takes the strictest of all components (rustical_ical
+/// The strictest CLASS among RECURRENCE-ID override blocks (`split_component`): "" (none or all public), PRIVATE (any
+/// value but PUBLIC and CONFIDENTIAL counts as that, an empty one too) or CONFIDENTIAL. RustiCal takes the strictest of all components (rustical_ical
 /// visibility.rs `calendar_level`), so the editor's hint combines it with the master's own.
 pub fn overrides_class(blocks: &[String]) -> String {
     let rank = blocks.iter().flat_map(|b| unfold(&b.replace("\r\n", "\n"))).filter(|l| prop_name(l) == "CLASS").map(|l| class_rank(&ical::split_line(&l).2)).max().unwrap_or(0);

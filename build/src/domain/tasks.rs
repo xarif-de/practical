@@ -158,9 +158,9 @@ fn shown_status(stored: String, stamped: bool) -> String {
     }
 }
 
+/// The list row's CLASS (`events::shown_class`): an unknown value counts as PRIVATE, as for sharees
 fn class_of(props: &[String]) -> String {
-    let v = text_of(props, "CLASS").to_ascii_uppercase();
-    if ["PUBLIC", "PRIVATE", "CONFIDENTIAL"].contains(&v.as_str()) { v } else { String::new() }
+    events::shown_class(first(props, "CLASS").map(|_| text_of(props, "CLASS")).as_deref())
 }
 
 fn geo_of(props: &[String]) -> Option<(f64, f64)> {
@@ -355,7 +355,7 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
         status: status_of(p),
         percent: num_of(p, "PERCENT-COMPLETE"),
         completed_at: completed_of(p, tz),
-        class: events::class_value(&text_of(p, "CLASS")).unwrap_or_default(),
+        class: events::stored_class(first(p, "CLASS").map(|_| text_of(p, "CLASS")).as_deref()),
         class_overrides: events::overrides_class(&extra),
         priority: num_of(p, "PRIORITY").filter(|v| (1..=9).contains(v)),
         categories: cats_of(p),

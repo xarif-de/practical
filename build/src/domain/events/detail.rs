@@ -93,7 +93,7 @@ pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, obj
         categories: i.categories,
         status: ical::text(main, "STATUS").unwrap_or_default().to_ascii_uppercase(),
         transp: ical::text(main, "TRANSP").unwrap_or_default().to_ascii_uppercase(),
-        class: ical::text(main, "CLASS").and_then(|c| class_value(&c)).unwrap_or_default(),
+        class: stored_class(main.get_property("CLASS").map(|p| ical::unescape(&p.value)).as_deref()),
         class_overrides: overrides_class(&extra),
         priority: ical::text(main, "PRIORITY").and_then(|p| p.trim().parse().ok()),
         color: ical::text(main, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_default(),

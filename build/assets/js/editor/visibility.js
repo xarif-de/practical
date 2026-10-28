@@ -37,6 +37,7 @@
   }
   // its input and change events reach the form's own handlers (wiring.js: dirty state, rule footers); the calendar
   // select re-renders it there (another calendar's levels), stRender after a fill or a rule, mode() on lock/unlock
-  // a step's symbol moves the slider there, as a drag would
-  $x('.vis-steps', VIS).addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b || b.disabled || b.dataset.i === visRange.value) return; visRange.value = b.dataset.i; ['input', 'change'].forEach(t => visRange.dispatchEvent(new Event(t, { bubbles: true }))); });
+  // a step's symbol moves the slider there, as a drag would; on the step it sits on already only when that is another
+  // client's value (it shows on "private"): the click picks PRIVATE itself
+  $x('.vis-steps', VIS).addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b || b.disabled || (b.dataset.i === visRange.value && (!f.class.value || VIS_CLASSES.includes(f.class.value)))) return; visRange.value = b.dataset.i; ['input', 'change'].forEach(t => visRange.dispatchEvent(new Event(t, { bubbles: true }))); });
   visRange.addEventListener('input', () => { const v = +visRange.value; f.class.value = v < 0 ? '' : VIS_CLASSES[v]; visRender(); });

@@ -34,7 +34,7 @@ fn reading_lines() {
     .collect();
     assert_eq!(text_of(&p, "SUMMARY"), "Steuer, Belege");
     assert_eq!(status_of(&p), "IN-PROCESS");
-    assert_eq!(class_of(&p), "");
+    assert_eq!(class_of(&p), "PRIVATE", "an unknown CLASS is private, as RustiCal reads it");
     assert_eq!(num_of(&p, "PRIORITY"), Some(12));
     assert_eq!(num_of(&p, "PERCENT-COMPLETE"), None);
     assert_eq!(geo_of(&p), Some((51.1, 13.2)));

@@ -50,10 +50,11 @@ fn day_facts(i: &Instance, d: Option<&EventDetail>, l: &L) -> String {
     if d.map(|x| x.transp.as_str()) == Some("TRANSPARENT") {
         mark("free", l.t("v-shown-free"));
     }
+    // every CLASS but PUBLIC and CONFIDENTIAL is private to sharees (events::shown_class)
     match d.map(|x| x.class.as_str()).unwrap_or("") {
-        "PRIVATE" => mark("lock", l.t("v-private")),
+        "" | "PUBLIC" => {}
         "CONFIDENTIAL" => mark("agent", l.t("v-confidential")),
-        _ => {}
+        _ => mark("lock", l.t("v-private")),
     }
     if let Some(p) = d.and_then(|x| x.priority).filter(|p| (1..=9).contains(p)) {
         let (icon, text) = match p {

@@ -133,6 +133,12 @@ test('a CLASS another client wrote is shown as itself, sits on the private step 
   await page.locator('#edh').fill('F7 Fremd neu');
   await save(page);
   expect((await api(page, 'GET', `/api/events/${key}`)).class).toBe('X-SECRET');
+  // the private step it sits on is a pick of its own: PRIVATE replaces the other client's value
+  await openEdit(page, key, '2026-11-05');
+  await page.locator('#ed-vis .vis-steps button[data-i="1"]').click();
+  await expect(page.locator('#ed-vis-out')).toHaveText('privat');
+  await save(page);
+  expect((await api(page, 'GET', `/api/events/${key}`)).class).toBe('PRIVATE');
 });
 
 /** The suggestion list of `field` is on screen where it is drawn: no ancestor clips it (settings.css `.set .group`). */

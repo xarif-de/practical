@@ -332,3 +332,19 @@ fn links_and_embedded_limits() {
     assert!(matches!(embedded_lines(&three), Err(AppError::BadRequest(m)) if m.to_string().starts_with("attachment too large")));
     assert_eq!(related_lines(&[Related { uid: " p ".into(), reltype: "parent".into(), ..Default::default() }, Related { uid: "a;b".into(), ..Default::default() }, Related { uid: "c".into(), reltype: "COUSIN".into(), ..Default::default() }]), ["RELATED-TO;RELTYPE=PARENT:p", "RELATED-TO:c"]);
 }
+
+#[test]
+fn class_values() {
+    // written: "" none, the modelled ones upper-case, a token verbatim, anything else private (RustiCal's reading)
+    let w: Vec<Option<String>> = ["", " ", "public", "Confidential", "X-SECRET", "x-geheim", "X_SECRET", "x secret", "ü"].iter().map(|v| class_value(v)).collect();
+    assert_eq!(w, [None, None, Some("PUBLIC".into()), Some("CONFIDENTIAL".into()), Some("X-SECRET".into()), Some("x-geheim".into()), Some("PRIVATE".into()), Some("PRIVATE".into()), Some("PRIVATE".into())]);
+    // read: no line "", an empty one private
+    assert_eq!((stored_class(None), stored_class(Some("")), stored_class(Some("X-SECRET"))), (String::new(), "PRIVATE".into(), "X-SECRET".into()));
+    // a list: unknown and empty private
+    assert_eq!([None, Some(""), Some("public"), Some("X-SECRET"), Some("confidential")].map(shown_class), ["", "PRIVATE", "PUBLIC", "PRIVATE", "CONFIDENTIAL"]);
+    // an override with an empty or unknown CLASS makes the series private, as RustiCal ranks it
+    let ov = |c: &str| format!("BEGIN:VEVENT\r\nRECURRENCE-ID:20261012T100000Z\r\n{c}\r\nEND:VEVENT");
+    assert_eq!(overrides_class(&[ov("CLASS:")]), "PRIVATE");
+    assert_eq!(overrides_class(&[ov("CLASS:X_SECRET"), ov("CLASS:PUBLIC")]), "PRIVATE");
+    assert_eq!(overrides_class(&[ov("CLASS:PUBLIC"), ov("SUMMARY:x")]), "");
+}

@@ -429,6 +429,19 @@ async fn an_unknown_class_survives_every_save() {
     assert!(ics.contains("CLASS:X-SECRET") && ics.contains("STATUS:COMPLETED"), "{ics}");
     let tasks = erin.get_json(&format!("/api/tasks/group.team/{}/xt", w.team_copy)).await;
     assert!(hidden(&tasks.body), "{}", tasks.body);
+    // the lists mark it private, as sharees get it: the task row's lock, the day view's mark
+    let page = bob.get("/calendar?view=day&date=2026-10-19").await.ok().body.clone();
+    assert!(page.contains("Geheim neu Marker7") && page.contains("#i-lock\"/></svg>Privat</span>"), "the day view marks it private");
+    // a malformed CLASS saves as PRIVATE, not as nothing (= PUBLIC)
+    app.put_ics("bob", &w.team, "kaputt", &crate::testkit::vevent("kaputt", "Kaputt Marker7", "DTSTART;TZID=Europe/Berlin:20261019T120000\nDTEND;TZID=Europe/Berlin:20261019T130000\nCLASS:X_SECRET")).await;
+    let kpath = format!("/api/events/bob/{}/kaputt", w.team);
+    let k = bob.get_json(&kpath).await.ok().json();
+    assert_eq!(k["class"], "PRIVATE");
+    let mut body = event_body(&k, "bob", &w.team);
+    body["summary"] = json!("Kaputt neu Marker7");
+    bob.json(Method::PUT, &kpath, body).await.ok();
+    assert!(stored(app, "bob", &w.team, "kaputt").await.contains("CLASS:PRIVATE"));
+    assert!(hidden(&erin.get_json(WINDOW).await.ok().body));
     // an explicit pick replaces it
     let d = bob.get_json(&path).await.ok().json();
     let mut body = event_body(&d, "bob", &w.team);
