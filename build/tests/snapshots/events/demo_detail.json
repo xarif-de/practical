@@ -122,6 +122,7 @@
     "Demo"
   ],
   "class": "PRIVATE",
+  "class_overrides": "",
   "color": "tomato",
   "description": "Zeilen mit Umbruch\nund Sonderzeichen, Komma; Semikolon.\nZweiter Absatz.",
   "end": "2026-09-22T21:30:00",

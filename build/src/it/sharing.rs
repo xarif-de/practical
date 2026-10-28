@@ -350,3 +350,67 @@ async fn privacy_page_lists_each_calendars_levels() {
     assert!(privacy.contains("privat: Nur die Zeit · vertraulich: Gar nicht"), "{privacy}");
     assert!(privacy.contains("name=\"listed_by_id\" value=\"1\" checked") && privacy.contains("name=\"listed_by_email\" value=\"1\" checked"), "both on by default");
 }
+
+/// The task editor's save body for a task detail (`GET /api/tasks/…`), as `taskBody()` sends it
+fn task_body(d: &serde_json::Value) -> serde_json::Value {
+    json!({
+        "principal": d["principal"], "cal_id": d["cal_id"], "summary": d["summary"], "description": d["description"], "location": d["location"],
+        "start": d["start"], "start_all_day": d["start_all_day"], "due": d["due"], "due_all_day": d["due_all_day"], "status": d["status"],
+        "percent": d["percent"], "completed_at": d["completed_at"], "priority": d["priority"], "class": d["class"], "categories": d["categories"],
+        "color": d["color"], "geo": d["geo"], "alarms": d["alarms"], "links": d["links"], "related": d["related"], "etag": d["etag"],
+    })
+}
+
+#[tokio::test]
+async fn an_unknown_class_survives_every_save() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    app.put_ics("bob", &w.team, "xs", &crate::testkit::vevent("xs", "Geheim Marker7", "DTSTART;TZID=Europe/Berlin:20261019T100000\nDTEND;TZID=Europe/Berlin:20261019T110000\nCLASS:X-SECRET")).await;
+    app.put_ics("bob", &w.team, "xt", &crate::testkit::vtodo("xt", "Geheimaufgabe Marker7", "DUE;VALUE=DATE:20261021\nCLASS:X-SECRET")).await;
+    let mut bob = app.login("bob").await;
+    let mut erin = app.login("erin").await;
+    let hidden = |s: &str| !s.contains("Marker7");
+    // the editor reads the value as written and sends it back: kept through a change of the title
+    let path = format!("/api/events/bob/{}/xs", w.team);
+    let d = bob.get_json(&path).await.ok().json();
+    assert_eq!(d["class"], "X-SECRET");
+    let mut body = event_body(&d, "bob", &w.team);
+    body["summary"] = json!("Geheim neu Marker7");
+    bob.json(Method::PUT, &path, body).await.ok();
+    assert!(stored(app, "bob", &w.team, "xs").await.contains("CLASS:X-SECRET"));
+    assert!(hidden(&erin.get_json(WINDOW).await.ok().body), "private to erin as before (Team: time only)");
+    // a task: the editor's save and the tick box
+    let tpath = format!("/api/tasks/bob/{}/xt", w.team);
+    let t = bob.get_json(&tpath).await.ok().json();
+    assert_eq!(t["class"], "X-SECRET");
+    let mut body = task_body(&t);
+    body["summary"] = json!("Geheimaufgabe neu Marker7");
+    bob.json(Method::PUT, &tpath, body).await.ok();
+    assert!(stored(app, "bob", &w.team, "xt").await.contains("CLASS:X-SECRET"));
+    bob.json(Method::PUT, &tpath, json!({ "principal": "bob", "cal_id": w.team, "summary": "", "completed": true })).await.ok();
+    let ics = stored(app, "bob", &w.team, "xt").await;
+    assert!(ics.contains("CLASS:X-SECRET") && ics.contains("STATUS:COMPLETED"), "{ics}");
+    let tasks = erin.get_json(&format!("/api/tasks/group.team/{}/xt", w.team_copy)).await;
+    assert!(hidden(&tasks.body), "{}", tasks.body);
+    // an explicit pick replaces it
+    let d = bob.get_json(&path).await.ok().json();
+    let mut body = event_body(&d, "bob", &w.team);
+    body["class"] = json!("PUBLIC");
+    bob.json(Method::PUT, &path, body).await.ok();
+    let ics = stored(app, "bob", &w.team, "xs").await;
+    assert!(ics.contains("CLASS:PUBLIC") && !ics.contains("X-SECRET"), "{ics}");
+}
+
+#[tokio::test]
+async fn the_hint_knows_the_strictest_class_of_a_series() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//t//EN\r\nBEGIN:VEVENT\r\nUID:ser\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:Serie\r\nDTSTART:20261005T100000Z\r\nDTEND:20261005T110000Z\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ser\r\nDTSTAMP:20261001T000000Z\r\nRECURRENCE-ID:20261012T100000Z\r\nSUMMARY:Serie\r\nDTSTART:20261012T120000Z\r\nDTEND:20261012T130000Z\r\nCLASS:CONFIDENTIAL\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    app.put_ics("bob", &w.team, "ser", ics).await;
+    let mut bob = app.login("bob").await;
+    let d = bob.get_json(&format!("/api/events/bob/{}/ser", w.team)).await.ok().json();
+    assert_eq!((d["class"].as_str(), d["class_overrides"].as_str()), (Some(""), Some("CONFIDENTIAL")));
+    // RustiCal agrees: the whole series is confidential to erin (Team hides confidential)
+    let mut erin = app.login("erin").await;
+    assert!(!erin.get_json(WINDOW).await.ok().body.contains("Serie"));
+}

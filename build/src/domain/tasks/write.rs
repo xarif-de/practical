@@ -178,7 +178,7 @@ pub(super) fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz
     if let Some(c) = i.completed_at {
         l.push(format!("COMPLETED:{}", ical::to_utc(c, tz).format("%Y%m%dT%H%M%SZ")));
     }
-    if let Some(v) = events::one_of(&i.class, &["PUBLIC", "PRIVATE", "CONFIDENTIAL"]) {
+    if let Some(v) = events::class_value(&i.class) {
         l.push(format!("CLASS:{v}"));
     }
     if let Some(p) = i.priority.filter(|p| (1..=9).contains(p)) {

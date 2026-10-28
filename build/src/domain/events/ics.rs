@@ -176,7 +176,7 @@ pub(super) fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chr
     if let Some(v) = one_of(&input.transp, &["OPAQUE", "TRANSPARENT"]) {
         l.push(format!("TRANSP:{v}"));
     }
-    if let Some(v) = one_of(&input.class, &["PUBLIC", "PRIVATE", "CONFIDENTIAL"]) {
+    if let Some(v) = class_value(&input.class) {
         l.push(format!("CLASS:{v}"));
     }
     if let Some(p) = input.priority.filter(|p| (0..=9).contains(p)) {

@@ -28,8 +28,10 @@ pub struct EventDetail {
     pub status: String,
     /// OPAQUE | TRANSPARENT | ""
     pub transp: String,
-    /// PUBLIC | PRIVATE | CONFIDENTIAL | ""
+    /// PUBLIC | PRIVATE | CONFIDENTIAL | "" | another client's value verbatim (`class_value`; a save keeps it)
     pub class: String,
+    /// the strictest CLASS of the RECURRENCE-ID overrides (`overrides_class`): with `class` it makes what sharees see
+    pub class_overrides: String,
     pub priority: Option<i64>,
     /// RFC 7986 COLOR (CSS colour name or #rrggbb)
     pub color: String,
@@ -63,7 +65,7 @@ pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, obj
     };
     let cal = CalInfo::bare(auth.clone());
     let i = instance_from(main, &cal, object_id, tz, main.has_rruleset(), alarm_offsets(main));
-    let (raw, _) = split_ics(&obj.get_ics());
+    let (raw, extra) = split_ics(&obj.get_ics());
     let rrule = main.get_property("RRULE").map(|p| ical::rrule_canon(&p.value));
     let timezone = match &main.dtstart.0 {
         caldata::types::CalDateOrDateTime::DateTime(d) => ical::tz_of(&d.timezone()).map(|t| t.name().to_string()).unwrap_or_else(|| tz.name().to_string()),
@@ -91,7 +93,8 @@ pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, obj
         categories: i.categories,
         status: ical::text(main, "STATUS").unwrap_or_default().to_ascii_uppercase(),
         transp: ical::text(main, "TRANSP").unwrap_or_default().to_ascii_uppercase(),
-        class: ical::text(main, "CLASS").unwrap_or_default().to_ascii_uppercase(),
+        class: ical::text(main, "CLASS").and_then(|c| class_value(&c)).unwrap_or_default(),
+        class_overrides: overrides_class(&extra),
         priority: ical::text(main, "PRIORITY").and_then(|p| p.trim().parse().ok()),
         color: ical::text(main, "COLOR").map(|c| c.trim().to_string()).filter(|c| valid_color(c)).unwrap_or_default(),
         geo: ical::text(main, "GEO").and_then(|g| { let (a, b) = g.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) }),

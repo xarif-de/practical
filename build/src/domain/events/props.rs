@@ -189,6 +189,39 @@ pub(crate) fn one_of<'a>(v: &str, allowed: &[&'a str]) -> Option<&'a str> {
     allowed.iter().copied().find(|a| *a == u)
 }
 
+/// The CLASS values the editor models
+pub const CLASSES: [&str; 3] = ["PUBLIC", "PRIVATE", "CONFIDENTIAL"];
+
+/// A CLASS value as read and written: a modelled one upper-case, any other iana-token / x-name (RFC 5545 §3.8.1.3:
+/// `1*(ALPHA / DIGIT / "-")`, e.g. `X-SECRET` of another client) verbatim; `None` for an empty or malformed one. An
+/// unknown class must survive a save: RustiCal shows it to sharees as PRIVATE (rustical_ical visibility.rs
+/// `class_level`), and dropping it made the object PUBLIC (test `it::sharing::an_unknown_class_survives_every_save`).
+pub fn class_value(v: &str) -> Option<String> {
+    let v = v.trim();
+    if let Some(k) = one_of(v, &CLASSES) {
+        return Some(k.to_string());
+    }
+    (!v.is_empty() && v.len() <= 64 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')).then(|| v.to_string())
+}
+
+/// How strict a CLASS is for sharees: 0 public or none, 1 PRIVATE or unknown (RustiCal's reading), 2 CONFIDENTIAL
+/// (never shown above PRIVATE: `Policy::new`)
+fn class_rank(v: &str) -> u8 {
+    match v.trim().to_ascii_uppercase().as_str() {
+        "" | "PUBLIC" => 0,
+        "CONFIDENTIAL" => 2,
+        _ => 1,
+    }
+}
+
+/// The strictest CLASS among RECURRENCE-ID override blocks (`split_component`): "" (none or all public), PRIVATE (an
+/// unknown one counts as that) or CONFIDENTIAL. RustiCal takes the strictest of all components (rustical_ical
+/// visibility.rs `calendar_level`), so the editor's hint combines it with the master's own.
+pub fn overrides_class(blocks: &[String]) -> String {
+    let rank = blocks.iter().flat_map(|b| unfold(&b.replace("\r\n", "\n"))).filter(|l| prop_name(l) == "CLASS").map(|l| class_rank(&ical::split_line(&l).2)).max().unwrap_or(0);
+    ["", "PRIVATE", "CONFIDENTIAL"][usize::from(rank)].to_string()
+}
+
 /// ORGANIZER / ATTENDEE: the modelled parameters plus every other parameter verbatim (`extra`),
 /// so RSVP, DELEGATED-FROM, X-… survive a save.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]

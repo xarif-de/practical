@@ -2,7 +2,7 @@
 // before a write through a share after which its writer sees less (the 422 round trip). erin writes into
 // bob's "Team" through group.team (seed: bob → group.team, write); own data only ("F7 …" in November 2026).
 import { api, expect, loginAs, settle, test } from '../lib/test.mjs';
-import { addCard, answer, fillWhen, instances, keyOf, openEdit, openNew } from './_editor.mjs';
+import { addCard, answer, createApi, fillWhen, instances, keyOf, openEdit, openNew, save } from './_editor.mjs';
 
 test.afterEach(async ({ page }) => {
   expect(page.__dialogs, 'no alert() from the app').toEqual([]);
@@ -108,4 +108,29 @@ test('the shares of a calendar: one line each, the access switch saves, the tras
   await row.locator('.val.end button').click();
   await answer(page, true);
   await expect(page.locator('[id="cal-alice-5eed0000-0000-4000-8000-000000000002"] .share-row')).toHaveCount(0);
+});
+
+test('unlocking an event without CLASS: the slider of an added status card is there and moves', async ({ page }) => {
+  await page.goto('/calendar'); // the API helper takes the page's session
+  const key = await createApi(page, { summary: 'F7 Ohne Klasse', start: '2026-11-04T09:00:00', end: '2026-11-04T10:00:00', cal: 'alice/5eed0000-0000-4000-8000-000000000001' });
+  await openEdit(page, key, '2026-11-04'); // view mode first, then the lock
+  await addCard(page, 'status');
+  await expect(page.locator('#ed-vis')).toBeVisible();
+  await expect(page.locator('#ed-vis-range')).toBeEnabled();
+  await page.locator('#ed-vis .vis-steps button[data-i="2"]').click();
+  await expect(page.locator('#ed-vis-out')).toHaveText('vertraulich');
+});
+
+test('a CLASS another client wrote is shown as itself, sits on the private step and survives a save', async ({ page }) => {
+  await page.goto('/calendar'); // the API helper takes the page's session
+  const r = await api(page, 'POST', '/api/events', { principal: 'alice', cal_id: '5eed0000-0000-4000-8000-000000000001', summary: 'F7 Fremd', start: '2026-11-05T09:00:00', end: '2026-11-05T10:00:00', class: 'X-SECRET' });
+  const key = `alice/5eed0000-0000-4000-8000-000000000001/${r.id}`;
+  await openEdit(page, key, '2026-11-05', { edit: false });
+  await expect(page.locator('#ed-status-card'), 'not public: the card shows itself').toBeVisible();
+  await page.locator('#ed-lock').click();
+  await expect(page.locator('#ed-vis-out')).toHaveText('X-SECRET');
+  await expect(page.locator('#ed-vis-range')).toHaveValue('1');
+  await page.locator('#edh').fill('F7 Fremd neu');
+  await save(page);
+  expect((await api(page, 'GET', `/api/events/${key}`)).class).toBe('X-SECRET');
 });

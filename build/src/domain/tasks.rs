@@ -100,7 +100,10 @@ pub struct TaskDetail {
     pub status: String,
     pub percent: Option<i64>,
     pub completed_at: Option<NaiveDateTime>,
+    /// as stored: another client's value too (`events::class_value`), so a save and the tick box keep it
     pub class: String,
+    /// the strictest CLASS of the RECURRENCE-ID overrides (`events::overrides_class`)
+    pub class_overrides: String,
     pub priority: Option<i64>,
     pub categories: Vec<String>,
     /// RFC 7986 COLOR (CSS colour name or #rrggbb)
@@ -333,7 +336,7 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
     let CalendarInnerData::Todo(t, _) = obj.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
-    let (raw, _) = events::split_component(&obj.get_ics(), "VTODO");
+    let (raw, extra) = events::split_component(&obj.get_ics(), "VTODO");
     let p = &raw.props;
     let (start, start_all_day) = stamp_of(p, "DTSTART", tz);
     let (due, due_all_day) = stamp_of(p, "DUE", tz);
@@ -352,7 +355,8 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
         status: status_of(p),
         percent: num_of(p, "PERCENT-COMPLETE"),
         completed_at: completed_of(p, tz),
-        class: class_of(p),
+        class: events::class_value(&text_of(p, "CLASS")).unwrap_or_default(),
+        class_overrides: events::overrides_class(&extra),
         priority: num_of(p, "PRIORITY").filter(|v| (1..=9).contains(v)),
         categories: cats_of(p),
         color: text_of(p, "COLOR"),
