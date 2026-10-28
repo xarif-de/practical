@@ -338,6 +338,10 @@ fn class_values() {
     // written: "" none, the modelled ones upper-case, a token verbatim, anything else private (RustiCal's reading)
     let w: Vec<Option<String>> = ["", " ", "public", "Confidential", "X-SECRET", "x-geheim", "X_SECRET", "x secret", "ü"].iter().map(|v| class_value(v)).collect();
     assert_eq!(w, [None, None, Some("PUBLIC".into()), Some("CONFIDENTIAL".into()), Some("X-SECRET".into()), Some("x-geheim".into()), Some("PRIVATE".into()), Some("PRIVATE".into()), Some("PRIVATE".into())]);
+    // compared as RustiCal does, Unicode upper case: dotless ı is I
+    assert_eq!((class_value("confıdentıal"), class_value("publıc")), (Some("CONFIDENTIAL".into()), Some("PUBLIC".into())));
+    assert_eq!((shown_class(Some("confıdentıal")), shown_class(Some("publıc"))), ("CONFIDENTIAL".to_string(), "PUBLIC".to_string()));
+    assert_eq!(overrides_class(&[format!("BEGIN:VEVENT\r\nRECURRENCE-ID:20261012T100000Z\r\nCLASS:confıdentıal\r\nEND:VEVENT")]), "CONFIDENTIAL");
     // read: no line "", an empty one private
     assert_eq!((stored_class(None), stored_class(Some("")), stored_class(Some("X-SECRET"))), (String::new(), "PRIVATE".into(), "X-SECRET".into()));
     // a list: unknown and empty private

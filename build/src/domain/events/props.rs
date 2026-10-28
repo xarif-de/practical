@@ -202,10 +202,17 @@ pub fn class_value(v: &str) -> Option<String> {
     if v.is_empty() {
         return None;
     }
-    if let Some(k) = one_of(v, &CLASSES) {
+    if let Some(k) = known_class(v) {
         return Some(k.to_string());
     }
     Some(if v.len() <= 64 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') { v.to_string() } else { "PRIVATE".into() })
+}
+
+/// One of [`CLASSES`] by RustiCal's comparison: `trim().to_uppercase()`, Unicode (rustical_ical visibility.rs
+/// `class_level`), so `confıdentıal` (dotless ı) is CONFIDENTIAL there and here alike
+fn known_class(v: &str) -> Option<&'static str> {
+    let u = v.trim().to_uppercase();
+    CLASSES.into_iter().find(|k| *k == u)
 }
 
 /// The CLASS a stored object carries as the editor reads it: "" without a CLASS line, else [`class_value`] of its
@@ -217,9 +224,9 @@ pub fn stored_class(v: Option<&str>) -> String {
 /// The CLASS a list shows (task rows, the day view's mark): "" without one, PUBLIC and CONFIDENTIAL as they are,
 /// every other value PRIVATE, as RustiCal treats it for sharees
 pub fn shown_class(v: Option<&str>) -> String {
-    match v.map(|v| v.trim().to_ascii_uppercase()) {
+    match v.map(known_class) {
         None => String::new(),
-        Some(v) if v == "PUBLIC" || v == "CONFIDENTIAL" => v,
+        Some(Some(k)) if k != "PRIVATE" => k.into(),
         Some(_) => "PRIVATE".into(),
     }
 }
@@ -227,9 +234,9 @@ pub fn shown_class(v: Option<&str>) -> String {
 /// How strict a present CLASS is for sharees: 0 PUBLIC, 2 CONFIDENTIAL (never shown above PRIVATE: `Policy::new`),
 /// 1 everything else — PRIVATE, an unknown, a malformed or an empty value (RustiCal's `class_level`)
 fn class_rank(v: &str) -> u8 {
-    match v.trim().to_ascii_uppercase().as_str() {
-        "PUBLIC" => 0,
-        "CONFIDENTIAL" => 2,
+    match known_class(v) {
+        Some("PUBLIC") => 0,
+        Some("CONFIDENTIAL") => 2,
         _ => 1,
     }
 }

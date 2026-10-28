@@ -432,6 +432,9 @@ async fn an_unknown_class_survives_every_save() {
     // the lists mark it private, as sharees get it: the task row's lock, the day view's mark
     let page = bob.get("/calendar?view=day&date=2026-10-19").await.ok().body.clone();
     assert!(page.contains("Geheim neu Marker7") && page.contains("#i-lock\"/></svg>Privat</span>"), "the day view marks it private");
+    // the search knows it as private ("privat" is the word of its status field)
+    let found = bob.get_json("/api/search?q=privat").await.ok().body.clone();
+    assert!(found.contains("Geheim neu Marker7"), "{found}");
     // a malformed CLASS saves as PRIVATE, not as nothing (= PUBLIC)
     app.put_ics("bob", &w.team, "kaputt", &crate::testkit::vevent("kaputt", "Kaputt Marker7", "DTSTART;TZID=Europe/Berlin:20261019T120000\nDTEND;TZID=Europe/Berlin:20261019T130000\nCLASS:X_SECRET")).await;
     let kpath = format!("/api/events/bob/{}/kaputt", w.team);

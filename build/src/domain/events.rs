@@ -548,7 +548,7 @@ pub(crate) fn search_extra(obj: &CalendarObject) -> SearchExtra {
     let mut people = persons_of(p, "ORGANIZER");
     people.extend(persons_of(p, "ATTENDEE"));
     let geo = p.iter().find(|l| prop_name(l) == "GEO").and_then(|l| { let v = ical::split_line(l).2; let (a, b) = v.split_once(';')?; Some((a.trim().parse().ok()?, b.trim().parse().ok()?)) });
-    SearchExtra { people, links: links_of(p), status: get("STATUS"), transp: get("TRANSP"), class: get("CLASS"), priority: get("PRIORITY").parse().ok(), geo, related: related_of(p).into_iter().map(|r| r.uid).collect() }
+    SearchExtra { people, links: links_of(p), status: get("STATUS"), transp: get("TRANSP"), class: shown_class(p.iter().find(|l| prop_name(l) == "CLASS").map(|l| ical::unescape(ical::split_line(l).2.trim())).as_deref()), priority: get("PRIORITY").parse().ok(), geo, related: related_of(p).into_iter().map(|r| r.uid).collect() }
 }
 
 /// Number of instances per month of `year` (picker density) — one pass over the year per calendar,
