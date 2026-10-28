@@ -35,9 +35,20 @@ async fn sharees_list_their_copies() {
     let cals = crate::domain::collections::calendars_for(&app.state, &dave, false).await.unwrap();
     let c = cals.iter().find(|c| c.id == w.privat_copy).unwrap();
     assert!(c.read_only, "a read share");
-    // the owner sees whom it is shared with; the sharee does not get the list
+    // the owner sees whom it is shared with and manages it; the sharee gets neither the list nor its forms
     let mut bob = app.login("bob").await;
-    bob.get("/settings").await.ok().has("Team");
+    let page = bob.get("/settings").await.ok().body.clone();
+    let own = &page[page.find(&format!("id=\"cal-bob-{}\"", w.team)).expect("Team's page")..];
+    let own = &own[..own.find("</section>").unwrap()];
+    assert!(own.contains("share-row") && own.contains("value=\"group.team\"") && own.contains("/unshare\"") && own.contains("share-add") && own.contains("/visibility\""), "{own}");
+    let mut erin_c = app.login("erin").await;
+    let page = erin_c.get("/settings").await.ok().body.clone();
+    let copy = &page[page.find(&format!("id=\"cal-group.team-{}\"", w.team_copy)).expect("the copy's page")..];
+    let copy = &copy[..copy.find("</section>").unwrap()];
+    assert!(copy.contains("Bob Muster"), "who shared it: {copy}");
+    for f in ["share-row", "share-add", "/unshare", "/share\"", "/visibility", "vis-form"] {
+        assert!(!copy.contains(f), "no {f} for the copy: {copy}");
+    }
     // connecting a device: the group's account now shows a calendar (the copy), so erin is offered it
     let groups = crate::domain::groups::list_for_user(&app.state, &erin).await.unwrap();
     assert!(groups.iter().find(|g| g.id == "group.team").unwrap().needs_cal_account(), "bob → group.team: the group's account carries the copy");
@@ -144,11 +155,24 @@ async fn tasks_and_contacts_through_a_write_copy() {
     let w = seed_shared().await;
     let app = &w.s.app;
     let mut erin = app.login("erin").await;
-    let t = erin.get_json(&format!("/api/tasks/group.team/{}/todo", w.team_copy)).await.ok().json();
+    let tpath = format!("/api/tasks/group.team/{}/todo", w.team_copy);
+    let t = erin.get_json(&tpath).await.ok().json();
     assert_eq!(t["summary"], "Teamaufgabe");
+    let mut body = task_body(&t);
+    body["summary"] = json!("Teamaufgabe von Erin");
+    erin.json(Method::PUT, &tpath, body).await.ok();
+    assert!(stored(app, "bob", &w.team, "todo").await.contains("SUMMARY:Teamaufgabe von Erin"));
+    erin.json(Method::PUT, &tpath, json!({ "principal": "group.team", "cal_id": w.team_copy, "summary": "", "completed": true })).await.ok();
+    assert!(stored(app, "bob", &w.team, "todo").await.contains("STATUS:COMPLETED"), "the tick box too");
     let cpath = format!("/api/contacts/group.team/{}/tina", w.team_ab_copy);
     let c = erin.get_json(&cpath).await.ok().json();
-    assert_eq!(c["full_name"], "Tina Team");
+    assert_eq!((c["full_name"].as_str(), c["read_only"].as_bool()), (Some("Tina Team"), Some(false)));
+    let mut body = c.clone();
+    body["full_name"] = json!("Tina Teamleitung");
+    erin.json(Method::PUT, &cpath, body).await.ok();
+    assert!(stored_card(app, "bob", &w.team_ab, "tina").await.contains("FN:Tina Teamleitung"));
+    let id = erin.json(Method::POST, "/api/contacts", json!({ "principal": "group.team", "ab_id": w.team_ab_copy, "full_name": "Neu im Team" })).await.ok().json()["id"].as_str().unwrap().to_string();
+    assert!(stored_card(app, "bob", &w.team_ab, &id).await.contains("FN:Neu im Team"), "a new contact lands in bob's book");
     let erin_p = app.principal("erin").await;
     let abs = crate::domain::collections::addressbooks_for(&app.state, &erin_p, false).await.unwrap();
     assert!(abs.iter().any(|a| a.auth.home() == "group.team" && a.auth.owner() == "bob" && a.auth.id() == w.team_ab), "the copy is bob's book");
@@ -586,4 +610,82 @@ async fn the_history_keys_a_path_as_ensure_resolves_it() {
     assert_eq!(c.history_key(false, "dave", &w.privat_copy).await, ("dave".to_string(), w.privat_copy.clone()));
     // nothing there any more (a purged collection): the path itself
     assert_eq!(c.history_key(false, "dave", "weg").await, ("dave".to_string(), "weg".to_string()));
+}
+
+/// Every GET that renders calendar data, as `who` sees it: none may carry a marker of what the share hides
+async fn canary(app: &crate::testkit::TestApp, who: &str, home: &str, copy: &str, ids: &[&str], queries: &[&str], markers: &[&str]) {
+    let mut c = app.login(who).await;
+    let mut paths: Vec<String> = vec![WINDOW.into(), "/api/mentions".into(), "/api/history".into(), "/api/categories".into(), format!("/settings/export/calendars/{home}/{copy}"), "/tasks".into(), "/calendar".into(), "/settings".into()];
+    for v in ["day", "week", "month", "planner", "weekends", "vacation", "countdown", "numbers"] {
+        for d in ["2026-10-15", "2026-10-16"] {
+            paths.push(format!("/calendar?view={v}&date={d}"));
+            paths.push(format!("/calendar?view={v}&date={d}&fragment=1"));
+        }
+    }
+    for v in ["groups", "table", "board", "timeline", "deck"] {
+        paths.push(format!("/tasks?view={v}"));
+    }
+    for q in queries {
+        paths.extend([format!("/api/search?q={q}"), format!("/api/events/suggest?q={q}"), format!("/api/titles?q={q}")]);
+    }
+    for id in ids {
+        paths.extend([format!("/api/events/{home}/{copy}/{id}"), format!("/api/tasks/{home}/{copy}/{id}"), format!("/api/events/{home}/{copy}/{id}/attach/0")]);
+    }
+    for p in &paths {
+        for json in [false, true] {
+            let r = if json { c.get_json(p).await } else { c.get(p).await };
+            assert!(!r.status.is_server_error(), "{who} {p}: {} {}", r.status, r.body);
+            for m in markers {
+                assert!(!r.body.contains(m), "{who} {p} (json: {json}) shows {m}: {}", r.body);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn no_page_or_answer_shows_a_sharee_what_the_share_hides() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    // the owner sees them where the sharees must not: the loop's routes reach the data
+    let mut bob = app.login("bob").await;
+    let att = bob.get(&format!("/api/events/bob/{}/busy/attach/0", w.team)).await.ok().body.clone();
+    assert_eq!(att, "Marker7");
+    assert!(bob.get_json(&format!("/api/tasks/bob/{}/geheim", w.team)).await.ok().body.contains("Notiz Marker7"));
+    assert!(bob.get(&format!("/settings/export/calendars/bob/{}", w.team)).await.ok().body.contains("Verborgen Marker7"));
+    assert!(bob.get("/calendar?view=day&date=2026-10-15").await.ok().body.contains("Geheimprojekt"));
+    // erin: private Team events show their time only, confidential ones nothing; dave: alice's private dentist nothing
+    canary(app, "erin", "group.team", &w.team_copy, &["busy", "gone", "geheim"], &["geheim", "verborgen", "keller", "notiz"], &["Marker7", "Geheim", "Verborgen"]).await;
+    canary(app, "dave", "dave", &w.privat_copy, &["zahnarzt"], &["zahn", "weiß"], &["Zahnarzt", "Weiß"]).await;
+}
+
+#[tokio::test]
+async fn a_sharee_changes_only_its_own_view_and_never_the_share() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let bob_p = app.principal("bob").await;
+    let erin_p = app.principal("erin").await;
+    let owners_team = || async { rustical_store::CalendarReadStore::get_calendar(app.state.raw().calendars, "bob", &w.team, false).await.unwrap() };
+    let mut erin = app.login("erin").await;
+    // rename and recolour the copy: hers changes, bob's calendar stays as it is
+    erin.post_form(&format!("/settings/calendars/group.team/{}/update", w.team_copy), &[("name", "Meins"), ("color", "#000000"), ("description", "von Erin")]).await;
+    let team = owners_team().await;
+    assert_eq!((team.meta.displayname.as_deref(), team.meta.color.as_deref(), team.meta.description.as_deref()), (Some("Team"), Some("#5856d6"), None));
+    let copy = crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap().into_iter().find(|c| c.id == w.team_copy).unwrap();
+    assert_eq!((copy.displayname.as_str(), copy.color.as_str()), ("Meins", "#000000"));
+    // ending a share is the owner's: from the owner's path and from the copy's, refused, the share stays
+    erin.post_form(&format!("/settings/calendars/bob/{}/unshare", w.team), &[("sharee", "group.team")]).await;
+    erin.post_form(&format!("/settings/calendars/group.team/{}/unshare", w.team_copy), &[("sharee", "group.team")]).await;
+    erin.post_form(&format!("/settings/addressbooks/group.team/{}/unshare", w.team_ab_copy), &[("sharee", "group.team")]).await;
+    let a = crate::domain::collections::ensure_calendar(&app.state, &bob_p, "bob", &w.team, crate::state::Need::Own).await.unwrap();
+    assert_eq!(app.state.collections().calendar_shares(&a).await.unwrap().len(), 1, "still shared");
+    let ab = crate::domain::collections::ensure_addressbook(&app.state, &bob_p, "bob", &w.team_ab, crate::state::Need::Own).await.unwrap();
+    assert_eq!(app.state.collections().addressbook_shares(&ab).await.unwrap().len(), 2);
+    // deleting the copy, and purging the address book's: each only ends the share for her
+    erin.post_form(&format!("/settings/calendars/group.team/{}/delete", w.team_copy), &[]).await;
+    erin.post_form(&format!("/settings/addressbooks/group.team/{}/purge", w.team_ab_copy), &[]).await;
+    assert!(crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap().iter().all(|c| c.owner != "bob"));
+    assert!(crate::domain::collections::addressbooks_for(&app.state, &erin_p, false).await.unwrap().iter().all(|a| a.owner != "bob"));
+    assert!(owners_team().await.deleted_at.is_none() && stored(app, "bob", &w.team, "plan").await.contains("Teamplan"), "bob's calendar and its objects stay");
+    assert!(stored_card(app, "bob", &w.team_ab, "tina").await.contains("Tina Team"), "and his address book");
+    assert_eq!(app.state.collections().addressbook_shares(&ab).await.unwrap().len(), 1, "dave's share is untouched");
 }

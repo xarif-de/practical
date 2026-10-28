@@ -56,8 +56,9 @@ pub async fn seed() -> Seed {
 
 /// [`seed`] plus sharing: alice shares her Privat with dave (read); bob shares his calendar Team and his address
 /// book Teamkontakte with `group.team` = {erin} (write), and Teamkontakte with dave (read), through the settings routes. Team holds a public event
-/// with bob's reminder, a private one (sharees see only its time: Team's levels are set to 1/0) and a confidential
-/// one (hidden from them), each hidden part carrying the word "Marker7"; and a task.
+/// with bob's reminder, a private one with an attached file (sharees see only its time: Team's levels are set to 1/0)
+/// and a confidential one (hidden from them), a public task and a private one, each hidden part carrying the word
+/// "Marker7" (the attachment's text too).
 pub struct SharedSeed {
     pub s: Seed,
     pub team: String,
@@ -79,9 +80,10 @@ pub async fn seed_shared() -> SharedSeed {
     let team = app.calendar("bob", "Team", "#5856d6", &["VEVENT", "VTODO"]).await;
     let team_ab = app.addressbook("bob", "Teamkontakte", "#34c759").await;
     app.put_ics("bob", &team, "plan", &vevent("plan", "Teamplan", "DTSTART;TZID=Europe/Berlin:20261014T100000\nDTEND;TZID=Europe/Berlin:20261014T110000\nBEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Bobalarm\nTRIGGER:-PT15M\nEND:VALARM")).await;
-    app.put_ics("bob", &team, "busy", &vevent("busy", "Geheimprojekt Marker7", "DTSTART;TZID=Europe/Berlin:20261015T100000\nDTEND;TZID=Europe/Berlin:20261015T110000\nLOCATION:Marker7-Keller\nCLASS:PRIVATE")).await;
+    app.put_ics("bob", &team, "busy", &vevent("busy", "Geheimprojekt Marker7", "DTSTART;TZID=Europe/Berlin:20261015T100000\nDTEND;TZID=Europe/Berlin:20261015T110000\nLOCATION:Marker7-Keller\nCLASS:PRIVATE\nATTACH;FMTTYPE=text/plain;FILENAME=Marker7.txt;ENCODING=BASE64;VALUE=BINARY:TWFya2VyNw==")).await;
     app.put_ics("bob", &team, "gone", &vevent("gone", "Verborgen Marker7", "DTSTART;TZID=Europe/Berlin:20261016T100000\nDTEND;TZID=Europe/Berlin:20261016T110000\nCLASS:CONFIDENTIAL")).await;
     app.put_ics("bob", &team, "todo", &vtodo("todo", "Teamaufgabe", "DUE;VALUE=DATE:20261020")).await;
+    app.put_ics("bob", &team, "geheim", &vtodo("geheim", "Geheimaufgabe Marker7", "DUE;VALUE=DATE:20261017\nDESCRIPTION:Notiz Marker7\nCLASS:PRIVATE")).await;
     app.put_vcf("bob", &team_ab, "tina", "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:tina\r\nFN:Tina Team\r\nN:Team;Tina;;;\r\nEMAIL:tina@example.org\r\nEND:VCARD\r\n").await;
     let mut bob = app.login("bob").await;
     let r = bob.post_form(&format!("/settings/calendars/bob/{team}/share"), &[("sharee", "group.team"), ("access", "write")]).await;
