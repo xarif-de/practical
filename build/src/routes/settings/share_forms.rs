@@ -105,6 +105,30 @@ pub(super) async fn unshare_addressbook(state: State<SharedState>, user: Princip
     unshare(state, user, session, ctx, "addressbooks", owner, id, f).await
 }
 
+pub(super) async fn access_calendar(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, f: Form<ShareForm>) -> Response {
+    access(state, user, session, ctx, "calendars", owner, id, f).await
+}
+
+pub(super) async fn access_addressbook(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, f: Form<ShareForm>) -> Response {
+    access(state, user, session, ctx, "addressbooks", owner, id, f).await
+}
+
+/// The access switch of one share line: changes an existing share only. Through [`share`] a page opened before the
+/// sharee ended the share would create it again.
+#[allow(clippy::too_many_arguments)]
+async fn access(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, kinds: &str, owner: String, id: String, Form(f): Form<ShareForm>) -> Response {
+    form(&state, &session, &ctx, &f.csrf, &format!("{}-{owner}-{id}", if kinds == "calendars" { "cal" } else { "ab" }), async {
+        let a = ensure(&state, &user, kinds, &owner, &id).await?;
+        if kinds == "calendars" {
+            state.collections().set_calendar_share_access(&a, f.sharee.trim(), access_of(&f.access)).await?;
+        } else {
+            state.collections().set_addressbook_share_access(&a, f.sharee.trim(), access_of(&f.access)).await?;
+        }
+        Ok(Some("flash-shared"))
+    })
+    .await
+}
+
 /// Shares with `sharee` (an id, or an e-mail address); sharing again with the same principal changes only the
 /// access (the store's upsert).
 #[allow(clippy::too_many_arguments)]

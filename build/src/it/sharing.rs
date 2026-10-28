@@ -216,10 +216,23 @@ async fn settings_share_unshare_and_levels() {
     alice.post_form(&format!("/settings/calendars/alice/{}/unshare", w.s.privat), &[("sharee", "dave")]).await;
     let mut dave = app.login("dave").await;
     assert_eq!(dave.get_json(&format!("/api/events/dave/{}/urlaub", w.privat_copy)).await.status, StatusCode::NOT_FOUND);
+    // the access switch of a share line from before changes nothing: the ended share stays ended
+    alice.post_form(&format!("/settings/calendars/alice/{}/access", w.s.privat), &[("sharee", "dave"), ("access", "write")]).await;
     // only the owner shares
     erin.post_form(&format!("/settings/calendars/bob/{}/share", w.team), &[("sharee", "dave"), ("access", "write")]).await;
     let dave_p = app.principal("dave").await;
     assert!(crate::domain::collections::calendars_for(&app.state, &dave_p, false).await.unwrap().iter().all(|c| c.owner == "dave"), "nothing shared with dave now");
+    // on a share that exists the switch changes its access, and only the owner's does
+    let team_ro = || async {
+        let erin_p = app.principal("erin").await;
+        let cals = crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap();
+        cals.iter().find(|c| c.principal == "group.team" && c.id == w.team_copy).map(|c| c.read_only)
+    };
+    assert_eq!(team_ro().await, Some(false));
+    erin.post_form(&format!("/settings/calendars/bob/{}/access", w.team), &[("sharee", "group.team"), ("access", "read")]).await;
+    assert_eq!(team_ro().await, Some(false), "a sharee does not change the access");
+    bob.post_form(&format!("/settings/calendars/bob/{}/access", w.team), &[("sharee", "group.team"), ("access", "read")]).await;
+    assert_eq!(team_ro().await, Some(true));
 }
 
 #[tokio::test]

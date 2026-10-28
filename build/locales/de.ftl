@@ -2010,6 +2010,7 @@ err-share-read-only = Das ist nur zum Lesen mit dir geteilt.
 err-share-owner = Mit dem Besitzer selbst kannst du nicht teilen.
 err-share-owner-member = Mitglieder der Besitzer-Gruppe haben schon vollen Zugriff.
 err-share-unknown = Es gibt keinen Nutzer und keine Gruppe mit diesem Namen oder dieser E-Mail-Adresse.
+err-share-gone = Diese Freigabe gibt es nicht mehr.
 err-share-ambiguous = Dieser Name und diese E-Mail-Adresse gehören verschiedenen Nutzern.
 err-share-not-shareable = Geburtstagskalender und Abonnements lassen sich nicht teilen.
 err-visibility = Vertrauliche Termine dürfen nicht mehr zeigen als private.

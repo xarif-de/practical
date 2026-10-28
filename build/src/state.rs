@@ -438,6 +438,14 @@ fn write_error(e: rustical_store::Error) -> AppError {
     }
 }
 
+/// An access change of a share that no longer exists (400), else as [`write_error`]
+fn access_error(e: rustical_store::Error) -> AppError {
+    match e {
+        rustical_store::Error::NotFound => AppError::bad("err-share-gone"),
+        e => write_error(e),
+    }
+}
+
 /// Calendars, address books, their objects and their shares — always for a user ([`Collections::calendars`],
 /// [`Collections::ensure_calendar`]) or for an [`Authorized`] collection.
 pub struct Collections<'a>(&'a AppState);
@@ -804,6 +812,19 @@ impl Collections<'_> {
         a.checked(Need::Own)?;
         self.0.share_hints.clear();
         self.0.shares.share_addressbook(a.owner(), a.id(), sharee, access, Some(&actor.id)).await.map_err(write_error)
+    }
+
+    /// Changes only the access of an existing share: one its sharee ended meanwhile stays ended (`err-share-gone`)
+    pub async fn set_calendar_share_access(&self, a: &Authorized, sharee: &str, access: Access) -> AppResult<()> {
+        a.checked(Need::Own)?;
+        self.0.share_hints.clear();
+        self.0.shares.set_calendar_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)
+    }
+
+    pub async fn set_addressbook_share_access(&self, a: &Authorized, sharee: &str, access: Access) -> AppResult<()> {
+        a.checked(Need::Own)?;
+        self.0.share_hints.clear();
+        self.0.shares.set_addressbook_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)
     }
 
     /// A sharee's own colour of a shared address book (`None`: the owner's, or an own one)

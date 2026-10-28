@@ -2013,6 +2013,7 @@ err-share-read-only = this is shared with you read-only
 err-share-owner = you cannot share with the owner itself
 err-share-owner-member = members of the owning group already have full access
 err-share-unknown = no user or group with this name or e-mail address
+err-share-gone = this share does not exist any more
 err-share-ambiguous = this name and this e-mail address belong to different users
 err-share-not-shareable = birthday calendars and subscriptions cannot be shared
 err-visibility = confidential events may not show more than private ones

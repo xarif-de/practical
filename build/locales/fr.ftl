@@ -2017,6 +2017,7 @@ err-share-read-only = Ceci est partagé avec vous en lecture seule.
 err-share-owner = Vous ne pouvez pas partager avec le propriétaire lui-même.
 err-share-owner-member = Les membres du groupe propriétaire ont déjà un accès complet.
 err-share-unknown = Aucun utilisateur ni groupe avec ce nom ou cette adresse e-mail.
+err-share-gone = Ce partage n'existe plus.
 err-share-ambiguous = Ce nom et cette adresse e-mail appartiennent à des utilisateurs différents.
 err-share-not-shareable = Les calendriers d'anniversaires et les abonnements ne peuvent pas être partagés.
 err-visibility = Les événements confidentiels ne peuvent pas en montrer plus que les privés.

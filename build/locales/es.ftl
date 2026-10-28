@@ -2015,6 +2015,7 @@ err-share-read-only = Esto se compartió contigo solo para lectura.
 err-share-owner = No puedes compartir con el propio propietario.
 err-share-owner-member = Los miembros del grupo propietario ya tienen acceso completo.
 err-share-unknown = No hay ningún usuario ni grupo con este nombre o esta dirección de correo.
+err-share-gone = Este compartido ya no existe.
 err-share-ambiguous = Este nombre y esta dirección de correo pertenecen a usuarios distintos.
 err-share-not-shareable = Los calendarios de cumpleaños y las suscripciones no se pueden compartir.
 err-visibility = Los eventos confidenciales no pueden mostrar más que los privados.
