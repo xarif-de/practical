@@ -134,3 +134,46 @@ test('a CLASS another client wrote is shown as itself, sits on the private step 
   await save(page);
   expect((await api(page, 'GET', `/api/events/${key}`)).class).toBe('X-SECRET');
 });
+
+/** The suggestion list of `field` is on screen where it is drawn: no ancestor clips it (settings.css `.set .group`). */
+const onScreen = list => list.evaluate(el => { const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.bottom - 8); return !!hit && el.contains(hit); });
+
+test('sharing: two letters suggest people, the second one picked goes into the field, the share asks whom first', async ({ page }) => {
+  // seed: erin "Erin Schreiber" and erik "Erik Gast" both start with "er"; by name: Erik first
+  await page.goto('/settings#cal-alice-5eed0000-0000-4000-8000-000000000001');
+  const form = page.locator('[id="cal-alice-5eed0000-0000-4000-8000-000000000001"] form.share-add');
+  const field = form.locator('input[name=sharee]'), list = form.locator('.combo');
+  await field.pressSequentially('er');
+  await expect(list.locator('.r')).toHaveCount(2);
+  await expect(field).toHaveAttribute('aria-expanded', 'true');
+  expect(await onScreen(list), 'not clipped by the group around it').toBe(true);
+  await expect(list.locator('.r').nth(1)).toContainText('Erin Schreiber');
+  await list.locator('.r').nth(1).click();
+  await expect(field).toHaveValue('erin');
+  await expect(list).toBeHidden();
+  await expect(field).toBeFocused();
+  await form.locator('button[type=submit]').click();
+  await expect(page.locator('.ask')).toContainText('Erin Schreiber (erin)');
+  await answer(page, true);
+  await expect(page.locator('[id="cal-alice-5eed0000-0000-4000-8000-000000000001"] .share-row', { hasText: 'erin' })).toHaveCount(1);
+});
+
+test('a group\'s new member: typed, suggested without those already in it, picked by keyboard, added', async ({ page }) => {
+  await page.goto('/settings#groups');
+  const form = page.locator('form.member-add[action="/settings/groups/group.familie/members"]');
+  const field = form.locator('input[name=member]'), list = form.locator('.combo');
+  await expect(form.locator('select'), 'no list of everyone').toHaveCount(0);
+  await field.pressSequentially('bo');
+  await expect(field).toHaveAttribute('aria-expanded', 'false'); // bob is in it already
+  await field.fill('');
+  await field.pressSequentially('er');
+  await expect(list.locator('.r')).toHaveCount(2);
+  expect(await onScreen(list)).toBe(true);
+  await field.press('ArrowDown');
+  await field.press('ArrowDown');
+  await expect(list.locator('.r[aria-selected=true]')).toContainText('Erin Schreiber');
+  await field.press('Enter');
+  await expect(field).toHaveValue('erin');
+  await Promise.all([page.waitForURL(/#groups$/), form.locator('button[type=submit]').click()]);
+  await expect(page.locator('form[action="/settings/groups/group.familie/members/erin/remove"]')).toHaveCount(1);
+});

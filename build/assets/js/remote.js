@@ -15,12 +15,6 @@
      list serves all four pages, because it is the same question each time. */
   let SERVERS = [];
   try { SERVERS = JSON.parse($('#rm-servers')?.textContent || '[]'); } catch (_) { SERVERS = []; }
-  /* Closers of the suggestion boxes, one per page that has a field. Scroll fires per wheel tick, so
-     the four pages share one listener pair instead of binding their own. */
-  const CLOSERS = [];
-  const closeAllSug = () => CLOSERS.forEach(f => f());
-  addEventListener('scroll', closeAllSug, { passive: true, capture: true });
-  addEventListener('resize', closeAllSug);
 
   const T = trs('js-rm-', ['waiting', 'nothing', 'readonly-src', 'both-hint', 'pull-hint', 'need-server', 'need-pick', 'doing-title']);
   T['doing'] = T['doing-title'];
@@ -119,102 +113,19 @@
     };
     origin.addEventListener('input', () => origin.setCustomValidity(''));
 
-    /* ---- the addresses used before ------------------------------------------------------------
-       Built like the search suggestions (search.js): a listbox of our own, not a <datalist>, whose
-       dropdown triangle no other field here has and which came back on hover even when hidden.
-       Opens on focus, narrows as letters are typed, ↑/↓ walks it, Enter takes the marked one. */
+    /* ---- the addresses used before: the shared suggestion list (practical.combo, combo.js), opened on focus,
+       narrowed as letters are typed. What is already typed in full is no suggestion: offering it back says nothing. */
     const sug = q('.rm-sug');
-    let marked = -1, shown = [];
-
-    const closeSug = () => {
-      sug.hidden = true;
-      marked = -1;
-      origin.setAttribute('aria-expanded', 'false');
-      origin.removeAttribute('aria-activedescendant');
-    };
-
-    const mark = i => {
-      marked = i;
-      [...sug.children].forEach((el, n) => el.setAttribute('aria-selected', String(n === i)));
-      if (i >= 0) origin.setAttribute('aria-activedescendant', sug.children[i].id);
-      else origin.removeAttribute('aria-activedescendant');
-    };
-
-    /* The list is `fixed` (settings.css), so its place is set here. It is put under the FIELD, not
-       the row, so it lines up with what is being typed, and kept inside the window. */
-    const place = () => {
-      const f = origin.getBoundingClientRect();
-      sug.style.width = `${Math.max(f.width, 190)}px`;
-      sug.style.left = `${Math.min(f.left, innerWidth - sug.offsetWidth - 8)}px`;
-      const below = innerHeight - f.bottom;
-      // above the field when there is no room below it
-      if (below < sug.offsetHeight + 12 && f.top > sug.offsetHeight + 12) {
-        sug.style.top = `${f.top - sug.offsetHeight - 4}px`;
-      } else {
-        sug.style.top = `${f.bottom + 4}px`;
-      }
-    };
-
-    function drawSug() {
-      const typed = origin.value.trim().toLowerCase();
-      // what is already typed in full is no suggestion: offering it back says nothing
-      shown = SERVERS.filter(v => v.toLowerCase().includes(typed) && v.toLowerCase() !== typed);
-      sug.innerHTML = shown
-        .map((v, i) => `<div class="r" role="option" id="${sug.id}-o${i}" aria-selected="false" data-v="${escQ(v)}">${escQ(v)}</div>`)
-        .join('');
-      sug.hidden = !shown.length;
-      origin.setAttribute('aria-expanded', String(!!shown.length));
-      if (shown.length) place();
-      mark(-1);
-    }
-
-    const takeSug = v => {
-      origin.value = v;
-      origin.setCustomValidity('');
-      closeSug();
-      origin.focus();
-    };
-
     if (sug && SERVERS.length) {
       sug.id = `rm-sug-${form.closest('.page').id}`;
-      origin.setAttribute('aria-controls', sug.id);
-      origin.addEventListener('focus', drawSug);
-      origin.addEventListener('input', drawSug);
-      // a click must not pull the focus out of the field first
-      sug.addEventListener('mousedown', e => e.preventDefault());
-      sug.addEventListener('click', e => {
-        const r = e.target.closest('.r');
-        if (r) takeSug(r.dataset.v);
-      });
-      sug.addEventListener('mousemove', e => {
-        const r = e.target.closest('.r');
-        if (r) mark([...sug.children].indexOf(r));
-      });
-      origin.addEventListener('blur', () => setTimeout(closeSug, 120));
-      // a fixed box does not travel with the page: scrolling or resizing closes it rather than
-      // leaving it beside the field it belongs to. One shared pair of listeners: four pages carry
-      // one of these fields each, and only one of them can be open.
-      CLOSERS.push(closeSug);
+      practical.combo(origin, sug, { focus: true, fetch: v => { const typed = v.trim().toLowerCase(); return SERVERS.filter(x => x.toLowerCase().includes(typed) && x.toLowerCase() !== typed); }, label: v => [v], value: v => v, take: () => origin.setCustomValidity('') });
     }
-
+    /* Enter (no suggestion marked: the list took that one): connect. It must never reach the form, whose submit is
+       the import BATCH — an address plus Enter would have imported nothing. */
     origin.addEventListener('keydown', e => {
-      const open = !sug.hidden && shown.length;
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        if (!open) { drawSug(); return; }
-        e.preventDefault();
-        const n = shown.length;
-        mark(e.key === 'ArrowDown' ? (marked + 1) % n : (marked <= 0 ? n : marked) - 1);
-        return;
-      }
-      if (e.key === 'Escape' && open) { e.stopPropagation(); closeSug(); return; }
-      /* Enter: take the marked suggestion, else connect. It must never reach the form, whose
-         submit is the import BATCH — an address plus Enter would have imported nothing. */
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (marked >= 0) { takeSug(shown[marked]); return; }
-        closeSug();
-        if (!go.disabled) go.click();
-      }
+      if (e.key !== 'Enter' || e.defaultPrevented) return;
+      e.preventDefault();
+      if (!go.disabled) go.click();
     });
 
     // the direction radios decide what the hint under them says, and a collection the remote will

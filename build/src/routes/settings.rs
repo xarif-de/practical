@@ -53,7 +53,6 @@ pub(crate) const SESSION_NEW_UPLOADER: &str = "new_uploader";
 pub struct SettingsPage {
     pub ctx: PageCtx,
     pub groups: Vec<GroupInfo>,
-    pub individuals: Vec<Principal>,
     pub trashed: Vec<TrashedGroup>,
     pub calendars: Vec<CalInfo>,
     pub addressbooks: Vec<AbInfo>,
@@ -366,7 +365,6 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),
         alarm_snaps_default_end: events::fmt_offsets(&events::AlarmSnaps::default().end),
         groups: groups::list_for_user(&state, &user).await?,
-        individuals: groups::individuals(&state).await?,
         trashed: groups::trashed_for_user(&state, &user).await?,
         calendars: cals_all.clone(),
         addressbooks: abs_all.clone(),

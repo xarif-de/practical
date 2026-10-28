@@ -8,7 +8,7 @@ fn page(lang: &str, public: &str, school: &str, names: &[(&str, &str)], tz: Opti
         remote_sync: false,
         remote_links: vec![],
         remote_servers: vec![],
-        ctx, groups: vec![], individuals: vec![], trashed: vec![], calendars: vec![], addressbooks: vec![], deleted_calendars: vec![], deleted_addressbooks: vec![], tokens: vec![], new_token: None, uploader: false, new_uploader: None,
+        ctx, groups: vec![], trashed: vec![], calendars: vec![], addressbooks: vec![], deleted_calendars: vec![], deleted_addressbooks: vec![], tokens: vec![], new_token: None, uploader: false, new_uploader: None,
         uploader_devices: vec![],
         prefs: Prefs { timezone: tz.map(str::to_string), scheme: Some("dark".into()), ..Prefs::defaults() }, owners: vec![], palette: vec![], retention_days: 90, default_timezone: "Europe/Berlin".into(),
         public_regions: public.into(), school_regions: school.into(), region_names: names.iter().map(|(c, n)| (c.to_string(), (n.to_string(), String::new()))).collect(),

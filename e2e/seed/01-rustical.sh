@@ -20,6 +20,8 @@ r principals create bob   -n "Bob Muster"     --for-testing-password-from-arg de
 r principals create carol -n "Carol Test"     --for-testing-password-from-arg devpass >/dev/null
 r principals create dave  -n "Dave Leser"     --for-testing-password-from-arg devpass >/dev/null
 r principals create erin  -n "Erin Schreiber" --for-testing-password-from-arg devpass >/dev/null
+# no collections, no group: a second person whose id starts like erin's, so "er" suggests two (sharing.spec.mjs)
+r principals create erik  -n "Erik Gast"      --for-testing-password-from-arg devpass >/dev/null
 r principals create group.familie -p group -n "Familie" >/dev/null
 r principals membership assign alice --to group.familie >/dev/null
 r principals membership assign bob   --to group.familie >/dev/null

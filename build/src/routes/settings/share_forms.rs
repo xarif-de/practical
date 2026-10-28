@@ -171,7 +171,9 @@ pub(super) struct ShareeQuery {
 
 #[derive(serde::Serialize)]
 pub(super) struct Sharee {
-    id: String,
+    /// `None` for someone found by an address who keeps name and id out of the suggestions: the form posts the address
+    id: Option<String>,
+    /// their address then, as in the suggestions
     name: String,
     group: bool,
     /// only for a member of the group
@@ -179,11 +181,18 @@ pub(super) struct Sharee {
 }
 
 /// Whom a name or e-mail address means, before anything is shared (the confirmation shows it). A group's
-/// members only for its members: anyone could otherwise read them by typing `group.<slug>`.
+/// members only for its members: anyone could otherwise read them by typing `group.<slug>`. Found by an address
+/// and unlisted by name and id (`prefs::unlisted`): the address alone, as `sharee_suggest` shows them.
 pub(super) async fn sharee(State(state): State<SharedState>, user: Principal, crate::extract::Query(q): crate::extract::Query<ShareeQuery>) -> AppResult<axum::Json<Sharee>> {
-    let id = state.collections().resolve_sharee(&q.q).await?;
+    use rustical_store::auth::AuthenticationProvider;
+    let input = q.q.trim();
+    let id = state.collections().resolve_sharee(input).await?;
+    let by_address = state.principals().get_principal(input).await?.is_none();
+    if by_address && crate::domain::prefs::unlisted(&state.db).await?.get(&id).is_some_and(|(no_id, _)| *no_id) {
+        return Ok(axum::Json(Sharee { id: None, name: input.to_string(), group: false, members: None }));
+    }
     let r = row(&state, &user, id, Access::Read).await?;
-    Ok(axum::Json(Sharee { id: r.sharee, name: r.label, group: r.is_group, members: r.members }))
+    Ok(axum::Json(Sharee { id: Some(r.sharee), name: r.label, group: r.is_group, members: r.members }))
 }
 
 /// What `/api/sharee/suggest` offers per principal: `value` goes into the field (the id, or the address of
@@ -196,8 +205,8 @@ pub(super) struct Suggestion {
     email: Option<String>,
 }
 
-/// The people whose name, id or e-mail address starts with what was typed (at least two characters; a name
-/// by any of its words), at most [`SUGGEST_MAX`], by name. Groups and the user are left out, and so is
+/// The people whose id or e-mail address starts with what was typed, or whose name has a word starting with each
+/// typed word (at least two characters; "erin sch" finds Erin Schreiber), at most [`SUGGEST_MAX`], by name. Groups and the user are left out, and so is
 /// everyone by what they keep out of the suggestions (`prefs::unlisted`, settings `#privacy`): typing the
 /// whole id or address still shares (`sharee`).
 pub(super) async fn sharee_suggest(State(state): State<SharedState>, user: Principal, crate::extract::Query(q): crate::extract::Query<ShareeQuery>) -> AppResult<axum::Json<Vec<Suggestion>>> {
@@ -214,7 +223,8 @@ pub(super) async fn sharee_suggest(State(state): State<SharedState>, user: Princ
         }
         let (no_id, no_email) = unlisted.get(&p.id).copied().unwrap_or_default();
         let name = p.displayname.clone().filter(|n| !n.trim().is_empty()).unwrap_or_else(|| p.id.clone());
-        let by_id = !no_id && (p.id.to_lowercase().starts_with(&q) || name.to_lowercase().split_whitespace().any(|w| w.starts_with(&q)));
+        let words: Vec<String> = name.to_lowercase().split_whitespace().map(String::from).collect();
+        let by_id = !no_id && (p.id.to_lowercase().starts_with(&q) || q.split_whitespace().all(|t| words.iter().any(|w| w.starts_with(t))));
         let email = if no_email { None } else { state.collections().principal_email(&p.id).await? };
         let by_email = email.as_ref().is_some_and(|e| e.to_lowercase().starts_with(&q));
         if !by_id && !by_email {

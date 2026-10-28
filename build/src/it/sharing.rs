@@ -414,3 +414,45 @@ async fn the_hint_knows_the_strictest_class_of_a_series() {
     let mut erin = app.login("erin").await;
     assert!(!erin.get_json(WINDOW).await.ok().body.contains("Serie"));
 }
+
+#[tokio::test]
+async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() {
+    use rustical_store::auth::AuthenticationProvider;
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    app.state.principals().set_principal_email("erin", Some("erin@example.org")).await.unwrap();
+    let mut bob = app.login("bob").await;
+    let mut erin = app.login("erin").await;
+    let values = |r: serde_json::Value| r.as_array().unwrap().iter().map(|s| s["value"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    // every typed word starts a word of the name
+    assert_eq!(values(bob.get_json("/api/sharee/suggest?q=erin%20sch").await.ok().json()), ["erin"]);
+    assert_eq!(values(bob.get_json("/api/sharee/suggest?q=Schreiber%20Er").await.ok().json()), ["erin"]);
+    assert!(values(bob.get_json("/api/sharee/suggest?q=erin%20x").await.ok().json()).is_empty());
+    // listed by id only: an address finds nothing, the id finds her without the address
+    erin.post_form("/settings/privacy", &[("listed_by_id", "1")]).await;
+    assert!(values(bob.get_json("/api/sharee/suggest?q=erin%40").await.ok().json()).is_empty());
+    assert_eq!(bob.get_json("/api/sharee/suggest?q=er").await.ok().json(), json!([{ "value": "erin", "name": "Erin Schreiber", "id": "erin", "email": null }]));
+    // listed by address only: the confirmation names the address, not her name or id; the share goes by the address
+    erin.post_form("/settings/privacy", &[("listed_by_email", "1")]).await;
+    assert_eq!(bob.get_json("/api/sharee?q=erin%40example.org").await.ok().json(), json!({ "id": null, "name": "erin@example.org", "group": false, "members": null }));
+    assert_eq!(bob.get_json("/api/sharee?q=erin").await.ok().json()["id"], "erin", "the whole id still names her");
+    let cal = app.calendar("bob", "Notizen", "#112233", &["VEVENT"]).await;
+    let r = bob.post_form(&format!("/settings/calendars/bob/{cal}/share"), &[("sharee", "erin@example.org"), ("access", "read")]).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER, "{}", r.body);
+    let erin_p = app.principal("erin").await;
+    assert!(crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap().iter().any(|c| c.owner == "bob" && c.auth.id() == cal));
+    // a group's member field lists nobody; a member is added by id or by address
+    let mut alice = app.login("alice").await;
+    let page = alice.get("/settings").await.ok().body.clone();
+    assert!(!page.contains("value=\"carol\"") && !page.contains("Carol Test"), "nobody listed for the picking");
+    let r = alice.post_form("/settings/groups/group.familie/members", &[("member", "erin@example.org")]).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER, "{}", r.body);
+    alice.post_form("/settings/groups/group.familie/members", &[("member", "carol")]).await;
+    let mut members = app.state.principals().list_members("group.familie").await.unwrap();
+    members.sort();
+    assert_eq!(members, ["alice", "bob", "carol", "erin"]);
+    // a group is no member, nor is nobody
+    alice.post_form("/settings/groups/group.familie/members", &[("member", "group.team")]).await;
+    alice.post_form("/settings/groups/group.familie/members", &[("member", "niemand@example.org")]).await;
+    assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 4);
+}

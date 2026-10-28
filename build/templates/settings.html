@@ -327,9 +327,10 @@
     {% for m in g.members %}
     <div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ m }}</span><span class="val">{% if m != ctx.user_id() %}<form method="post" action="/settings/groups/{{ g.id }}/members/{{ m }}/remove" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", m) }}">{{ m::ico("user-minus") }}<span>{{ ctx.t("member-remove") }}</span></button></form>{% endif %}</span></div>
     {% endfor %}
-    <form class="cell noic" method="post" action="/settings/groups/{{ g.id }}/members">
+    {#- a new member by id or address, with the sharing suggestions (settings-sharing.js; only who lets others find them) -#}
+    <form class="cell noic member-add" method="post" action="/settings/groups/{{ g.id }}/members" data-members="{{ g.members.join(",") }}">
       {{ m::csrf() }}
-      <select name="member" required aria-label="{{ ctx.t("member-pick") }}"><option value="">{{ ctx.t("member-pick") }}</option>{% for p in individuals %}{% if !g.members.contains(p.id) %}<option value="{{ p.id }}">{{ p.id }}{% if let Some(d) = p.displayname %} ({{ d }}){% endif %}</option>{% endif %}{% endfor %}</select>
+      <input type="text" name="member" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}" aria-label="{{ ctx.t("member-pick") }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="msugg-{{ g.id }}"><span class="combo" id="msugg-{{ g.id }}" role="listbox" aria-label="{{ ctx.t("share-sugg") }}" hidden></span>
       <button class="btn" type="submit">{{ m::ico("member-add") }}<span>{{ ctx.t("member-add") }}</span></button>
     </form>
     <form method="post" action="/settings/groups/{{ g.id }}/leave">{{ m::csrf() }}<button class="cell btnrow danger" type="submit" data-confirm="{{ ctx.t1("confirm-leave", "name", g.displayname) }}">{{ m::ico("logout") }}<span>{{ ctx.t("group-leave") }}</span></button></form>

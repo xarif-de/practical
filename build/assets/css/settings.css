@@ -46,13 +46,6 @@
 .set .cell.noic.wide { grid-template-columns: auto minmax(0, 1fr); }
 .set .cell.wide .val { justify-self: stretch; }
 .set .cell.wide .val input[type=text] { max-width: none; }
-/* sharing suggestions (settings-sharing.js): under the field, as wide as it */
-.set .share-find { position: relative; }
-.set .share-sugg { position: absolute; right: 0; top: calc(100% + 6px); min-width: 100%; max-width: 360px; z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); padding: 4px; text-align: left; }
-.set .share-sugg button { all: unset; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; color: var(--fg); line-height: 1.3; }
-.set .share-sugg button small { display: block; font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.set .share-sugg button:hover, .set .share-sugg button[aria-selected=true] { background: var(--tile); }
-.set .share-sugg button:focus-visible { outline: revert; }
 .set .cell.link { cursor: pointer; } .set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
 .set .cell .chev { color: var(--fg-3); font-size: 20px; line-height: 1; margin-left: 2px; }
 .set .cell.btnrow { grid-template-columns: 1fr; color: var(--accent); cursor: pointer; }
@@ -176,9 +169,6 @@
    `fixed`, with the coordinates set when it opens (remote.js): the settings group around the field
    is `overflow: hidden` for its rounded corners, which clipped an absolutely positioned list away
    entirely (measured: open, 190x83, and nothing of it on screen). */
-.set .rm-sug { position: fixed; min-width: 190px; max-width: 320px; padding: 6px; z-index: 30; text-align: left; } /* the value cell is right-aligned; a list is read from the left */
-.set .rm-sug .r { display: block; padding: 7px 10px; border-radius: 8px; font-size: 14px; color: var(--fg); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.set .rm-sug .r:hover, .set .rm-sug .r[aria-selected=true] { background: var(--tile); }
 .set .cell .val .rm-in input[type=text] { min-width: 190px; max-width: 280px; }
 /* the phone keeps its narrow fields: 190 px plus the button wrapped the row to 56 px (measured at
    390 px wide). This override has to sit AFTER the rule above — a media query adds no specificity. */

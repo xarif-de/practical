@@ -435,12 +435,12 @@ async fn the_address_field_offers_the_servers_used_before() {
     assert_eq!(html.matches("id=\"rm-servers\"").count(), 1, "one island for every address field");
     assert!(html.contains("https://a.example.org"), "the island does not carry the addresses");
     /* The list is ours, not the browser's: a <datalist> wears a dropdown triangle in Chromium that
-       no other field here has. So the field is a combobox over a `.rm-sug` listbox — one per form,
+       no other field here has. So the field is a combobox over a `.rm-sug` listbox (practical.combo) — one per form,
        and two forms here, because the fixture configures no key and the two SYNC pages therefore do
        not exist (`the_ways_in_are_nested_under_import_and_sync`). */
     assert!(!html.contains("<datalist"), "no browser dropdown anywhere");
     assert!(!html.contains("list=\"rm-servers\""), "and no field pointing at one");
-    assert_eq!(html.matches("class=\"rm-sug\"").count(), 2, "every address field needs its own listbox");
+    assert_eq!(html.matches("class=\"rm-sug combo\"").count(), 2, "every address field needs its own listbox");
     // the search field in the frame is a combobox too, so this counts only the address ones
     assert_eq!(html.matches("class=\"rm-origin\" required inputmode=\"url\"").count(), 2);
     for row in html.split("class=\"rm-origin\"").skip(1) {

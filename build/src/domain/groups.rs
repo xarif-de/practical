@@ -106,19 +106,6 @@ pub async fn list_for_user(state: &AppState, user: &Principal) -> AppResult<Vec<
     Ok(out)
 }
 
-/// Individuals that can be added to a group (everyone with a RustiCal account).
-pub async fn individuals(state: &AppState) -> AppResult<Vec<Principal>> {
-    let mut all: Vec<Principal> = state
-        .principals()
-        .get_principals()
-        .await?
-        .into_iter()
-        .filter(|p| p.principal_type == PrincipalType::Individual)
-        .collect();
-    all.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(all)
-}
-
 pub async fn ensure_member(state: &AppState, user: &Principal, gid: &str) -> AppResult<Principal> {
     if !is_group_id(gid) {
         return Err(AppError::NotFound);
@@ -163,8 +150,12 @@ pub async fn create(state: &AppState, user: &Principal, name: &str) -> AppResult
     Ok(id)
 }
 
+/// Adds `member` (an id, or an e-mail address as sharing takes one: `Collections::resolve_sharee`) to the group.
+/// The settings field suggests only who lets others find them; nobody else is listed for the picking.
 pub async fn add_member(state: &AppState, user: &Principal, gid: &str, member: &str) -> AppResult<()> {
     ensure_member(state, user, gid).await?;
+    let member = state.collections().resolve_sharee(member).await?;
+    let member = member.as_str();
     let target = state.principals().get_principal(member).await?.ok_or(AppError::NotFound)?;
     if target.principal_type != PrincipalType::Individual {
         return Err(AppError::bad("err-group-individuals"));

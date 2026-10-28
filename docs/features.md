@@ -359,7 +359,7 @@ The start page has four sections:
 
 A **group** is a set of people who share calendars and address books, for example a family. A group belongs to its
 members. Every member may add or remove members, create the group's calendars and address books, and delete the
-group.
+group. A new member is entered by account name or e-mail address, with the same suggestions as sharing.
 
 <img src="images/32-groups.webp" alt="A group and its members: every member may add or remove members and manage the group's calendars." width="100%">
 
@@ -443,7 +443,8 @@ never finished leaves nothing behind. To lock out a lost device, disconnect it t
 You can share a calendar or an address book with another person or with a group, to **read** or to **write**. Open
 the calendar or address book in the settings; its **Sharing** block has **Share with**. Enter an account name, a group (`group.<name>`) or
 the e-mail address the person signs in with. From two characters on, PractiCal suggests people by name, account name
-or address, but only by what each of them lets others find them by. It shows whom it found, and you confirm. A group's
+or address, but only by what each of them lets others find them by. It shows whom it found, and you confirm. Someone
+found by an address who keeps their name and account name out of the suggestions is shown by that address only. A group's
 members are shown only to members of that group. The access is a switch: the eye reads, the pencil writes. The same
 block lists who has it, one line each, with that switch and a trash button that ends the share after asking.
 

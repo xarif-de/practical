@@ -33,7 +33,7 @@ async fn group_rules() {
     assert!(matches!(create(&app.state, &alice, "…").await, Err(AppError::BadRequest(_))));
     let alice = app.principal("alice").await;
     assert!(matches!(add_member(&app.state, &carol, &gid, "carol").await, Err(AppError::Forbidden)));
-    assert!(matches!(add_member(&app.state, &alice, &gid, "nobody").await, Err(AppError::NotFound)));
+    assert!(matches!(add_member(&app.state, &alice, &gid, "nobody").await, Err(AppError::BadRequest(m)) if m.key == "err-share-unknown"), "nobody by that id or address");
     add_member(&app.state, &alice, &gid, "bob").await.unwrap();
     add_member(&app.state, &alice, &gid, "bob").await.unwrap();
     assert!(matches!(ensure_member(&app.state, &alice, "alice").await, Err(AppError::NotFound)), "not a group id");
@@ -41,7 +41,6 @@ async fn group_rules() {
     app.calendar(&gid, "Läufe", "#000000", &["VEVENT"]).await;
     let list = list_for_user(&app.state, &alice).await.unwrap();
     assert_eq!(list.iter().map(|g| (g.id.as_str(), g.members.len(), g.n_calendars, g.n_addressbooks)).collect::<Vec<_>>(), [("group.lauf-treff", 1, 0, 0), ("group.lauftreff", 2, 1, 0)]);
-    assert_eq!(individuals(&app.state).await.unwrap().iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["alice", "bob", "carol"]);
     // trash: wrong name, then the id works too; collections go to the trash with it
     assert!(matches!(trash(&app.state, &alice, &gid, Some("falsch")).await, Err(AppError::BadRequest(_))));
     trash(&app.state, &alice, &gid, Some(&gid)).await.unwrap();

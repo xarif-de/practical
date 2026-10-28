@@ -162,7 +162,7 @@ test('groups: create, add and remove a member, member leaves, delete â†’ trash â
   await Promise.all([page.waitForURL(/#groups$/), page.locator('#groups form[action="/settings/groups"] button[type=submit]').click()]);
   const add = page.locator(`form[action="/settings/groups/${gid}/members"]`);
   await expect(add).toBeVisible();
-  await add.locator('select[name=member]').selectOption('bob');
+  await add.locator('input[name=member]').fill('bob');
   await Promise.all([page.waitForURL(/#groups$/), add.locator('button[type=submit]').click()]);
   const rm = page.locator(`form[action="/settings/groups/${gid}/members/bob/remove"] button`);
   await expect(rm).toBeVisible();
@@ -171,7 +171,7 @@ test('groups: create, add and remove a member, member leaves, delete â†’ trash â
   await page.waitForURL(/#groups$/);
   await expect(page.locator(`form[action="/settings/groups/${gid}/members/bob/remove"]`)).toHaveCount(0);
   // bob again, and bob leaves by himself
-  await page.locator(`form[action="/settings/groups/${gid}/members"] select[name=member]`).selectOption('bob');
+  await page.locator(`form[action="/settings/groups/${gid}/members"] input[name=member]`).fill('bob');
   await Promise.all([page.waitForURL(/#groups$/), page.locator(`form[action="/settings/groups/${gid}/members"] button[type=submit]`).click()]);
   const bobCtx = await browser.newContext({ baseURL: BASE, locale: 'de-DE' });
   const bob = await bobCtx.newPage();

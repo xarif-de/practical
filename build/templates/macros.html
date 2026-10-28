@@ -179,7 +179,7 @@
   {%- endfor %}
   <form class="group sp share-add" method="post" action="/settings/{{ kinds }}/{{ c.principal }}/{{ c.id }}/share" data-t-confirm="{{ ctx.t("js-share-confirm") }}" data-t-group="{{ ctx.t("share-group-note") }}" data-t-members="{{ ctx.t("js-share-members") }}">{{ csrf() }}
     {#- suggestions from two typed characters on (settings-sharing.js, share_forms::sharee_suggest) -#}
-    <div class="cell noic wide"><span>{{ ctx.t("share-with") }}</span><span class="val share-find"><input type="text" name="sharee" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}" aria-label="{{ ctx.t("share-with") }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}"><span class="share-sugg" id="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}" role="listbox" aria-label="{{ ctx.t("share-sugg") }}" hidden></span></span></div>
+    <div class="cell noic wide"><span>{{ ctx.t("share-with") }}</span><span class="val"><input type="text" name="sharee" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}" aria-label="{{ ctx.t("share-with") }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}"><span class="combo" id="sugg-{{ pre }}-{{ c.principal }}-{{ c.id }}" role="listbox" aria-label="{{ ctx.t("share-sugg") }}" hidden></span></span></div>
     <div class="cell noic"><span>{{ ctx.t("share-access") }}</span>{{ access_seg(ctx.t("share-access"), false) }}</div>
     <button class="cell btnrow" type="submit">{{ ico("users") }}<span>{{ ctx.t("share-go") }}</span></button>
   </form>
@@ -226,7 +226,7 @@
     <div class="group">
       {#- address and sign-in on one row: the field is the question and the arrow is the answer, so
           splitting them over two rows made the button look like a second, separate step -#}
-      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ ico("forward") }}</button></span></span></label>
+      <label class="cell noic"><span>{{ ctx.t("rm-server") }}</span><span class="val"><span class="rm-in"><input type="text" class="rm-origin" required inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("rm-server-ph") }}" aria-label="{{ ctx.t("rm-server") }}" role="combobox" aria-expanded="false" aria-autocomplete="list"><div class="rm-sug combo" role="listbox" aria-label="{{ ctx.t("rm-server") }}" hidden></div><button type="button" class="btn icon-btn rm-go" title="{{ ctx.t("rm-connect") }}" aria-label="{{ ctx.t("rm-connect") }}">{{ ico("forward") }}</button></span></span></label>
     </div>
     <p class="foot">{{ ctx.t("rm-connect-hint") }}</p>
     <p class="foot">{{ ctx.t("rm-scope-hint") }}</p>
