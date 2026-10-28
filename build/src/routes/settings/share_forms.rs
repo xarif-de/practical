@@ -176,7 +176,7 @@ async fn current_sharee(state: &SharedState, a: &crate::state::Authorized, kinds
     } else {
         state.collections().addressbook_shares(a).await?.into_iter().map(|s| s.sharee).collect()
     };
-    crate::domain::groups::resolve_person(secret, &people, input).ok_or_else(|| AppError::bad("err-share-gone"))
+    crate::domain::groups::resolve_person(&state.person_secret().await?, secret, &people, input).ok_or_else(|| AppError::bad("err-share-gone"))
 }
 
 #[derive(Deserialize)]

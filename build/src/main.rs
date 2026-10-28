@@ -408,6 +408,7 @@ async fn serve() -> Result<(), String> {
         db,
         config,
     }));
+    state.person_secret().await.map_err(|e| e.to_string())?; // made or read once, before the first page
     let app = build_router(&state)?;
     tasks::spawn_change_poller(state.clone());
     tasks::spawn_trash_purger(state.clone());

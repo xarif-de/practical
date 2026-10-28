@@ -503,6 +503,19 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     assert!(no_id(&page) && page.contains("erin@example.org") && !page.contains("Erin Schreiber"), "bob's settings, unlisted by id");
     let key = key_after(&page, &format!("id=\"cal-bob-{cal}\""));
     assert!(key.len() == 33 && key[1..].bytes().all(|b| b.is_ascii_hexdigit()), "{key}");
+    // nothing on the page reproduces it: an HMAC under the page's CSRF token (what the viewer holds) is another value;
+    // the server's own secret makes it
+    let csrf = bob.get("/settings").await.meta_csrf();
+    let hex = |m: [u8; 32]| format!("~{}", m[..16].iter().map(|b| format!("{b:02x}")).collect::<String>());
+    for guess in [hex(crate::domain::groups::hmac_sha256(csrf.as_bytes(), b"erin")), hex(crate::domain::groups::hmac_sha256(csrf.as_bytes(), format!("{csrf}\u{1f}erin").as_bytes()))] {
+        assert_ne!(guess, key, "computable from the page");
+    }
+    let server = app.state.person_secret().await.unwrap();
+    assert_eq!(crate::domain::groups::person_key(&server, &csrf, "erin"), key);
+    // a restart reads the same secret back from the database (db::secret: made once), so the page's keys stay valid
+    let again = crate::db::secret(&app.state.db, "person-key").await.unwrap();
+    assert_eq!(again, server);
+    assert_eq!(crate::domain::groups::person_key(&again, &csrf, "erin"), key);
     // unlisted by both: her name, not the address
     erin.post_form("/settings/privacy", &[]).await;
     let page = bob.get("/settings").await.ok().body.clone();
@@ -518,7 +531,7 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     bob.post_form(&format!("/settings/calendars/bob/{zweit}/share"), &[("sharee", "dave"), ("access", "read")]).await;
     let r = bob.post_form_json(&format!("/settings/calendars/bob/{zweit}/unshare"), &[("sharee", &key)]).await;
     assert!(r.json()["ok"] == false && r.body.contains("nicht mehr"), "{} {}", r.status, r.body);
-    let other = crate::domain::groups::person_key("another session", "erin");
+    let other = crate::domain::groups::person_key(&app.state.person_secret().await.unwrap(), "another session", "erin");
     let r = bob.post_form_json(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", &other)]).await;
     assert!(r.json()["ok"] == false, "{} {}", r.status, r.body);
     assert_eq!(app.state.collections().calendar_shares(&a).await.unwrap().len(), 1);

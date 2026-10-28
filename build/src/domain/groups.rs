@@ -46,8 +46,8 @@ pub struct Shown {
     pub id: Option<String>,
 }
 
-/// [`Shown`] of `id`; `unlisted` = `prefs::unlisted` (read once per page), `secret` the page's session secret
-/// ([`person_key`]), `someone` the neutral word in the page's language
+/// [`Shown`] of `id`; `unlisted` = `prefs::unlisted` (read once per page), `secret` the session's CSRF token (the
+/// session part of [`person_key`]), `someone` the neutral word in the page's language
 pub async fn shown(state: &AppState, unlisted: &std::collections::HashMap<String, (bool, bool)>, secret: &str, someone: &str, id: &str) -> AppResult<Shown> {
     let (no_id, no_email) = unlisted.get(id).copied().unwrap_or_default();
     let name = state.principals().get_principal(id).await?.and_then(|p| p.displayname).filter(|n| !n.trim().is_empty());
@@ -55,7 +55,7 @@ pub async fn shown(state: &AppState, unlisted: &std::collections::HashMap<String
         return Ok(Shown { key: id.to_string(), label: name.unwrap_or_else(|| id.to_string()), id: Some(id.to_string()) });
     }
     let address = if no_email { None } else { state.collections().principal_email(id).await? };
-    Ok(Shown { key: person_key(secret, id), label: address.or(name).unwrap_or_else(|| someone.to_string()), id: None })
+    Ok(Shown { key: person_key(&state.person_secret().await?, secret, id), label: address.or(name).unwrap_or_else(|| someone.to_string()), id: None })
 }
 
 /// HMAC-SHA256 (RFC 2104) of `msg` under `key` (sha2 only: no further crate for one MAC; test `hmac_rfc4231`)
@@ -68,23 +68,25 @@ pub fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
     Sha256::new().chain_update(pad(0x5c)).chain_update(inner).finalize().into()
 }
 
-/// The opaque form key of a person: `~` + 128 bits of HMAC-SHA256 of the id under `secret`, the session's CSRF token
-/// (`PageCtx::csrf`: server-side, per session, already in every form). Hex: safe in a path segment. Another session's
-/// page, or a guess, names nobody; an address moving to another principal changes nothing.
-pub fn person_key(secret: &str, id: &str) -> String {
-    let mac = hmac_sha256(secret.as_bytes(), id.as_bytes());
+/// The opaque form key of a person: `~` + 128 bits of HMAC-SHA256 under `server` (`AppState::person_secret`, never
+/// sent anywhere: the viewer cannot compute a key for a guessed id) of `session` (the session's CSRF token: keys of one
+/// person differ between users and sessions) 0x1f `id`. Hex: safe in a path segment. Another session's page names
+/// nobody; an address moving to another principal changes nothing.
+pub fn person_key(server: &[u8], session: &str, id: &str) -> String {
+    let msg = [session.as_bytes(), &[0x1f], id.as_bytes()].concat();
+    let mac = hmac_sha256(server, &msg);
     format!("~{}", mac[..16].iter().map(|b| format!("{b:02x}")).collect::<String>())
 }
 
 /// The one of `people` (a collection's current sharees, a group's current members) that `input` names: its id, or
 /// its [`person_key`]; `None` for anyone else, so a key cannot reach beyond that list
-pub fn resolve_person<'a>(secret: &str, people: impl IntoIterator<Item = &'a String>, input: &str) -> Option<String> {
+pub fn resolve_person<'a>(server: &[u8], session: &str, people: impl IntoIterator<Item = &'a String>, input: &str) -> Option<String> {
     let input = input.trim();
     let people: Vec<&String> = people.into_iter().collect();
     if let Some(p) = people.iter().find(|p| p.as_str() == input) {
         return Some((*p).clone());
     }
-    input.starts_with('~').then(|| people.into_iter().find(|p| person_key(secret, p) == input).cloned()).flatten()
+    input.starts_with('~').then(|| people.into_iter().find(|p| person_key(server, session, p) == input).cloned()).flatten()
 }
 
 /// The members of `g` as the settings list them ([`shown`]), the user marked
@@ -241,7 +243,7 @@ pub async fn add_member(state: &AppState, user: &Principal, gid: &str, member: &
 pub async fn remove_member_keyed(state: &AppState, user: &Principal, gid: &str, input: &str, secret: &str) -> AppResult<RemoveOutcome> {
     ensure_member(state, user, gid).await?;
     let members = state.principals().list_members(gid).await?;
-    let member = resolve_person(secret, &members, input).ok_or(AppError::NotFound)?;
+    let member = resolve_person(&state.person_secret().await?, secret, &members, input).ok_or(AppError::NotFound)?;
     remove_member(state, user, gid, &member).await
 }
 

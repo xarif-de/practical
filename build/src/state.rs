@@ -70,6 +70,8 @@ pub struct AppState {
     pub guards: Guards,
     // which own calendars are shared, and the calendar's levels: display hints only ([`Collections::share_hint`])
     share_hints: ShareHints,
+    // the person keys' server secret ([`AppState::person_secret`])
+    person_secret: tokio::sync::OnceCell<[u8; 32]>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -182,9 +184,17 @@ impl AppState {
             started_at: p.started_at,
             guards: Default::default(),
             share_hints: Default::default(),
+            person_secret: Default::default(),
             db: p.db,
             config: p.config,
         }
+    }
+
+    /// The server's secret of the person keys (`groups::person_key`): 32 random bytes made once, kept in
+    /// `practical_secrets` (`db::secret`) and never sent anywhere, so the same after a restart and in every pod.
+    /// Read at start (`serve`) and kept.
+    pub async fn person_secret(&self) -> AppResult<[u8; 32]> {
+        self.person_secret.get_or_try_init(|| crate::db::secret(&self.db, "person-key")).await.copied().map_err(AppError::Internal)
     }
 
     /// RustiCal's principal store: principals, memberships, app tokens (nothing of collections).
