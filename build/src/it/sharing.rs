@@ -478,6 +478,17 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     assert_eq!(r.status, StatusCode::SEE_OTHER, "{}", r.body);
     let erin_p = app.principal("erin").await;
     assert!(crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap().iter().any(|c| c.owner == "bob" && c.auth.id() == cal));
+    // the page shows the share by the address too, nowhere her id or her name (the address itself starts with "erin")
+    // her id as a word ("lettering" holds "erin" too), and her name
+    let hides_her = |page: &str| { let rest = page.replace("erin@example.org", ""); !rest.split(|c: char| !c.is_alphanumeric()).any(|w| w == "erin") && !rest.contains("Erin Schreiber") };
+    let page = bob.get("/settings").await.ok().body.clone();
+    assert!(page.contains("value=\"erin@example.org\"") && hides_her(&page), "bob's settings");
+    // its line's forms work with that key: the access switch, then the end of the share
+    bob.post_form(&format!("/settings/calendars/bob/{cal}/access"), &[("sharee", "erin@example.org"), ("access", "write")]).await;
+    let a = crate::domain::collections::ensure_calendar(&app.state, &app.principal("bob").await, "bob", &cal, crate::state::Need::Own).await.unwrap();
+    assert_eq!(app.state.collections().calendar_shares(&a).await.unwrap().iter().map(|s| (s.sharee.clone(), s.access)).collect::<Vec<_>>(), [("erin".to_string(), crate::state::Access::Write)]);
+    bob.post_form(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", "erin@example.org")]).await;
+    assert!(app.state.collections().calendar_shares(&a).await.unwrap().is_empty());
     // a group's member field lists nobody; a member is added by id or by address
     let mut alice = app.login("alice").await;
     let page = alice.get("/settings").await.ok().body.clone();
@@ -488,10 +499,17 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     let mut members = app.state.principals().list_members("group.familie").await.unwrap();
     members.sort();
     assert_eq!(members, ["alice", "bob", "carol", "erin"]);
+    // the members' pages list her by the address, and its remove form works with it
+    for who in ["alice", "bob"] {
+        let page = app.login(who).await.get("/settings").await.ok().body.clone();
+        assert!(page.contains("/members/erin@example.org/remove") && hides_her(&page), "{who}'s settings");
+    }
     // a group is no member, nor is nobody
     alice.post_form("/settings/groups/group.familie/members", &[("member", "group.team")]).await;
     alice.post_form("/settings/groups/group.familie/members", &[("member", "niemand@example.org")]).await;
     assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 4);
+    alice.post_form("/settings/groups/group.familie/members/erin@example.org/remove", &[]).await;
+    assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 3);
 }
 
 /// The stored card as its owner's store holds it

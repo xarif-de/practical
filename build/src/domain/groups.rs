@@ -25,8 +25,33 @@ pub struct GroupInfo {
     pub id: String,
     pub displayname: String,
     pub members: Vec<String>,
+    /// the members as the settings list them ([`shown`]), the user among them marked
+    #[serde(skip)]
+    pub shown: Vec<(Shown, bool)>,
     pub n_calendars: usize,
     pub n_addressbooks: usize,
+}
+
+/// A person as others see them in a list (a share line, a group's members): `key` is what the page's forms send
+/// back (the server resolves it, `Collections::resolve_sharee`), `label` what is shown. Someone who keeps their
+/// name and id out of the suggestions (`prefs::unlisted`) is shown and keyed by the address others found them
+/// by, so neither their id nor their name reaches the page; without a known address their id stays (whoever
+/// shared with them or added them typed it).
+#[derive(Debug, Clone)]
+pub struct Shown {
+    pub key: String,
+    pub label: String,
+}
+
+/// [`Shown`] of `id`; `unlisted` = `prefs::unlisted` (read once per page)
+pub async fn shown(state: &AppState, unlisted: &std::collections::HashMap<String, (bool, bool)>, id: &str) -> AppResult<Shown> {
+    if unlisted.get(id).is_some_and(|(no_id, _)| *no_id)
+        && let Some(e) = state.collections().principal_email(id).await?
+    {
+        return Ok(Shown { key: e.clone(), label: e });
+    }
+    let label = state.principals().get_principal(id).await?.and_then(|p| p.displayname).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| id.to_string());
+    Ok(Shown { key: id.to_string(), label })
 }
 
 impl GroupInfo {
@@ -89,15 +114,22 @@ pub fn is_group_id(id: &str) -> bool {
 
 pub async fn list_for_user(state: &AppState, user: &Principal) -> AppResult<Vec<GroupInfo>> {
     let mut out = vec![];
+    let unlisted = crate::domain::prefs::unlisted(&state.db).await?;
     for gid in user.memberships_without_self() {
         let Some(p) = state.principals().get_principal(gid).await? else { continue };
         if p.principal_type != PrincipalType::Group {
             continue;
         }
+        let members = state.principals().list_members(gid).await?;
+        let mut rows = vec![];
+        for m in &members {
+            rows.push((shown(state, &unlisted, m).await?, m == &user.id));
+        }
         out.push(GroupInfo {
             id: p.id.clone(),
             displayname: p.displayname.clone().unwrap_or_else(|| p.id.clone()),
-            members: state.principals().list_members(gid).await?,
+            members,
+            shown: rows,
             n_calendars: state.collections().group_calendar_count(gid).await?,
             n_addressbooks: state.collections().own_counts(gid).await.1,
         });
@@ -167,8 +199,11 @@ pub async fn add_member(state: &AppState, user: &Principal, gid: &str, member: &
     Ok(())
 }
 
+/// `member`: an id or the address it is shown by ([`Shown::key`])
 pub async fn remove_member(state: &AppState, user: &Principal, gid: &str, member: &str) -> AppResult<RemoveOutcome> {
     ensure_member(state, user, gid).await?;
+    let member = &state.collections().resolve_sharee(member).await.map_err(|_| AppError::NotFound)?;
+    let member = member.as_str();
     let members = state.principals().list_members(gid).await?;
     if !members.iter().any(|m| m == member) {
         return Err(AppError::NotFound);

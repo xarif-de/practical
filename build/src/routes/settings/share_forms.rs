@@ -10,6 +10,7 @@ use crate::state::{Access, Need, Policy};
 /// The shares of the user's own collections as the settings page lists them, by `"cal:<p>/<id>"` /
 /// `"ab:<p>/<id>"`.
 pub struct ShareRow {
+    /// what the line's forms send back: the id, or the address of someone unlisted by id (`groups::Shown`)
     pub sharee: String,
     pub label: String,
     pub is_group: bool,
@@ -45,12 +46,28 @@ pub(super) async fn share_rows(state: &SharedState, user: &Principal, cals: &[Ca
     Ok(out)
 }
 
+/// A share line: a person as `groups::shown` shows them; a group by its name, its members (by their keys) only
+/// for its members
 async fn row(state: &SharedState, user: &Principal, sharee: String, access: Access) -> AppResult<ShareRow> {
     use rustical_store::auth::{AuthenticationProvider, PrincipalType};
     let p = state.principals().get_principal(&sharee).await?;
     let is_group = p.as_ref().is_some_and(|p| p.principal_type == PrincipalType::Group);
-    let members = if is_group && user.is_principal(&sharee) { Some(state.principals().list_members(&sharee).await?) } else { None };
-    Ok(ShareRow { label: p.and_then(|p| p.displayname).unwrap_or_else(|| sharee.clone()), sharee, is_group, members, write: access == Access::Write })
+    let unlisted = crate::domain::prefs::unlisted(&state.db).await?;
+    let members = if is_group && user.is_principal(&sharee) {
+        let mut v = vec![];
+        for m in state.principals().list_members(&sharee).await? {
+            v.push(crate::domain::groups::shown(state, &unlisted, &m).await?.key);
+        }
+        Some(v)
+    } else {
+        None
+    };
+    let write = access == Access::Write;
+    if is_group {
+        return Ok(ShareRow { label: p.and_then(|p| p.displayname).unwrap_or_else(|| sharee.clone()), sharee, is_group, members, write });
+    }
+    let s = crate::domain::groups::shown(state, &unlisted, &sharee).await?;
+    Ok(ShareRow { sharee: s.key, label: s.label, is_group, members, write })
 }
 
 /// A calendar's visibility levels (settings, its sharing block)
@@ -119,10 +136,12 @@ pub(super) async fn access_addressbook(state: State<SharedState>, user: Principa
 async fn access(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, kinds: &str, owner: String, id: String, Form(f): Form<ShareForm>) -> Response {
     form(&state, &session, &ctx, &f.csrf, &format!("{}-{owner}-{id}", if kinds == "calendars" { "cal" } else { "ab" }), async {
         let a = ensure(&state, &user, kinds, &owner, &id).await?;
+        // the line's key: an id, or the address of someone unlisted by id (`row`)
+        let sharee = state.collections().resolve_sharee(&f.sharee).await?;
         if kinds == "calendars" {
-            state.collections().set_calendar_share_access(&a, f.sharee.trim(), access_of(&f.access)).await?;
+            state.collections().set_calendar_share_access(&a, &sharee, access_of(&f.access)).await?;
         } else {
-            state.collections().set_addressbook_share_access(&a, f.sharee.trim(), access_of(&f.access)).await?;
+            state.collections().set_addressbook_share_access(&a, &sharee, access_of(&f.access)).await?;
         }
         Ok(Some("flash-shared"))
     })
@@ -157,7 +176,8 @@ pub(super) struct UnshareForm {
 async fn unshare(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, kinds: &str, owner: String, id: String, Form(f): Form<UnshareForm>) -> Response {
     form(&state, &session, &ctx, &f.csrf, &format!("{}-{owner}-{id}", if kinds == "calendars" { "cal" } else { "ab" }), async {
         let a = ensure(&state, &user, kinds, &owner, &id).await?;
-        let r = if kinds == "calendars" { state.collections().unshare_calendar(&a, &f.sharee).await } else { state.collections().unshare_addressbook(&a, &f.sharee).await };
+        let sharee = state.collections().resolve_sharee(&f.sharee).await?; // an id, or a line's address (`row`)
+        let r = if kinds == "calendars" { state.collections().unshare_calendar(&a, &sharee).await } else { state.collections().unshare_addressbook(&a, &sharee).await };
         // already gone (the sharee removed it meanwhile) is what was wanted
         match r {
             Ok(()) | Err(AppError::Store(rustical_store::Error::NotFound)) => Ok(Some("flash-unshared")),
@@ -212,8 +232,10 @@ pub(super) async fn sharee(State(state): State<SharedState>, user: Principal, cr
     if by_address && crate::domain::prefs::unlisted(&state.db).await?.get(&id).is_some_and(|(no_id, _)| *no_id) {
         return Ok(axum::Json(Sharee { id: None, name: input.to_string(), group: false, members: None }));
     }
-    let r = row(&state, &user, id, Access::Read).await?;
-    Ok(axum::Json(Sharee { id: Some(r.sharee), name: r.label, group: r.is_group, members: r.members }))
+    let r = row(&state, &user, id.clone(), Access::Read).await?;
+    // typed as an id: named by it and the name, whatever the page's line will show (`row`)
+    let name = if r.is_group { r.label } else { state.principals().get_principal(&id).await?.and_then(|p| p.displayname).unwrap_or_else(|| id.clone()) };
+    Ok(axum::Json(Sharee { id: Some(id), name, group: r.is_group, members: r.members }))
 }
 
 /// What `/api/sharee/suggest` offers per principal: `value` goes into the field (the id, or the address of
