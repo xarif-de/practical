@@ -68,14 +68,13 @@ pub struct AppState {
     pub started_at: chrono::DateTime<chrono::Utc>,
     /// the HTTP layer's process-wide state (shutdown signal, write locks, login throttle)
     pub guards: Guards,
-    // which own collections are shared, and the owner's levels: display hints only ([`Collections::share_hint`])
+    // which own calendars are shared, and the calendar's levels: display hints only ([`Collections::share_hint`])
     share_hints: ShareHints,
 }
 
 pub type SharedState = Arc<AppState>;
 
-/// What the lists show of an owner's shared collections: whether an own collection is shared, and a shared
-/// calendar's levels (the editor's hint). Display only — what anyone may read or write always comes
+/// What the lists show of an owner's shared calendars: their levels (the editor's hint, `CalInfo::vis`). Display only — what anyone may read or write always comes
 /// from `ensure`/the listings, never from here. Kept [`SHARE_HINT_TTL`] (shares and levels changed through
 /// RustiCal show by then), cleared by every change made through [`Collections`].
 #[derive(Default)]
@@ -83,10 +82,9 @@ struct ShareHints(std::sync::Mutex<std::collections::HashMap<String, (std::time:
 
 const SHARE_HINT_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// One owner's [`ShareHints`] entry: its shared calendars with their levels, its shared address books
+/// One owner's [`ShareHints`] entry: its shared calendars with their levels
 pub struct ShareHint {
     pub calendars: std::collections::HashMap<String, Policy>,
-    pub addressbooks: std::collections::HashSet<String>,
 }
 
 impl ShareHints {
@@ -858,7 +856,7 @@ impl Collections<'_> {
         self.0.shares.set_visibility(a.owner(), a.id(), policy).await.map_err(write_error)
     }
 
-    /// [`ShareHints`] of `owner`: its live own collections that are shared, a calendar with its levels
+    /// [`ShareHints`] of `owner`: its live own calendars that are shared, each with its levels
     pub async fn share_hint(&self, owner: &str) -> AppResult<Arc<ShareHint>> {
         let s = self.0;
         if let Some((at, h)) = s.share_hints.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(owner)
@@ -873,13 +871,7 @@ impl Collections<'_> {
                 calendars.insert(c.id, policy);
             }
         }
-        let mut addressbooks = std::collections::HashSet::new();
-        for a in s.addressbooks.get_addressbooks(owner).await? {
-            if !s.shares.list_addressbook_shares(owner, &a.id).await?.is_empty() {
-                addressbooks.insert(a.id);
-            }
-        }
-        let h = Arc::new(ShareHint { calendars, addressbooks });
+        let h = Arc::new(ShareHint { calendars });
         s.share_hints.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(owner.to_string(), (std::time::Instant::now(), h.clone()));
         Ok(h)
     }

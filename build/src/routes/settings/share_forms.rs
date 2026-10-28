@@ -1,5 +1,5 @@
 //! Sharing on a collection's settings page: suggestions while typing (`GET /api/sharee/suggest`), share
-//! (after `GET /api/sharee` named whom), change a share's access, end one or several shares; a calendar's
+//! (after `GET /api/sharee` named whom), change a share's access, end a share; a calendar's
 //! visibility levels (what sharees see of private and confidential events). All for the collection's managers
 //! (`state::Need::Own`); a sharee removes a share with the collection's own delete form
 //! (`collections::delete_calendar`). Settings `#privacy`: whether the user is among others' suggestions.
@@ -21,7 +21,7 @@ pub struct ShareRow {
 pub(super) async fn share_rows(state: &SharedState, user: &Principal, cals: &[CalInfo], abs: &[AbInfo]) -> AppResult<HashMap<String, Vec<ShareRow>>> {
     let mut out = HashMap::new();
     let colls = state.collections();
-    // the settings list the shares as they are now, not the lists' hints (`CalInfo::has_shares`, up to 30 s old)
+    // the settings list the shares as they are now, not the lists' hints (`state::ShareHints`, up to 30 s old)
     for c in cals.iter().filter(|c| c.shareable()) {
         let shares = colls.calendar_shares(&c.auth).await?;
         let mut rows = vec![];
@@ -97,12 +97,12 @@ pub(super) async fn share_addressbook(state: State<SharedState>, user: Principal
     share(state, user, session, ctx, "addressbooks", owner, id, f).await
 }
 
-pub(super) async fn unshare_calendar(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, body: String) -> Response {
-    unshare(state, user, session, ctx, "calendars", owner, id, body).await
+pub(super) async fn unshare_calendar(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, f: Form<UnshareForm>) -> Response {
+    unshare(state, user, session, ctx, "calendars", owner, id, f).await
 }
 
-pub(super) async fn unshare_addressbook(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, body: String) -> Response {
-    unshare(state, user, session, ctx, "addressbooks", owner, id, body).await
+pub(super) async fn unshare_addressbook(state: State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((owner, id)): Path<(String, String)>, f: Form<UnshareForm>) -> Response {
+    unshare(state, user, session, ctx, "addressbooks", owner, id, f).await
 }
 
 /// Shares with `sharee` (an id, or an e-mail address); sharing again with the same principal changes only the
@@ -122,26 +122,23 @@ async fn share(State(state): State<SharedState>, user: Principal, session: Sessi
     .await
 }
 
-/// Ends the shares of every `sharee` field (one or several at once).
+#[derive(Deserialize)]
+pub(super) struct UnshareForm {
+    pub(super) csrf: String,
+    pub(super) sharee: String,
+}
+
+/// Ends the share with `sharee` (each share line has its own form).
 #[allow(clippy::too_many_arguments)]
-async fn unshare(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, kinds: &str, owner: String, id: String, body: String) -> Response {
-    let fields: Vec<(String, String)> = url::form_urlencoded::parse(body.as_bytes()).into_owned().collect();
-    let csrf = fields.iter().find(|(k, _)| k == "csrf").map(|(_, v)| v.clone()).unwrap_or_default();
-    form(&state, &session, &ctx, &csrf, &format!("{}-{owner}-{id}", if kinds == "calendars" { "cal" } else { "ab" }), async {
+async fn unshare(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, kinds: &str, owner: String, id: String, Form(f): Form<UnshareForm>) -> Response {
+    form(&state, &session, &ctx, &f.csrf, &format!("{}-{owner}-{id}", if kinds == "calendars" { "cal" } else { "ab" }), async {
         let a = ensure(&state, &user, kinds, &owner, &id).await?;
-        let sharees: Vec<&str> = fields.iter().filter(|(k, _)| k == "sharee").map(|(_, v)| v.as_str()).collect();
-        if sharees.is_empty() {
-            return Err(AppError::bad("err-share-none-picked"));
+        let r = if kinds == "calendars" { state.collections().unshare_calendar(&a, &f.sharee).await } else { state.collections().unshare_addressbook(&a, &f.sharee).await };
+        // already gone (the sharee removed it meanwhile) is what was wanted
+        match r {
+            Ok(()) | Err(AppError::Store(rustical_store::Error::NotFound)) => Ok(Some("flash-unshared")),
+            Err(e) => Err(e),
         }
-        for s in sharees {
-            let r = if kinds == "calendars" { state.collections().unshare_calendar(&a, s).await } else { state.collections().unshare_addressbook(&a, s).await };
-            // already gone (the sharee removed it meanwhile) is what was wanted
-            match r {
-                Ok(()) | Err(AppError::Store(rustical_store::Error::NotFound)) => {}
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(Some("flash-unshared"))
     })
     .await
 }

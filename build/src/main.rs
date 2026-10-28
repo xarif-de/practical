@@ -106,21 +106,26 @@
 //!
 //! All caches live in [`state::AppState`] (most in [`state::Caches`]). The rule: a write is never answered
 //! from before it. Keys therefore contain the synctoken, plus zone, day or language where the answer depends
-//! on them. Test: `it/caches.rs` (mutate, then the cached read must equal the uncached answer).
+//! on them. A collection is keyed by [`state::Authorized::cache_key`] = its `(owner, id)`, how this path shows it
+//! (own, or a share with its access and the calendar's levels) and the path `(home, name)`: a sharee's view and
+//! the owner's never share an entry, and a change of the levels is a new key. Test: `it/caches.rs` (mutate, then
+//! the cached read must equal the uncached answer).
 //!
 //! | cache | key | invalidation / bound |
 //! |---|---|---|
-//! | [`domain::events::InstanceCache`] | (principal, cal, synctoken, tz, from, to), the exact window | LRU above 4 MiB; an entry above ¼ of that is not kept |
-//! | [`domain::events::DensityCache`] | (principal, cal) → (synctoken, tz, year) | ≤ 6 per calendar |
-//! | [`domain::events::ObjMetaCache`], [`domain::tasks::TaskCache`], [`domain::contacts::ContactCache`] | (principal, collection) | caught up through the store's `sync_changes` when the synctoken moved |
-//! | [`routes::api::MentionCache`] | user → (tz, today, [(principal, cal, synctoken, has VEVENT)]) | one per user |
-//! | [`routes::more::YearCache`] | (principal, cal, synctoken, tz, year) | LRU above 6 MiB |
+//! | [`domain::events::InstanceCache`] | (cache_key, synctoken, tz, from, to), the exact window | LRU above 4 MiB; an entry above ¼ of that is not kept |
+//! | [`domain::events::DensityCache`] | cache_key → (synctoken, tz, year) | ≤ 6 per calendar |
+//! | [`domain::events::ObjMetaCache`], [`domain::tasks::TaskCache`], [`domain::contacts::ContactCache`] | cache_key | caught up through the store's `sync_changes` when the synctoken moved |
+//! | [`routes::api::MentionCache`] | user → (tz, today, [(cache_key, synctoken, has VEVENT)]) | one per user |
+//! | [`routes::more::YearCache`] | (cache_key, synctoken, tz, year) | LRU above 6 MiB |
 //! | [`routes::history::HistoryCache`] | user → key of everything the document is made of | LRU above 6 MiB |
-//! | [`domain::search::IndexCache`] | user → fingerprint of the synctokens of the user's collections | rebuilt in part on a change; dropped after 30 min idle |
+//! | [`domain::search::IndexCache`] | user → fingerprint of (cache_key, synctoken, name; a calendar's colour) of the user's collections | rebuilt in part on a change; dropped after 30 min idle |
+//! | [`domain::uploader::IndexCache`] | generation of the read-only calendars and uploader devices | every write to them bumps it (PractiCal's own tables only) |
 //! | [`domain::holidays::MemCache`] | (country, subdivision, year, kind-lang) | `cache_put` drops the key; ≤ 512 keys; freshness by `fetched_at` |
 //! | [`sessions::DbStore`] (memory part) | session id | write-through; expired records dropped on writes, at most every 10 min |
 //! | [`domain::geo::Geo`] | request string → places | 7 days; throttle 1 request/s per provider |
 //! | [`domain::history::PlanMemo`] | — | lives for one request |
+//! | `state::ShareHints` | owner → the levels of its shared calendars | **the exception**: no synctoken, 30 s TTL, cleared by every share and level change made through [`state::Collections`]; one made with RustiCal's CLI shows within 30 s. Display only (the editor's hint, `CalInfo::vis`): what anyone reads or writes comes from `ensure` and the listings, never from it |
 //!
 //! # Assets
 //!

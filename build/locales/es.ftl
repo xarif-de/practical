@@ -2063,4 +2063,3 @@ vis-l4 = Todo
 vis-apps-hint = Los eventos confidenciales nunca muestran más que los privados. Los dispositivos que ya cargaron un evento lo conservan hasta su próxima sincronización.
 flash-shared = Compartido.
 flash-unshared = Compartidos terminados.
-err-share-none-picked = Selecciona primero al menos un compartido.

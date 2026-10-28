@@ -2058,4 +2058,3 @@ vis-l4 = Alles
 vis-apps-hint = Vertrauliche Termine zeigen nie mehr als private. Geräte, die einen Termin schon geladen haben, behalten ihn, bis sie neu abgleichen.
 flash-shared = Geteilt.
 flash-unshared = Freigaben beendet.
-err-share-none-picked = Wähle zuerst mindestens eine Freigabe aus.

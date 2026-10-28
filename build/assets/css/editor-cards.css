@@ -28,8 +28,9 @@
 .rrpop .pk { display: grid; grid-template-columns: 26px 1fr; column-gap: 10px; align-items: center; }
 .rrpop .pk .pav { grid-row: 1 / 3; width: 26px; height: 26px; border-radius: 8px; color: #fff; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; }
 .rrpop .pk b { font-weight: 600; font-size: 13.5px; } .rrpop .pk small { color: var(--fg-3); font-size: 11.5px; }
-/* status card: four tiles — icon follows the value, grey = not set, accent = set; a click opens
-   the chooser (rrPop) which writes the hidden select behind the tile */
+/* status tiles (an event's status card: status, transparency, priority and the visibility tile; a task's general
+   card: priority and the visibility tile) — icon follows the value, grey = not set, accent = set; a click opens the
+   chooser (rrPop) which writes the hidden select behind the tile */
 .ed .cardform .stiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-left: 26px; }
 .ed .cardform .stile { all: unset; cursor: pointer; background: var(--bg); border-radius: 12px; padding: 8px 10px; display: grid; grid-template-columns: 18px 1fr; gap: 0 8px; align-items: center; align-content: start; border: 1px solid transparent; box-sizing: border-box; min-width: 0; } /* a tile stretched to its row's taller neighbour (the visibility tile) keeps its content at the top, label over value */
 .ed .cardform .stile:hover, .ed .cardform .stile[aria-expanded=true] { border-color: var(--line); }

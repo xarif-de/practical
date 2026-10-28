@@ -106,7 +106,7 @@
 .ed .cardform input:focus, .ed .cardform select:focus, .ed .cardform textarea:focus { outline: none; background: transparent; }
 .ed .cardform .field.times > div { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; grid-area: v; }
 .ed .cardform .field.times small { color: var(--fg-3); }
-/* the visibility (R11, macros.html ed_vis): one tile among the status tiles (.st-dyn holds the ones status.js
+/* the visibility (macros.html ed_vis): one tile among the status tiles (.st-dyn holds the ones status.js
    draws) — name, value, the steps' symbols over the slider, what sharees see. A step sits over its stop: the
    native thumb is ~16px, its centre travels from 8px to 100% − 8px; the first and last step align to the edges */
 .ed .cardform .stiles .st-dyn { display: contents; }

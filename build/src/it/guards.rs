@@ -139,10 +139,18 @@ fn collections_are_reached_only_through_the_state() {
     assert!(found.is_empty(), "outside state.rs, main.rs and testkit.rs: {found:#?}");
 }
 
-#[test]
-fn no_raw_sql_on_rusticals_object_and_share_tables() {
+#[tokio::test]
+async fn no_raw_sql_on_rusticals_object_and_share_tables() {
     let objects = [format!("calendar{}", "objects"), format!("address{}", "objects"), format!("calendarobject{}", "changelog"), format!("addressobject{}", "changelog")];
-    let shares = [format!("calendar_{}", "shares"), format!("addressbook_{}", "shares"), format!("principal_{}", "visibility"), format!("principal_{}", "emails")];
+    // the tables of the fork's sharing migrations (rustical_store_sqlite migrations/*_sharing, *_calendar_visibility);
+    // listed, since the migrations live in the crate's checkout, not here — each must exist in a migrated store, so a
+    // table the fork renames or drops fails here instead of leaving its successor unguarded
+    let shares = [format!("calendar_{}", "shares"), format!("addressbook_{}", "shares"), format!("calendar_{}", "visibility"), format!("principal_{}", "emails")];
+    let app = crate::testkit::TestApp::new().await;
+    for t in objects.iter().chain(&shares) {
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?").bind(t).fetch_one(&app.state.db).await.unwrap();
+        assert_eq!(n, 1, "no table {t} in RustiCal's store: update this list");
+    }
     // read-only, each binding the collection's owner and id (`Authorized::owner()/id()`): the search index, the
     // history's ingest, the contacts' card reads
     let allowed: BTreeMap<&str, usize> = [("domain/search/index.rs", 1), ("domain/history/ingest.rs", 6), ("domain/contacts/vcard.rs", 3)].into();

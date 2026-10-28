@@ -78,8 +78,6 @@ pub struct CalInfo {
     pub shared_by: Option<String>,
     /// the owning principal
     pub owner: String,
-    /// own and shared with someone
-    pub has_shares: bool,
     /// the calendar's visibility levels (private, confidential) when sharees are involved (own with shares, or a share)
     pub vis: Option<(u8, u8)>,
 }
@@ -101,7 +99,6 @@ pub struct AbInfo {
     pub view: View,
     pub shared_by: Option<String>,
     pub owner: String,
-    pub has_shares: bool,
     /// shared with the user to read: PractiCal writes nothing into it ([`ensure_ab_writable`])
     pub read_only: bool,
 }
@@ -176,7 +173,6 @@ impl CalInfo {
             view: View::of(&auth),
             shared_by: None,
             owner: auth.owner().to_string(),
-            has_shares: false,
             vis: None,
             auth,
         }
@@ -205,7 +201,6 @@ fn cal_info(a: Authorized, c: Calendar, owner: &Owner) -> CalInfo {
         view,
         shared_by: None,
         owner: a.owner().to_string(),
-        has_shares: false,
         vis: None,
         auth: a,
     }
@@ -280,7 +275,6 @@ impl AbInfo {
             view: View::of(&auth),
             shared_by: None,
             owner: auth.owner().to_string(),
-            has_shares: false,
             read_only: !auth.allows(Need::Write),
             auth,
         }
@@ -307,7 +301,6 @@ fn ab_info(auth: Authorized, a: Addressbook, owner: &Owner, color: Option<String
         view: View::of(&auth),
         shared_by: None,
         owner: auth.owner().to_string(),
-        has_shares: false,
         read_only: !auth.allows(Need::Write),
         auth,
     }
@@ -359,7 +352,6 @@ pub async fn calendars_for(state: &AppState, user: &Principal, deleted: bool) ->
             c.managed = managed.contains(&key);
             let h = colls.share_hint(&c.owner).await?;
             if let Some(p) = h.calendars.get(c.auth.id()).filter(|_| !deleted) {
-                c.has_shares = true;
                 c.vis = Some((p.private, p.confidential));
             }
         }
@@ -388,8 +380,6 @@ pub async fn addressbooks_for(state: &AppState, user: &Principal, deleted: bool)
         let mut a = ab_info(auth, a, home, color);
         if copy {
             a.shared_by = Some(label_of(state, &mut labels, &a.owner).await);
-        } else if !deleted {
-            a.has_shares = colls.share_hint(&a.owner).await?.addressbooks.contains(a.auth.id());
         }
         out.push(a);
     }
