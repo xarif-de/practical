@@ -170,8 +170,12 @@ test('a group\'s new member: typed, suggested without those already in it, picke
   const form = page.locator('form.member-add[action="/settings/groups/group.familie/members"]');
   const field = form.locator('input[name=member]'), list = form.locator('.combo');
   await expect(form.locator('select'), 'no list of everyone').toHaveCount(0);
-  await field.pressSequentially('bo');
-  await expect(field).toHaveAttribute('aria-expanded', 'false'); // bob is in it already
+  // the server offers bob (after the 150 ms debounce); the field leaves him out, he is in it already
+  const [resp] = await Promise.all([page.waitForResponse(r => r.url().includes('/api/sharee/suggest?q=bo')), field.pressSequentially('bo')]);
+  expect((await resp.json()).map(x => x.id)).toContain('bob');
+  await settle(page);
+  await expect(field).toHaveAttribute('aria-expanded', 'false');
+  await expect(list.locator('.r')).toHaveCount(0);
   await field.fill('');
   await field.pressSequentially('er');
   await expect(list.locator('.r')).toHaveCount(2);

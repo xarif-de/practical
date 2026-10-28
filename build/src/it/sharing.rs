@@ -578,7 +578,12 @@ async fn shares_are_listed_with_their_owner_and_are_not_mine() {
     let page = dave.get("/contacts").await.ok().body.clone();
     assert!(page.contains("<small>Bob Muster</small>"), "the filter row");
     assert!(page.contains(&format!("value=\"dave/{}\" disabled>Teamkontakte (Bob Muster)</option>", w.team_ab_dave_copy)), "{page}");
-    assert!(!page.contains("contenteditable"), "no table cell to edit in place");
+    // the table view (only it has cells to edit in place): none for the read copy's contact; erin's write copy has them
+    let table = dave.get("/contacts?view=table").await.ok().body.clone();
+    assert!(table.contains("Tina Team") && !table.contains("contenteditable"), "no table cell to edit in place: {table}");
+    let mut erin = app.login("erin").await;
+    let table = erin.get("/contacts?view=table").await.ok().body.clone();
+    assert!(table.contains("Tina Team") && table.contains("contenteditable data-f=\"full_name\""), "a writable row has them");
     // the settings' list says who shared it, not the user's own name
     let set = dave.get("/settings").await.ok().body.clone();
     assert!(!set.contains("Dave Leser · "), "{set}");
@@ -656,50 +661,118 @@ async fn the_history_keys_a_path_as_ensure_resolves_it() {
     assert_eq!(c.history_key(false, "dave", "weg").await, ("dave".to_string(), "weg".to_string()));
 }
 
-/// Every GET that renders calendar data, as `who` sees it: none may carry a marker of what the share hides
-async fn canary(app: &crate::testkit::TestApp, who: &str, home: &str, copy: &str, ids: &[&str], queries: &[&str], markers: &[&str]) {
-    let mut c = app.login(who).await;
-    let mut paths: Vec<String> = vec![WINDOW.into(), "/api/mentions".into(), "/api/history".into(), "/api/categories".into(), format!("/settings/export/calendars/{home}/{copy}"), "/tasks".into(), "/calendar".into(), "/settings".into()];
-    for v in ["day", "week", "month", "planner", "weekends", "vacation", "countdown", "numbers"] {
-        for d in ["2026-10-15", "2026-10-16"] {
-            paths.push(format!("/calendar?view={v}&date={d}"));
-            paths.push(format!("/calendar?view={v}&date={d}&fragment=1"));
-        }
-    }
-    for v in ["groups", "table", "board", "timeline", "deck"] {
-        paths.push(format!("/tasks?view={v}"));
-    }
-    for q in queries {
-        paths.extend([format!("/api/search?q={q}"), format!("/api/events/suggest?q={q}"), format!("/api/titles?q={q}")]);
-    }
-    for id in ids {
-        paths.extend([format!("/api/events/{home}/{copy}/{id}"), format!("/api/tasks/{home}/{copy}/{id}"), format!("/api/events/{home}/{copy}/{id}/attach/0")]);
-    }
-    for p in &paths {
-        for json in [false, true] {
-            let r = if json { c.get_json(p).await } else { c.get(p).await };
-            assert!(!r.status.is_server_error(), "{who} {p}: {} {}", r.status, r.body);
-            for m in markers {
-                assert!(!r.body.contains(m), "{who} {p} (json: {json}) shows {m}: {}", r.body);
+/// A GET of the canary loop: the path with `{h}`/`{c}` for the collection's home and name, and the status the sharee
+/// and the owner must get
+struct Probe {
+    path: String,
+    sharee: StatusCode,
+    owner: StatusCode,
+}
+
+fn ok(path: impl Into<String>) -> Probe {
+    Probe { path: path.into(), sharee: StatusCode::OK, owner: StatusCode::OK }
+}
+
+/// Every route group that renders calendar data, read by the sharee (`who` in `home`/`copy`) and by the owner (in
+/// `ohome`/`ocal`): each answer has its expected status; no sharee answer carries a marker of what the share hides,
+/// and in every group some owner answer does (the routes reach the data). HTML and JSON both, the status for the
+/// one the route speaks (`/api/…` JSON, else HTML).
+async fn canary(app: &crate::testkit::TestApp, (who, home, copy): (&str, &str, &str), (owner, ohome, ocal): (&str, &str, &str), groups: Vec<(&str, Vec<Probe>)>, markers: &[&str]) {
+    let mut s = app.login(who).await;
+    let mut o = app.login(owner).await;
+    for (group, probes) in groups {
+        let mut seen = false;
+        for p in &probes {
+            for (c, h, cal, want, sharee) in [(&mut s, home, copy, p.sharee, true), (&mut o, ohome, ocal, p.owner, false)] {
+                let path = p.path.replace("{h}", h).replace("{c}", cal);
+                for json in [false, true] {
+                    let r = if json { c.get_json(&path).await } else { c.get(&path).await };
+                    if json == path.starts_with("/api/") {
+                        assert_eq!(r.status, want, "{} {path} (json: {json}): {}", if sharee { who } else { owner }, r.body);
+                    }
+                    let hit = markers.iter().find(|m| r.body.contains(**m));
+                    if sharee {
+                        assert!(hit.is_none(), "{who} {path} (json: {json}) shows {hit:?}: {}", r.body);
+                    } else {
+                        seen |= hit.is_some();
+                    }
+                }
             }
         }
+        assert!(seen, "{group}: no answer of the owner shows a marker, so the group proves nothing");
     }
+}
+
+/// The route groups of the loop, `q` the search words, `objects` the probes of single objects
+fn groups(q: &[&str], objects: Vec<Probe>, plans: Vec<Probe>) -> Vec<(&'static str, Vec<Probe>)> {
+    let mut views = vec![];
+    for v in ["day", "week", "month", "planner", "weekends", "vacation", "countdown", "numbers"] {
+        for d in ["2026-10-15", "2026-10-16"] {
+            views.extend([ok(format!("/calendar?view={v}&date={d}")), ok(format!("/calendar?view={v}&date={d}&fragment=1"))]);
+        }
+    }
+    let mut search = vec![ok("/api/mentions"), ok("/api/categories"), ok("/api/search/history")];
+    for w in q {
+        search.extend([ok(format!("/api/search?q={w}")), ok(format!("/api/events/suggest?q={w}")), ok(format!("/api/titles?q={w}"))]);
+    }
+    let mut tasks = vec![ok("/tasks"), ok("/api/tasks/done?back=all")];
+    tasks.extend(["groups", "table", "board", "timeline", "deck"].map(|v| ok(format!("/tasks?view={v}"))));
+    let redirect = Probe { path: "/".into(), sharee: StatusCode::SEE_OTHER, owner: StatusCode::SEE_OTHER };
+    let mut history = vec![ok("/api/history"), ok("/history")];
+    history.extend(plans);
+    vec![
+        ("pages", vec![redirect, ok("/calendar?date=2026-10-15"), ok("/settings"), ok("/editor?kind=event"), ok("/editor?kind=task"), ok("/contacts"), ok("/contacts?view=table"), ok("/contacts/part"), ok("/contacts/part?view=table")]),
+        ("views", views),
+        ("windows", vec![ok(WINDOW), ok("/api/days?start=2026-10-12&count=7"), ok("/api/weeks?start=2026-10-12&count=3"), ok("/api/density?year=2026")]),
+        ("tasks", tasks),
+        ("search", search),
+        ("history", history),
+        ("export", vec![ok("/settings/export/calendars/{h}/{c}")]),
+        ("objects", objects),
+    ]
+}
+
+/// The change ids `/api/history` lists for the user
+async fn change_ids(c: &mut crate::testkit::Client) -> Vec<i64> {
+    c.get_json("/api/history").await.ok().json()["changes"].as_array().unwrap().iter().filter_map(|x| x["id"].as_i64()).collect()
 }
 
 #[tokio::test]
 async fn no_page_or_answer_shows_a_sharee_what_the_share_hides() {
     let w = seed_shared().await;
     let app = &w.s.app;
-    // the owner sees them where the sharees must not: the loop's routes reach the data
+    let (n404, n200) = (StatusCode::NOT_FOUND, StatusCode::OK);
+    let hidden = |path: &str| Probe { path: path.into(), sharee: n404, owner: n200 };
+    // history: bob changes his confidential event (a change only he sees), erin a public one (one both see), bob searches
     let mut bob = app.login("bob").await;
-    let att = bob.get(&format!("/api/events/bob/{}/busy/attach/0", w.team)).await.ok().body.clone();
-    assert_eq!(att, "Marker7");
-    assert!(bob.get_json(&format!("/api/tasks/bob/{}/geheim", w.team)).await.ok().body.contains("Notiz Marker7"));
-    assert!(bob.get(&format!("/settings/export/calendars/bob/{}", w.team)).await.ok().body.contains("Verborgen Marker7"));
-    assert!(bob.get("/calendar?view=day&date=2026-10-15").await.ok().body.contains("Geheimprojekt"));
-    // erin: private Team events show their time only, confidential ones nothing; dave: alice's private dentist nothing
-    canary(app, "erin", "group.team", &w.team_copy, &["busy", "gone", "geheim"], &["geheim", "verborgen", "keller", "notiz"], &["Marker7", "Geheim", "Verborgen"]).await;
-    canary(app, "dave", "dave", &w.privat_copy, &["zahnarzt"], &["zahn", "weiß"], &["Zahnarzt", "Weiß"]).await;
+    let gone = format!("/api/events/bob/{}/gone", w.team);
+    let mut body = event_body(&bob.get_json(&gone).await.ok().json(), "bob", &w.team);
+    body["summary"] = json!("Verborgen Marker7 neu");
+    bob.json(Method::PUT, &gone, body).await.ok();
+    let bob_only = change_ids(&mut bob).await.into_iter().max().unwrap();
+    bob.json(Method::POST, "/api/search/history", json!({ "q": "Marker7 gesucht" })).await.ok();
+    let mut erin = app.login("erin").await;
+    let plan = format!("/api/events/group.team/{}/plan", w.team_copy);
+    let mut body = event_body(&erin.get_json(&plan).await.ok().json(), "group.team", &w.team_copy);
+    body["summary"] = json!("Teamplan von Erin");
+    erin.json(Method::PUT, &plan, body).await.ok();
+    let mut plans: Vec<Probe> = change_ids(&mut erin).await.into_iter().map(|id| ok(format!("/api/history/{id}/plan"))).collect();
+    plans.push(hidden(&format!("/api/history/{bob_only}/plan")));
+    let objects = vec![ok("/api/events/{h}/{c}/busy"), hidden("/api/events/{h}/{c}/gone"), ok("/api/tasks/{h}/{c}/geheim"), hidden("/api/events/{h}/{c}/busy/attach/0")];
+    // erin: private Team events and tasks show their time only, confidential ones nothing
+    canary(app, ("erin", "group.team", &w.team_copy), ("bob", "bob", &w.team), groups(&["geheim", "verborgen", "keller", "notiz", "erledigt"], objects, plans), &["Marker7", "Geheim", "Verborgen"]).await;
+    // dave: alice's private dentist not at all (Privat's levels are unset: hidden)
+    let mut alice = app.login("alice").await;
+    let zahn = format!("/api/events/alice/{}/zahnarzt", w.s.privat);
+    let mut body = event_body(&alice.get_json(&zahn).await.ok().json(), "alice", &w.s.privat);
+    body["summary"] = json!("Zahnarzt Dr. Weiß, neu");
+    alice.json(Method::PUT, &zahn, body).await.ok();
+    let alice_only = change_ids(&mut alice).await.into_iter().max().unwrap();
+    alice.json(Method::POST, "/api/search/history", json!({ "q": "Zahnarzt" })).await.ok();
+    let objects = vec![hidden("/api/events/{h}/{c}/zahnarzt")];
+    // (alice's Privat holds no tasks: that group has nothing to show the owner either)
+    let g = groups(&["zahn", "wei"], objects, vec![hidden(&format!("/api/history/{alice_only}/plan"))]).into_iter().filter(|(g, _)| *g != "tasks").collect();
+    canary(app, ("dave", "dave", &w.privat_copy), ("alice", "alice", &w.s.privat), g, &["Zahnarzt", "Weiß"]).await;
 }
 
 #[tokio::test]
