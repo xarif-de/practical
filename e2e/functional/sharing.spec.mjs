@@ -2,6 +2,7 @@
 // before a write through a share after which its writer sees less (the 422 round trip). erin writes into
 // bob's "Team" through group.team (seed: bob → group.team, write); own data only ("F7 …" in November 2026).
 import { api, expect, loginAs, settle, test } from '../lib/test.mjs';
+import { BASE } from '../lib/env.mjs';
 import { addCard, answer, createApi, fillWhen, instances, keyOf, openEdit, openNew, save } from './_editor.mjs';
 
 test.afterEach(async ({ page }) => {
@@ -191,4 +192,32 @@ test('a shared calendar keeps its owner\'s reminders only: the reminder card is 
   await page.locator('.addmenu .add').click();
   await expect(page.locator('.addmenu [data-card-add="alarm"]')).toBeDisabled();
   await expect(page.locator('.addmenu [data-card-add="status"]')).toBeEnabled();
+  // inert, not only for the mouse: no Tab stop or assistive-tech action below the card's head and hint
+  expect(await page.locator('#ed-alarm-card').evaluate(c => [...c.children].filter(x => x.tagName !== 'H2' && !x.classList.contains('al-share')).every(x => x.inert))).toBe(true);
+});
+
+test('a conflict after the visibility question keeps the answer: "keep mine" saves without asking again', async ({ page, browser }) => {
+  await loginAs(page, 'erin');
+  await page.goto('/calendar');
+  const cal = await teamCopy(page), [principal, cal_id] = cal.split('/');
+  const r = await api(page, 'POST', '/api/events', { principal, cal_id, summary: 'F7 Konflikt', start: '2026-11-07T09:00:00', end: '2026-11-07T10:00:00' });
+  const key = `${cal}/${r.id}`;
+  await openEdit(page, key, '2026-11-07');
+  await addCard(page, 'status');
+  await page.locator('#ed-vis .vis-steps button[data-i="1"]').click();
+  await page.locator('#ed-save').click();
+  await expect(page.locator('.ask')).toContainText('gar nicht mehr');
+  // meanwhile bob changes it: the confirmed write meets a newer version
+  const bobCtx = await browser.newContext({ baseURL: BASE, locale: 'de-DE' }), bob = await bobCtx.newPage();
+  await loginAs(bob, 'bob');
+  await bob.goto('/calendar');
+  const team = (await api(bob, 'GET', '/api/events?start=2026-11-07&end=2026-11-08')).find(e => e.summary === 'F7 Konflikt');
+  const d = await api(bob, 'GET', `/api/events/${team.principal}/${team.cal_id}/${team.object_id}`);
+  await api(bob, 'PUT', `/api/events/${team.principal}/${team.cal_id}/${team.object_id}`, { ...d, summary: 'F7 Konflikt (Bob)' });
+  await bobCtx.close();
+  await answer(page, true); // save anyway
+  await expect(page.locator('.ask')).toContainText(/überschreiben|Version|geändert/i); // the conflict question
+  await answer(page, true); // keep mine
+  await expect(page.locator('#ed')).toBeHidden();
+  await expect(page.locator('.ask')).toHaveCount(0);
 });

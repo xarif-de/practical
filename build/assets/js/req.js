@@ -78,7 +78,7 @@
      Enter and a click) it returns the pending one; run(fn, true) instead runs fn once more after it (an autosave: the
      newest state wins). Meanwhile box[data-state=saving][aria-busy=true] and buttons() are disabled; afterwards idle()
      (else each button gets its own state back). A failed answer: 'auth' → nothing (the page leaves for the login);
-     'conflict' with conflict = { overwrite, reload } → the question "keep mine / load theirs" (Escape: back to the
+     'conflict' with conflict = { overwrite(flags), reload } → the question "keep mine / load theirs" (Escape: back to the
      editing, the message stays); a 422 question of a write through a share — {code:"confirm-visibility",level}: its
      writer sees the object shortened (level 1–3) or not at all (0) afterwards; {code:"confirm-alarms"}: the share
      keeps only its owner's reminders — with confirm(flags): asks, and on "yes" its answer (the write again with every
@@ -111,7 +111,7 @@
                 if (a === null) break;
                 set('saving'); stop = P.progress(300);
                 if (!a) { await o.conflict.reload(); tell = false; break; }
-                r = await o.conflict.overwrite();
+                r = await o.conflict.overwrite(flags); // the questions answered so far are not asked again
               } else if (q) {
                 set('conflict'); stop();
                 const a = await askYesNo(q.text, tr('js-req-vis-save'), tr('js-req-vis-back'), true);

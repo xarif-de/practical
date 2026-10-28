@@ -20,7 +20,7 @@
   /* writes (save, delete, a rule's save and delete): one at a time, Save shows the progress, a 409 asks whether the
      own version overwrites the other one (the server's ETag of now) or the other one is loaded (practical.writer) */
   const W = practical.writer(form, { buttons: () => [$('#ed-save'), $('#ed-delete'), $('#ed-reset')], error: $('#ed-error'), idle: () => updateButtons(),
-    conflict: { overwrite: async () => { const r = await practical.req(API + '/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(); },
+    conflict: { overwrite: async flags => { const r = await practical.req(API + '/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(flags); }, /* with what was confirmed already */
       reload: () => openEditor(f.key.value, openDate) },
     confirm: flags => put(flags) });
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = () => { if (!W.busy) close(); };
