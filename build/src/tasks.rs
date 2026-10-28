@@ -78,10 +78,13 @@ async fn poll_changes(state: &SharedState, seen: &mut HashMap<(String, String, S
             let prev = seen.insert(key.clone(), tok);
             if !first && prev != Some(tok) {
                 // also to every share of it: the SSE stream sends an event only for a home its user may use
-                if let Ok(homes) = state.collections().copy_homes(kind, &key.1, &key.2).await {
-                    for (home, name) in homes {
-                        let _ = state.changes.send(ChangeEvent { kind, principal: home, id: name, synctoken: tok });
+                match state.collections().copy_homes(kind, &key.1, &key.2).await {
+                    Ok(homes) => {
+                        for (home, name) in homes {
+                            let _ = state.changes.send(ChangeEvent { kind, principal: home, id: name, synctoken: tok });
+                        }
                     }
+                    Err(e) => tracing::warn!("change poll: the shares of {}/{}: {e}", key.1, key.2),
                 }
                 let _ = state.changes.send(ChangeEvent { kind, principal: key.1, id: key.2, synctoken: tok });
             }

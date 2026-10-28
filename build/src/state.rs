@@ -562,16 +562,24 @@ impl Collections<'_> {
         Ok(s.calendars.get_calendars(gid).await?.len() + s.shares.calendars_shared_with(gid).await?.len())
     }
 
-    /// The collection behind a path as the change history keys it: `(owner, id)` for a share, the path itself
-    /// otherwise (no content; the write that names the path was checked by its route).
+    /// The collection behind a path as the change history keys it: `(owner, id)` as `ensure` resolves the path
+    /// (an own collection of that name first, else a share), the path itself when it resolves to nothing (a purged
+    /// collection) or the lookup fails (logged). No content; the write that names the path was checked by its route.
     pub async fn history_key(&self, addressbook: bool, home: &str, name: &str) -> (String, String) {
         let s = self.0;
-        let target = if addressbook {
-            s.shares.get_addressbook_share(home, name).await.ok().flatten().map(|x| (x.owner, x.addressbook_id))
+        let r = if addressbook {
+            access::resolve_addressbook(&*s.shares, &*s.addressbooks, home, name, true).await.map(|(r, _)| r)
         } else {
-            s.shares.get_calendar_share(home, name).await.ok().flatten().map(|x| (x.owner, x.cal_id))
+            access::resolve_calendar(&*s.shares, &*s.calendars, home, name, true).await.map(|(r, _)| r)
         };
-        target.unwrap_or_else(|| (home.to_string(), name.to_string()))
+        match r {
+            Ok(r) => (r.owner().to_string(), r.id().to_string()),
+            Err(rustical_store::Error::NotFound) => (home.to_string(), name.to_string()),
+            Err(e) => {
+                tracing::warn!("history: the collection behind {home}/{name}: {e}");
+                (home.to_string(), name.to_string())
+            }
+        }
     }
 
     /// The homes and names a collection is shared to, without content (SSE fans a change out to them).
@@ -620,6 +628,25 @@ impl Collections<'_> {
     pub async fn put_objects(&self, a: &Authorized, objects: Vec<(String, CalendarObject)>, overwrite: bool) -> AppResult<()> {
         a.checked(Need::Write)?;
         rustical_store::shared::put_objects(&*self.0.calendars, &*self.0.shares, &a.resolved, objects, overwrite).await.map_err(write_error)
+    }
+
+    /// Writes objects through a share one by one, as the store does (`put_objects`); one its rules refuse
+    /// (`CopyRule`: seen shortened, the UID of a hidden object, …) is skipped and logged, any other error stops.
+    /// Returns how many were refused (an import into a share counts them, `transfer::import_calendar`).
+    pub async fn put_copy_objects_skipping(&self, a: &Authorized, objects: Vec<(String, CalendarObject)>) -> AppResult<usize> {
+        a.checked(Need::Write)?;
+        let mut refused = 0;
+        for (id, o) in objects {
+            match rustical_store::shared::put_object(&*self.0.calendars, &*self.0.shares, &a.resolved, &id, o, true, Preconditions::default()).await {
+                Ok(_) => {}
+                Err(rustical_store::Error::CopyRule(rule)) => {
+                    tracing::warn!("import through a share: object {id} skipped: {rule}");
+                    refused += 1;
+                }
+                Err(e) => return Err(write_error(e)),
+            }
+        }
+        Ok(refused)
     }
 
     /// Into the trash bin (always, through a share)

@@ -1145,6 +1145,10 @@ js-set-imported = { $n ->
     [one] %n Objekt importiert.
    *[other] %n Objekte importiert.
 }
+js-set-refused = { $n ->
+    [one] %n Eintrag übersprungen: Die Freigabe nimmt ihn nicht an.
+   *[other] %n Einträge übersprungen: Die Freigabe nimmt sie nicht an.
+}
 js-tk-open = Offen
 js-tk-doing = In Arbeit
 js-tk-done = Erledigt

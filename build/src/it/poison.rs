@@ -388,7 +388,7 @@ async fn a_large_import_is_chunked() {
     let cal = s.app.calendar("alice", "Import", "#000000", &["VEVENT"]).await;
     let alice = s.app.principal("alice").await;
     let (r, peak) = peak_of(crate::domain::transfer::import_calendar(&s.app.state, &alice, "alice", &cal, file.as_bytes())).await;
-    assert_eq!(r.unwrap(), n + 1);
+    assert_eq!(r.unwrap(), (n + 1, 0));
     // the route (history guard, JSON answer) on top: a second import of the same file overwrites
     assert_eq!(c.post_raw(&format!("/settings/import/calendars/alice/{cal}"), &file).await.ok().json()["imported"], n + 1);
     let series = s.app.state.raw().calendars.get_object("alice", &cal, "series", false).await.unwrap();
@@ -424,7 +424,7 @@ async fn recording_a_large_import_holds_a_chunk_not_the_import() {
     let (first, peak_new) = peak_of(g.commit()).await;
     let mut g = history::begin(&s.app.state, Actor::import(&alice, "")).await;
     g.coll(Store::Cal, "alice", &cal);
-    assert_eq!(crate::domain::transfer::import_calendar(&s.app.state, &alice, "alice", &cal, two.as_bytes()).await.unwrap(), n);
+    assert_eq!(crate::domain::transfer::import_calendar(&s.app.state, &alice, "alice", &cal, two.as_bytes()).await.unwrap(), (n, 0));
     let (second, peak_log) = peak_of(g.commit()).await;
     // what was recorded: one change each, every object in it
     let db = &s.app.state.db;

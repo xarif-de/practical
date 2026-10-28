@@ -296,7 +296,9 @@ fn store_chunk(chunk: &[(String, String)]) -> AppResult<Vec<(String, CalendarObj
 /// Imports every VEVENT/VTODO/VJOURNAL object of an .ics file into an EXISTING
 /// calendar; objects with a known UID are overwritten (merge). Written in chunks of `IMPORT_CHUNK` objects (one
 /// transaction each, so other users' saves get the write lock in between) after the whole file was checked.
-pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<usize> {
+/// Returns (stored, refused): through a share an object its rules refuse is skipped, the rest is written
+/// (`Collections::put_copy_objects_skipping`); in an own calendar nothing is refused.
+pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str, cal_id: &str, ics: &[u8]) -> AppResult<(usize, usize)> {
     let cal = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
     collections::ensure_writable(state, &cal).await?;
     let (objects, _) = file_objects(ics, false).await?;
@@ -307,15 +309,17 @@ pub async fn import_calendar(state: &AppState, user: &Principal, principal: &str
         for chunk in objects.chunks(IMPORT_CHUNK) {
             state.collections().put_objects(&cal, store_chunk(chunk)?, true).await?;
         }
-        return Ok(objects.len());
+        return Ok((objects.len(), 0));
     }
-    // through a share a known UID is replaced under the name it has (a new name with it would be refused)
+    // through a share a known UID is replaced under the name it has (a new name with it would be refused); one the
+    // share refuses (an object seen shortened, the UID of a hidden one) is skipped, as the store writes one by one
     let known: std::collections::HashMap<String, String> = state.collections().objects(&cal).await?.into_iter().map(|(id, o)| (o.get_uid().to_string(), id)).collect();
+    let mut refused = 0;
     for chunk in objects.chunks(IMPORT_CHUNK) {
         let chunk = store_chunk(chunk)?.into_iter().map(|(uid, o)| (known.get(&uid).cloned().unwrap_or(uid), o)).collect();
-        state.collections().put_objects(&cal, chunk, true).await?;
+        refused += state.collections().put_copy_objects_skipping(&cal, chunk).await?;
     }
-    Ok(objects.len())
+    Ok((objects.len() - refused, refused))
 }
 
 /// Creates a calendar from an .ics file (RustiCal's `import_calendar` with the first chunk, `put_objects` for the

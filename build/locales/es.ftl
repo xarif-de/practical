@@ -1150,6 +1150,10 @@ js-set-imported = { $n ->
     [one] %n objeto importado.
    *[other] %n objetos importados.
 }
+js-set-refused = { $n ->
+    [one] %n elemento omitido: el compartido no lo acepta.
+   *[other] %n elementos omitidos: el compartido no los acepta.
+}
 js-tk-open = Pendiente
 js-tk-doing = En curso
 js-tk-done = Completada

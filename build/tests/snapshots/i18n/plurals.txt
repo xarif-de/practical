@@ -106,6 +106,10 @@ de js-set-imported 0: %n Objekte importiert.
 de js-set-imported 1: %n Objekt importiert.
 de js-set-imported 2: %n Objekte importiert.
 de js-set-imported 5: %n Objekte importiert.
+de js-set-refused 0: %n Einträge übersprungen: Die Freigabe nimmt sie nicht an.
+de js-set-refused 1: %n Eintrag übersprungen: Die Freigabe nimmt ihn nicht an.
+de js-set-refused 2: %n Einträge übersprungen: Die Freigabe nimmt sie nicht an.
+de js-set-refused 5: %n Einträge übersprungen: Die Freigabe nimmt sie nicht an.
 de js-snaps-n 0: %n Rastpunkte
 de js-snaps-n 1: %n Rastpunkt
 de js-snaps-n 2: %n Rastpunkte
@@ -314,6 +318,10 @@ en js-set-imported 0: %n objects imported.
 en js-set-imported 1: %n object imported.
 en js-set-imported 2: %n objects imported.
 en js-set-imported 5: %n objects imported.
+en js-set-refused 0: %n entries skipped: the share does not take them.
+en js-set-refused 1: %n entry skipped: the share does not take it.
+en js-set-refused 2: %n entries skipped: the share does not take them.
+en js-set-refused 5: %n entries skipped: the share does not take them.
 en js-snaps-n 0: %n snap points
 en js-snaps-n 1: %n snap point
 en js-snaps-n 2: %n snap points
@@ -518,6 +526,10 @@ fr js-set-imported 0: %n objet importé.
 fr js-set-imported 1: %n objet importé.
 fr js-set-imported 2: %n objets importés.
 fr js-set-imported 5: %n objets importés.
+fr js-set-refused 0: %n élément ignoré : le partage ne l'accepte pas.
+fr js-set-refused 1: %n élément ignoré : le partage ne l'accepte pas.
+fr js-set-refused 2: %n éléments ignorés : le partage ne les accepte pas.
+fr js-set-refused 5: %n éléments ignorés : le partage ne les accepte pas.
 fr js-snaps-n 0: %n point d'accroche
 fr js-snaps-n 1: %n point d'accroche
 fr js-snaps-n 2: %n points d'accroche
@@ -730,6 +742,10 @@ es js-set-imported 0: %n objetos importados.
 es js-set-imported 1: %n objeto importado.
 es js-set-imported 2: %n objetos importados.
 es js-set-imported 5: %n objetos importados.
+es js-set-refused 0: %n elementos omitidos: el compartido no los acepta.
+es js-set-refused 1: %n elemento omitido: el compartido no lo acepta.
+es js-set-refused 2: %n elementos omitidos: el compartido no los acepta.
+es js-set-refused 5: %n elementos omitidos: el compartido no los acepta.
 es js-snaps-n 0: %n puntos de ajuste
 es js-snaps-n 1: %n punto de ajuste
 es js-snaps-n 2: %n puntos de ajuste

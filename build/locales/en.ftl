@@ -1148,6 +1148,10 @@ js-set-imported = { $n ->
     [one] %n object imported.
    *[other] %n objects imported.
 }
+js-set-refused = { $n ->
+    [one] %n entry skipped: the share does not take it.
+   *[other] %n entries skipped: the share does not take them.
+}
 js-tk-open = Open
 js-tk-doing = In process
 js-tk-done = Completed

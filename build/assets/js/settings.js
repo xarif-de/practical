@@ -3,7 +3,8 @@
   const settings = document.querySelector('.settings');
   if (!settings) return;
   const { esc } = practical;
-  const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: n => tr('js-set-imported', { n }) };
+  // an import into a share may skip what the share refuses (`refused`, transfer::import_calendar): said after the count
+  const T = { ...trs('js-set-', ['err', 'active', 'denied', 'unsupported']), done: (n, refused) => tr('js-set-imported', { n }) + (refused ? ' ' + tr('js-set-refused', { n: refused }) : '') };
   /* A suggested name ("Mein Kalender") is there to be replaced: while it is still untouched,
      focusing the field selects all of it, so the first keystroke overwrites the whole word. The
      mousedown is stopped because a click would otherwise collapse the selection to a caret. Once
@@ -19,7 +20,7 @@
   settings.querySelectorAll('input[type=file][data-import]').forEach(inp => { const w = practical.writer(inp.closest('form') || inp); inp.addEventListener('change', async () => {
     const file = inp.files[0]; if (!file) return;
     const body = await file.arrayBuffer();
-    await w.run(async () => { const r = await practical.req(inp.dataset.import, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body }); if (r.ok) { sessionStorage.toast = T.done(r.data.imported); practical.leaving = true; location.reload(); } return r; });
+    await w.run(async () => { const r = await practical.req(inp.dataset.import, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body }); if (r.ok) { sessionStorage.toast = T.done(r.data.imported, r.data.refused); practical.leaving = true; location.reload(); } return r; });
     inp.value = '';
   }); });
   // import into a NEW calendar or address book (.imp-form, data-kind = the route's collection kind): the page

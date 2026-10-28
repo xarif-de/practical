@@ -23,7 +23,7 @@ async fn new_calendar_from_a_file() {
     assert!(matches!(import_new_calendar(&app.state, &alice, empty, ics("").as_bytes()).await, Err(AppError::BadRequest(m)) if m == "no calendar objects found"));
     // merge into an existing calendar: same UID replaces
     let merged = import_calendar(&app.state, &alice, "alice", &id, vtodo("t", "T neu", "").as_bytes()).await.unwrap();
-    assert_eq!(merged, 1);
+    assert_eq!(merged, (1, 0));
     assert!(app.state.raw().calendars.get_object("alice", &id, "t", false).await.unwrap().get_ics().contains("SUMMARY:T neu"));
     assert!(matches!(import_calendar(&app.state, &alice, "alice", "missing", vtodo("t", "T", "").as_bytes()).await, Err(AppError::Store(_))));
     let bob = app.user("bob", "Bob").await;
@@ -57,7 +57,7 @@ async fn a_sloppy_ics_gets_its_required_properties() {
     // no PRODID: caldata parses it, but RustiCal could not read the stored objects back — they were hidden
     let no_prodid = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:np\r\nDTSTAMP:20261001T080000Z\r\nDTSTART:20261102T080000Z\r\nSUMMARY:Ohne PRODID\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
     assert!(rustical_ical::CalendarObject::from_ics(CalendarObject::from(IcalParser::from_slice(no_prodid.as_bytes()).next().unwrap().unwrap().into_objects().unwrap().remove(0)).get_ics().to_string()).is_err(), "what the old import stored");
-    assert_eq!(import_calendar(&app.state, &alice, "alice", &cal, no_prodid.as_bytes()).await.unwrap(), 1);
+    assert_eq!(import_calendar(&app.state, &alice, "alice", &cal, no_prodid.as_bytes()).await.unwrap(), (1, 0));
     let stored = app.state.raw().calendars.get_objects("alice", &cal).await.unwrap();
     assert_eq!(stored.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), ["np"], "stored and readable");
     assert!(stored[0].1.get_ics().contains(&format!("PRODID:{PRODID}")));

@@ -24,15 +24,22 @@ pub(super) async fn export_addressbook(State(state): State<SharedState>, user: P
 #[derive(serde::Serialize)]
 pub(super) struct Imported {
     imported: usize,
+    /// objects a share refused (only when there were some: settings.js tells their number)
+    #[serde(skip_serializing_if = "is_zero")]
+    refused: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// Raw .ics body (app.js reads the chosen file and POSTs it — no multipart dependency).
 pub(super) async fn import_calendar(State(state): State<SharedState>, user: Principal, Path((owner, id)): Path<(String, String)>, _: csrf::Token, body: axum::body::Bytes) -> AppResult<axum::Json<Imported>> {
     let mut g = history::begin(&state, Actor::import(&user, "")).await;
     g.coll(Store::Cal, &owner, &id);
-    let imported = crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await?;
+    let (imported, refused) = crate::domain::transfer::import_calendar(&state, &user, &owner, &id, &body).await?;
     g.commit().await;
-    Ok(axum::Json(Imported { imported }))
+    Ok(axum::Json(Imported { imported, refused }))
 }
 
 #[derive(serde::Deserialize)]
@@ -102,5 +109,5 @@ pub(super) async fn import_addressbook(State(state): State<SharedState>, user: P
     g.coll(Store::Ab, &owner, &id);
     let imported = crate::domain::transfer::import_addressbook(&state, &user, &owner, &id, &body).await?;
     g.commit().await;
-    Ok(axum::Json(Imported { imported }))
+    Ok(axum::Json(Imported { imported, refused: 0 }))
 }

@@ -552,3 +552,38 @@ async fn reminders_into_a_share_are_asked_about_first() {
     own["summary"] = json!("Eigen mit Erinnerung");
     erin.json(Method::POST, "/api/events", own).await.ok();
 }
+
+#[tokio::test]
+async fn an_import_through_a_share_skips_what_the_share_refuses() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let mut erin = app.login("erin").await;
+    // two new events; "busy" erin sees only as its time (refused: Level), "gone" not at all (refused: ForeignUid)
+    let ev = |uid: &str, title: &str| format!("BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:{title}\r\nDTSTART:20261023T100000Z\r\nDTEND:20261023T110000Z\r\nEND:VEVENT\r\n");
+    let file = format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//t//EN\r\n{}{}{}{}END:VCALENDAR\r\n", ev("neu1", "Import eins"), ev("busy", "Überschrieben"), ev("gone", "Überschrieben"), ev("neu2", "Import zwei"));
+    let r = erin.post_raw(&format!("/settings/import/calendars/group.team/{}", w.team_copy), &file).await;
+    assert_eq!(r.ok().json(), json!({ "imported": 2, "refused": 2 }));
+    assert!(stored(app, "bob", &w.team, "neu1").await.contains("Import eins") && stored(app, "bob", &w.team, "neu2").await.contains("Import zwei"), "the ones after a refused one too");
+    assert!(stored(app, "bob", &w.team, "busy").await.contains("Marker7") && stored(app, "bob", &w.team, "gone").await.contains("CLASS:CONFIDENTIAL"));
+}
+
+#[tokio::test]
+async fn the_history_keys_a_path_as_ensure_resolves_it() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let c = app.state.collections();
+    // a share: the owner's calendar; an own one: itself
+    assert_eq!(c.history_key(false, "group.team", &w.team_copy).await, ("bob".to_string(), w.team.clone()));
+    assert_eq!(c.history_key(true, "group.team", &w.team_ab_copy).await, ("bob".to_string(), w.team_ab.clone()));
+    assert_eq!(c.history_key(false, "alice", &w.s.arbeit).await, ("alice".to_string(), w.s.arbeit.clone()));
+    // an own calendar under the name of a share row in the same home is what the path means (ensure: own first).
+    // The store refuses to create one (rustical_store_sqlite calendar_store `calendar_name_shared`): written by SQL here
+    let mut tx = app.state.db.begin().await.unwrap();
+    for q in ["CREATE TEMP TABLE c AS SELECT * FROM calendars WHERE principal = 'alice' AND id = ?1", "UPDATE c SET principal = 'dave', id = ?2, push_topic = 'own-under-share-name'", "INSERT INTO calendars SELECT * FROM c", "DROP TABLE c"] {
+        sqlx::query(q).bind(&w.s.arbeit).bind(&w.privat_copy).execute(&mut *tx).await.unwrap();
+    }
+    tx.commit().await.unwrap();
+    assert_eq!(c.history_key(false, "dave", &w.privat_copy).await, ("dave".to_string(), w.privat_copy.clone()));
+    // nothing there any more (a purged collection): the path itself
+    assert_eq!(c.history_key(false, "dave", "weg").await, ("dave".to_string(), "weg".to_string()));
+}

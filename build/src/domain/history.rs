@@ -118,14 +118,25 @@ impl Guard<'_> {
     /// change, if anything changed. A failing history is logged and never fails the write.
     pub async fn commit(self) -> Option<i64> {
         // a write through a share is a change of the owner's collection: the owner's history attributes it to
-        // the actor (the routes name the path, i.e. the share's home and name)
+        // the actor (the routes name the path, i.e. the share's home and name). One lookup per path: this runs
+        // under the global history lock, and an import names one path for many objects.
         let (mut objects, mut colls) = (HashSet::new(), HashSet::new());
+        let mut keys: std::collections::HashMap<(bool, String, String), (String, String)> = std::collections::HashMap::new();
+        let mut key = async |store: Store, p: String, c: String| {
+            let k = (store == Store::Ab, p, c);
+            if let Some(v) = keys.get(&k) {
+                return v.clone();
+            }
+            let v = self.state.collections().history_key(k.0, &k.1, &k.2).await;
+            keys.insert(k, v.clone());
+            v
+        };
         for (store, p, c, id) in self.objects {
-            let (p, c) = self.state.collections().history_key(store == Store::Ab, &p, &c).await;
+            let (p, c) = key(store, p, c).await;
             objects.insert((store, p, c, id));
         }
         for (store, p, c) in self.colls {
-            let (p, c) = self.state.collections().history_key(store == Store::Ab, &p, &c).await;
+            let (p, c) = key(store, p, c).await;
             colls.insert((store, p, c));
         }
         match ingest(self.state, Some((&self.actor, &objects, &colls))).await {
