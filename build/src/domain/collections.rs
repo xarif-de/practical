@@ -102,6 +102,8 @@ pub struct AbInfo {
     pub shared_by: Option<String>,
     pub owner: String,
     pub has_shares: bool,
+    /// shared with the user to read: PractiCal writes nothing into it ([`ensure_ab_writable`])
+    pub read_only: bool,
 }
 
 pub const PALETTE: &[&str] = &["#0a84ff", "#30b46c", "#ff3b30", "#ff9f0a", "#af52de", "#32ade6", "#ff2d55", "#5856d6", "#a2845e", "#8e8e93"];
@@ -143,6 +145,12 @@ pub async fn ensure_addressbook(state: &AppState, user: &Principal, home: &str, 
 }
 
 impl CalInfo {
+    /// Who it is listed with (filters, the editor's calendar select, settings): a group's name, the owner of one
+    /// shared with the user directly; `None` for the user's own. Rows with one are not "mine" (filter "only mine")
+    pub fn label(&self) -> Option<&str> {
+        if self.is_group { Some(&self.owner_label) } else { self.shared_by.as_deref() }
+    }
+
     /// The user's own live calendar that can be shared (not a subscription, not a birthday calendar)
     pub fn shareable(&self) -> bool {
         !self.view.is_copy() && self.subscription_url.is_none() && self.deleted_at.is_none() && !self.id.starts_with("_birthdays_")
@@ -231,6 +239,12 @@ pub async fn ensure_writable(state: &AppState, a: &Authorized) -> AppResult<()> 
     Err(AppError::bad(if subscribed { "err-subscribed-read-only" } else { "err-calendar-read-only" }))
 }
 
+/// `Err` for a write into an address book shared with the user to read (`err-share-read-only`, as calendars:
+/// [`ensure_writable`]); every PractiCal write into an address book asks it.
+pub fn ensure_ab_writable(a: &Authorized) -> AppResult<()> {
+    if a.allows(Need::Write) { Ok(()) } else { Err(AppError::bad("err-share-read-only")) }
+}
+
 /// Marks a calendar read-only for PractiCal (`source`: who fills it). Tests only: the uploader writes its rows
 /// with key and device (`uploader::upload`).
 #[cfg(test)]
@@ -267,8 +281,15 @@ impl AbInfo {
             shared_by: None,
             owner: auth.owner().to_string(),
             has_shares: false,
+            read_only: !auth.allows(Need::Write),
             auth,
         }
+    }
+
+    /// Who it is listed with (filters, the contact editor's select, settings): a group's name, the owner of one
+    /// shared with the user directly; `None` for the user's own
+    pub fn label(&self) -> Option<&str> {
+        if self.is_group { Some(&self.owner_label) } else { self.shared_by.as_deref() }
     }
 }
 
@@ -287,6 +308,7 @@ fn ab_info(auth: Authorized, a: Addressbook, owner: &Owner, color: Option<String
         shared_by: None,
         owner: auth.owner().to_string(),
         has_shares: false,
+        read_only: !auth.allows(Need::Write),
         auth,
     }
 }
@@ -564,7 +586,8 @@ pub async fn delete_object(state: &AppState, user: &Principal, store: Store, pri
             state.collections().delete_object(&a, object_id, None).await?
         }
         Store::Ab => {
-            let a = ensure_addressbook(state, user, principal, coll, Need::Write).await?;
+            let a = ensure_addressbook(state, user, principal, coll, Need::Read).await?;
+            ensure_ab_writable(&a)?;
             state.collections().delete_address_object(&a, object_id).await?
         }
     }

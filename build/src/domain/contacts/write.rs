@@ -165,7 +165,8 @@ pub async fn create_contact(state: &AppState, user: &Principal, i: ContactInput)
 
 /// `keep_uid`: a move to another address book keeps the UID (see `events::create_event_as`).
 pub async fn create_contact_as(state: &AppState, user: &Principal, i: ContactInput, keep_uid: Option<&str>) -> AppResult<String> {
-    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Write).await?;
+    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Read).await?;
+    collections::ensure_ab_writable(&ab)?;
     let keep = match keep_uid {
         Some(u) if matches!(stored_card(state, &ab, u).await, Err(AppError::NotFound | AppError::Store(rustical_store::Error::NotFound))) => Some(u.to_string()),
         _ => None,
@@ -177,7 +178,8 @@ pub async fn create_contact_as(state: &AppState, user: &Principal, i: ContactInp
 }
 
 pub async fn update_contact(state: &AppState, user: &Principal, object_id: &str, i: ContactInput, expected_etag: Option<&str>) -> AppResult<()> {
-    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Write).await?;
+    let ab = collections::ensure_addressbook(state, user, &i.principal, &i.ab_id, Need::Read).await?;
+    collections::ensure_ab_writable(&ab)?;
     let (existing, etag) = stored_card(state, &ab, object_id).await?;
     if let Some(e) = expected_etag
         && !e.is_empty()

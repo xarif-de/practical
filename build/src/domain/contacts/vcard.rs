@@ -233,6 +233,7 @@ pub fn contact_from(vc: &VcardContact, raw: &[RawLine], ab: &AbInfo, object_id: 
         ab_name: ab.displayname.clone(),
         ab_color: ab.color.clone(),
         is_group: ab.is_group,
+        read_only: ab.read_only,
         object_id: object_id.to_string(),
         uid: vc.get_uid().unwrap_or(object_id).to_string(),
         full_name,

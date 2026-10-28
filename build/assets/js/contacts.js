@@ -166,7 +166,7 @@
   const hasData = card => $$('input:not([type=hidden]), textarea', card).some(i => !i.closest('template') && i.value.trim() !== '') || !!$('.chip', card);
   function markEmpty() { $$('.field', form).forEach(fl => { const p = $('.pdate', fl); const v = p ? getDate(p) : ($('input, select, textarea', fl) || {}).value; fl.classList.toggle('empty', !(v || '').trim()); }); const mn = $('.morenames', form); mn.classList.toggle('filled', $$('input', mn).some(i => i.value.trim())); }
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
-  function mode(m) { form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
+  function mode(m) { if (m === 'edit' && form.classList.contains('ro')) m = 'view'; /* a read-only address book's contact (c.read_only): view mode only */ form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
   const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].filter(e => !e.closest('template')).map(e => e.value).join('|') + '|' + chips().join(',') + '|' + $$('.pref[aria-pressed=true]', form).length;
   function updateButtons() { const changed = serialize() !== baseline, busy = W.busy; $('#ct-save').disabled = !changed || busy; $('#ct-reset').disabled = (!changed && form.classList.contains('new')) || busy; $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new') || busy; }
   const W = practical.writer(form, { buttons: () => [$('#ct-save'), $('#ct-delete'), $('#ct-reset')], error: $('#ct-error'), idle: () => updateButtons(),
@@ -183,7 +183,10 @@
     // A user without a single address book has an EMPTY picker, and reading `.options[0].value`
     // threw — which killed the rest of app.js with it, including the first-start hints
     // (found 2026-10-09). Nothing can be saved in that state anyway; the page must still work.
-    f.ab.value = c ? `${c.principal}/${c.ab_id}` : (f.ab.options[0] ? f.ab.options[0].value : '');
+    // a new contact never lands in a read-only address book (a disabled option)
+    const firstOk = [...f.ab.options].find(o => !o.disabled);
+    f.ab.value = c ? `${c.principal}/${c.ab_id}` : (firstOk ? firstOk.value : '');
+    form.classList.toggle('ro', !!(c && c.read_only));
     setDate($('[data-date=birthday]', form), c ? c.birthday : ''); setDate($('[data-date=anniversary]', form), c ? c.anniversary : '');
     ['phones', 'emails', 'addresses', 'urls', 'impp', 'related', 'dates'].forEach(l => { rows(l).forEach(r => r.remove()); (c ? c[l] : []).forEach(it => addRow(l, it)); });
     if (!c) addRow('phones', { kind: 'cell', value: '' });

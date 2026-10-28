@@ -425,7 +425,8 @@ pub async fn import_new_addressbook(state: &AppState, user: &Principal, owner: &
 /// Merges a .vcf file into an existing address book (a known UID is overwritten). Every card is parsed first;
 /// the store has no batch write for cards, so they are then written one by one.
 pub async fn import_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str, vcf: &[u8]) -> AppResult<usize> {
-    let ab = collections::ensure_addressbook(state, user, principal, ab_id, Need::Write).await?;
+    let ab = collections::ensure_addressbook(state, user, principal, ab_id, Need::Read).await?;
+    collections::ensure_ab_writable(&ab)?;
     let cards = file_cards(vcf)?;
     if cards.is_empty() {
         return Err(AppError::bad("err-no-vcards"));

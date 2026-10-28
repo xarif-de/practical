@@ -126,7 +126,7 @@
   <div class="label">{{ ctx.t("vis-title") }}</div>
   <div class="group">
     {%- for c in calendars %}{% if let Some(v) = self.vis_of(c.principal.as_str(), c.id.as_str()) %}
-    <a class="cell link noic" href="#cal-{{ c.principal }}-{{ c.id }}"><span>{{ c.displayname }}{% if c.is_group %} ({{ c.owner_label }}){% endif %}<span class="sub">{{ ctx.t("ed-class-private") }}: {{ ctx.t(self.level_key(&v.private)) }} · {{ ctx.t("ed-class-confidential") }}: {{ ctx.t(self.level_key(&v.confidential)) }}</span></span><span class="val"><span class="chev">›</span></span></a>
+    <a class="cell link noic" href="#cal-{{ c.principal }}-{{ c.id }}"><span>{{ c.displayname }}{% if let Some(l) = c.label() %} ({{ l }}){% endif %}<span class="sub">{{ ctx.t("ed-class-private") }}: {{ ctx.t(self.level_key(&v.private)) }} · {{ ctx.t("ed-class-confidential") }}: {{ ctx.t(self.level_key(&v.confidential)) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {%- endif %}{% endfor %}
   </div>
   <p class="foot">{{ ctx.t("privacy-vis-hint") }} <a href="#collections">{{ ctx.t("tab-collections") }} ›</a></p>
@@ -161,7 +161,7 @@
     {%- if let Some(l) = self.link_for("cal", c.principal.as_str(), c.id.as_str()) %}
     {{ m::coll_row("cal", "calendar", c, self.comps(c.components), l.id.as_str()) }}
     {%- else %}
-    <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}">{{ m::ico("calendar") }}</span><span>{{ c.displayname }}<span class="sub">{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
+    <a class="cell link" href="#cal-{{ c.principal }}-{{ c.id }}"><span class="swatch" style="background:{{ c.color }}" data-cpk-swatch="calendar:{{ c.principal }}/{{ c.id }}">{{ m::ico("calendar") }}</span><span>{{ c.displayname }}<span class="sub">{% if c.view.is_copy() && !c.is_group %}{% if let Some(o) = c.shared_by %}{{ o }}{% endif %}{% else %}{{ c.owner_label }}{% if c.is_group %} ({{ ctx.t("group") }}){% endif %}{% endif %} · {{ self.comps(c.components) }}</span></span><span class="val"><span class="chev">›</span></span></a>
     {%- endif %}
     {% endfor %}
     <a class="cell btnrow" href="#new-calendar">{{ m::ico("cal-plus") }}<span>{{ ctx.t("calendar-create") }}</span></a>
@@ -176,7 +176,7 @@
     {%- if let Some(l) = self.link_for("ab", a.principal.as_str(), a.id.as_str()) %}
     {{ m::coll_row("ab", "contacts", a, "", l.id.as_str()) }}
     {%- else %}
-    <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}" data-cpk-swatch="addressbook:{{ a.principal }}/{{ a.id }}">{{ m::ico("contacts") }}</span><span>{{ a.displayname }}<span class="sub">{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
+    <a class="cell link" href="#ab-{{ a.principal }}-{{ a.id }}"><span class="swatch" style="background:{{ a.color }}" data-cpk-swatch="addressbook:{{ a.principal }}/{{ a.id }}">{{ m::ico("contacts") }}</span><span>{{ a.displayname }}<span class="sub">{% if a.view.is_copy() && !a.is_group %}{% if let Some(o) = a.shared_by %}{{ o }}{% endif %}{% else %}{{ a.owner_label }}{% if a.is_group %} ({{ ctx.t("group") }}){% endif %}{% endif %}</span></span><span class="val"><span class="chev">›</span></span></a>
     {%- endif %}
     {% endfor %}
     <a class="cell btnrow" href="#new-addressbook">{{ m::ico("book-plus") }}<span>{{ ctx.t("addressbook-create") }}</span></a>

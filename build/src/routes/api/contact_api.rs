@@ -30,7 +30,8 @@ pub(super) async fn update_contact(State(state): State<SharedState>, user: Princ
     let mut g = history::begin(&state, Actor::ui(&user)).await;
     g.object(Store::Ab, &p, &a, &id);
     if u.input.principal != p || u.input.ab_id != a {
-        let source = crate::domain::collections::ensure_addressbook(&state, &user, &p, &a, crate::state::Need::Write).await?;
+        let source = crate::domain::collections::ensure_addressbook(&state, &user, &p, &a, crate::state::Need::Read).await?;
+        crate::domain::collections::ensure_ab_writable(&source)?;
         let (tp, ta) = (u.input.principal.clone(), u.input.ab_id.clone());
         let (old, old_etag) = contacts::stored_card(&state, &source, &id).await?;
         if old_etag != etag {

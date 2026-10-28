@@ -74,6 +74,9 @@ pub struct Contact {
     /// the address book's colour (AbInfo.color), for the chips
     pub ab_color: String,
     pub is_group: bool,
+    /// its address book is shared with the user to read (`AbInfo::read_only`): the editor stays in view mode
+    #[serde(default)]
+    pub read_only: bool,
     pub object_id: String,
     pub uid: String,
     pub full_name: String,
@@ -255,7 +258,7 @@ pub async fn contacts_for(state: &AppState, abs: &[AbInfo]) -> AppResult<Vec<Con
         for c in ab_contacts(state, ab).await?.contacts.values() {
             let mut c = c.clone();
             // name and colour change without the synctoken moving: always the current ones
-            (c.ab_name, c.ab_color, c.is_group) = (ab.displayname.clone(), ab.color.clone(), ab.is_group);
+            (c.ab_name, c.ab_color, c.is_group, c.read_only) = (ab.displayname.clone(), ab.color.clone(), ab.is_group, ab.read_only);
             out.push(c);
         }
     }

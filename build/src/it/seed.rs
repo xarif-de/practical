@@ -55,7 +55,7 @@ pub async fn seed() -> Seed {
 }
 
 /// [`seed`] plus sharing: alice shares her Privat with dave (read); bob shares his calendar Team and his address
-/// book Teamkontakte with `group.team` = {erin} (write), through the settings routes. Team holds a public event
+/// book Teamkontakte with `group.team` = {erin} (write), and Teamkontakte with dave (read), through the settings routes. Team holds a public event
 /// with bob's reminder, a private one (sharees see only its time: Team's levels are set to 1/0) and a confidential
 /// one (hidden from them), each hidden part carrying the word "Marker7"; and a task.
 pub struct SharedSeed {
@@ -66,6 +66,8 @@ pub struct SharedSeed {
     pub privat_copy: String,
     pub team_copy: String,
     pub team_ab_copy: String,
+    /// dave's read copy of Teamkontakte
+    pub team_ab_dave_copy: String,
 }
 
 pub async fn seed_shared() -> SharedSeed {
@@ -85,28 +87,30 @@ pub async fn seed_shared() -> SharedSeed {
     let r = bob.post_form(&format!("/settings/calendars/bob/{team}/share"), &[("sharee", "group.team"), ("access", "write")]).await;
     assert_eq!(r.status, axum::http::StatusCode::SEE_OTHER, "{}", r.body);
     bob.post_form(&format!("/settings/addressbooks/bob/{team_ab}/share"), &[("sharee", "group.team"), ("access", "write")]).await;
+    bob.post_form(&format!("/settings/addressbooks/bob/{team_ab}/share"), &[("sharee", "dave"), ("access", "read")]).await;
     let mut alice = app.login("alice").await;
     alice.post_form(&format!("/settings/calendars/alice/{}/share", s.privat), &[("sharee", "dave"), ("access", "read")]).await;
     // the names of the copies as their owners' share lists give them
-    let names = |owner: &'static str, id: String, ab: bool| async move {
+    let names = |owner: &'static str, id: String, ab: bool, sharee: &'static str| async move {
         let o = app.principal(owner).await;
         let c = app.state.collections();
         let v: Vec<String> = if ab {
             let a = crate::domain::collections::ensure_addressbook(&app.state, &o, owner, &id, crate::state::Need::Own).await.unwrap();
-            c.addressbook_shares(&a).await.unwrap().into_iter().map(|x| x.name).collect()
+            c.addressbook_shares(&a).await.unwrap().into_iter().filter(|x| x.sharee == sharee).map(|x| x.name).collect()
         } else {
             let a = crate::domain::collections::ensure_calendar(&app.state, &o, owner, &id, crate::state::Need::Own).await.unwrap();
-            c.calendar_shares(&a).await.unwrap().into_iter().map(|x| x.name).collect()
+            c.calendar_shares(&a).await.unwrap().into_iter().filter(|x| x.sharee == sharee).map(|x| x.name).collect()
         };
-        assert_eq!(v.len(), 1, "{owner}/{id}: {v:?}");
+        assert_eq!(v.len(), 1, "{owner}/{id} → {sharee}: {v:?}");
         v.into_iter().next().unwrap()
     };
-    let team_copy = names("bob", team.clone(), false).await;
-    let team_ab_copy = names("bob", team_ab.clone(), true).await;
-    let privat_copy = names("alice", s.privat.clone(), false).await;
+    let team_copy = names("bob", team.clone(), false, "group.team").await;
+    let team_ab_copy = names("bob", team_ab.clone(), true, "group.team").await;
+    let team_ab_dave_copy = names("bob", team_ab.clone(), true, "dave").await;
+    let privat_copy = names("alice", s.privat.clone(), false, "dave").await;
     // Team's levels: private events show their time (every calendar hides both unless set)
     let bob = app.principal("bob").await;
     let a = crate::domain::collections::ensure_calendar(&app.state, &bob, "bob", &team, crate::state::Need::Own).await.unwrap();
     app.state.collections().set_visibility(&a, crate::state::Policy::new(1, 0).unwrap()).await.unwrap();
-    SharedSeed { s, team, team_ab, privat_copy, team_copy, team_ab_copy }
+    SharedSeed { s, team, team_ab, privat_copy, team_copy, team_ab_copy, team_ab_dave_copy }
 }

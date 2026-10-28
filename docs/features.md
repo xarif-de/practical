@@ -453,7 +453,8 @@ e-mail address (both on unless you turn them off); anyone who types your whole a
 with you. The page also lists what others see of each of your calendars; that is changed on the calendar itself.
 
 A shared calendar appears for its receivers with its own name and colour, which each of them may change; the
-settings show who shared it, and **Remove from my list** ends the share for them (the owner's calendar stays). It works in
+settings show who shared it, and so do the filters and the editor, next to its name. Something shared to read opens
+in view mode only, in calendars and in contacts. **Remove from my list** ends the share for them (the owner's calendar stays). It works in
 PractiCal and in every CalDAV/CardDAV app. Phones and Apple devices see a calendar shared with a group through the
 group's account, as the group's own calendars.
 

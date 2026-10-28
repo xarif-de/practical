@@ -69,6 +69,7 @@
   ],
   "prefix": "Dr.",
   "principal": "p",
+  "read_only": false,
   "related": [],
   "suffix": "jun.",
   "title": "Leiterin",

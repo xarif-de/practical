@@ -456,3 +456,62 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     alice.post_form("/settings/groups/group.familie/members", &[("member", "niemand@example.org")]).await;
     assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 4);
 }
+
+/// The stored card as its owner's store holds it
+async fn stored_card(app: &crate::testkit::TestApp, owner: &str, ab: &str, id: &str) -> String {
+    rustical_store::AddressbookReadStore::get_object(app.state.raw().addressbooks, owner, ab, id, false).await.unwrap().get_vcf().to_string()
+}
+
+#[tokio::test]
+async fn a_read_share_takes_no_write_of_any_kind() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let mut alice = app.login("alice").await;
+    alice.post_form(&format!("/settings/calendars/alice/{}/share", w.s.aufgaben), &[("sharee", "dave"), ("access", "read")]).await;
+    let mut dave = app.login("dave").await;
+    let dave_p = app.principal("dave").await;
+    let tasks_copy = crate::domain::collections::calendars_for(&app.state, &dave_p, false).await.unwrap().into_iter().find(|c| c.owner == "alice" && c.auth.id() == w.s.aufgaben).unwrap().id;
+    let (card0, ics0, task0) = (stored_card(app, "bob", &w.team_ab, "tina").await, stored(app, "alice", &w.s.privat, "urlaub").await, stored(app, "alice", &w.s.aufgaben, "steuer").await);
+    let refused = |r: crate::testkit::Resp| {
+        assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
+        assert!(r.body.contains("nur zum Lesen"), "the share's message, not a bare 403: {}", r.body);
+    };
+    // the contact: read-only in its detail, and every write says why it is refused
+    let cpath = format!("/api/contacts/dave/{}/tina", w.team_ab_dave_copy);
+    let c = dave.get_json(&cpath).await.ok().json();
+    assert_eq!(c["read_only"], true);
+    let mut body = c.clone();
+    body["full_name"] = json!("Von Dave");
+    body["ab_id"] = json!(w.team_ab_dave_copy);
+    refused(dave.json(Method::PUT, &cpath, body.clone()).await);
+    refused(dave.json(Method::POST, "/api/contacts", body).await);
+    refused(dave.delete(&cpath).await);
+    refused(dave.post_raw(&format!("/settings/import/addressbooks/dave/{}", w.team_ab_dave_copy), "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:tina\r\nFN:Überschrieben\r\nEND:VCARD\r\n").await);
+    // the calendar: drag and drop, the tick box, an .ics import
+    let r = dave.json(Method::POST, &format!("/api/events/dave/{}/urlaub/move", w.privat_copy), json!({ "days": 1 })).await;
+    assert!(r.status.is_client_error(), "{} {}", r.status, r.body);
+    let r = dave.json(Method::PUT, &format!("/api/tasks/dave/{tasks_copy}/steuer"), json!({ "principal": "dave", "cal_id": tasks_copy, "summary": "", "completed": true })).await;
+    assert!(r.status.is_client_error(), "{} {}", r.status, r.body);
+    let r = dave.post_raw(&format!("/settings/import/calendars/dave/{}", w.privat_copy), &crate::testkit::vevent("urlaub", "Überschrieben", "DTSTART;VALUE=DATE:20261026\nDTEND;VALUE=DATE:20261031")).await;
+    assert!(r.status.is_client_error(), "{} {}", r.status, r.body);
+    assert_eq!((stored_card(app, "bob", &w.team_ab, "tina").await, stored(app, "alice", &w.s.privat, "urlaub").await, stored(app, "alice", &w.s.aufgaben, "steuer").await), (card0, ics0, task0), "nothing changed");
+}
+
+#[tokio::test]
+async fn shares_are_listed_with_their_owner_and_are_not_mine() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let mut dave = app.login("dave").await;
+    // the filter rows and the editor's select name the owner; "only mine" is offered (there are shares)
+    let cal = dave.get("/calendar?date=2026-10-14").await.ok().body.clone();
+    assert!(cal.contains("<small>Alice Beispiel</small>") && cal.contains("data-filter=\"mine\""), "{cal}");
+    assert!(cal.contains(&format!("value=\"dave/{}\"", w.privat_copy)) && cal.contains("(Alice Beispiel)</option>"), "the editor's select");
+    // the contacts: the read copy is labelled, and no new or moved contact can be put there
+    let page = dave.get("/contacts").await.ok().body.clone();
+    assert!(page.contains("<small>Bob Muster</small>"), "the filter row");
+    assert!(page.contains(&format!("value=\"dave/{}\" disabled>Teamkontakte (Bob Muster)</option>", w.team_ab_dave_copy)), "{page}");
+    assert!(!page.contains("contenteditable"), "no table cell to edit in place");
+    // the settings' list says who shared it, not the user's own name
+    let set = dave.get("/settings").await.ok().body.clone();
+    assert!(!set.contains("Dave Leser · "), "{set}");
+}
