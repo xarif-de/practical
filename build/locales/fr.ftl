@@ -1093,6 +1093,7 @@ js-req-vis-shortened = Ensuite, vous ne verrez plus ceci qu’en abrégé (le pa
 js-req-vis-gone = Ensuite, vous ne verrez plus ceci du tout (le partage ne montre pas ce niveau). Enregistrer quand même ?
 js-req-vis-save = Enregistrer quand même
 js-req-vis-back = Revenir à la modification
+js-req-alarms = Vos rappels ne sont pas enregistrés dans ce calendrier partagé : il ne garde que ceux de son propriétaire. Enregistrer quand même ?
 js-req-restored = Vos modifications non enregistrées d’avant la connexion sont de retour – vérifiez-les et enregistrez-les.
 js-req-copy = La copie dans le presse-papiers n’a pas fonctionné.
 js-week = Semaine %w %y
@@ -2001,6 +2002,7 @@ upl-del-hint = Les calendriers cochés vont à la corbeille. Les autres restent 
 upl-del-go = Déconnecter l’appareil
 upl-managed-hint = Un PractiCalUploader gère ce calendrier. Retire-le dans l’uploader (désélectionne-le) ou avec l’appareil sous « Appareils connectés ».
 ed-read-only = Calendrier en lecture seule · affichage uniquement
+ed-al-share = Un calendrier partagé ne garde que les rappels de son propriétaire : les vôtres ne sont pas enregistrés.
 
 # Sharing calendars and address books (state::Collections, domain::sharing)
 err-share-trash-href = Le propriétaire a un élément de ce nom dans la corbeille. Choisissez un autre nom.

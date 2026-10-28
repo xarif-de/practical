@@ -1091,6 +1091,7 @@ js-req-vis-shortened = Afterwards you will see this only shortened (the share do
 js-req-vis-gone = Afterwards you will not see this at all (the share does not show this level). Save anyway?
 js-req-vis-save = Save anyway
 js-req-vis-back = Back to editing
+js-req-alarms = Your reminders are not saved in this shared calendar: it keeps only its owner's. Save anyway?
 js-req-restored = Your unsaved changes from before the login are back – please check and save them.
 js-req-copy = Copying to the clipboard did not work.
 js-week = Week %w %y
@@ -1997,6 +1998,7 @@ upl-del-hint = Ticked calendars go to the trash. The others stay read-only; you 
 upl-del-go = Disconnect device
 upl-managed-hint = A PractiCalUploader manages this calendar. Remove it in the uploader (deselect it) or together with the device under “Connected devices”.
 ed-read-only = Read-only calendar · view only
+ed-al-share = A shared calendar keeps only its owner's reminders: yours are not saved.
 
 # Sharing calendars and address books (state::Collections, domain::sharing)
 err-share-trash-href = the owner has an entry with this name in the trash; choose another name

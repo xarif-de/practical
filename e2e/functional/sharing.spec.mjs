@@ -177,3 +177,12 @@ test('a group\'s new member: typed, suggested without those already in it, picke
   await Promise.all([page.waitForURL(/#groups$/), form.locator('button[type=submit]').click()]);
   await expect(page.locator('form[action="/settings/groups/group.familie/members/erin/remove"]')).toHaveCount(1);
 });
+
+test('a shared calendar keeps its owner\'s reminders only: the reminder card is not offered there', async ({ page }) => {
+  await loginAs(page, 'erin');
+  await openNew(page, '2026-11-06');
+  await fillWhen(page, { title: 'F7 Ohne Erinnerung', from: '09:00', to: '10:00', cal: await teamCopy(page) });
+  await page.locator('.addmenu .add').click();
+  await expect(page.locator('.addmenu [data-card-add="alarm"]')).toBeDisabled();
+  await expect(page.locator('.addmenu [data-card-add="status"]')).toBeEnabled();
+});

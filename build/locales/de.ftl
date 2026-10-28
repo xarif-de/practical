@@ -1088,6 +1088,7 @@ js-req-vis-shortened = Danach siehst du das nur noch gekürzt (die Freigabe zeig
 js-req-vis-gone = Danach siehst du das gar nicht mehr (die Freigabe zeigt diese Stufe nicht). Trotzdem speichern?
 js-req-vis-save = Trotzdem speichern
 js-req-vis-back = Zurück zum Bearbeiten
+js-req-alarms = In diesem geteilten Kalender werden deine Erinnerungen nicht gespeichert: Es bleiben nur die seines Besitzers. Trotzdem speichern?
 js-req-restored = Deine ungespeicherten Änderungen von vor der Anmeldung sind wieder da – bitte prüfen und speichern.
 js-req-copy = Kopieren in die Zwischenablage ging nicht.
 js-week = KW %w %y
@@ -1994,6 +1995,7 @@ upl-del-hint = Angehakte Kalender kommen in den Papierkorb. Die anderen bleiben 
 upl-del-go = Gerät trennen
 upl-managed-hint = Diesen Kalender verwaltet ein PractiCalUploader. Entfernen kannst du ihn im Uploader (abwählen) oder zusammen mit dem Gerät unter „Verbundene Geräte“.
 ed-read-only = Schreibgeschützter Kalender · nur Ansicht
+ed-al-share = In einem geteilten Kalender bleiben nur die Erinnerungen seines Besitzers: deine werden nicht gespeichert.
 
 # Sharing calendars and address books (state::Collections, domain::sharing)
 err-share-trash-href = Unter diesem Namen liegt beim Besitzer ein Eintrag im Papierkorb. Wähle einen anderen Namen.

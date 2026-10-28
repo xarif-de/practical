@@ -515,3 +515,40 @@ async fn shares_are_listed_with_their_owner_and_are_not_mine() {
     let set = dave.get("/settings").await.ok().body.clone();
     assert!(!set.contains("Dave Leser · "), "{set}");
 }
+
+#[tokio::test]
+async fn reminders_into_a_share_are_asked_about_first() {
+    let w = seed_shared().await;
+    let app = &w.s.app;
+    let eigen = app.calendar("erin", "Eigen", "#123456", &["VEVENT"]).await;
+    app.put_ics("erin", &eigen, "mit", &crate::testkit::vevent("mit", "Mit Erinnerung", "DTSTART;TZID=Europe/Berlin:20261022T100000\nDTEND;TZID=Europe/Berlin:20261022T110000\nBEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Erinalarm\nTRIGGER:-PT5M\nEND:VALARM")).await;
+    let mut erin = app.login("erin").await;
+    let asked = |r: &crate::testkit::Resp| r.status == StatusCode::UNPROCESSABLE_ENTITY && r.json() == json!({ "code": "confirm-alarms" });
+    // moving her own event with a reminder into the share: asked, nothing moved
+    let path = format!("/api/events/erin/{eigen}/mit");
+    let d = erin.get_json(&path).await.ok().json();
+    assert_eq!(d["alarms"].as_array().map(Vec::len), Some(1));
+    let mut body = event_body(&d, "group.team", &w.team_copy);
+    let r = erin.json(Method::PUT, &path, body.clone()).await;
+    assert!(asked(&r), "{} {}", r.status, r.body);
+    assert!(stored(app, "erin", &eigen, "mit").await.contains("Erinalarm"), "still hers");
+    // confirmed: moved, without her reminder
+    body["confirm_alarms"] = json!(true);
+    let id = erin.json(Method::PUT, &path, body).await.ok().json()["id"].as_str().unwrap().to_string();
+    let ics = stored(app, "bob", &w.team, &id).await;
+    assert!(ics.contains("SUMMARY:Mit Erinnerung") && !ics.contains("Erinalarm"), "{ics}");
+    // a new one in the share with a reminder: the same question; without one: none
+    let mut new = event_body(&d, "group.team", &w.team_copy);
+    new["summary"] = json!("Neu geteilt");
+    let r = erin.json(Method::POST, "/api/events", new.clone()).await;
+    assert!(asked(&r), "{} {}", r.status, r.body);
+    new["alarms"] = json!([]);
+    erin.json(Method::POST, "/api/events", new).await.ok();
+    // a task too
+    let r = erin.json(Method::POST, "/api/tasks", json!({ "principal": "group.team", "cal_id": w.team_copy, "summary": "Geteilte Aufgabe", "alarms": [{ "minutes": 10 }] })).await;
+    assert!(asked(&r), "{} {}", r.status, r.body);
+    // an own calendar asks nothing
+    let mut own = event_body(&d, "erin", &eigen);
+    own["summary"] = json!("Eigen mit Erinnerung");
+    erin.json(Method::POST, "/api/events", own).await.ok();
+}

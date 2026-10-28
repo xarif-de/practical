@@ -49,13 +49,23 @@ fn user_tz(input: &EventInput, default: chrono_tz::Tz) -> chrono_tz::Tz {
     input.timezone.as_deref().and_then(ical::parse_tz).unwrap_or(default)
 }
 
-/// A sharee who writes an object it would then see shortened or not at all (its CLASS under the owner's
-/// policy) has to confirm it first (R2: it may; the editor asks). Own calendars: nothing to ask. Changing an
+/// A sharee who writes an object it would then see shortened or not at all (its CLASS under the calendar's
+/// levels) has to confirm it first: the write is allowed, the editor asks (req.js writer). Own calendars: nothing to ask. Changing an
 /// object it sees only shortened is refused before (`Authorized::ensure_seen_whole`), so that is no question.
 pub(crate) fn confirm_visibility(cal: &crate::state::Authorized, obj: &CalendarObject, confirmed: bool) -> AppResult<()> {
     let level = cal.level(obj);
     if !cal.is_own() && !confirmed && level < crate::state::FULL_LEVEL {
         return Err(AppError::ConfirmVisibility(level));
+    }
+    Ok(())
+}
+
+/// A write through a share keeps only the owner's stored reminders and drops those it carries (rustical_ical
+/// visibility.rs `with_stored_alarms`): a write that carries some asks first (the editor disables the card there, but a
+/// move of an own event into a share, or a category rule, can bring them). Own calendars: nothing to ask.
+pub(crate) fn confirm_alarms(cal: &crate::state::Authorized, has_alarms: bool, confirmed: bool) -> AppResult<()> {
+    if !cal.is_own() && has_alarms && !confirmed {
+        return Err(AppError::ConfirmAlarms);
     }
     Ok(())
 }
@@ -74,6 +84,7 @@ pub async fn create_event(state: &AppState, user: &Principal, input: EventInput,
 pub async fn create_event_as(state: &AppState, user: &Principal, input: EventInput, default_tz: chrono_tz::Tz, keep_uid: Option<&str>) -> AppResult<String> {
     let cal = collections::ensure_calendar(state, user, &input.principal, &input.cal_id, Need::Read).await?;
     collections::ensure_writable(state, &cal).await?;
+    confirm_alarms(&cal, !input.alarms.is_empty(), input.confirm_alarms)?;
     let tz = user_tz(&input, default_tz);
     let keep = match keep_uid {
         Some(u) if state.collections().object(&cal, u).await.is_err() => Some(u.to_string()),
@@ -105,6 +116,7 @@ pub async fn update_event(state: &AppState, user: &Principal, object_id: &str, i
     {
         return Err(AppError::conflict("err-changed-event"));
     }
+    confirm_alarms(&cal, !input.alarms.is_empty(), input.confirm_alarms)?;
     let CalendarInnerData::Event(main, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };

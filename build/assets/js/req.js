@@ -79,12 +79,14 @@
      newest state wins). Meanwhile box[data-state=saving][aria-busy=true] and buttons() are disabled; afterwards idle()
      (else each button gets its own state back). A failed answer: 'auth' → nothing (the page leaves for the login);
      'conflict' with conflict = { overwrite, reload } → the question "keep mine / load theirs" (Escape: back to the
-     editing, the message stays); a 422 {code:"confirm-visibility",level} (a write through a share after which its
-     writer sees the object shortened, level 1–3, or not at all, 0) with confirm(): asks, and on "yes" its answer
-     (the write again, confirmed), on "no" nothing more; else its message into `error` (an element) or a toast. Slower than 300 ms: the
+     editing, the message stays); a 422 question of a write through a share — {code:"confirm-visibility",level}: its
+     writer sees the object shortened (level 1–3) or not at all (0) afterwards; {code:"confirm-alarms"}: the share
+     keeps only its owner's reminders — with confirm(flags): asks, and on "yes" its answer (the write again with every
+     flag confirmed so far: confirm_visibility, confirm_alarms), on "no" nothing more; else its message into `error`
+     (an element) or a toast. Slower than 300 ms: the
      progress line too. box[data-state]: saving | conflict | error, none once done — the editor's own states (closed,
      view, edit, dirty) live in its classes. */
-  const confirmLevel = body => { try { const j = JSON.parse(body); return j && j.code === 'confirm-visibility' ? +j.level : null; } catch (_) { return null; } };
+  const question = body => { let j = null; try { j = JSON.parse(body); } catch (_) {} if (!j) return null; if (j.code === 'confirm-visibility') return { flag: 'confirm_visibility', text: tr(+j.level ? 'js-req-vis-shortened' : 'js-req-vis-gone') }; return j.code === 'confirm-alarms' ? { flag: 'confirm_alarms', text: tr('js-req-alarms') } : null; };
   P.writer = (box, o = {}) => {
     let pending = null, queued = null;
     const set = s => { if (s) box.dataset.state = s; else delete box.dataset.state; if (s === 'saving') box.setAttribute('aria-busy', 'true'); else box.removeAttribute('aria-busy'); };
@@ -97,11 +99,12 @@
         set('saving'); btns.forEach(b => { b.disabled = true; }); let stop = P.progress(300);
         return (pending = (async () => {
           let r, tell = true;
+          const flags = {};
           try {
             r = await fn();
             // each answer may ask again (a 409 after the confirmed write, a 422 after the overwrite)
             while (r && !r.ok) {
-              const vis = r.status === 422 && o.confirm ? confirmLevel(r.body) : null;
+              const q = r.status === 422 && o.confirm ? question(r.body) : null;
               if (r.kind === 'conflict' && o.conflict) {
                 set('conflict'); stop(); // the question waits for the user, not for the server
                 const a = await askYesNo(tr('js-req-conflict-ask'), tr('js-req-mine'), tr('js-req-theirs'), true);
@@ -109,12 +112,13 @@
                 set('saving'); stop = P.progress(300);
                 if (!a) { await o.conflict.reload(); tell = false; break; }
                 r = await o.conflict.overwrite();
-              } else if (vis !== null) {
+              } else if (q) {
                 set('conflict'); stop();
-                const a = await askYesNo(tr(vis ? 'js-req-vis-shortened' : 'js-req-vis-gone'), tr('js-req-vis-save'), tr('js-req-vis-back'), true);
+                const a = await askYesNo(q.text, tr('js-req-vis-save'), tr('js-req-vis-back'), true);
                 set('saving'); stop = P.progress(300);
                 if (!a) { tell = false; break; }
-                r = await o.confirm();
+                flags[q.flag] = true;
+                r = await o.confirm(flags);
               } else break;
             }
           } catch (e) { console.error(e); r = { ok: false, kind: 'server', status: 0, msg: tr('js-req-server'), body: '' }; }

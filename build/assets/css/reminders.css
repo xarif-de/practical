@@ -2,6 +2,9 @@
 /* event editor lists: reminder rows, series options, exception/extra dates, people */
 /* ---- reminders: a timeline strip with draggable markers, per-user preset chips and one
    expandable entry per alarm whose settings follow the chosen kind and trigger ---- */
+/* a share's calendar keeps only its owner's reminders (editor/reminders.js alShareSync): the card is inert under its hint */
+.ed .cardform #ed-alarm-card.shared > :not(h2):not(.al-share) { opacity: .45; pointer-events: none; }
+.ed .cardform .al-share { margin: 2px 0 8px; }
 .ed .cardform .tline { margin: 4px 0 8px 26px; position: relative; height: 84px; user-select: none; }
 .ed .cardform .tline .axis { position: absolute; left: 0; right: 0; top: 52px; height: 2px; background: var(--line); }
 .ed .cardform .tline .evb { position: absolute; top: 44px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--evc, var(--c5)) 25%, transparent); border-left: 3px solid var(--evc, var(--c5)); }

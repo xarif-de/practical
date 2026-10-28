@@ -46,6 +46,9 @@ pub struct TaskInput {
     /// the writer has confirmed that it will see the task only shortened or not at all afterwards (a share)
     #[serde(default)]
     pub confirm_visibility: bool,
+    /// the writer has confirmed that its reminders are not kept (a share: `events::confirm_alarms`)
+    #[serde(default)]
+    pub confirm_alarms: bool,
 }
 fn yes() -> bool {
     true
@@ -224,6 +227,7 @@ fn has_tzid(l: &str) -> bool {
 pub async fn create_task(state: &AppState, user: &Principal, mut i: TaskInput, tz: chrono_tz::Tz) -> AppResult<String> {
     let cal = collections::ensure_calendar(state, user, &i.principal, &i.cal_id, Need::Read).await?;
     collections::ensure_writable(state, &cal).await?;
+    events::confirm_alarms(&cal, !i.alarms.is_empty(), i.confirm_alarms)?;
     normalize(&mut i, crate::clock::now().with_timezone(&tz).naive_local());
     let uid = uuid::Uuid::new_v4().to_string();
     let lines = build_vtodo(&uid, 0, &i, tz, None)?;
@@ -247,6 +251,7 @@ pub async fn update_task(state: &AppState, user: &Principal, object_id: &str, mu
     {
         return Err(AppError::conflict("err-changed-task"));
     }
+    events::confirm_alarms(&cal, !i.alarms.is_empty(), i.confirm_alarms)?;
     let CalendarInnerData::Todo(t, _) = existing.get_inner().get_inner() else {
         return Err(AppError::NotFound);
     };
@@ -294,6 +299,7 @@ pub async fn set_completed(state: &AppState, user: &Principal, principal: &str, 
         alarms: d.alarms,
         links: d.links,
         confirm_visibility: false,
+        confirm_alarms: false,
         related: d.related,
     };
     update_task(state, user, object_id, i, Some(&etag), tz).await

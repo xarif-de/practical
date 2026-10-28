@@ -3,7 +3,7 @@
   // rule sentence, note height, reminder strip, footers — two of them force a layout) once per frame; whatever
   // reads them (save, close) runs a pending refresh first
   form.addEventListener('input', () => { updateButtons(); if (!refreshQ) refreshQ = requestAnimationFrame(refresh); });
-  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) { syncDot(); visRender(); } if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
+  form.addEventListener('change', e => { const t = e.target; if (t === f.calendar) { syncDot(); visRender(); cards(); /* a share's calendar: the reminder card inert, not offered */ } if (t === f.date) { if (f.end_date.value < f.date.value) f.end_date.value = f.date.value; dayline(); } if (t === f.date || t === f.from || t === f.all_day) { rrFocus = null; rrRender(); } if (!ruleMode && CATS.length && !t.dataset.rv) rulesMark(); refresh(); });
   form.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b || !form.contains(b)) return;
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }

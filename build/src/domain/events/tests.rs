@@ -100,6 +100,7 @@ fn build_and_reparse_event() {
         related: vec![],
         timezone: None,
         confirm_visibility: false,
+        confirm_alarms: false,
     };
     let lines = build_vevent("uid-1", 0, &input, tz, None).unwrap();
     let ics = ical::assemble(ical::vtimezone("Europe/Berlin"), "VEVENT", lines, &[]);
@@ -243,6 +244,7 @@ fn unchanged_save_keeps_every_property() {
         related: related_of(&raw.props),
         timezone: Some("Europe/Berlin".into()),
         confirm_visibility: false,
+        confirm_alarms: false,
     };
     assert_eq!(input.links.iter().map(|l| (l.kind.as_str(), l.embedded)).collect::<Vec<_>>(), vec![("url", false), ("conference", false), ("attach", false), ("attach", true)]);
     assert_eq!(input.links[1].features, vec!["AUDIO", "VIDEO"]);

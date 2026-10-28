@@ -461,7 +461,9 @@ group's account, as the group's own calendars.
 What others see of private and confidential events is set per calendar, in its **Sharing** block under
 **What others see**, from "everything" down to "not at all"; unless set, both are hidden. Confidential never shows
 more than private. Public events are always shown in full, contacts always in full. Someone who may write changes only the
-events they see in full; your reminders stay yours and are never sent to them. A calendar that the
+events they see in full; your reminders stay yours and are never sent to them. Their own reminders are not kept in
+your calendar, so the editor offers none there and asks before it saves an event that still carries some, such as
+one moved into the shared calendar. A calendar that the
 PractiCalUploader fills should only be shared to read: each upload overwrites what others change.
 
 When a group goes to the trash, its shares rest, both those of its calendars and those made with it; a restore

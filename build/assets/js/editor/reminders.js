@@ -9,6 +9,12 @@
   // mirrored into the hidden `alarms_json` input so dirty tracking and reset work like for any field. ----
   const AL = $('#ed-alarm-card'), AT = AL.dataset, alBox = $('[data-list="alarms"]', AL), tline = $('#ed-tline'), apre = $('#ed-apre');
   let ALARMS = [], alSeq = 0;
+  /* a share's calendar (`#ed-cal` option data-share) keeps only its owner's reminders and drops the writer's
+     (rustical_ical visibility.rs `with_stored_alarms`): there the card is inert with its hint and cannot be added;
+     a save that still carries reminders (an own event moved there, a category rule) is asked about first (the
+     server's 422 confirm-alarms, req.js writer). Not in rule mode: a rule belongs to no calendar. */
+  const alShared = () => { const o = f.calendar && f.calendar.selectedOptions[0]; return !ruleMode && !!o && o.hasAttribute('data-share'); };
+  function alShareSync() { const sh = alShared(); AL.classList.toggle('shared', sh); $x('#ed-al-share', AL).hidden = !sh; }
   const AL_ACTS = ['DISPLAY', 'AUDIO', 'EMAIL'], AL_ICO = { DISPLAY: '#i-monitor-dot', AUDIO: '#i-bell', EMAIL: '#i-mail' }, AL_PROX = ['ARRIVE', 'DEPART', 'CONNECT', 'DISCONNECT'];
   const SNAPS = (() => { try { const j = JSON.parse($('#alarm-snaps-data').textContent); if (Array.isArray(j.start) && j.start.length) return j; } catch (_) {} return { start: [2, 5, 15, 30, 60, 180, 480, 1440, 2880, 4320, 10080, 20160], end: [5, 10, 15, 30, 60] }; })(); // per-user snap points of the strip (settings)
   const SNAP_START = SNAPS.start, SNAP_END_ALL = SNAPS.end, AL_UNITS = [1, 60, 1440, 10080, 43200]; // a "month" is 30 days: iCalendar durations have no months

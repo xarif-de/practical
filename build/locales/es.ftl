@@ -1093,6 +1093,7 @@ js-req-vis-shortened = Después solo verás esto abreviado (la compartición no 
 js-req-vis-gone = Después ya no verás esto (la compartición no muestra este nivel). ¿Guardar de todos modos?
 js-req-vis-save = Guardar de todos modos
 js-req-vis-back = Volver a editar
+js-req-alarms = Tus recordatorios no se guardan en este calendario compartido: solo guarda los de su propietario. ¿Guardar de todos modos?
 js-req-restored = Tus cambios sin guardar de antes de iniciar sesión han vuelto: revísalos y guárdalos.
 js-req-copy = No se pudo copiar al portapapeles.
 js-week = Semana %w %y
@@ -1999,6 +2000,7 @@ upl-del-hint = Los calendarios marcados van a la papelera. Los demás siguen de 
 upl-del-go = Desconectar dispositivo
 upl-managed-hint = Un PractiCalUploader gestiona este calendario. Quítalo en el uploader (deselecciónalo) o junto con el dispositivo en «Dispositivos conectados».
 ed-read-only = Calendario de solo lectura · solo vista
+ed-al-share = Un calendario compartido solo guarda los recordatorios de su propietario: los tuyos no se guardan.
 
 # Sharing calendars and address books (state::Collections, domain::sharing)
 err-share-trash-href = El propietario tiene un elemento con este nombre en la papelera. Elige otro nombre.

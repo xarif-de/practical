@@ -158,6 +158,9 @@ pub struct EventInput {
     /// the writer has confirmed that it will see the event only shortened or not at all afterwards (a share)
     #[serde(default)]
     pub confirm_visibility: bool,
+    /// the writer has confirmed that its reminders are not kept (a share: `confirm_alarms`)
+    #[serde(default)]
+    pub confirm_alarms: bool,
 }
 
 /// RELATED-TO: a link to another event or task by UID; `target` is resolved for the editor

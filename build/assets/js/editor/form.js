@@ -22,7 +22,7 @@
   const W = practical.writer(form, { buttons: () => [$('#ed-save'), $('#ed-delete'), $('#ed-reset')], error: $('#ed-error'), idle: () => updateButtons(),
     conflict: { overwrite: async () => { const r = await practical.req(API + '/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(); },
       reload: () => openEditor(f.key.value, openDate) },
-    confirm: () => put({ confirm_visibility: true }) });
+    confirm: flags => put(flags) });
   $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = () => { if (!W.busy) close(); };
   addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
   const fmtD = s => dfmt(parse(s.slice(0, 10)), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });

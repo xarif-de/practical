@@ -36,6 +36,11 @@ pub enum AppError {
     /// question (req.js `o.confirm`) and sends again with `confirm_visibility`
     #[error("confirm the visibility (level {0})")]
     ConfirmVisibility(u8),
+    /// A write with reminders into a share, which keeps only its owner's (rustical_ical visibility.rs
+    /// `with_stored_alarms`): 422 with `{"code":"confirm-alarms"}`, asked like [`Self::ConfirmVisibility`] and sent
+    /// again with `confirm_alarms`
+    #[error("confirm that the reminders are not kept")]
+    ConfirmAlarms,
 }
 
 /// A message for a user: a Fluent key and its arguments. PractiCal's own errors (BadRequest, Conflict) carry
@@ -91,7 +96,7 @@ impl AppError {
         let key = match self {
             Self::BadRequest(m) | Self::Conflict(m) | Self::Rejected(_, m) => return Some(m.clone()),
             // a question, not a message: its JSON body must reach the editor unchanged (`ctx::localize_errors`)
-            Self::ConfirmVisibility(_) => return None,
+            Self::ConfirmVisibility(_) | Self::ConfirmAlarms => return None,
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => "flash-not-found",
             Self::Forbidden | Self::Store(rustical_store::Error::ReadOnly) => "flash-forbidden",
             Self::Store(rustical_store::Error::AlreadyExists) => "flash-exists",
@@ -131,6 +136,9 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         if let Self::ConfirmVisibility(level) = self {
             return (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(serde_json::json!({ "code": "confirm-visibility", "level": level }))).into_response();
+        }
+        if let Self::ConfirmAlarms = self {
+            return (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(serde_json::json!({ "code": "confirm-alarms" }))).into_response();
         }
         let status = match &self {
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => StatusCode::NOT_FOUND,
