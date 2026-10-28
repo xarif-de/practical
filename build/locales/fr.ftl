@@ -2036,6 +2036,8 @@ confirm-unshare = Mettre fin au partage avec { $name } ? La collection y dispara
 share-with = Partager avec
 share-with-ph = Nom ou adresse e-mail
 share-sugg = Suggestions
+# a person in a share line or a member list who keeps name, id and address from others
+person-someone = une personne
 privacy-title = Confidentialité
 privacy-sharing = Partage
 privacy-find = Trouvable lors d'un partage

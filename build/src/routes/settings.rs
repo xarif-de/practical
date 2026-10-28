@@ -364,7 +364,13 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         alarm_snaps_end: events::fmt_offsets(&snaps.end),
         alarm_snaps_default_start: events::fmt_offsets(&events::AlarmSnaps::default().start),
         alarm_snaps_default_end: events::fmt_offsets(&events::AlarmSnaps::default().end),
-        groups: groups::list_for_user(&state, &user).await?,
+        groups: {
+            let mut gs = groups::list_for_user(&state, &user).await?;
+            for g in &mut gs {
+                g.shown = groups::member_rows(&state, &user, &ctx.csrf, &ctx.t("person-someone"), g).await?;
+            }
+            gs
+        },
         trashed: groups::trashed_for_user(&state, &user).await?,
         calendars: cals_all.clone(),
         addressbooks: abs_all.clone(),
@@ -376,7 +382,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         new_uploader,
         uploader_devices: crate::domain::uploader::devices_of(&state, &user).await?,
         prefs: p.clone(),
-        share_rows: share_rows(&state, &user, &cals_all, &abs_all).await?,
+        share_rows: share_rows(&state, &user, &ctx.csrf, &ctx.t("person-someone"), &cals_all, &abs_all).await?,
         cal_vis: cal_vis(&state, &cals_all).await?,
         user_id: user.id.clone(),
         own_email: state.collections().principal_email(&user.id).await?,

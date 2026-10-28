@@ -491,17 +491,41 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     assert_eq!(r.status, StatusCode::SEE_OTHER, "{}", r.body);
     let erin_p = app.principal("erin").await;
     assert!(crate::domain::collections::calendars_for(&app.state, &erin_p, false).await.unwrap().iter().any(|c| c.owner == "bob" && c.auth.id() == cal));
-    // the page shows the share by the address too, nowhere her id or her name (the address itself starts with "erin")
-    // her id as a word ("lettering" holds "erin" too), and her name
-    let hides_her = |page: &str| { let rest = page.replace("erin@example.org", ""); !rest.split(|c: char| !c.is_alphanumeric()).any(|w| w == "erin") && !rest.contains("Erin Schreiber") };
+    // what a page may show of her: never her id (as a word: "lettering" holds "erin" too); unlisted by id the address
+    // and not her name, unlisted by both her name and not the address
+    let no_id = |page: &str| !page.replace("erin@example.org", "").split(|c: char| !c.is_alphanumeric()).any(|w| w == "erin");
+    // a line's or a row's key in a page: the first person key after `at`
+    let key_after = |page: &str, at: &str| { let sec = &page[page.find(at).unwrap_or_else(|| panic!("no {at}"))..]; let i = sec.find("~").unwrap(); sec[i..].split(['"', '/']).next().unwrap().to_string() };
     let page = bob.get("/settings").await.ok().body.clone();
-    assert!(page.contains("value=\"erin@example.org\"") && hides_her(&page), "bob's settings");
-    // its line's forms work with that key: the access switch, then the end of the share
-    bob.post_form(&format!("/settings/calendars/bob/{cal}/access"), &[("sharee", "erin@example.org"), ("access", "write")]).await;
+    assert!(no_id(&page) && page.contains("erin@example.org") && !page.contains("Erin Schreiber"), "bob's settings, unlisted by id");
+    let key = key_after(&page, &format!("id=\"cal-bob-{cal}\""));
+    assert!(key.len() == 33 && key[1..].bytes().all(|b| b.is_ascii_hexdigit()), "{key}");
+    // unlisted by both: her name, not the address
+    erin.post_form("/settings/privacy", &[]).await;
+    let page = bob.get("/settings").await.ok().body.clone();
+    assert!(no_id(&page) && !page.contains("erin@example.org") && page.contains("Erin Schreiber"), "bob's settings, unlisted by both");
+    assert_eq!(key_after(&page, &format!("id=\"cal-bob-{cal}\"")), key, "the same key for the same session");
+    erin.post_form("/settings/privacy", &[("listed_by_email", "1")]).await;
+    // its line's forms work with the key: the access switch, then the end of the share
     let a = crate::domain::collections::ensure_calendar(&app.state, &app.principal("bob").await, "bob", &cal, crate::state::Need::Own).await.unwrap();
+    bob.post_form(&format!("/settings/calendars/bob/{cal}/access"), &[("sharee", &key), ("access", "write")]).await;
     assert_eq!(app.state.collections().calendar_shares(&a).await.unwrap().iter().map(|s| (s.sharee.clone(), s.access)).collect::<Vec<_>>(), [("erin".to_string(), crate::state::Access::Write)]);
-    bob.post_form(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", "erin@example.org")]).await;
+    // a key of another collection's line, or of another session, does nothing
+    let zweit = app.calendar("bob", "Zweit", "#223344", &["VEVENT"]).await;
+    bob.post_form(&format!("/settings/calendars/bob/{zweit}/share"), &[("sharee", "dave"), ("access", "read")]).await;
+    let r = bob.post_form_json(&format!("/settings/calendars/bob/{zweit}/unshare"), &[("sharee", &key)]).await;
+    assert!(r.json()["ok"] == false && r.body.contains("nicht mehr"), "{} {}", r.status, r.body);
+    let other = crate::domain::groups::person_key("another session", "erin");
+    let r = bob.post_form_json(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", &other)]).await;
+    assert!(r.json()["ok"] == false, "{} {}", r.status, r.body);
+    assert_eq!(app.state.collections().calendar_shares(&a).await.unwrap().len(), 1);
+    bob.post_form_json(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", &key)]).await.ok();
     assert!(app.state.collections().calendar_shares(&a).await.unwrap().is_empty());
+    // a stale line (the share has ended): told it is gone, not reported as done
+    let r = bob.post_form_json(&format!("/settings/calendars/bob/{cal}/unshare"), &[("sharee", &key)]).await;
+    assert!(r.json()["ok"] == false && r.body.contains("nicht mehr"), "{} {}", r.status, r.body);
+    let r = bob.post_form_json(&format!("/settings/calendars/bob/{cal}/access"), &[("sharee", &key), ("access", "read")]).await;
+    assert!(r.json()["ok"] == false, "{} {}", r.status, r.body);
     // a group's member field lists nobody; a member is added by id or by address
     let mut alice = app.login("alice").await;
     let page = alice.get("/settings").await.ok().body.clone();
@@ -512,17 +536,36 @@ async fn whom_an_address_names_and_the_member_field_keep_to_what_people_allow() 
     let mut members = app.state.principals().list_members("group.familie").await.unwrap();
     members.sort();
     assert_eq!(members, ["alice", "bob", "carol", "erin"]);
-    // the members' pages list her by the address, and its remove form works with it
+    // the other members' pages list her by the address, without her id; unlisted by both by her name only
     for who in ["alice", "bob"] {
         let page = app.login(who).await.get("/settings").await.ok().body.clone();
-        assert!(page.contains("/members/erin@example.org/remove") && hides_her(&page), "{who}'s settings");
+        assert!(no_id(&page) && page.contains("erin@example.org") && !page.contains("Erin Schreiber"), "{who}'s settings");
     }
+    erin.post_form("/settings/privacy", &[]).await;
+    let page = alice.get("/settings").await.ok().body.clone();
+    assert!(no_id(&page) && !page.contains("erin@example.org") && page.contains("Erin Schreiber"), "alice's settings, unlisted by both");
     // a group is no member, nor is nobody
     alice.post_form("/settings/groups/group.familie/members", &[("member", "group.team")]).await;
     alice.post_form("/settings/groups/group.familie/members", &[("member", "niemand@example.org")]).await;
     assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 4);
-    alice.post_form("/settings/groups/group.familie/members/erin@example.org/remove", &[]).await;
-    assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 3);
+    // the row's remove form: a key of another session names nobody; the page's own removes her
+    let row_key = key_after(&page, "id=\"groups\"");
+    alice.post_form(&format!("/settings/groups/group.familie/members/{other}/remove"), &[]).await;
+    assert_eq!(app.state.principals().list_members("group.familie").await.unwrap().len(), 4);
+    alice.post_form(&format!("/settings/groups/group.familie/members/{row_key}/remove"), &[]).await;
+    assert!(!app.state.principals().list_members("group.familie").await.unwrap().contains(&"erin".to_string()));
+    // a person nobody may find: "someone" when they have no name either
+    app.state.principals().insert_principal(rustical_store::auth::Principal { displayname: None, ..app.principal("erin").await }, true).await.unwrap();
+    alice.post_form("/settings/groups/group.familie/members", &[("member", "erin")]).await;
+    let page = alice.get("/settings").await.ok().body.clone();
+    assert!(no_id(&page) && !page.contains("erin@example.org") && page.contains("eine Person"), "the neutral word");
+}
+
+#[test]
+fn hmac_rfc4231() {
+    // RFC 4231 test case 2
+    let mac = crate::domain::groups::hmac_sha256(b"Jefe", b"what do ya want for nothing?");
+    assert_eq!(mac.iter().map(|b| format!("{b:02x}")).collect::<String>(), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
 }
 
 /// The stored card as its owner's store holds it

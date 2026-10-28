@@ -2029,6 +2029,8 @@ confirm-unshare = Die Freigabe für { $name } beenden? Dort verschwindet die Sam
 share-with = Teilen mit
 share-with-ph = Name oder E-Mail-Adresse
 share-sugg = Vorschläge
+# a person in a share line or a member list who keeps name, id and address from others
+person-someone = eine Person
 privacy-title = Privatsphäre
 privacy-sharing = Teilen
 privacy-find = Beim Teilen auffindbar

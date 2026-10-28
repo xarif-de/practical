@@ -324,12 +324,13 @@
   {% for g in groups %}
   <div class="label">{{ g.displayname }} · {{ ctx.tn("n-calendars", "n", g.n_calendars as i64) }} · {{ ctx.tn("n-addressbooks", "n", g.n_addressbooks as i64) }}</div>
   <div class="group">
-    {#- each member as `groups::shown` shows them: someone unlisted by id by their address, which the remove form sends -#}
+    {#- each member as `groups::shown` shows them (someone unlisted by id without the id); the remove form sends its key,
+        a hex person key in the path for them -#}
     {% for (p, me) in g.shown %}
-    <div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ p.key }}</span><span class="val">{% if !me %}<form method="post" action="/settings/groups/{{ g.id }}/members/{{ p.key }}/remove" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", p.key) }}">{{ m::ico("user-minus") }}<span>{{ ctx.t("member-remove") }}</span></button></form>{% endif %}</span></div>
+    <div class="cell"><span class="swatch" style="background:var(--c2)">{{ m::ico("user") }}</span><span>{{ p.label }}{% if let Some(i) = p.id %}<span class="sub">{{ i }}</span>{% endif %}</span><span class="val">{% if !me %}<form method="post" action="/settings/groups/{{ g.id }}/members/{{ p.key }}/remove" class="inline">{{ m::csrf() }}<button class="link danger" type="submit" data-confirm="{{ ctx.t1("confirm-remove-member", "name", p.label) }}">{{ m::ico("user-minus") }}<span>{{ ctx.t("member-remove") }}</span></button></form>{% endif %}</span></div>
     {% endfor %}
     {#- a new member by id or address, with the sharing suggestions (settings-sharing.js; only who lets others find them) -#}
-    <form class="cell noic member-add" method="post" action="/settings/groups/{{ g.id }}/members" data-members="{% for (p, _) in g.shown %}{% if !loop.first %},{% endif %}{{ p.key }}{% endfor %}">
+    <form class="cell noic member-add" method="post" action="/settings/groups/{{ g.id }}/members" data-members="{% for (p, _) in g.shown %}{% if let Some(i) = p.id %}{{ i }},{% endif %}{% endfor %}">
       {{ m::csrf() }}
       <input type="text" name="member" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="{{ ctx.t("share-with-ph") }}" aria-label="{{ ctx.t("member-pick") }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="msugg-{{ g.id }}"><span class="combo" id="msugg-{{ g.id }}" role="listbox" aria-label="{{ ctx.t("share-sugg") }}" hidden></span>
       <button class="btn" type="submit">{{ m::ico("member-add") }}<span>{{ ctx.t("member-add") }}</span></button>
