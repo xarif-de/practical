@@ -63,7 +63,7 @@ COPY --from=builder /practical /practical
 # XARIF.md there). linux/amd64 + linux/arm64. The tag MUST equal the rustical_* crates' tag
 # in Cargo.toml — build.rs and the image test check it, and one Renovate group
 # (renovate.json) moves both. Run as `/usr/local/bin/rustical serve`.
-COPY --from=registry.gitlab.com/xarif/docker/rustical:v0.16.7-xarif.4@sha256:d92516131fe35f7455ae7082a5c490242297ec3b966d3b9b58241735130c44dd /usr/local/bin/rustical /usr/local/bin/rustical
+COPY --from=registry.gitlab.com/xarif/docker/rustical:v0.16.7-xarif.5@sha256:6ff2c2c5c50793d8d2e28bc09a7720640481d236c49133866dbb931fa95b84e5 /usr/local/bin/rustical /usr/local/bin/rustical
 # the SQLite path RustiCal's image sets (its Dockerfile); PractiCal reads PRACTICAL__* only
 ENV RUSTICAL_DATA_STORE__SQLITE__DB_URL=/var/lib/rustical/db.sqlite3
 # PractiCal's allocator (mimalloc, Cargo.toml): return freed memory at once and commit arena memory
