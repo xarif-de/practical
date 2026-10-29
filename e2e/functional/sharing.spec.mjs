@@ -225,3 +225,32 @@ test('a conflict after the visibility question keeps the answer: "keep mine" sav
   await expect(page.locator('#ed')).toBeHidden();
   await expect(page.locator('.ask')).toHaveCount(0);
 });
+
+test('an access changed while the page is open reaches the editor without a reload', async ({ page, browser }) => {
+  await loginAs(page, 'erin');
+  await page.goto('/calendar?view=month&date=2026-11-10');
+  const copy = await teamCopy(page);
+  await expect(page.locator(`#ed-cal option[value="${copy}"]`)).toBeEnabled();
+  const bobCtx = await browser.newContext({ baseURL: BASE, locale: 'de-DE' }), bob = await bobCtx.newPage();
+  await loginAs(bob, 'bob');
+  const team = `cal-bob-${copy.split('/')[1].replace(/_shared_by_bob$/, '')}`; // the copy is named after bob's calendar
+  const flip = async v => {
+    await bob.goto(`/settings#${team}`);
+    await bob.locator(`[id="${team}"] .share-row`, { hasText: 'group.team' }).locator(`.seg button[data-v="${v}"]`).click();
+    await expect(bob.locator('.toast')).toBeVisible();
+  };
+  try {
+    await flip('read');
+    // the live change reloads erin's view, whose toolbar lists the copy as read-only; the editor opened after takes it
+    const listed = new RegExp(`(^|,)${copy.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(,|$)`);
+    await expect(page.locator('.toolbar')).toHaveAttribute('data-ro', listed);
+    const day = page.locator('.v-month .day[data-date="2026-11-10"]');
+    await day.hover();
+    await day.locator('.add').click();
+    await page.locator('#ed:not([hidden])').waitFor();
+    await expect(page.locator(`#ed-cal option[value="${copy}"]`)).toBeDisabled();
+  } finally {
+    await flip('write');
+    await bobCtx.close();
+  }
+});

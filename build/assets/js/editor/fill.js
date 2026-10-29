@@ -3,6 +3,9 @@
   function fill(d, date, asNew) {
     const old = d && !asNew; current = old ? d : null; openDate = date; touched = false; form.reset(); clsSet(''); $('#ed-error').textContent = '';
     $$('.card[data-added]', form).forEach(x => x.removeAttribute('data-added')); catsInit([]); $$('.rows .row', form).forEach(x => x.remove());
+    // the read-only calendars as the view shown now knows them (its toolbar's data-ro, routes::calendar read_only_cals; a
+    // share's access change reloads it): no page reload needed. The server checks every write anyway.
+    const roList = $('.toolbar[data-ro]'); if (roList) { const ro = new Set(roList.dataset.ro.split(',')); [...f.calendar.options].forEach(o => { o.disabled = ro.has(o.value); }); }
     f.key.value = old ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = old ? d.etag : '';
     form.classList.toggle('new', !old); form.classList.toggle('ro', !!(old && d.read_only)); f.summary.placeholder = old ? D.tTitle : D.tNewtitle;
     const b = $('#ed-save'); b.title = old ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);

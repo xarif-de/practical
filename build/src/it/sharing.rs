@@ -229,10 +229,21 @@ async fn settings_share_unshare_and_levels() {
         cals.iter().find(|c| c.principal == "group.team" && c.id == w.team_copy).map(|c| c.read_only)
     };
     assert_eq!(team_ro().await, Some(false));
+    let mut rx = app.state.changes.subscribe();
     erin.post_form(&format!("/settings/calendars/bob/{}/access", w.team), &[("sharee", "group.team"), ("access", "read")]).await;
     assert_eq!(team_ro().await, Some(false), "a sharee does not change the access");
+    assert!(rx.try_recv().is_err(), "nothing changed, nothing announced");
+    let copy = format!("group.team/{}", w.team_copy);
+    let ro_list = |page: &str| page.split("data-ro=\"").nth(1).and_then(|r| r.split('"').next()).map(|r| r.split(',').any(|c| c == copy));
+    assert_eq!(ro_list(&erin.get("/calendar").await.ok().body), Some(false));
     bob.post_form(&format!("/settings/calendars/bob/{}/access", w.team), &[("sharee", "group.team"), ("access", "read")]).await;
     assert_eq!(team_ro().await, Some(true));
+    // the sharee's open pages hear of it (its copy, as the change poller fans changes out), and the view they reload
+    // lists the copy as read-only (the editor takes its calendars' state from there: editor/fill.js)
+    let ev = rx.try_recv().expect("the access change is announced");
+    assert_eq!((ev.kind, ev.principal.as_str(), ev.id.as_str()), ("calendar", "group.team", w.team_copy.as_str()));
+    assert!(rx.try_recv().is_err(), "once, and to the sharee only");
+    assert_eq!(ro_list(&erin.get("/calendar").await.ok().body), Some(true));
 }
 
 #[tokio::test]

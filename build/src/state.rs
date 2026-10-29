@@ -814,17 +814,36 @@ impl Collections<'_> {
         self.0.shares.share_addressbook(a.owner(), a.id(), sharee, access, Some(&actor.id)).await.map_err(write_error)
     }
 
-    /// Changes only the access of an existing share: one its sharee ended meanwhile stays ended (`err-share-gone`)
+    /// Changes only the access of an existing share: one its sharee ended meanwhile stays ended (`err-share-gone`).
+    /// The sharee's open pages hear of it ([`Self::access_changed`]).
     pub async fn set_calendar_share_access(&self, a: &Authorized, sharee: &str, access: Access) -> AppResult<()> {
         a.checked(Need::Own)?;
         self.0.share_hints.clear();
-        self.0.shares.set_calendar_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)
+        self.0.shares.set_calendar_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)?;
+        self.access_changed("calendar", a, sharee).await;
+        Ok(())
     }
 
     pub async fn set_addressbook_share_access(&self, a: &Authorized, sharee: &str, access: Access) -> AppResult<()> {
         a.checked(Need::Own)?;
         self.0.share_hints.clear();
-        self.0.shares.set_addressbook_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)
+        self.0.shares.set_addressbook_share_access(a.owner(), a.id(), sharee, access).await.map_err(access_error)?;
+        self.access_changed("addressbook", a, sharee).await;
+        Ok(())
+    }
+
+    /// A live change for the sharee's copy, as the change poller fans changes out (tasks.rs): `/api/changes` reaches
+    /// that home and, for a group, its members, whose views reload with the new access (the calendar toolbar's
+    /// `data-ro`). No object changed: synctoken 0. A failed lookup only costs the live update.
+    async fn access_changed(&self, kind: &'static str, a: &Authorized, sharee: &str) {
+        match self.copy_homes(kind, a.owner(), a.id()).await {
+            Ok(homes) => {
+                for (home, name) in homes.into_iter().filter(|(h, _)| h == sharee) {
+                    let _ = self.0.changes.send(ChangeEvent { kind, principal: home, id: name, synctoken: 0 });
+                }
+            }
+            Err(e) => tracing::warn!("share access change of {}/{}: no live update: {e}", a.owner(), a.id()),
+        }
     }
 
     /// A sharee's own colour of a shared address book (`None`: the owner's, or an own one)
