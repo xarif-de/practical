@@ -2032,8 +2032,6 @@ confirm-unshare = End the share with { $name }? The collection disappears there.
 share-with = Share with
 share-with-ph = Name or e-mail address
 share-sugg = Suggestions
-# a person in a share line or a member list who keeps name, id and address from others
-person-someone = someone
 privacy-title = Privacy
 privacy-sharing = Sharing
 privacy-find = Findable when sharing
@@ -2044,7 +2042,7 @@ privacy-find-none = Not findable
 privacy-by-id = By name and user name
 privacy-by-email = By e-mail address
 privacy-no-email = None known yet
-privacy-find-hint = If you like, other users can be offered your user name or e-mail address as a suggestion when they share calendars and address books. Anyone who knows your full user name or address can share with you without one.
+privacy-find-hint = If you like, other users can be offered your user name or e-mail address as a suggestion when they share calendars and address books. Anyone who knows your full user name or address can share with you without one. The setting only decides whether others find you in suggestions: people who share with you or are in a group with you see your name and user name.
 privacy-vis-hint = You can set the visibility of your events to "private" or "confidential". In the calendar you then decide how these events appear in shared calendars.
 share-access = Access
 share-go = Share

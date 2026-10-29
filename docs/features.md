@@ -444,14 +444,15 @@ You can share a calendar or an address book with another person or with a group,
 the calendar or address book in the settings; its **Sharing** block has **Share with**. Enter an account name, a group (`group.<name>`) or
 the e-mail address the person signs in with. From two characters on, PractiCal suggests people by name, account name
 or address, but only by what each of them lets others find them by. It shows whom it found, and you confirm. Someone
-found by an address who keeps their name and account name out of the suggestions is shown by that address only, in
-the share list and in a group's members too; someone who keeps the address out as well is shown by name. A group's
+found by an address who keeps their name and account name out of the suggestions is named by that address only in
+this confirmation. A group's
 members are shown only to members of that group. The access is a switch: the eye reads, the pencil writes. The same
 block lists who has it, one line each, with that switch and a trash button that ends the share after asking.
 
 **Settings › Privacy** says whether others find you among those suggestions by your name and account name and by your
 e-mail address (both on unless you turn them off); anyone who types your whole account name or address can still share
-with you. The page also lists what others see of each of your calendars; that is changed on the calendar itself.
+with you. The switches decide only whether others can find you in suggestions: people who share with you or are in a
+group with you see your name and user name, as in any collaboration. The page also lists what others see of each of your calendars; that is changed on the calendar itself.
 
 A shared calendar appears for its receivers with its own name and colour, which each of them may change; the
 settings show who shared it, and so do the filters and the editor, next to its name. Something shared to read opens

@@ -2034,8 +2034,6 @@ confirm-unshare = ¿Terminar el compartido con { $name }? La colección desapare
 share-with = Compartir con
 share-with-ph = Nombre o dirección de correo
 share-sugg = Sugerencias
-# a person in a share line or a member list who keeps name, id and address from others
-person-someone = una persona
 privacy-title = Privacidad
 privacy-sharing = Compartir
 privacy-find = Localizable al compartir
@@ -2046,7 +2044,7 @@ privacy-find-none = No localizable
 privacy-by-id = Por nombre y nombre de usuario
 privacy-by-email = Por dirección de correo
 privacy-no-email = Ninguna conocida aún
-privacy-find-hint = Si quieres, a otros usuarios se les puede sugerir tu nombre de usuario o tu dirección de correo al compartir calendarios y libretas. Quien conozca tu nombre de usuario o tu dirección completos puede compartir contigo sin sugerencia.
+privacy-find-hint = Si quieres, a otros usuarios se les puede sugerir tu nombre de usuario o tu dirección de correo al compartir calendarios y libretas. Quien conozca tu nombre de usuario o tu dirección completos puede compartir contigo sin sugerencia. Este ajuste solo decide si otros te encuentran en las sugerencias: quien comparte contigo o está en un grupo contigo ve tu nombre y tu nombre de usuario.
 privacy-vis-hint = Puedes poner la visibilidad de tus eventos en «privado» o «confidencial». En el calendario decides luego cómo se muestran esos eventos en los calendarios compartidos.
 share-access = Acceso
 share-go = Compartir

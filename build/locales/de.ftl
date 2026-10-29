@@ -2029,8 +2029,6 @@ confirm-unshare = Die Freigabe für { $name } beenden? Dort verschwindet die Sam
 share-with = Teilen mit
 share-with-ph = Name oder E-Mail-Adresse
 share-sugg = Vorschläge
-# a person in a share line or a member list who keeps name, id and address from others
-person-someone = eine Person
 privacy-title = Privatsphäre
 privacy-sharing = Teilen
 privacy-find = Beim Teilen auffindbar
@@ -2041,7 +2039,7 @@ privacy-find-none = Nicht auffindbar
 privacy-by-id = Über Name und Nutzernamen
 privacy-by-email = Über E-Mail-Adresse
 privacy-no-email = Noch keine bekannt
-privacy-find-hint = Wenn du das möchtest, können anderen Nutzern beim Teilen von Kalendern und Adressbüchern dein Nutzername oder deine E-Mail-Adresse vorgeschlagen werden. Wer deinen Nutzernamen oder deine Adresse ganz kennt, kann auch ohne Vorschlag mit dir teilen.
+privacy-find-hint = Wenn du das möchtest, können anderen Nutzern beim Teilen von Kalendern und Adressbüchern dein Nutzername oder deine E-Mail-Adresse vorgeschlagen werden. Wer deinen Nutzernamen oder deine Adresse ganz kennt, kann auch ohne Vorschlag mit dir teilen. Die Einstellung regelt nur, ob man dich in Vorschlägen findet: Wer mit dir teilt oder mit dir in einer Gruppe ist, sieht deinen Namen und Nutzernamen.
 privacy-vis-hint = Du kannst die Sichtbarkeit deiner Termine auf „privat“ oder „vertraulich“ stellen. Im Kalender kannst du dann festlegen, wie diese Termine in geteilten Kalendern dargestellt werden.
 share-access = Zugriff
 share-go = Teilen

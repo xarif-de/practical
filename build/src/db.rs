@@ -390,23 +390,7 @@ CREATE TABLE practical_holidays (
         "ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_id INTEGER NOT NULL DEFAULT 0;
          ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_email INTEGER NOT NULL DEFAULT 0;",
     ),
-    (
-        27,
-        // secrets PractiCal makes for itself and never sends anywhere ([`secret`]; `person-key`: groups::person_key)
-        "CREATE TABLE practical_secrets (name TEXT PRIMARY KEY, value BLOB NOT NULL);",
-    ),
 ];
-
-/// The 32-byte secret `name` of `practical_secrets`, made (random) on first use. INSERT OR IGNORE, then read: two
-/// pods starting at once keep the one written first.
-pub async fn secret(db: &SqlitePool, name: &str) -> Result<[u8; 32], String> {
-    use rand::RngExt;
-    let mut fresh = [0u8; 32];
-    rand::rng().fill(&mut fresh[..]);
-    sqlx::query("INSERT OR IGNORE INTO practical_secrets (name, value) VALUES (?, ?)").bind(name).bind(&fresh[..]).execute(db).await.map_err(|e| format!("secret {name}: {e}"))?;
-    let v: Vec<u8> = sqlx::query_scalar("SELECT value FROM practical_secrets WHERE name = ?").bind(name).fetch_one(db).await.map_err(|e| format!("secret {name}: {e}"))?;
-    v.try_into().map_err(|v: Vec<u8>| format!("secret {name}: {} bytes, expected 32", v.len()))
-}
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.
 /// A repair that finds nothing is recorded as applied without touching the table.

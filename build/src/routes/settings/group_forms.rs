@@ -33,8 +33,7 @@ pub(super) async fn group_add_member(State(state): State<SharedState>, user: Pri
 
 pub(super) async fn group_remove_member(State(state): State<SharedState>, user: Principal, session: Session, ctx: PageCtx, Path((gid, member)): Path<(String, String)>, Form(f): Form<Csrf>) -> Response {
     form(&state, &session, &ctx, &f.csrf, "groups", async {
-        // the row's key: an id, or a person key under this session's secret (groups::shown)
-        Ok(match groups::remove_member_keyed(&state, &user, &gid, &member, &ctx.csrf).await? {
+        Ok(match groups::remove_member(&state, &user, &gid, &member).await? {
             RemoveOutcome::Removed => None,
             // the last member leaving trashes the group: the one outcome the page does not show
             RemoveOutcome::GroupTrashed => Some("flash-group-trashed"),
