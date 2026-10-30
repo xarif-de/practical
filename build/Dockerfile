@@ -6,7 +6,13 @@
 # renovate: datasource=docker packageName=rust
 FROM rust:1.99-alpine@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f7ad3fd049557d AS builder
 # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls).
-RUN apk add --no-cache build-base perl make
+# Package mirror (base/dagger-modules docs/ci.md): in CI apk reads a copy of the
+# repositories file pointing at the artifact-proxy gateway (which falls back to
+# dl-cdn itself); the image keeps its own file. Locally the arg is unset.
+ARG XARIF_APK_MIRROR
+RUN sed "s#https*://dl-cdn.alpinelinux.org/alpine#${XARIF_APK_MIRROR:-&}#" /etc/apk/repositories > /tmp/apk-repos \
+ && apk add --repositories-file /tmp/apk-repos --no-cache build-base perl make \
+ && rm /tmp/apk-repos
 WORKDIR /src
 
 # Package mirror (base/dagger-modules docs/ci.md): in CI crates come through the
