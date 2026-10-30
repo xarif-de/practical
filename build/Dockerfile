@@ -9,6 +9,15 @@ FROM rust:1.99-alpine@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f
 RUN apk add --no-cache build-base perl make
 WORKDIR /src
 
+# Package mirror (base/dagger-modules docs/ci.md): in CI crates come through the
+# artifact-proxy gateway, which falls back to crates.io itself; locally the arg is
+# unset and nothing changes. Builder stage only — the file names a cluster-internal
+# address and never reaches the runtime image.
+ARG XARIF_CARGO_REGISTRY
+RUN if [ -n "$XARIF_CARGO_REGISTRY" ]; then mkdir -p "${CARGO_HOME:-$HOME/.cargo}" && \
+      printf '[source.crates-io]\nreplace-with = "xarif"\n[source.xarif]\nregistry = "%s"\n' \
+        "$XARIF_CARGO_REGISTRY" >> "${CARGO_HOME:-$HOME/.cargo}/config.toml"; fi
+
 # e2e (every build) or dist (release tags: dagger-ci.yaml release-build-args); see the profiles in Cargo.toml. e2e
 # since 2026-10-09: it is `release` plus incremental compilation, and a `main` image is a test artefact that is never
 # deployed (CONTRIBUTING.md). `mise run pipeline` after a one-line change: 33.9 s vs 2m41s on release, both warm;
