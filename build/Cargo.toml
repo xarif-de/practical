@@ -111,12 +111,12 @@ rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-
 [build-dependencies]
 # JS minifier with a real parser (a syntax error fails the build): app.js brotli 100.2 → 69.4 KB.
 # One project (oxc-project), 6 lines because the ES2020 target lives in oxc_compat.
-oxc_allocator = "0.155"
-oxc_parser = { version = "0.155", default-features = false }
-oxc_span = "0.155"
-oxc_minifier = "0.155"
-oxc_codegen = { version = "0.155", default-features = false }
-oxc_compat = "0.155"
+oxc_allocator = "0.156"
+oxc_parser = { version = "0.156", default-features = false }
+oxc_span = "0.156"
+oxc_minifier = "0.156"
+oxc_codegen = { version = "0.156", default-features = false }
+oxc_compat = "0.156"
 # brotli quality 11 (every browser over HTTPS takes br); 4 small crates, pure Rust.
 brotli = "9"
 flate2 = "1.1"
