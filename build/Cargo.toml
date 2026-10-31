@@ -23,11 +23,11 @@ path = "src/main.rs"
 # its SQLite store. Tag == the
 # rustical image tag deployed in kubernetes/rustical (build.rs exports it;
 # `practical check-rustical-image <ref>` and the deployment tool_check compare).
-rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5" }
-rustical_store_sqlite = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5" }
-rustical_ical = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5" }
-rustical_oidc = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5" }
-rustical_dav_push = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5" }
+rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6" }
+rustical_store_sqlite = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6" }
+rustical_ical = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6" }
+rustical_oidc = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6" }
+rustical_dav_push = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6" }
 # --- in RustiCal's graph (same versions as its workspace)
 caldata = { version = "0.17", features = ["chrono-tz"] }
 axum = "0.8"
@@ -105,7 +105,7 @@ mimalloc = { version = "0.1", default-features = false }
 [dev-dependencies]
 tower = "=0.5.3"
 # its `test` feature: resolved collections for unit tests that need no store (never in a release build)
-rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.5", features = ["test"] }
+rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.16.7-xarif.6", features = ["test"] }
 
 # Build only (build.rs: minify + precompress the static assets; nothing of it ships in the binary).
 [build-dependencies]
