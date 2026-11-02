@@ -27,7 +27,7 @@ pub async fn export_calendar(state: &AppState, user: &Principal, principal: &str
     let objects = state.collections().objects(&auth).await?;
     let ical = IcalCalendar::from_objects(PRODID.to_string(), objects.into_iter().map(|(_, o)| o.into()).collect(), vec![]);
     let name = cal.meta.displayname.clone().unwrap_or_else(|| cal_id.to_string());
-    Ok((name, ical.generate()))
+    Ok((name, ical.generate_string()))
 }
 
 pub async fn export_addressbook(state: &AppState, user: &Principal, principal: &str, ab_id: &str) -> AppResult<(String, String)> {

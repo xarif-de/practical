@@ -486,24 +486,6 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "caldata"
-version = "0.17.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e50a7f4bb3fc5b2f6c07634d7bb4d308918eeec3c28db214cd7e229e8bb690"
-dependencies = [
- "chrono",
- "chrono-tz",
- "derive_more",
- "itertools 0.15.0",
- "lazy_static",
- "log",
- "phf 0.14.0",
- "regex",
- "thiserror 2.0.21",
- "vtimezones-rs",
-]
-
-[[package]]
-name = "caldata"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c2f85ce182d29b84762786c202524a0cfccbaf473fe78f558763f9e6a749f5"
@@ -3241,7 +3223,7 @@ dependencies = [
  "axum",
  "base64ct",
  "brotli",
- "caldata 0.17.3",
+ "caldata",
  "chacha20poly1305",
  "chrono",
  "chrono-tz",
@@ -3765,7 +3747,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
- "caldata 0.18.0",
+ "caldata",
  "derive_more",
  "futures-util",
  "headers",
@@ -3818,7 +3800,7 @@ version = "0.18.0"
 source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
 dependencies = [
  "axum",
- "caldata 0.18.0",
+ "caldata",
  "chrono",
  "chrono-tz",
  "derive_more",
@@ -3858,7 +3840,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "caldata 0.18.0",
+ "caldata",
  "chrono",
  "chrono-tz",
  "clap",
@@ -3887,7 +3869,7 @@ version = "0.18.0"
 source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
 dependencies = [
  "async-trait",
- "caldata 0.18.0",
+ "caldata",
  "chrono",
  "derive_more",
  "hex",

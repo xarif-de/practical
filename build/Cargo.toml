@@ -29,7 +29,7 @@ rustical_ical = { git = "https://github.com/xarif-de/rustical", tag = "v0.18.0-x
 rustical_oidc = { git = "https://github.com/xarif-de/rustical", tag = "v0.18.0-xarif.1" }
 rustical_dav_push = { git = "https://github.com/xarif-de/rustical", tag = "v0.18.0-xarif.1" }
 # --- in RustiCal's graph (same versions as its workspace)
-caldata = { version = "0.17", features = ["chrono-tz"] }
+caldata = "0.18"
 axum = "0.8"
 http = "1.4"
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
