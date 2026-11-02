@@ -149,6 +149,9 @@
   {#- the sync belongs to the collection it syncs, so it is edited where its name and colour are -#}
   <div class="label">{{ ctx.t("rm-links") }}</div>
   <div class="group rm-row" data-rm-id="{{ l.id }}">
+    {%- if !l.by.is_empty() %}
+    <div class="cell noic"><span>{{ ctx.t("rm-by") }}</span><span class="val">{{ l.by }}</span></div>
+    {%- endif %}
     <div class="cell noic"><span>{{ ctx.t("rm-direction") }}</span><span class="val">{% if l.two_way %}{{ ctx.t("rm-both") }}{% else %}{{ ctx.t("rm-pull") }}{% endif %}</span></div>
     <div class="cell noic"><span>{{ ctx.t("rm-ran") }}</span><span class="val">{% if l.err.is_empty() %}{% if l.ran_at.is_empty() %}{{ ctx.t("rm-never") }}{% else %}{{ l.ran_at }}{% endif %}{% else %}<span class="bad">{{ ctx.t(l.err.as_str()) }}</span>{% endif %}</span></div>
     <button type="button" class="cell btnrow rm-now">{{ ico("repeat") }}<span>{{ ctx.t("rm-now") }}</span></button>

@@ -1906,6 +1906,7 @@ rm-remove = Dejar de sincronizar
 js-rm-remove-hint = La colección y sus entradas se quedan en PractiCal. Solo se corta la conexión y se borra la contraseña de aplicación en Nextcloud.
 rm-remove-hint = La colección y sus entradas se quedan en PractiCal. Solo se corta la conexión y se borra la contraseña de aplicación en Nextcloud.
 rm-ran = Última sincronización
+rm-by = Configurada por
 err-remote-kind = Tipo de colección desconocido.
 err-remote-href = El servidor apuntó a una dirección externa.
 err-remote-discover = No se encontró acceso a calendarios en este servidor.

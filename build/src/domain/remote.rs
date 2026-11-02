@@ -330,35 +330,46 @@ pub async fn link_by_id(state: &AppState, id: &str) -> AppResult<Link> {
     row_to_link(&r)
 }
 
-/// A user's links, each already carrying its account's error if there is one — a revoked app
-/// password is recorded once, on the account, and every link of it is blocked by it.
+/// Whether `user` may see and manage a link of `principal`'s into a collection of `owner`'s: their
+/// own, or one that fills a collection of a group they are in. A member may delete that collection
+/// (which ends the link), so they may also see the sync, change it and end it on its own; the
+/// credential stays its maker's and is never shown.
+fn may_manage(user: &Principal, principal: &str, owner: &str) -> bool {
+    principal == user.id || user.is_principal(owner)
+}
+
+/// The links a user sees — their own and those of their groups' collections — each already carrying
+/// its account's error if there is one: a revoked app password is recorded once, on the account, and
+/// every link of it is blocked by it.
 pub async fn links_of(state: &AppState, user: &Principal) -> AppResult<Vec<Link>> {
+    // every link, filtered here: membership is the user's, not a column (the cap keeps this short)
     let rows = sqlx::query(
         "SELECT l.*, a.err AS account_err FROM practical_remote_links l
            JOIN practical_remote_accounts a ON a.id = l.account_id
-         WHERE l.principal = ? ORDER BY l.kind, l.local_id",
+         ORDER BY l.kind, l.local_id",
     )
-    .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
-    rows.iter()
-        .map(|r| {
-            let mut l = row_to_link(r)?;
+    let mut out = vec![];
+    for r in &rows {
+        let mut l = row_to_link(r)?;
+        if may_manage(user, &l.principal, &l.owner) {
             l.err = r.get::<Option<String>, _>("account_err").or(l.err);
-            Ok(l)
-        })
-        .collect()
+            out.push(l);
+        }
+    }
+    Ok(out)
 }
 
-/// One link of THIS user. A foreign id answers NotFound (404, not 403) so ids are not enumerable.
+/// One link this user may manage ([`links_of`]). Any other id answers NotFound (404, not 403) so
+/// ids are not enumerable.
 pub async fn link_of(state: &AppState, user: &Principal, id: &str) -> AppResult<Link> {
-    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE id = ? AND principal = ?")
-        .bind(id)
-        .bind(&user.id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound)?;
-    row_to_link(&r)
+    let r = sqlx::query("SELECT * FROM practical_remote_links WHERE id = ?").bind(id).fetch_optional(&state.db).await?.ok_or(AppError::NotFound)?;
+    let link = row_to_link(&r)?;
+    if !may_manage(user, &link.principal, &link.owner) {
+        return Err(AppError::NotFound);
+    }
+    Ok(link)
 }
 
 /// The link of a local collection, if it has one. Used by the sync loop to decide whether a local
@@ -424,11 +435,11 @@ pub async fn create_link(state: &AppState, user: &Principal, owner: &str, accoun
 
 pub async fn set_link(state: &AppState, user: &Principal, id: &str, two_way: Option<bool>, every_min: Option<i64>) -> AppResult<()> {
     let link = link_of(state, user, id).await?;
-    sqlx::query("UPDATE practical_remote_links SET direction = ?, every_min = ? WHERE id = ? AND principal = ?")
+    // link_of checked the caller; a group member may change a link another member made
+    sqlx::query("UPDATE practical_remote_links SET direction = ?, every_min = ? WHERE id = ?")
         .bind(if two_way.unwrap_or(link.two_way) { "both" } else { "pull" })
         .bind(every_min.unwrap_or(link.every_min).clamp(MIN_EVERY_MIN, MAX_EVERY_MIN))
         .bind(id)
-        .bind(&user.id)
         .execute(&state.db)
         .await?;
     Ok(())

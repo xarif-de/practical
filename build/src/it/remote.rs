@@ -2,8 +2,9 @@
 //!
 //! The protocol itself is tested in `domain::remote::tests` (against answers measured from a real
 //! nextcloud) and by hand against `e2e/nextcloud-dev.sh`. What matters here is the surface: a link
-//! id must be useless to anyone but its owner, because "sync now" on a foreign link would make the
-//! server dial that user's Nextcloud with that user's credential.
+//! id must be useless to anyone but its maker and, for a group collection, the group's members,
+//! because "sync now" on a foreign link would make the server dial that user's Nextcloud with that
+//! user's credential.
 
 use super::seed::seed;
 use axum::http::{Method, StatusCode};
@@ -524,6 +525,42 @@ async fn a_link_can_fill_a_group_collection() {
     assert!(!own.contains("rm-drop"), "a calendar without a link shows one");
 
     crate::domain::remote::may_write(&s.app.state, &link).await.unwrap();
+}
+
+/// A link into a group collection is the group's business, not only its maker's: every member may
+/// delete that collection, so every member sees its sync on the collection's page — with who set it
+/// up — and may change it, run it or end it. Someone outside the group still gets a plain 404.
+#[tokio::test]
+async fn every_member_of_the_group_sees_and_manages_its_link() {
+    let s = seed().await;
+    let link = a_link_into(&s.app, "alice", "group.familie", &s.familie).await;
+    let alice_name = s.app.principal("alice").await.displayname.unwrap();
+    let group_page = |html: &str| html.split(&format!("id=\"cal-group.familie-{}\"", s.familie)).nth(1).unwrap_or_default().split("</section>").next().unwrap_or_default().to_string();
+
+    // bob did not make it, yet the group calendar's page shows it, and names alice as its maker
+    let mut bob = s.app.login("bob").await;
+    let page = group_page(&String::from_utf8_lossy(&bob.get("/settings").await.ok().bytes));
+    assert!(page.contains(&format!("data-rm-id=\"{link}\"")) && page.contains("rm-drop"), "a member does not see the group calendar's link");
+    assert!(page.contains(&alice_name), "the page does not say who set the link up");
+    let mut alice_web = s.app.login("alice").await;
+    let own = group_page(&String::from_utf8_lossy(&alice_web.get("/settings").await.ok().bytes));
+    assert!(own.contains(&format!("data-rm-id=\"{link}\"")) && !own.contains(&alice_name), "its maker is told she made it");
+
+    // carol is in no group: the id is as useless to her as one that does not exist
+    let mut carol = s.app.login("carol").await;
+    for body in [json!({"action": "now"}), json!({"action": "remove"}), json!({"direction": "pull"})] {
+        assert_eq!(carol.json(Method::POST, &format!("/settings/remote/link/{link}"), body).await.status, StatusCode::NOT_FOUND, "carol reached the group's link");
+    }
+
+    // bob changes the direction, and the change lands on alice's link
+    bob.json(Method::POST, &format!("/settings/remote/link/{link}"), json!({"direction": "pull"})).await.ok();
+    let alice = s.app.principal("alice").await;
+    assert!(!crate::domain::remote::link_of(&s.app.state, &alice, &link).await.unwrap().two_way, "bob's 'pull' did not land");
+
+    // and ends it: gone for both, the calendar stays
+    bob.json(Method::POST, &format!("/settings/remote/link/{link}"), json!({"action": "remove"})).await.ok();
+    assert!(crate::domain::remote::links_of(&s.app.state, &alice).await.unwrap().is_empty(), "the link outlived its removal by a member");
+    assert!(crate::domain::collections::calendars_for(&s.app.state, &alice, false).await.unwrap().iter().any(|c| c.id == s.familie), "removing the sync took the calendar");
 }
 
 /// A link into a group ends when its user can no longer reach the group: they left it, or it went

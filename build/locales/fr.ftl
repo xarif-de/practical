@@ -1908,6 +1908,7 @@ rm-remove = Arrêter la synchronisation
 js-rm-remove-hint = La collection et ses entrées restent dans PractiCal. Seule la connexion est coupée et le mot de passe d’application supprimé chez Nextcloud.
 rm-remove-hint = La collection et ses entrées restent dans PractiCal. Seule la connexion est coupée et le mot de passe d’application supprimé chez Nextcloud.
 rm-ran = Dernière synchronisation
+rm-by = Configurée par
 err-remote-kind = Type de collection inconnu.
 err-remote-href = Le serveur a renvoyé vers une adresse extérieure.
 err-remote-discover = Aucun accès aux agendas n’a été trouvé sur ce serveur.

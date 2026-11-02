@@ -175,6 +175,8 @@ pub struct RemoteLinkRow {
     pub two_way: bool,
     pub ran_at: String,
     pub err: String,
+    /// who set it up, when that was another member of the collection's group ("" = the user)
+    pub by: String,
 }
 
 /// The rule as the page edits it: (kind, value). A rule from before v2 ("category or title word")
@@ -298,17 +300,21 @@ impl SettingsPage {
     }
 }
 
-/// The user's links. No name of its own: a link is shown on the row and the page of the collection
-/// it syncs, which is where its name already is. A link whose collection was deleted does not
-/// exist — `collections::delete_*` ends it (`remote::unlink_collection`).
+/// The links the user sees: their own and those of their groups' collections, whoever made them. No
+/// name of its own: a link is shown on the row and the page of the collection it syncs, which is
+/// where its name already is. A link whose collection was deleted does not exist —
+/// `collections::delete_*` ends it (`remote::unlink_collection`).
 async fn remote_rows(state: &SharedState, user: &Principal) -> AppResult<Vec<RemoteLinkRow>> {
+    use rustical_store::auth::AuthenticationProvider;
     let mut out = vec![];
     for l in crate::domain::remote::links_of(state, user).await? {
         let kind = match l.kind {
             crate::domain::remote::dav::Kind::Cal => "cal",
             crate::domain::remote::dav::Kind::Ab => "ab",
         };
+        let by = if l.principal == user.id { String::new() } else { state.principals().get_principal(&l.principal).await.ok().flatten().and_then(|p| p.displayname).unwrap_or_else(|| l.principal.clone()) };
         out.push(RemoteLinkRow {
+            by,
             id: l.id,
             kind: kind.to_string(),
             owner: l.owner,
