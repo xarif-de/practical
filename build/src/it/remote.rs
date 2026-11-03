@@ -478,6 +478,29 @@ async fn an_existing_connection_is_offered_again() {
     assert_eq!(r.status, StatusCode::BAD_REQUEST, "reuse must not be a way around the address rules");
 }
 
+/// Ending the last link revokes its app password at the remote, so no copy of it may stay to be offered again:
+/// before, the kept credential came back through `reuse`, the remote answered 401, and that 401 reached the
+/// page, whose request layer took it for a lost session and left for /login → /calendar (2026-11-03).
+#[tokio::test]
+async fn a_revoked_credential_is_not_offered_again_and_a_refusal_is_no_lost_session() {
+    let s = seed().await;
+    let cal = crate::domain::collections::calendars_for(&s.app.state, &s.app.principal("alice").await, false).await.unwrap()[0].id.clone();
+    let link = a_link(&s.app, "alice", &cal).await;
+    let logins = &s.app.state.remote_logins;
+    let h = logins.adopt("https://example.org", "alice", "alice", crate::domain::remote::dav::Secret("pw".into()));
+    let bob_h = logins.adopt("https://example.org", "bob", "bob", crate::domain::remote::dav::Secret("pw".into()));
+    let mut alice = s.app.login("alice").await;
+    alice.json(Method::POST, &format!("/settings/remote/link/{link}"), json!({"action": "remove"})).await.ok();
+    assert!(logins.reusable("https://example.org", "alice").is_none(), "the revoked credential is still offered");
+    assert!(logins.granted(&h, "alice").is_err());
+    assert!(logins.granted(&bob_h, "bob").is_ok(), "another user's credential went with it");
+
+    // a remote's refusal answers like any other refusal, never as this session's 401
+    use axum::response::IntoResponse;
+    let r = crate::error::AppError::Rejected(StatusCode::UNAUTHORIZED, crate::error::Msg { key: "err-remote-auth", args: vec![] }).into_response();
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+}
+
 /// What a page sees of the keep-window: a credential stays usable after its batch, for this user
 /// and this address only. The window's own arithmetic is tested where it lives
 /// (`domain::remote::login`, which can hand `sweep` a time).

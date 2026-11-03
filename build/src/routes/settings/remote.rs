@@ -75,8 +75,15 @@ pub(super) async fn collections_offered(State(state): State<SharedState>, user: 
     let (origin, login, secret) = state.remote_logins.granted(&q.handle, &user.id)?;
     let base: url::Url = origin.parse().map_err(|_| AppError::bad("err-remote-bad-server"))?;
     let dav = remote::dav::Dav::new(state.remote_http.clone(), base, login, secret);
-    let (cal_home, ab_home) = dav.discover().await?;
-    let principal = principal_of(&dav).await?;
+    // a refused credential (revoked in Nextcloud meanwhile) must not be offered again: the page then signs in anew
+    let refused = |e: AppError| {
+        if matches!(e, AppError::Rejected(axum::http::StatusCode::UNAUTHORIZED, _)) {
+            state.remote_logins.drop_handle(&q.handle, &user.id);
+        }
+        e
+    };
+    let (cal_home, ab_home) = dav.discover().await.map_err(refused)?;
+    let principal = principal_of(&dav).await.map_err(refused)?;
     let mut out = Offer { calendars: vec![], addressbooks: vec![] };
     for c in dav.collections(&cal_home, Kind::Cal, &principal).await? {
         out.calendars.push(RemoteColl { href: c.href, name: c.name, color: c.color, writable: c.writable, components: c.components });

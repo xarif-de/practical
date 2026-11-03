@@ -243,6 +243,18 @@ impl Logins {
         Some(handle)
     }
 
+    /// Forgets every credential of this user for this address: its app password was just revoked at
+    /// the remote (the last link went), and a copy kept here would be offered again by [`Logins::reusable`]
+    /// and answered 401.
+    pub fn forget(&self, origin: &str, principal: &str) {
+        self.by_handle.lock().unwrap().retain(|_, p| !(p.principal == principal && p.origin == origin));
+    }
+
+    /// Forgets one handle of this user's: the remote refused its credential.
+    pub fn drop_handle(&self, handle: &str, principal: &str) {
+        self.by_handle.lock().unwrap().retain(|h, p| !(h == handle && p.principal == principal));
+    }
+
     /// Takes out every parked credential whose window has run out, for the caller to revoke. Called
     /// from the minute tick ([`crate::tasks::spawn_remote_login_reaper`]), because nothing else is
     /// guaranteed to happen: a user who imports once and leaves must not leave a password behind.

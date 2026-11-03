@@ -160,8 +160,9 @@
       if (reuse.ok) {
         handle = reuse.data.handle;
         go.disabled = false;
-        await offer();
-        return;
+        // a kept credential the remote refuses now (revoked in Nextcloud meanwhile; the server forgets it): sign in anew
+        if (await offer(true) !== false) return;
+        go.disabled = true;
       }
       if (!reuse.ok && reuse.status !== 404) { go.disabled = false; tell(reuse); return; }
       const r = await req('/settings/remote/login', { method: 'POST', json: { origin: origin.value } });
@@ -181,7 +182,8 @@
       }, 2000);
     });
 
-    async function offer() {
+    /** `quiet`: a refusal is not told but answered `false`, for the caller to sign in anew. */
+    async function offer(quiet = false) {
       say(T.waiting);
       const asked = handle;
       const r = await req('/settings/remote/collections', { method: 'POST', json: { handle } });
@@ -189,7 +191,7 @@
       // a newer sign-in started while this list was on its way: it would pair this server's
       // collections with that sign-in's handle
       if (asked !== handle) return;
-      if (!tell(r).ok) return;
+      if (!r.ok) { if (!quiet) tell(r); return false; }
       const items = kind === 'cal' ? r.data.calendars : r.data.addressbooks;
       picked.hidden = false;
       if (!items.length) { list.innerHTML = `<div class="cell noic"><span>${escQ(T.nothing)}</span></div>`; take.disabled = true; listed(); return; }

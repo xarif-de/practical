@@ -463,6 +463,12 @@ async fn drop_link(state: &AppState, link: &Link) -> AppResult<()> {
         if let Some((a, s)) = creds {
             login::revoke(&state.remote_http, &a.base_url, &a.login, &s).await;
         }
+        // the account goes: no copy of its credential may stay to be offered again (Logins::reusable), even
+        // when it could not be unsealed for the revoke
+        let origin: Option<String> = sqlx::query_scalar("SELECT base_url FROM practical_remote_accounts WHERE id = ?").bind(&link.account_id).fetch_optional(&state.db).await?;
+        if let Some(o) = origin {
+            state.remote_logins.forget(&o, &link.principal);
+        }
         sqlx::query("DELETE FROM practical_remote_accounts WHERE id = ? AND principal = ?").bind(&link.account_id).bind(&link.principal).execute(&state.db).await?;
     }
     Ok(())

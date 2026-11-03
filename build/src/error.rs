@@ -143,6 +143,9 @@ impl IntoResponse for AppError {
         let status = match &self {
             Self::NotFound | Self::Store(rustical_store::Error::NotFound) => StatusCode::NOT_FOUND,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            // a REMOTE server refusing our stored credential is not this session ending: answered as 401, the
+            // page's request layer (assets/js/req.js) took it for a lost login and left for /login → /calendar
+            Self::Rejected(s, _) if *s == StatusCode::UNAUTHORIZED => StatusCode::BAD_REQUEST,
             Self::Rejected(s, _) => *s,
             Self::BadRequest(_) | Self::Ical(_) => StatusCode::BAD_REQUEST,
             Self::Conflict(_) | Self::Store(rustical_store::Error::AlreadyExists) => StatusCode::CONFLICT,
