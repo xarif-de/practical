@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '../lib/test.mjs';
 import { BASE, RUN_DIR } from '../lib/env.mjs';
+import { gotoPage } from './_goto.mjs';
 
 const SEEDS = (process.env.CHAOS_SEEDS || '1,2,3').split(',').map(Number);
 const STEPS = Number(process.env.CHAOS_STEPS || 6); // per page and phase
@@ -116,13 +117,13 @@ for (const SEED of SEEDS) test(`seed ${SEED}: ${PAGES.length} pages × ${STEPS} 
     for (const p of PAGES) {
       cur = p; trail = [`goto ${p}`];
       await page.setViewportSize({ width: 1280, height: 800 });
-      // the page before can still navigate on its own (an injected 401 → the login → back): then once more
-      for (let i = 0; i < 2; i++) { try { await page.goto(p, { timeout: 15000 }); break; } catch (e) { if (i || !/interrupted by another navigation/.test(e.message)) note('goto', e.message.split('\n')[0]); await quiet(); } }
+      // the page before can still navigate on its own (an injected 401 → the login → back): gotoPage waits that out
+      try { await gotoPage(page, p); } catch (e) { note('goto', e.message.split('\n')[0]); await quiet(); }
       for (step = 0; step < STEPS; step++) {
         let timer;
         const hung = await Promise.race([act().then(() => false), new Promise(r => { timer = setTimeout(() => r(true), 15000); })]);
         clearTimeout(timer);
-        if (hung) { note('step-timeout', trail.slice(-1)[0]); await page.goto(p, { timeout: 15000 }).catch(() => {}); }
+        if (hung) { note('step-timeout', trail.slice(-1)[0]); await gotoPage(page, p).catch(() => {}); }
         steps++;
       }
     }

@@ -16,8 +16,11 @@ import { BASE, FIRST_PORT, TZ } from './lib/env.mjs';
 const desktop = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false };
 const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 // software raster, whole tiles: GPU/partial raster antialiased rounded corners differently between runs
-// (16–90 px per state, DOM + style identical; with these flags 0 differences over 3 repeat runs)
-const launchOptions = { args: ['--disable-gpu', '--disable-partial-raster'] };
+// (16–90 px per state, DOM + style identical; with these flags 0 differences over 3 repeat runs). Linux (the VM, e2e/vm.sh)
+// also without subpixel glyph positioning: at deviceScaleFactor 2 the same text line came out with 1-3 levels different
+// edge pixels from run to run (two VM baselines: 61 of 1135 states, all phone; --font-render-hinting=none did not help;
+// with this flag 0 of 550 phone PNGs over 3 runs and 0 of 1135 states between two full baselines, 2026-11-03)
+const launchOptions = { args: ['--disable-gpu', '--disable-partial-raster', ...(process.platform === 'linux' ? ['--disable-font-subpixel-positioning'] : [])] };
 const common = { baseURL: BASE, timezoneId: TZ, reducedMotion: 'reduce', serviceWorkers: 'block', browserName: 'chromium', permissions: ['clipboard-read', 'clipboard-write'], launchOptions };
 
 const visual = [];
@@ -46,7 +49,7 @@ export default defineConfig({
   workers: Number(process.env.E2E_WORKERS || 4),
   // one suite per run: the visual suite's workers share one server (read-only), the functional suite's write to their own
   // perf: interaction latency (e2e/perf), opt-in, never part of the gate
-  projects: process.env.E2E_SUITE === 'chaos' ? [{ name: 'chaos', testDir: './chaos', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
+  projects: process.env.E2E_SUITE === 'chaos' ? [{ name: 'chaos', testDir: './chaos', fullyParallel: false, workers: 1, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE', trace: 'retain-on-failure' } }] // a chaos finding is rare: its trace (.work/test-results-<port>/…/trace.zip) is the evidence
     : process.env.E2E_SUITE === 'perf' ? [{ name: 'perf', testDir: './perf', fullyParallel: false, workers: 1, timeout: 900_000, use: { ...common, ...desktop, colorScheme: 'light', locale: 'de-DE' } }]
     : process.env.E2E_SUITE === 'visual' ? visual
     : process.env.E2E_SUITE === 'a11y' ? a11y : [

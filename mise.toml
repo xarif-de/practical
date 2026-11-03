@@ -30,7 +30,7 @@ exec cargo deny --manifest-path build/Cargo.toml check advisories bans sources
 """
 
 [tasks.test]
-description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust version — one Renovate group moves both); this checkout's own target dir, content-checked freshness, sccache if installed (e2e/cargo.sh)"
+description = "Rust unit tests (rust-toolchain.toml: the builder image's Rust version — one Renovate group moves both) in this checkout's VM container (e2e/vm.sh; own target dir, content-checked freshness, mbx cache: e2e/cargo.sh)"
 run = "e2e/cargo.sh test"
 
 [tasks.logo]
@@ -38,30 +38,28 @@ description = "Brand: build/assets/icon.svg + logo.svg + lettering.svg from bran
 run = "uv run -q brand/build.py"
 
 [tasks.doc]
-description = "API doc of the Rust code (rustdoc with private items: a [[bin]] crate) in this checkout's target dir (e2e/cargo.sh); any rustdoc warning (a broken intra-doc link too) fails; prints the index.html path. Module docs start at build/src/main.rs"
+description = "API doc of the Rust code (rustdoc with private items: a [[bin]] crate), built in the VM container (e2e/vm.sh, e2e/cargo.sh) and copied to e2e/.work/doc; any rustdoc warning (a broken intra-doc link too) fails; prints the index.html path. Module docs start at build/src/main.rs"
 run = '''
-set -e
-RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
+exec e2e/vm.sh sh -ec '
+RUSTDOCFLAGS="-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
 T="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(cd build && pwd -P | shasum | cut -c1-12)}"
-echo "API doc: $T/doc/practical/index.html"
+rm -rf e2e/.work/doc && mkdir -p e2e/.work && cp -R "$T/doc" e2e/.work/doc
+echo "API doc: $PWD/e2e/.work/doc/practical/index.html"'
 '''
 
 [tasks.dev]
-description = "Feedback loop: watchexec rebuilds+restarts on src/templates/locales edits (~3-10 s), CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db`"
+description = "Feedback loop in a VM container of its own (e2e/vm.sh --serve, port DEV_PORT, default 4001): watchexec (polling: colima passes no file events) rebuilds+restarts on src/templates/locales edits, CSS/JS are served from disk, the browser reloads itself and re-logs DEV_USER in. DB = the copy from `mise run dev-db` (under $HOME)"
 run = '''
-DB="${DB:-$HOME/.cache/practical-dev/db.sqlite3}"
+export DB="${DB:-$HOME/.cache/practical-dev/db.sqlite3}"
 [ -f "$DB" ] || { echo "no DB copy at $DB — run: mise run dev-db" >&2; exit 1; }
-cd build
-export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+P="${DEV_PORT:-4001}"
+exec e2e/vm.sh --serve "$P" sh -ec '
+cd build # rust-toolchain.toml picks the toolchain (no RUSTUP_TOOLCHAIN in the container to override it)
 export PRACTICAL__RUSTICAL_URL= PRACTICAL__DB_PATH="$DB" PRACTICAL__ALLOW_PASSWORD_LOGIN=true \
-  PRACTICAL__PUBLIC_URL=http://localhost:4001 PRACTICAL__BIND=127.0.0.1:4001 \
+  PRACTICAL__PUBLIC_URL="http://localhost:$0" PRACTICAL__BIND="0.0.0.0:$0" \
   PRACTICAL__DEV_ASSETS_DIR="$PWD/assets" \
   PRACTICAL__PUBLIC_DAV_URL=https://dav.example.org PRACTICAL__DEV_LOGIN="${DEV_USER:-thomass}"
-if command -v watchexec >/dev/null 2>&1; then
-  exec watchexec --restart --watch src --watch templates --watch locales --watch Cargo.toml --watch build.rs -- cargo run -- serve
-fi
-echo "watchexec not found (brew install watchexec) — running once without auto-rebuild" >&2
-exec cargo run -- serve
+exec watchexec --poll=500ms --restart --watch src --watch templates --watch locales --watch Cargo.toml --watch build.rs -- mbx run -- serve' "$P"
 '''
 
 [tasks.dev-db]
@@ -81,18 +79,18 @@ echo "copy at $DEST — login ${DEV_USER:-thomass} / devpass on http://localhost
 '''
 
 [tasks.e2e-seed]
-description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): RustiCal CLI in docker + PractiCal HTTP, frozen clock, blocked egress"
+description = "Build the synthetic e2e fixture DB (e2e/.work/fixture.sqlite3): RustiCal CLI in docker + (VM container) PractiCal HTTP, frozen clock, blocked egress"
 run = "e2e/seed/seed.sh"
 
 [tasks.readme-shots]
-description = "Screenshots for the README, the site gallery and docs/features.md: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json (E2E_PORT, SEED_PORT)"
+description = "Screenshots for the README, the site gallery and docs/features.md: e2e-profile server build → showcase DB (e2e/demo/seed.sh, synthetic, frozen clock, blocked egress) → Playwright shots → docs/images/NN-*.webp + e2e/demo/shots.json (E2E_PORT, SEED_PORT); build, stage 2 and shots in the VM container (e2e/vm.sh: Linux fonts)"
 run = '''
 set -e
 W="$PWD/e2e/.work/demo"
-(cd e2e && { [ -d node_modules ] || npm ci --no-fund --no-audit; } && npx playwright install chromium >/dev/null)
+e2e/vm.sh sh -c 'cd e2e && { [ -d node_modules ] || npm ci --no-fund --no-audit; }'
 e2e/build-server.sh "$W/practical"
 e2e/demo/seed.sh "$W/practical" "$W/demo.sqlite3"
-exec node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
+exec e2e/vm.sh node e2e/demo/shots.mjs "$W/practical" "$W/demo.sqlite3"
 '''
 
 [tasks.docs-nav]
@@ -100,65 +98,69 @@ description = "Docs navigation: back links to the start page (docs/index.md) + i
 run = "node e2e/demo/docs-nav.mjs"
 
 [tasks.site]
-description = "The GitLab Pages site, locally: site/build.mjs (docs/index.md + gallery, docs/*.md, CONTRIBUTING.md; every link checked) + a fresh API doc (rustdoc -D warnings, e2e/cargo.sh) in api/ → e2e/.work/site; preview: python3 -m http.server -d e2e/.work/site 4501"
+description = "The GitLab Pages site, locally (VM container, e2e/vm.sh): site/build.mjs (docs/index.md + gallery, docs/*.md, CONTRIBUTING.md; every link checked) + a fresh API doc (rustdoc -D warnings, e2e/cargo.sh) in api/ → e2e/.work/site; preview: python3 -m http.server -d e2e/.work/site 4501"
 run = '''
-set -e
+exec e2e/vm.sh sh -ec '
 OUT="$PWD/e2e/.work/site"
 # npm ci again whenever the lockfile is newer than the installed tree (npm ci writes node_modules/.package-lock.json)
 [ site/node_modules/.package-lock.json -nt site/package-lock.json ] || (cd site && npm ci --no-fund --no-audit)
 node site/build.mjs --out "$OUT"
-RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
+RUSTDOCFLAGS="-D warnings" e2e/cargo.sh doc --no-deps --document-private-items
 T="${E2E_TARGET_DIR:-$HOME/.cache/practical-e2e/target-$(cd build && pwd -P | shasum | cut -c1-12)}"
 cp -R "$T/doc" "$OUT/api"
 echo "site: $OUT/index.html (API doc: $OUT/api/practical/index.html)"
-echo "preview: python3 -m http.server -d $OUT 4501  →  http://localhost:4501/"
+echo "preview: python3 -m http.server -d $OUT 4501  →  http://localhost:4501/"'
 '''
 
 [tasks.e2e]
-description = "Functional e2e suite (Playwright, e2e/functional) against an e2e-profile build of this checkout (E2E_PROFILE=release: the shipped profile); spec files on E2E_WORKERS (4) workers, each file on fresh servers + fixture copies"
+description = "Functional e2e suite (Playwright, e2e/functional) against an e2e-profile build of this checkout (E2E_PROFILE=release: the shipped profile), in the VM container (e2e/vm.sh); spec files on E2E_WORKERS (4) workers, each file on fresh servers + fixture copies; args → playwright test"
 run = '''
+exec e2e/vm.sh sh -ec '
 cd e2e
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null
-exec npx playwright test
+exec npx playwright test "$@"' sh
 '''
 
 [tasks.e2e-baseline]
-description = "Visual baseline (PNG + DOM + computed style of every UI state): mise run e2e-baseline -- [outdir], default ~/.cache/practical-e2e/<sha>"
+description = "Visual baseline (PNG + DOM + computed style of every UI state) in the VM container (e2e/vm.sh): mise run e2e-baseline -- [outdir], default ~/.cache/practical-e2e/<sha>; outdir under ~/.cache/practical-e2e or the checkout"
 run = "e2e/baseline.sh"
 
 [tasks.e2e-compare]
-description = "Diff two baselines (pixels, DOM, computed style): mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
-run = "node e2e/compare.mjs"
+description = "Diff two baselines (pixels, DOM, computed style) in the VM container: mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
+run = "e2e/vm.sh node e2e/compare.mjs"
 
 [tasks.bench]
-description = "Performance bench of this checkout on the synthetic big DB (e2e/bench): server latency/RSS/idle CPU, wire bytes, UI interaction times, sizes → mise run bench -- [--out dir], default ~/.cache/practical-e2e/bench-<sha>"
-run = "node e2e/bench/bench.mjs"
+description = "Performance bench of this checkout on the synthetic big DB (e2e/bench), in the VM container (e2e/vm.sh): server latency/RSS/idle CPU, wire bytes, UI interaction times, sizes → mise run bench -- [--out dir], default ~/.cache/practical-e2e/bench-<sha>"
+run = "e2e/vm.sh node e2e/bench/bench.mjs"
 
 [tasks.bench-compare]
-description = "A/B bench against a former `mise run bench` dir, interleaved on this machine: mise run bench-compare -- <ref-dir> [--out dir]; exit 1 on a regression beyond the thresholds"
-run = "node e2e/bench/bench.mjs --ref"
+description = "A/B bench against a former `mise run bench` dir (made in the VM container too: it runs the ref's binary), interleaved: mise run bench-compare -- <ref-dir> [--out dir]; exit 1 on a regression beyond the thresholds"
+run = "e2e/vm.sh node e2e/bench/bench.mjs --ref"
 
 [tasks.chaos]
-description = "Chaos Tier 1 alone: the seeded UI monkey with network chaos (e2e/chaos, one worker, ~60 s; CHAOS_SEEDS=1,2,3 CHAOS_STEPS=6); part of `gate`"
+description = "Chaos Tier 1 alone: the seeded UI monkey with network chaos (e2e/chaos, one worker, ~60 s; CHAOS_SEEDS=1,2,3 CHAOS_STEPS=6), in the VM container (e2e/vm.sh); part of `gate`"
 run = '''
+exec e2e/vm.sh sh -ec '
 cd e2e
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null
-E2E_SUITE=chaos exec npx playwright test
+E2E_SUITE=chaos exec npx playwright test "$@"' sh
 '''
 
 [tasks.a11y]
-description = "Accessibility alone: axe-core over fixed states (desktop light + dark, phone light) against e2e/a11y-allow.txt + the keyboard flows (e2e/a11y, ~30 s), then a11y-check.mjs (stale allow-list lines); part of `gate`"
+description = "Accessibility alone: axe-core over fixed states (desktop light + dark, phone light) against e2e/a11y-allow.txt + the keyboard flows (e2e/a11y, ~30 s), then a11y-check.mjs (stale allow-list lines), in the VM container (e2e/vm.sh); part of `gate`"
 run = '''
+exec e2e/vm.sh sh -ec '
 cd e2e
 [ -d node_modules ] || npm ci --no-fund --no-audit
 npx playwright install chromium >/dev/null
-E2E_SUITE=a11y npx playwright test && exec node a11y-check.mjs
+E2E_SUITE=a11y npx playwright test "$@"
+exec node a11y-check.mjs' sh
 '''
 
 [tasks.gate-quick]
-description = "The cheapest gate: cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos and a11y"
+description = "The cheapest gate, in the VM container (e2e/vm.sh, heavy lock): cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos and a11y"
 run = "e2e/gate.sh quick"
 
 [tasks.gate]

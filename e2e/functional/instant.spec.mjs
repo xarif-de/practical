@@ -47,9 +47,14 @@ test('a hidden tab closes the live stream after the grace period; the return rec
   expect(await streams(page)).toEqual([1]); // a short absence keeps the stream
   await page.clock.runFor(60000);
   expect(await streams(page)).toEqual([2]); // closed
-  // a change while away: no fetch in the hidden tab
+  // a change while away: no fetch in the hidden tab. The server broadcasts it from its change poller (real time, every
+  // POLL_MS): bob's own stream receiving it = that round is over. Returning before it, alice's new stream got the
+  // broadcast too and redrew a second time after the resync's (2 fetches when the first redraw was slow: gate run
+  // 2026-11-03 at host load 6.5)
   const { bob, ctx } = await bobPage(browser);
+  await bob.evaluate(() => { window.__chg = new Promise(r => document.addEventListener('rustical:change', r, { once: true })); });
   await bobEvent(bob, 'F5 Weg', '2026-11-11T09:00:00');
+  await bob.evaluate(() => window.__chg);
   await ctx.close();
   const fetched = [];
   page.on('request', r => { if (r.url().includes('fragment=1')) fetched.push(r.url()); });

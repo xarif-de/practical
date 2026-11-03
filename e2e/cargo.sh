@@ -1,5 +1,8 @@
 #!/bin/sh
 # cargo for this checkout's build/ — `mise run test` and build-server.sh run it: cargo.sh <subcommand> [args…]
+#  - in the VM: on the host it re-runs itself through vm.sh (this checkout's Linux container; E2E_NATIVE=1: host, diagnosis
+#    only). There E2E_TARGET_DIR=/target (a volume, never a host dir) and E2E_CARGO=mbx (the fleet's compiler cache;
+#    sccache is off: E2E_SCCACHE=0). The sccache notes below are the native setup's.
 #  - toolchain: build/rust-toolchain.toml (an exported RUSTUP_TOOLCHAIN would silently override the file).
 #  - target dir: one per checkout, E2E_TARGET_DIR or ~/.cache/practical-e2e/target-<hash of build/'s path>, given as
 #    --target-dir. build/.cargo/config.toml's dir is shared by all worktrees, and cargo then reported ANOTHER
@@ -22,6 +25,7 @@
 #    are unaffected (cargo passes them --cap-lints allow), but the flag is part of every crate's fingerprint: a
 #    target dir built without it is rebuilt once.
 set -eu
+[ -n "${E2E_VM_INSIDE:-}" ] || exec "$(dirname "$0")/vm.sh" "$0" "$@"
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO/build"
 export RUSTUP_TOOLCHAIN="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
@@ -43,5 +47,5 @@ if [ -f "$REC" ]; then
 else
   cut -c67- "$NOW" | while IFS= read -r f; do touch "$f"; done
 fi
-cargo "$SUB" --target-dir "$T" "$@"
+"${E2E_CARGO:-cargo}" "$SUB" --target-dir "$T" "$@"
 mv "$NOW" "$REC"

@@ -15,15 +15,26 @@
 # reference baseline of the base commit in a second worktree (161-262 s each, measured 2026-10-08/09). Reach for it
 # when the point of the change is that nothing may look different.
 # Env as for the suites: E2E_PORT (functional: E2E_PORT … +2×E2E_WORKERS−1), E2E_FIXTURE, E2E_WORKERS (default 4),
-# E2E_OUT (the new baseline, default ~/.cache/practical-e2e/<sha>[+dirty]).
+# E2E_OUT (the new baseline, default ~/.cache/practical-e2e/<sha>[+dirty]). Runs in the VM container (vm.sh): ports are
+# the container's own, the reference must be a baseline made there too (`env` line of .e2e-baseline).
 set -eu
+[ -n "${E2E_VM_INSIDE:-}" ] || exec "$(dirname "$0")/vm.sh" "$0" "$@" # in the VM container (vm.sh)
 unset E2E_SUITE # the functional suite first; baseline.sh selects the visual one itself
 E2E="$(cd "$(dirname "$0")" && pwd -P)"
 MODE="${1:-}"
 case "$MODE" in
   quick|full) ;;
   visual) REF="${2:-${E2E_REF:-}}"
-        [ -n "$REF" ] && [ -f "$REF/.e2e-baseline" ] || { echo "gate visual: no reference baseline (${REF:-none}); make one on the base commit: mise run e2e-baseline -- <dir>" >&2; exit 2; } ;;
+        [ -n "$REF" ] && [ -f "$REF/.e2e-baseline" ] || { echo "gate visual: no reference baseline (${REF:-none}); make one on the base commit: mise run e2e-baseline -- <dir> (under ~/.cache/practical-e2e or the checkout: the VM sees only those)" >&2; exit 2; }
+        # pixels depend on fonts + Chromium build: a reference of another environment (a native macOS baseline, i.e.
+        # one without an `env` line = all from before e2e/vm.sh) is refused; another VM image only warned about
+        OWN="${PRACTICAL_E2E_VM:-native-$(uname -s)}"; REFENV="$(sed -n 's/^env //p' "$REF/.e2e-baseline")"; REFENV="${REFENV:-native-Darwin}"
+        case "$REFENV" in
+          "$OWN") ;;
+          practical-e2e-vm:*) case "$OWN" in practical-e2e-vm:*) echo "gate visual: warning: reference from $REFENV, this run in $OWN (another Chromium or toolchain: a difference may be the environment's)" >&2 ;; *) REFENV="" ;; esac ;;
+          *) REFENV="" ;;
+        esac
+        [ -n "$REFENV" ] || { echo "gate visual: reference $REF was made in $(sed -n 's/^env //p' "$REF/.e2e-baseline" | grep . || echo 'native-Darwin (before e2e/vm.sh)'), this run in $OWN: make the reference in the same environment (mise run e2e-baseline -- <dir> on the base commit)" >&2; exit 2; } ;;
   *) echo "usage: gate.sh quick | full | visual <reference-baseline-dir>" >&2; exit 2 ;;
 esac
 T0=$(date +%s); LAST=$T0; SUMMARY=""

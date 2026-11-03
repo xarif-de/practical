@@ -5,8 +5,12 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 
 ## Never
 - `cargo fmt` — it rewrites every file. House style (long lines) is matched by hand.
-- Plain `cargo` in `build/` without a target dir of your own: `build/.cargo/config.toml`'s dir is shared by all
-  worktrees and cargo then hands one worktree another's binary as fresh (seen 2026-10-06). Build via `e2e/cargo.sh`.
+- cargo, rustc or Playwright natively on the macOS host (MS Defender scans every new host file: CPU tax, disk). Every
+  build/test runs in the checkout's VM container (`e2e/vm.sh`; Build, test, gate). Plain cargo: `e2e/vm.sh cargo …`
+  in `build/` (target /target of the container, never `build/.cargo/config.toml`'s dir, shared by all worktrees:
+  cargo handed one worktree another's binary as fresh, 2026-10-06). `E2E_NATIVE=1` = diagnosis only.
+- Wrapping a vm.sh-backed command (mise gate/test/bench/… tasks, cargo.sh, gate.sh) in the heavy lock by hand: vm.sh
+  takes it itself; a second flock waits for itself forever.
 - Production writes, tests inside the production pod, personal data in tests: synthetic data only (`e2e/seed/`,
   `src/it/seed.rs`, `e2e/bench/gen-db.py`). Cluster access read-only; `mise run dev-db` takes a `VACUUM INTO` copy.
 - `sleep`/fixed-delay waiting or polling: wait on a signal (`wait $PID`, `curl --retry-connrefused`, a readiness
@@ -17,19 +21,26 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
   share /private/tmp (bind mounts arrive empty): `docker cp`.
 
 ## Build, test, gate
-- `e2e/cargo.sh <sub> [args]` (= `mise run test` for `test`): toolchain from `build/rust-toolchain.toml` (an
-  exported `RUSTUP_TOOLCHAIN` overrides the file; cargo.sh sets it), target dir per checkout (`E2E_TARGET_DIR`,
-  default `~/.cache/practical-e2e/target-<hash of path>`; it unsets `CARGO_TARGET_DIR`), inputs touched by content
-  hash (cargo trusts mtimes), sccache if installed, `RUSTFLAGS=-D warnings` (a new warning fails every gate step).
-- Plain cargo only with `export CARGO_TARGET_DIR=~/.cache/practical-<task>-target` and the toolchain export; delete
-  that dir afterwards. Check `df -h ~` before a cold build (1.6-4 GB per target dir).
+- All of it runs in the colima/Docker VM: `e2e/vm.sh <cmd>` (header = reference). Image `practical-e2e-vm:<hash>`
+  (e2e/vm/Dockerfile: rust:<channel>-bookworm + toolchain of rust-toolchain.toml, Node 24.7.0, Playwright's Chromium
+  + OS deps, fonts-inter, mbx, watchexec; built on first use ~2 min); container `practical-vm-<checkout dir>` (warm,
+  kept); volumes `rust-dev-cargo`, `rust-dev-mbx` (fleet layout: mbx store + target `/vol/targets/practical-vm-<dir>`
+  = `/target`). Mounted at host paths: checkout, git common dir (ro), `~/.cache/practical-e2e` → reports, baselines,
+  bench dirs land there; ref/out dirs elsewhere fail. The mise tasks delegate; cargo.sh, build-server.sh, gate.sh,
+  baseline.sh, seed.sh (stage 1 = docker on the host first), bench.mjs re-exec themselves; global-setup.mjs refuses a
+  host Playwright. Ports are the container's own (no clash between worktrees, none published). Every vm.sh run holds
+  `~/.cache/practical-e2e/heavy.lock` (host flock) → runs of all worktrees queue host-wide.
+- `e2e/cargo.sh <sub> [args]` (= `mise run test` for `test`): toolchain from `build/rust-toolchain.toml` (cargo.sh
+  exports it as `RUSTUP_TOOLCHAIN`), target `E2E_TARGET_DIR` (VM: /target; native default
+  `~/.cache/practical-e2e/target-<hash of path>`), cargo via `E2E_CARGO` (VM: mbx), inputs touched by content hash
+  (cargo trusts mtimes), `RUSTFLAGS=-D warnings` (a new warning fails every gate step).
 
 | command | runs | when |
 |---|---|---|
-| `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → docs-nav + site link check (`node site/build.mjs --check`) → server build (`e2e` profile) → functional suite | every commit (~80 s warm; the doc step ~10 s) |
-| `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~30 s) | part of `gate`; alone after UI/ARIA/focus edits |
-| `mise run gate` | quick → chaos → a11y | before most commits; no reference baseline needed |
-| `mise run gate-visual -- <ref-dir>` | gate → visual baseline → compare vs `<ref-dir>` → theme-cover | OPT-IN, for a refactoring whose point is that nothing looks different. While surfaces are being designed every state differs on purpose, so the comparison only reports noise and costs a reference baseline of the base commit too (161-262 s each) |
+| `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → docs-nav + site link check (`node site/build.mjs --check`) → server build (`e2e` profile) → functional suite | every commit (VM, 2026-11-03: 86 s warm, 117 s after an image rebuild; native was ~80-120 s) |
+| `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~35 s) | part of `gate`; alone after UI/ARIA/focus edits |
+| `mise run gate` | quick → chaos → a11y | before most commits; no reference baseline needed (VM: 163-175 s, 7× green in a row 2026-11-03). A chaos failure keeps its trace: `.work/test-results-<port>/…/trace.zip` |
+| `mise run gate-visual -- <ref-dir>` | gate → visual baseline → compare vs `<ref-dir>` → theme-cover | OPT-IN, for a refactoring whose point is that nothing looks different. While surfaces are being designed every state differs on purpose, so the comparison only reports noise and costs a reference baseline of the base commit too (VM: 110 s; native was 161-262 s) |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
 | `E2E_PROFILE=release <any of the above>` | the shipped profile | release candidates, Cargo profile changes, binary size |
 
@@ -38,7 +49,14 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
   33.9 s with `e2e`; the first build on the new profile is a cold 4m39s.
 
 - References come from the base commit: `mise run e2e-baseline -- <dir>` / `mise run bench` in a worktree of it, or an
-  existing `~/.cache/practical-e2e/<…>-<base-sha>`.
+  existing `~/.cache/practical-e2e/<…>-<base-sha>` made in the VM. Everything made natively (all before 2026-11-03)
+  is invalid: macOS fonts/raster differ (gate visual refuses a `.e2e-baseline` without `env practical-e2e-vm:…`), a
+  native bench dir holds a macOS binary the VM cannot run. VM bench (proc.py Linux): CPU = threads' schedstat ns,
+  wakeups = voluntary context switches, instructions null (Colima VM has no PMU: no srv.inst.*/idle.inst), no power
+  state (exit 4 never fires). A/A 2026-11-03 (2 runs, host load 4-7): 0 alarms, worst ratios srv.lat 1.052, srv.cpu
+  1.032, ui.busy 1.137, ui.cpu4 1.118, idle.cpu 0.70-0.90; thresholds kept. A rise from a reference of 0 counts.
+- VM visual repeatability: two baselines of one commit = 0 of 1135 states differ (2026-11-03), needs Chromium's
+  `--disable-font-subpixel-positioning` on Linux (playwright.config.mjs; without it 61 phone states varied).
 - Visual rule (`gate-visual` only): every state it reports as different must map to one intended change of yours,
   named per state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
 - a11y rule: a new axe finding fails (fix it, or add `<rule>⇥<key>⇥<reason>` to e2e/a11y-allow.txt); a line no state
@@ -56,13 +74,16 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 - An intended bench cost is named in the commit with its ratio from the bench table.
 
 ## Parallel work
-- One worktree per task: `git worktree add ~/git/xarif.de/docker/practical-wt-<pkg> -b <branch> <base>`; `cd e2e && npm ci`.
-- Ports: `E2E_PORT=<p>`; functional uses p … p+2×E2E_WORKERS−1 (default 4 workers → p+7), bench p … p+2, visual p, p+1:
-  keep 10 ports between agents. `E2E_FIXTURE=<shared fixture.sqlite3>` (read-only) avoids re-seeding.
-- Target dir: automatic per checkout (cargo.sh); delete `~/.cache/practical-e2e/target-<hash>` with the worktree.
-- Heavy runs (full gate, e2e-baseline, bench) one at a time per host, Playwright ≤ 4 workers. Queue them behind a
-  host-wide lock instead of polling:
-  `perl -MFcntl=:flock -e 'open(my $f,">","$ENV{HOME}/.cache/practical-e2e/heavy.lock") or die $!; flock($f,LOCK_EX) or die $!; system(@ARGV); exit($?>>8)' -- mise run gate -- <ref>`
+- One worktree per task: `git worktree add ~/git/xarif.de/docker/practical-wt-<pkg> -b <branch> <base>` (under $HOME: colima mounts only that); the first VM run does `npm ci`.
+- Ports: `E2E_PORT=<p>` (default 4101) inside the worktree's container; functional uses p … p+2×E2E_WORKERS−1, bench
+  p … p+2, visual p, p+1. Other worktrees have their own container (network namespace): no spacing needed.
+  `E2E_FIXTURE=<shared fixture.sqlite3>` (read-only, under ~/.cache/practical-e2e or the checkout) avoids re-seeding.
+- With the worktree, remove its VM state: `docker exec practical-vm-<dir> rm -rf /vol/targets/practical-vm-<dir>`,
+  then `docker rm -f practical-vm-<dir>`. Never a `rust-dev-*` container: those belong to other tasks.
+- Heavy runs one at a time per host, Playwright ≤ 4 workers: vm.sh queues every run behind
+  `~/.cache/practical-e2e/heavy.lock` itself ("waiting for … heavy.lock" = another run holds it).
+- `mise run dev` = its own throwaway container `practical-vm-<dir>-serve` publishing 127.0.0.1:`DEV_PORT` (4001);
+  watchexec polls (colima's virtiofs passes no file events). DB under $HOME.
 
 ## Release policy
 - plan.xarif.de runs only release images: git tag `vX.Y.Z` → CI builds `[profile.dist]`; kubernetes/rustical's

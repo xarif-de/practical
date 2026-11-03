@@ -7,7 +7,10 @@ E2E="$(cd "$(dirname "$0")/.." && pwd)"
 BIN=$1
 OUT="${2:-$E2E/.work/demo/demo.sqlite3}"
 WORK="$E2E/.work/demo/seed"
-rm -rf "$WORK"; mkdir -p "$WORK" "$(dirname "$OUT")"
-"$E2E/demo/01-rustical.sh" "$WORK"
+if [ -z "${E2E_VM_INSIDE:-}" ]; then # stage 1 on the host (docker), stage 2 in the VM container (vm.sh)
+  rm -rf "$WORK"; mkdir -p "$WORK" "$(dirname "$OUT")"
+  "$E2E/demo/01-rustical.sh" "$WORK"
+  exec "$E2E/vm.sh" "$0" "$@"
+fi
 python3 "$E2E/demo/02-demo.py" "$BIN" "$WORK" "$OUT"
 rm -rf "$WORK"

@@ -16,7 +16,7 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 |---|---|
 | mise.toml | every task (`mise tasks`): test, doc, logo, site, dev, dev-db, gate-quick, gate, gate-visual, a11y, chaos, e2e*, bench*, readme-shots, docs-nav, deny, image, pipeline |
 | dagger-ci.yaml, .forgejo/workflows/ci.yml | CI = `dagger call … ci` (base/dagger-modules): cargo-deny, image build with `cargo test`, tests/tests.yaml; Forgejo only triggers it |
-| renovate.json | dependency updates; groups: the rustical_* crates + RustiCal image move as one, the Rust builder image + rust-toolchain.toml as one |
+| renovate.json | dependency updates; groups: the rustical_* crates + RustiCal image move as one, the Rust builder image + e2e/vm/Dockerfile's rust image + rust-toolchain.toml as one |
 | AGENTS.md (CLAUDE.md = `@AGENTS.md`) | agent operating rules, gate table |
 | README.md, CONTRIBUTING.md, LICENSE (AGPL-3.0), .ignore | showcase (gitlab.com project page; links into docs = absolute site URLs `https://xarif.gitlab.io/docker/practical/…`, checked by site/build.mjs), dev workflow (also on the site), licence, search exclusions |
 | .gitlab-ci.yml | gitlab.com mirror only: `api-doc` (rustdoc) → `pages` (node image: site/build.mjs → public/, rustdoc → public/api/); main with changes in Rust sources/docs/site/shots.json, `vX.Y.Z` tags, web |
@@ -34,7 +34,7 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 | Dockerfile | rust-alpine builder (cache mounts, `touch` all = no stale-mtime binary) → alpine + /practical + RustiCal's binary (same tag) |
 | deny.toml, rust-toolchain.toml | cargo-deny config (`mise run deny`, CI); toolchain = the builder image's Rust (one Renovate group) |
 | e2e/nextcloud-dev.sh | a throwaway Nextcloud (the version plan.xarif.de runs) for developing the remote import and sync: two users, own and shared calendars/address books, one event per `CLASS`, a webcal subscription, a deleted calendar. `up`/`down`/`reseed` |
-| .cargo/config.toml | target dir outside build/ (dagger uploads build/); SHARED by worktrees → always `e2e/cargo.sh` |
+| .cargo/config.toml | target dir outside build/ (dagger uploads build/); SHARED by worktrees → never used locally: the VM container sets `CARGO_TARGET_DIR=/target` (e2e/vm.sh) |
 | askama.toml, LICENSE | template config; copy of /LICENSE (a test keeps them equal) |
 | tools/gen_regions.py → src/data/regions.json | CLDR region names and tree; its `LANGS` must list every UI language |
 | tests/fixtures, tests/snapshots | goldens (`UPDATE_SNAPSHOTS=1 mise run test` rewrites); recurrence-real.json (60 anonymised real series × 60 instances by python-dateutil); demo-event-full.ics (every VEVENT property) |
@@ -82,20 +82,22 @@ Client-side rules (the server side of each feature is in the module docs):
 ## e2e/ (Playwright + harness; commands: CONTRIBUTING.md "Tests and gates")
 | path | purpose |
 |---|---|
-| cargo.sh, build-server.sh | per-checkout cargo (AGENTS.md); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
+| vm.sh, vm/Dockerfile | every local build/test in the checkout's Linux container in the colima VM (header of vm.sh; AGENTS.md "Build, test, gate"): image practical-e2e-vm:<hash>, container practical-vm-<dir>, host paths mounted 1:1, heavy lock; `--serve <port>` = `mise run dev` |
+| cargo.sh, build-server.sh | per-checkout cargo (AGENTS.md; in the VM: mbx, /target); server build in E2E_PROFILE (default `e2e`) + copy of the embedded assets |
 | gate.sh | gate: quick (cargo+docs+functional) / full (+chaos+a11y) / visual (+baseline, compare, theme-cover; opt-in) |
-| seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker), 02-practical.py (HTTP, frozen clock); users alice/bob/carol/dave/erin/erik (pw `devpass`; carol, erik empty), groups `group.familie`, `group.team` = {erin}; shares alice Privat → dave (read), bob Team → group.team (write; a third seed run as bob), fixed UUIDs `5eed0000-…`. Every person is marked through the first start (`onboarding_json` completed, in `pin()`): without it the language gate covers every page and no suite can click anything |
+| seed/ | fixture DB: 01-rustical.sh (RustiCal CLI in docker, on the host), 02-practical.py (in the VM) (HTTP, frozen clock); users alice/bob/carol/dave/erin/erik (pw `devpass`; carol, erik empty), groups `group.familie`, `group.team` = {erin}; shares alice Privat → dave (read), bob Team → group.team (write; a third seed run as bob), fixed UUIDs `5eed0000-…`. Every person is marked through the first start (`onboarding_json` completed, in `pin()`): without it the language gate covers every page and no suite can click anything |
 | first-start-db.sh | a DB in a brand-new user's state (one principal, no collections, no preferences) for judging the first start locally: `mise run dev` with `DB=~/.cache/practical-dev/first-start.sqlite3` |
 | demo/ | screenshots (`mise run readme-shots`): 01-rustical.sh (emma/james, `group.family`), 02-demo.py (reuses seed/02-practical.py helpers + `pin()`; English, synthetic), shots.mjs (34 states → docs/images/NN-*.webp, 1920 px; `SHOTS=<slug,…>` retakes; GROUPS = gallery group per slug), shots.json (order, titles, captions, group; read by site/build.mjs), docs-nav.mjs (`mise run docs-nav`: back links to docs/index.md + its documentation table on every listed page; `--check` in gate-quick) |
 | lib/ | axe.mjs (axe-core in the page, finding keys, allow-list; `E2E_AXE=1` + visual suite → `<state>.axe.json` audit), env.mjs (NOW = seed FROZEN), servers.mjs (dev server: DEV_LOGIN=alice, DEV_NOW=2026-10-14T08:00:00Z, DEV_POLL_MS=250, egress blocked; + non-dev login server on port+1), test.mjs (`test`, `settle()`), capture.mjs (PNG + DOM + style digest), visual.mjs, theme-cover.mjs, timing.mjs (`E2E_TIMING=1`) |
-| functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs` = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
+| functional/, visual/, chaos/, perf/, a11y/ | suites (`E2E_SUITE`=visual/chaos/perf/a11y, else functional); `_editor.mjs`/`_set.mjs`/`_axe.mjs`/chaos `_goto.mjs` (next page despite the page's own login round trip; goto.spec) = helpers; a11y = axe-cal/axe-pages (axe states) + keys (keyboard flows, desktop light only) |
 | a11y-check.mjs + a11y-allow.txt | after the a11y suite: NEW / STALE allow-list lines → exit 1 (key = contrast colour pair or target without positions/values; only shrinks) |
 | compare.mjs, theme-cover.mjs (+ theme-cover-allow.txt: backlog only shrinks), baseline.sh | visual diff (pixels, DOM, computed style), dark coverage, baseline capture |
 | bench/ | bench.mjs (driver, `RULES`; DB, servers, metrics, verdict and calibration in its "setup and calibration" block), client.mjs (UI interactions), gen-db.py (big synthetic DB), proc.py (CPU/RSS/wakeups/instructions per PID). Runtime: bench ~2 min, bench-compare ~3 min + build; env BENCH_ROUNDS, BENCH_UI_SAMPLES, BENCH_IDLE_S, BENCH_PHASES (server,count,idle,client), BENCH_SKIP_BUILD=1 |
 
 Visual projects: desktop 1440×900 + phone 390×844 × light/dark (de) + `@main` states in en (desktop/phone light).
 Browser frozen at NOW, Europe/Berlin, reduced motion, `Math.random` seeded, service workers blocked, no request
-leaves 127.0.0.1. Pixel baselines depend on host fonts + Chromium build: compare only baselines of one machine and fixture.
+leaves 127.0.0.1. Pixel baselines depend on fonts + Chromium build: compare only baselines of the VM image (`env` line of
+`.e2e-baseline`; gate visual refuses others) and one fixture; native macOS baselines (before 2026-11-03) are invalid.
 
 <!-- docs-nav:bottom -->
 ---

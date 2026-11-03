@@ -4,7 +4,10 @@
 `ps -o time` counts in 10 ms steps — too coarse for an idle server (≈ 10-100 ms CPU per minute). macOS:
 proc_pid_rusage(RUSAGE_INFO_V4): user + system time (mach units → ns), resident size, interrupt + package-idle
 wakeups, retired instructions (independent of the clock speed the power mode sets), lifetime peak physical
-footprint. Linux: /proc/<pid>/stat (clock ticks) + VmRSS + VmHWM; wakeups and instructions null."""
+footprint. Linux (the VM, e2e/vm.sh): CPU time = the sum of every thread's /proc/<pid>/task/<tid>/schedstat run time
+(ns; /proc/<pid>/stat counts 10 ms ticks: an idle server read 0.000 mcores, 2026-11-03), wakeups = the threads'
+voluntary context switches (a thread that blocks and runs again), both kept per thread at their last value so a thread
+that exited still counts; VmRSS + VmHWM; instructions null (no perf counters in the container)."""
 import ctypes, json, os, sys
 
 if sys.platform == "darwin":
@@ -28,15 +31,23 @@ if sys.platform == "darwin":
             return None
         return [(ru.user + ru.system) * tb.numer // tb.denom, ru.resident, ru.interrupt_wkups + ru.pkg_idle_wkups, ru.instructions, ru.lifetime_max_footprint]
 else:
-    HZ = os.sysconf("SC_CLK_TCK")
+    seen = {}  # pid → {tid: (cpu_ns, voluntary switches)}: last values, exited threads included
 
     def sample(pid):
         try:
-            f = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()
             st = {l.split(":")[0]: int(l.split()[1]) * 1024 for l in open(f"/proc/{pid}/status") if l.startswith(("VmRSS:", "VmHWM:"))}
+            tids = os.listdir(f"/proc/{pid}/task")
         except OSError:
             return None
-        return [(int(f[11]) + int(f[12])) * 1_000_000_000 // HZ, st.get("VmRSS"), None, None, st.get("VmHWM")]
+        last = seen.setdefault(pid, {})
+        for tid in tids:
+            try:
+                ns = int(open(f"/proc/{pid}/task/{tid}/schedstat").read().split()[0])
+                vol = next(int(l.split()[1]) for l in open(f"/proc/{pid}/task/{tid}/status") if l.startswith("voluntary_ctxt_switches:"))
+            except (OSError, StopIteration, ValueError):
+                continue  # exited between listdir and read: its last value stays
+            last[tid] = (ns, vol)
+        return [sum(v[0] for v in last.values()), st.get("VmRSS"), sum(v[1] for v in last.values()), None, st.get("VmHWM")]
 
 for line in sys.stdin:
     print(json.dumps({p: sample(int(p)) for p in line.split()}), flush=True)

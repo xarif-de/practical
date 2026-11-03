@@ -12,6 +12,8 @@ import { FINDINGS } from './lib/axe.mjs';
 export const runDirs = config => (PER_WORKER ? [...Array(config.workers).keys()] : [0]).map(i => path.join(WORK, `run-${FIRST_PORT + 2 * i}`));
 
 export default async function globalSetup(config) {
+  // the servers are Linux builds of the VM container (vm.sh); a host Playwright could not start them
+  if (!process.env.E2E_VM_INSIDE) throw new Error('the e2e suites run in the VM container: mise run e2e|chaos|a11y|gate…, or e2e/vm.sh npx playwright test … (E2E_NATIVE=1: on the host, diagnosis only)');
   if (!fs.existsSync(FIXTURE)) throw new Error(`no fixture at ${FIXTURE} — run: mise run e2e-seed`);
   for (const d of runDirs(config)) if (fs.existsSync(path.join(d, 'pids'))) throw new Error(`${d}/pids exists: a run on port ${FIRST_PORT} is active or was not torn down (stop those PIDs, delete the file)`);
   fs.mkdirSync(path.dirname(BIN), { recursive: true });

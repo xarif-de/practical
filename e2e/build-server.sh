@@ -7,6 +7,7 @@
 # serves THOSE, so the suites test the shipped JS/CSS (lib/servers.mjs, E2E_ASSETS).
 # Usage: build-server.sh <dest-binary>
 set -eu
+[ -n "${E2E_VM_INSIDE:-}" ] || exec "$(dirname "$0")/vm.sh" "$0" "$@" # in the VM container (vm.sh)
 case "$1" in /*) DEST=$1 ;; *) DEST="$PWD/$1" ;; esac
 mkdir -p "$(dirname "$DEST")"
 if ! "$(dirname "$0")/cargo.sh" build --profile "${E2E_PROFILE:-e2e}" --message-format=json-render-diagnostics > "$DEST.cargo.json" 2> "$DEST.cargo.log"; then

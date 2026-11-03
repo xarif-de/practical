@@ -12,7 +12,7 @@
 // Env: E2E_PORT (uses PORT … PORT+2), E2E_FIXTURE, E2E_PROFILE (cargo profile, default e2e), BENCH_ROUNDS (5),
 // BENCH_UI_SAMPLES (5), BENCH_IDLE_S (60), BENCH_SKIP_BUILD=1 (reuse this run dir's build), BENCH_PHASES
 // (server,count,idle,client: a subset for a quick look).
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -25,6 +25,8 @@ import { runClient } from './client.mjs';
 
 const HERE = path.join(E2E, 'bench');
 const args = process.argv.slice(2);
+// in the VM container (e2e/vm.sh: Linux build and browser); on the host this re-runs itself there
+if (!process.env.E2E_VM_INSIDE) process.exit(spawnSync(path.join(E2E, 'vm.sh'), ['node', process.argv[1], ...args], { stdio: 'inherit' }).status ?? 1);
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const REF = opt('--ref');
 const PORT = Number(process.env.E2E_PORT || 4101);
@@ -62,6 +64,9 @@ const log = m => console.error(`[bench ${((Date.now() - T0) / 1000).toFixed(0).p
 // without the `db::Watch` gate → idle.cpu ×95, idle.inst ×188, idle.wakeups ×16; a 300 KB static → release
 // size.binary ×1.013 (threshold ×1.01: smallest catch ≈ 226 KB), e2e ×1.010 reported only. Earlier (befd301):
 // app.js + 5 KB → wire ×1.054; 30 MB per burst → srv.rss.burst ×1.12.
+// VM (e2e/vm.sh, Linux; proc.py: schedstat CPU, voluntary switches as wakeups, no instructions, no power state), A/A of
+// 15eadbd 2026-11-03, 2 runs at host load 4-7 / VM 0.5-2: 0 alarms; worst ratios srv.lat 1.052, srv.cpu 1.032,
+// srv.first 1.090, srv.rss/peak 1.027, ui 1.081, ui.busy 1.137, ui.cpu4 1.118, idle.cpu 0.70-0.90, idle.wakeups 0.98-0.99.
 // Runtime: bench ~2 min, bench-compare ~3 min + build.
 // ---------------------------------------------------------------- thresholds (calibration: the block above)
 // alarm ⇔ ratio (cand/ref) > 1 + rel AND delta (cand − ref) > abs: small values and small relative moves stay quiet
@@ -431,18 +436,21 @@ function summarize(raw) {
 /** cand vs ref per metric: the median of the per-round ratios and differences (each side's median of that round), so
  *  a change of the CPU's speed between rounds hits both sides of a round alike. noise = IQR of those ratios. */
 function compare(rawRef, rawCand, sumRef, sumCand) {
+  // cand/ref; from a reference of 0 any rise is unbounded (it was 1: an idle server measured at 0 — /proc ticks in the VM
+  // before proc.py read schedstat — could not alarm on any idle cost); the rule's abs floor still has to be passed
+  const up = (ref, cand) => (ref ? cand / ref : cand > 0 ? Infinity : 1);
   const rows = [];
   for (const id of Object.keys(sumCand).filter(k => k in sumRef).sort()) {
     const base = id.replace(/\.p(50|90)$/, '');
     const A = rawRef[base], B = rawCand[base];
     let ratio, delta, noise;
     if (TOTAL.test(id) || !A || !B) {
-      ratio = sumRef[id].value ? sumCand[id].value / sumRef[id].value : 1; delta = sumCand[id].value - sumRef[id].value;
-      if (TOTAL.test(id) && A && B) { const q = A.map((a, i) => (median(a) ? median(B[i]) / median(a) : 1)); noise = quant(q, 0.75) - quant(q, 0.25); }
+      ratio = up(sumRef[id].value, sumCand[id].value); delta = sumCand[id].value - sumRef[id].value;
+      if (TOTAL.test(id) && A && B) { const q = A.map((a, i) => up(median(a), median(B[i]))); noise = quant(q, 0.75) - quant(q, 0.25); }
     } else {
       const n = Math.min(A.length, B.length), q = [], d = [];
       const stat = P90.test(id) ? v => quant(v, 0.9) : median;
-      for (let i = 0; i < n; i++) { const a = stat(A[i]), b = stat(B[i]); q.push(a ? b / a : 1); d.push(b - a); }
+      for (let i = 0; i < n; i++) { const a = stat(A[i]), b = stat(B[i]); q.push(up(a, b)); d.push(b - a); }
       ratio = median(q); delta = median(d); noise = q.length > 2 ? quant(q, 0.75) - quant(q, 0.25) : undefined;
     }
     const rl = rule(id), alarm = !!rl && ratio > 1 + rl.rel && delta > rl.abs;
