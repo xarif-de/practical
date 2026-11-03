@@ -88,7 +88,7 @@ impl PlanMemo {
         self.objs.insert(k.clone(), v.clone());
         Ok(v)
     }
-    pub(super) async fn blob(&mut self, state: &AppState, h: &str) -> AppResult<Option<String>> {
+    pub async fn blob(&mut self, state: &AppState, h: &str) -> AppResult<Option<String>> {
         if let Some(v) = self.blobs.get(h) {
             return Ok(v.clone());
         }
@@ -96,9 +96,14 @@ impl PlanMemo {
         self.blobs.insert(h.to_string(), v.clone());
         Ok(v)
     }
-    /// Every blob the plans of `all` can read, in one query (the history page plans every change).
-    pub async fn prefetch_blobs(&mut self, state: &AppState, all: &[Change]) -> AppResult<()> {
-        let want: Vec<&str> = all.iter().filter(|c| c.active()).flat_map(|c| c.items.iter()).flat_map(|i| [i.before.as_deref(), i.after.as_deref()]).flatten().filter(|h| !self.blobs.contains_key(*h)).collect::<HashSet<_>>().into_iter().collect();
+    /// Every blob the plans of `all` can read, in one query (the history page plans every change of a page).
+    pub async fn prefetch_blobs<'a>(&mut self, state: &AppState, all: impl IntoIterator<Item = &'a Change>) -> AppResult<()> {
+        let want: Vec<String> = all.into_iter().filter(|c| c.active()).flat_map(|c| c.items.iter()).flat_map(|i| [i.before.clone(), i.after.clone()]).flatten().collect();
+        self.prefetch(state, want).await
+    }
+    /// These blobs, in one query (those not read yet).
+    pub async fn prefetch(&mut self, state: &AppState, hashes: impl IntoIterator<Item = String>) -> AppResult<()> {
+        let want: Vec<String> = hashes.into_iter().filter(|h| !self.blobs.contains_key(h)).collect::<HashSet<_>>().into_iter().collect();
         if want.is_empty() {
             return Ok(());
         }
@@ -106,7 +111,7 @@ impl PlanMemo {
             self.blobs.insert(r.get("hash"), Some(r.get("body")));
         }
         for h in want {
-            self.blobs.entry(h.to_string()).or_insert(None);
+            self.blobs.entry(h).or_insert(None);
         }
         Ok(())
     }
@@ -131,7 +136,8 @@ impl PlanMemo {
     }
 }
 
-/// What undoing change `c` would do now. `all`: every visible change (for "later" and "by").
+/// What undoing change `c` would do now. `all`: the visible changes after it that touch its elements, or more
+/// ([`visible_for`]; for "later" and "by").
 pub async fn plan(state: &AppState, user: &Principal, c: &Change, all: &[Change], memo: &mut PlanMemo) -> AppResult<Plan> {
     let blocked = |why| Plan { now: vec![], ok: false, why: Some(why), warns: vec![], skips: vec![], ops: vec![] };
     if c.undone_by.is_some() {
@@ -272,7 +278,7 @@ async fn delete_obj(state: &AppState, (store, p, c, id): &ObjKey) -> AppResult<(
 /// Undoes change `id` as the user: a new change (src undo) that `id` then links to.
 /// Warnings need `confirmed`; without it the plan comes back as a conflict.
 pub async fn undo(state: &AppState, user: &Principal, id: i64, confirmed: bool) -> AppResult<Result<i64, Plan>> {
-    let all = visible(state, user).await?;
+    let all = visible_for(state, user, &[id]).await?;
     let Some(c) = all.iter().find(|c| c.id == id) else { return Err(AppError::NotFound) };
     let p = plan(state, user, c, &all, &mut PlanMemo::default()).await?;
     if !p.ok || (!confirmed && (!p.warns.is_empty() || !p.skips.is_empty())) {

@@ -342,6 +342,15 @@ An undo is a new change itself, so you can undo it again.
 The history has two views: a line map over time, and a list with details. By default, it keeps changes for 90 days.
 The server admin can change this period.
 
+When an import or a sync with a linked remote calendar brings in objects, each object becomes a change of its own. It is
+marked **taken over** rather than new, and it is dated when the object was originally created, taken from the
+object's own creation or modification date. An object created before the history's retention period gets no change.
+Because of this, you undo an import object by object, not as a whole. Updates and deletes from a sync stay one
+change at the time of the sync.
+
+The history is ordered by time. The page opens with the 100 newest changes. Older ones load as you need them: at the
+end of the list, when the map's time window reaches further back, or when a link points to an older change.
+
 ## Settings
 
 The settings hold your personal preferences. They are also where you manage calendars, address books and groups.

@@ -83,7 +83,25 @@ fn as_document(kind: Kind, parts: &[String]) -> String {
 pub async fn import(state: &AppState, user: &Principal, owner: &str, dav: &Dav, kind: Kind, href: &str, name: &str, color: &str) -> AppResult<(String, usize)> {
     let m = meta(dav, kind, href).await?;
     let parts = fetch_all(dav, kind, href).await?;
-    create_local(state, user, owner, kind, &m, name, color, &parts).await
+    import_fetched(state, user, owner, kind, &m, name, color, &parts).await
+}
+
+/// The local half of [`import`], after every request to the remote is done: the new collection and its
+/// objects, recorded as the user's import (`history::Actor::import`, which dates each object it takes over
+/// at its creation). Without the guard the history found the objects later as device changes, all at the
+/// import's minute (2026-11-03); the guard holds the history lock, so no network call may happen inside it.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn import_fetched(state: &AppState, user: &Principal, owner: &str, kind: Kind, m: &super::dav::Collection, name: &str, color: &str, parts: &[String]) -> AppResult<(String, usize)> {
+    let label = if name.trim().is_empty() { m.name.trim() } else { name.trim() };
+    let mut g = crate::domain::history::begin(state, crate::domain::history::Actor::import(user, label)).await;
+    let (id, n) = create_local(state, user, owner, kind, m, name, color, parts).await?;
+    let store = match kind {
+        Kind::Cal => crate::domain::history_text::Store::Cal,
+        Kind::Ab => crate::domain::history_text::Store::Ab,
+    };
+    g.coll(store, owner, &id);
+    g.commit().await;
+    Ok((id, n))
 }
 
 /// Creates the local collection and the link, then runs the first round so the mapping is complete

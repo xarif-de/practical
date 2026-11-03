@@ -1,8 +1,9 @@
-// /history — the change history. One document (#history-data, again from /api/history after an undo
-// or a live change) drawn two ways: the line map (one line per element over time, one stop per change,
-// undo as an arc back to what it undid) and the list with details (before / after / today, what undo
-// would do, the element's own history, a day ruler on the right). Undo asks the server for its plan
-// first; warnings (a value changed later gets overwritten, later changes go inactive) need a yes.
+// /history — the change history. One document (#history-data: the newest page of changes; older pages from
+// /api/history?before= as the views reach them; again after an undo or a live change, with ?from= the loaded ones)
+// drawn two ways: the line map (one line per element over time, one stop per change, undo as an arc back to what it
+// undid) and the list with details (before / after / today, what undo would do, the element's own history, a day
+// ruler on the right). Undo asks the server for its plan first; warnings (a value changed later gets overwritten,
+// later changes go inactive) need a yes.
 (() => {
   const root = document.getElementById('hx');
   if (!root) return;
@@ -18,13 +19,31 @@
   let D, log, byId, els;
   const S = k => (D.t && D.t[k]) || k;
   const tr = (k, vars = {}) => { const s = S(k); return (typeof s === 'object' ? plural(s, +vars[s.$]) : s).replace(/%(\w+)/g, (m, n) => n in vars ? vars[n] : m); }; // plural: app.js
+  // an import or a remote sync round takes objects over: its creates read as `take` (routes/history.rs `takes`)
+  const TAKES = new Set(['import', 'sync']);
+  // fields at their default come without them (routes/history.rs `data`)
+  const prep = c => ({ dev: null, prodid: null, label: null, reverts: null, undoneBy: null, inactiveBy: null, tech: false, ...c,
+    items: TAKES.has(c.src) ? c.items.map(it => it.act === 'create' ? { ...it, act: 'take' } : it) : c.items, undo: { why: null, by: null, warn: 0, ...c.undo }, t: new Date(c.at) });
+  // in time, oldest first (as the document lists them): an import dates each object it takes over when it was made, so
+  // ids are not in time order (routes/history.rs `Page`)
+  const byTime = (a, b) => a.t - b.t || a.id - b.id;
+  let appended = false; // older pages were added: a reload asks for all loaded ones (?from=), not the first page
   function load(doc) {
     D = doc;
-    // fields at their default come without them (routes/history.rs `data`)
-    log = D.changes.map(c => ({ dev: null, prodid: null, label: null, reverts: null, undoneBy: null, inactiveBy: null, tech: false, ...c, undo: { why: null, by: null, warn: 0, ...c.undo }, t: new Date(c.at) }));
+    log = D.changes.map(prep);
     byId = Object.fromEntries(log.map(c => [c.id, c]));
     els = D.els;
     plans.clear();
+    appended = false;
+  }
+  // an older page: its changes go before the loaded ones; of an element, collection or person the newer entry wins
+  function append(doc) {
+    const add = doc.changes.filter(c => !byId[c.id]).map(prep);
+    for (const c of add) byId[c.id] = c;
+    log = [...add, ...log].sort(byTime);
+    for (const [k, e] of Object.entries(doc.els)) els[k] = els[k] ? { ...e, ...els[k] } : e;
+    D.colls = { ...doc.colls, ...D.colls }; D.people = { ...doc.people, ...D.people };
+    D.more = doc.more; D.cursor = doc.cursor; appended = true;
   }
   const plans = new Map();
   load(JSON.parse($('#history-data').textContent));
@@ -34,7 +53,9 @@
   const kindOf = c => c.items[0].kind;
   const collOf = c => c.items[0].coll;
   const actOf = c => c.items.every(i => i.act === c.items[0].act) ? c.items[0].act : 'update';
-  const isBulk = c => c.items.length > 1;
+  const count = c => c.n || c.items.length; // a bulk change comes with its first items and their number `n`
+  const isBulk = c => count(c) > 1;
+  const opens = a => a === 'create' || a === 'take' || a === 'restore'; // the element is there from this stop on
   const status = c => c.undoneBy ? 'undone' : c.inactiveBy ? 'inactive' : 'active';
   const coll = k => D.colls[k] || { name: k.split('/').pop(), color: 'var(--fg-3)' };
   const elTitle = el => (els[el] && els[el].title) || '';
@@ -44,7 +65,7 @@
     const l = c.label || '';
     if (l.startsWith('colors:')) return tr('bulk-colors', { name: l.slice(7) || '…' }).replace(' („…“)', '').replace(' ("…")', '');
     if (c.src === 'import') return l ? tr('bulk-import-name', { name: l }) : S('bulk-import');
-    return `${c.items.length} ${kindName(kindOf(c), 2)}`;
+    return `${count(c)} ${kindName(kindOf(c), 2)}`;
   };
   const title = c => isBulk(c) ? bulkTitle(c) : (elTitle(c.items[0].el) || c.items[0].title || '—');
   const srcKey = c => c.src === 'dav' ? 'dav:' + (c.dev || '?') : c.src;
@@ -65,28 +86,31 @@
   const when = t => { const d = dayDiff(t); return (d === 0 ? S('today') : d === 1 ? S('yesterday') : fmtShort.format(t)) + ' ' + time(t); };
   const oldest = () => { const t = now(); t.setDate(t.getDate() - D.retention); return t; };
   const actWord = a => S('act-' + a);
+  const fmtBorn = new Intl.DateTimeFormat(LOC, { dateStyle: 'medium', timeStyle: 'short' });
+  const born = it => it.born ? tr('born', { date: fmtBorn.format(new Date(it.born)) }) : ''; // when a taken-over object was made
   const actTag = a => `<span class="hx-act ${a}">${esc(actWord(a))}</span>`;
 
   const sentence = (c, link = true) => {
     const who = `<b>${esc(actor(c))}</b>`, a = actOf(c), k = kindOf(c);
     if (c.src === 'undo') return tr('s-undo', { who, ref: ref(c.reverts) }) + ` <span class="muted">(${esc(isBulk(c) ? bulkTitle(c) : title(c))} ${esc(actWord(a))})</span>`;
-    if (isBulk(c)) return tr('s-bulk', { who, n: c.items.length, kinds: esc(kindName(k, 2)), act: esc(actWord(a)) }) + (c.label !== null ? ` <span class="muted">· ${esc(bulkTitle(c))}</span>` : '');
+    if (isBulk(c)) return tr('s-bulk', { who, n: count(c), kinds: esc(kindName(k, 2)), act: esc(actWord(a)) }) + (c.label !== null ? ` <span class="muted">· ${esc(bulkTitle(c))}</span>` : '');
     const tt = link ? `<a href="#" class="hx-el" data-el="${esc(c.items[0].el)}">„${esc(title(c))}“</a>` : `„${esc(title(c))}“`;
-    return tr('s-' + k, { who, title: tt, act: esc(actWord(a)) });
+    // a take is dated at the object's creation, not at the takeover: the sentence says both
+    return tr((a === 'take' ? 's-take-' : 's-') + k, { who, title: tt, act: esc(actWord(a)) });
   };
-  const what = c => (c.src === 'undo' ? `#${c.reverts} ${S('undone-short')}: ` : '') + (isBulk(c) ? `${c.items.length} ${kindName(kindOf(c), 2)} ${actWord(actOf(c))}` : `${kindName(kindOf(c))} ${actWord(actOf(c))}`);
+  const what = c => (c.src === 'undo' ? `#${c.reverts} ${S('undone-short')}: ` : '') + (isBulk(c) ? `${count(c)} ${kindName(kindOf(c), 2)} ${actWord(actOf(c))}` : `${kindName(kindOf(c))} ${actWord(actOf(c))}`);
   // attribute rows; a multi-item change shows one row per element (up to `max`)
   const diffRows = (c, max = 4) => {
     if (isBulk(c)) {
       const rows = c.items.slice(0, max).map(it => {
         const a = it.attrs.find(x => x[0] !== 'SUMMARY' && x[0] !== 'FN') || it.attrs[0] || [];
-        return { k: elTitle(it.el) || it.title, from: it.act === 'update' ? a[2] : '', to: it.act === 'update' ? a[3] : '', act: it.act };
+        return { k: elTitle(it.el) || it.title, from: it.act === 'update' ? a[2] : '', to: it.act === 'update' ? a[3] : '', act: it.act, note: born(it) };
       });
-      if (c.items.length > max) rows.push({ more: c.items.length - max });
+      if (count(c) > rows.length) rows.push({ more: count(c) - rows.length });
       return rows;
     }
     const it = c.items[0];
-    return it.attrs.map(([k, label, from, to]) => ({ k: label, key: k, from, to, act: it.act }));
+    return [...(it.born ? [{ k: S('born-k'), note: fmtBorn.format(new Date(it.born)) }] : []), ...it.attrs.map(([k, label, from, to]) => ({ k: label, key: k, from, to, act: it.act }))];
   };
   // several values (one per line: alarms, attendees, numbers …): which went, which came, which stayed
   const lines = v => v ? v.split('\n') : [];
@@ -100,6 +124,7 @@
   };
   const multi = r => (r.from || '').includes('\n') || (r.to || '').includes('\n');
   const diff = (c, max) => `<div class="hx-diff">` + diffRows(c, max).map(r => r.more ? `<div class="hx-dr"><span class="k"></span><span class="hx-dv muted">${esc(tr('more', { n: r.more }))}</span></div>` :
+    r.note && !r.to && !r.from ? `<div class="hx-dr"><span class="k">${esc(r.k)}</span><span class="hx-dv muted">${esc(r.note)}</span></div>` :
     `<div class="hx-dr"><span class="k">${esc(r.k)}</span><span class="hx-dv${multi(r) ? ' hx-lines' : ''}">${(r.act === 'update' || r.act === 'move') && multi(r) ? lineDiff(r.from, r.to).inline : r.act === 'update' || r.act === 'move' ? `${r.from ? `<del>${esc(r.from)}</del>` : `<span class="muted">${esc(S('empty'))}</span>`}<span class="ar">→</span>${r.to ? `<ins>${esc(r.to)}</ins>` : `<span class="muted">${esc(S('empty'))}</span>`}`
       : r.act === 'delete' ? (r.from ? `<del>${esc(r.from)}</del>` : `<span class="muted">${esc(actWord('delete'))}</span>`) : (r.to ? `<ins>${esc(r.to)}</ins>` : `<span class="muted">${esc(actWord(r.act))}</span>`)}</span></div>`).join('') + '</div>';
   const statusTag = c => {
@@ -150,11 +175,22 @@
   // false: the document came back unchanged (the live echo of an undo made here) — nothing to redraw
   let lastDoc = '';
   async function reload() {
-    const r = practical.tell(await practical.req('/api/history', { headers: { Accept: 'application/json' }, as: 'text' }));
+    const r = practical.tell(await practical.req(appended && D.cursor != null ? `/api/history?from=${encodeURIComponent(D.cursor)}` : '/api/history', { headers: { Accept: 'application/json' }, as: 'text' }));
     if (!r.ok) return false; // the page stays as it is, the failure is told
     const t = r.data; if (t === lastDoc) return false;
-    lastDoc = t; load(JSON.parse(t)); return true;
+    const wide = appended; lastDoc = t; load(JSON.parse(t)); appended = wide; return true;
   }
+  // older pages, one request at a time; a failed one stops the automatic loading until a click asks again
+  let fetching = null, stalled = false;
+  const older = () => fetching || (fetching = (async () => {
+    if (!D.more || D.cursor == null) return false;
+    const r = practical.tell(await practical.req(`/api/history?before=${encodeURIComponent(D.cursor)}`, { headers: { Accept: 'application/json' }, as: 'json' }));
+    if (!r.ok) { stalled = true; return false; }
+    append(r.data); return true;
+  })().finally(() => { fetching = null; }));
+  // older pages until `done()` holds or none is left; true when it holds
+  async function until(done) { while (!done() && D.more && !stalled) if (!await older()) break; return done(); }
+  const olderBtn = () => D.more ? `<div class="hx-older"><button class="btn" type="button" data-older>${esc(S('older'))}</button></div>` : '';
   async function planOf(id) {
     if (!plans.has(id)) plans.set(id, fetch(`/api/history/${id}/plan`).then(r => r.ok ? r.json() : null).catch(() => null));
     return plans.get(id);
@@ -184,7 +220,7 @@
     if (F.q) { const h = hay(c); if (!fold(F.q).split(/\s+/).filter(Boolean).every(w => h.includes(w))) return false; }
     return true;
   };
-  const list = () => log.filter(c => match(c)).sort((a, b) => b.id - a.id);
+  const list = () => log.filter(c => match(c)).sort((a, b) => byTime(b, a));
   const facetCounts = key => { const m = new Map(); for (const c of log) if (match(c, key)) for (const v of facet[key](c)) m.set(v, (m.get(v) || 0) + 1); return m; };
   const facetValues = key => { const all = new Set(); for (const c of log) if (F.tech || !c.tech) for (const v of facet[key](c)) all.add(v); return [...all]; };
   const facetLabel = (key, v) => key === 'kinds' ? kindName(v, 2) : key === 'srcs' ? srcName(v) : key === 'acts' ? actWord(v) : key === 'colls' ? coll(v).name : key === 'attrs' ? attrLabel(v) : key === 'who' ? person(v).name : v;
@@ -252,7 +288,7 @@
   // ---- view: line map ---------------------------------------------------------------------------
   const Map_ = (() => {
     const PPD = { 7: 150, 30: 38, 90: 13 }, ROWH = 64, LY = 38; // LY + 22 = the stop's number, inside the row
-    let zoom = +localStorage.hxZoom || 30, openId = null, host = null, resizeOn = false;
+    let zoom = +localStorage.hxZoom || 30, openId = null, host = null, resizeOn = false, filling = false;
     // pixels per day: the zoom's minimum, stretched so the days fill the window's width
     let ppd = 38;
     const fit = () => {
@@ -265,7 +301,7 @@
     const shape = (act, hollow, big) => {
       const c = `var(--hx-${act})`, f = hollow ? 'var(--bg)' : c, s = `fill="${f}" stroke="${c}" stroke-width="2"`, k = big ? 1.25 : 1;
       switch (act) {
-        case 'create': return `<circle r="${6.5 * k}" ${s}/><circle r="${2.2 * k}" fill="${hollow ? c : 'var(--bg)'}"/>`;
+        case 'create': case 'take': return `<circle r="${6.5 * k}" ${s}/><circle r="${2.2 * k}" fill="${hollow ? c : 'var(--bg)'}"/>`;
         case 'delete': return `<rect x="${-5.5 * k}" y="${-5.5 * k}" width="${11 * k}" height="${11 * k}" rx="2" ${s}/>`;
         case 'restore': return `<rect x="${-5 * k}" y="${-5 * k}" width="${10 * k}" height="${10 * k}" rx="1.5" transform="rotate(45)" ${s}/>`;
         case 'move': return `<path d="M${-6 * k} ${5 * k}L0 ${-6 * k}L${6 * k} ${5 * k}Z" ${s} stroke-linejoin="round"/>`;
@@ -284,7 +320,7 @@
             const b = key[0] === 'b' ? byId[+key.slice(1)] : null, el = b ? b.items[0].el : key, e = els[el] || {};
             map.set(key, { key, bulk: b, el, label: b ? bulkTitle(b) : elTitle(el), kind: e.kind || kindOf(c), color: coll(e.coll || collOf(c)).color, stops: [] });
           }
-          const n = key[0] === 'b' ? c.items.length : c.items.filter(i => i.el === key).length;
+          const n = key[0] === 'b' ? count(c) : c.items.filter(i => i.el === key).length;
           const it = key[0] === 'b' ? c.items[0] : c.items.find(i => i.el === key);
           map.get(key).stops.push({ c, act: key[0] === 'b' ? actOf(c) : it.act, n });
         }
@@ -295,13 +331,13 @@
         for (const s of r.stops) { s.x = Math.max((s.c.t - start) / 864e5 * ppd, last + 16); last = s.x; }
         r.alive = r.bulk ? r.bulk.items.some(i => (els[i.el] || {}).exists) : (els[r.el] || {}).exists;
       }
-      return out.sort((a, b) => b.stops[b.stops.length - 1].c.id - a.stops[a.stops.length - 1].c.id);
+      return out.sort((a, b) => byTime(b.stops[b.stops.length - 1].c, a.stops[a.stops.length - 1].c));
     }
     function rowSvg(r, W, stopX, nx) {
       let segs = '', x0 = null, ghost = null;
-      if (!(r.stops[0].act === 'create' || r.stops[0].act === 'restore')) x0 = 0;
+      if (!opens(r.stops[0].act)) x0 = 0;
       for (const s of r.stops) {
-        if ((s.act === 'create' || s.act === 'restore') && x0 === null) { if (ghost !== null) segs += `<line x1="${ghost}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-ghost"/>`; ghost = null; x0 = s.x; }
+        if (opens(s.act) && x0 === null) { if (ghost !== null) segs += `<line x1="${ghost}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-ghost"/>`; ghost = null; x0 = s.x; }
         if (s.act === 'delete' && x0 !== null) { segs += `<line x1="${x0}" x2="${s.x}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${esc(r.color)}"/>`; x0 = null; ghost = s.x; }
       }
       if (x0 !== null) segs += `<line x1="${x0}" x2="${Math.max(nx, r.stops[r.stops.length - 1].x)}" y1="${LY}" y2="${LY}" class="hxg-line" style="stroke:${esc(r.color)}"/>`;
@@ -319,7 +355,7 @@
         const st = status(s.c), hollow = st !== 'active';
         const body = s.n > 1 || r.bulk
           ? `<rect x="-15" y="-9" width="30" height="18" rx="9" fill="${hollow ? 'var(--bg)' : `var(--hx-${s.act})`}" stroke="var(--hx-${s.act})" stroke-width="2"/><text y="4" text-anchor="middle" class="hxg-n${hollow ? ' h' : ''}">${s.n}</text>`
-          : shape(s.act, hollow, s.act === 'create');
+          : shape(s.act, hollow, s.act === 'create' || s.act === 'take');
         const ring = s.c.src === 'undo' ? '<circle r="11" class="hxg-ring"/>' : '';
         const txt = sentence(s.c, false).replace(/<[^>]+>/g, '');
         // The <title> IS the name — no aria-label beside it. axe counts an SVG title as the
@@ -342,12 +378,13 @@
       const nx = (now() - start) / 864e5 * ppd;
       return `<svg width="${W}" height="30" class="hxg-axis">${t}<line x1="${nx}" x2="${nx}" y1="4" y2="30" class="hxg-nowl"/><text x="${nx - 4}" y="10" text-anchor="end" class="hxg-now">${esc(S('now'))}</text></svg>`;
     }
-    const legend = () => `<div class="hxg-legend">${ACTS.map(a => `<span><svg width="16" height="16" viewBox="-8 -8 16 16">${shape(a, false)}</svg>${esc(actWord(a))}</span>`).join('')}
+    // a take stop looks like a create: the create's entry names both when the loaded changes have one
+    const legend = () => `<div class="hxg-legend">${ACTS.map(a => `<span><svg width="16" height="16" viewBox="-8 -8 16 16">${shape(a, false)}</svg>${esc(a === 'create' && log.some(c => c.items.some(i => i.act === 'take')) ? `${actWord(a)} / ${actWord('take')}` : actWord(a))}</span>`).join('')}
       <span><svg width="16" height="16" viewBox="-8 -8 16 16">${shape('update', true)}</svg>${esc(S('lg-hollow'))}</span>
       <span><svg width="26" height="16" viewBox="0 0 26 16"><path d="M22 13 C22 1, 4 1, 4 13" class="hxg-arc"/></svg>${esc(S('lg-arc'))}</span></div>`;
     function mount(h) {
       host = h;
-      h.innerHTML = `${legend()}<div class="hxg-scroll" data-m="map"></div><div class="hxg-pop" data-m="pop" hidden></div><div class="hx-foot" data-m="foot"></div>`;
+      h.innerHTML = `<div data-m="legend"></div><div class="hxg-scroll" data-m="map"></div><div class="hxg-pop" data-m="pop" hidden></div><div class="hx-foot" data-m="foot"></div>`;
       $('[data-m="map"]', h).addEventListener('scroll', () => { if (openId) pop(); });
       if (!resizeOn) { resizeOn = true; let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (host) render(false); }, 150); }); } // once: every mount used to add one more
       render(true);
@@ -358,6 +395,9 @@
       const lst = list();
       const end = new Date(dayKey(now())); end.setDate(end.getDate() + 1);
       const start = new Date(end.getTime() - zoom * 864e5);
+      // the window reaches before the oldest loaded change: load older pages, then draw again
+      if (D.more && !stalled && !filling && (!log.length || log[0].t >= start)) { filling = true; until(() => !log.length || log[0].t < start).then(() => { filling = false; if (host) { chrome(); render(false); } }); }
+      M('legend').innerHTML = legend();
       fit();
       let rs = rows(lst, start);
       // stops of one moment push each other past "now": make room for them inside the width
@@ -412,6 +452,7 @@
     }
     function go(id) {
       const c = byId[id], end = new Date(dayKey(now())); end.setDate(end.getDate() + 1);
+      if (!c) return;
       if (c.t < new Date(end.getTime() - zoom * 864e5)) zoom = 90;
       openId = id; render();
       const g = $(`.hxg-stop[data-cid="${id}"]`, host);
@@ -433,15 +474,16 @@
       if (isBulk(c)) return `<table class="hxc-tab">${head.replace('<th></th>', `<th>${esc(S('col-el'))}</th>`)}<tbody>${c.items.map(it => {
         const e = els[it.el] || {}, a = it.attrs.find(x => x[0] !== 'SUMMARY' && x[0] !== 'FN') || [];
         const upd = it.act === 'update' || it.act === 'move';
-        const before = upd ? a[2] : it.act === 'create' ? '—' : it.act === 'restore' ? actWord('delete') : S('present');
-        const after = upd ? a[3] : it.act === 'delete' ? actWord('delete') : it.act === 'create' ? S('new') : S('present');
+        // taken over: the object was made before, when its own text says
+        const before = upd ? a[2] : it.act === 'create' ? '—' : it.act === 'take' ? born(it) || '—' : it.act === 'restore' ? actWord('delete') : S('present');
+        const after = upd ? a[3] : it.act === 'delete' ? actWord('delete') : it.act === 'create' ? S('new') : it.act === 'take' ? actWord('take') : S('present');
         const today = !e.exists ? actWord('delete') : upd ? '' : S('present');
-        return `<tr><th>${esc(elTitle(it.el) || it.title)}</th><td class="hxc-vb">${esc(before || S('empty'))}</td><td class="hxc-va">${esc(after || S('empty'))}</td><td class="${today === actWord('delete') && after !== today ? 'hxc-vx' : 'hxc-vn'}">${esc(today || '·')}</td></tr>`;
-      }).join('')}</tbody></table>`;
+        return `<tr><th>${esc(elTitle(it.el) || it.title)}</th><td class="hxc-vb${it.act === 'take' ? ' muted' : ''}">${esc(before || S('empty'))}</td><td class="hxc-va">${esc(after || S('empty'))}</td><td class="${today === actWord('delete') && after !== today ? 'hxc-vx' : 'hxc-vn'}">${esc(today || '·')}</td></tr>`;
+      }).join('')}${count(c) > c.items.length ? `<tr><th></th><td colspan="3" class="muted">${esc(tr('more', { n: count(c) - c.items.length }))}</td></tr>` : ''}</tbody></table>`;
       const it = c.items[0], e = els[it.el] || {};
       if (it.act !== 'update' && it.act !== 'move') {
         const rows = it.attrs.filter(a => a[2] || a[3]);
-        return `<p class="hxc-note">${esc(S('note-' + it.act))}</p><table class="hxc-tab"><tbody>${rows.map(([k, label, from, to]) => `<tr><th>${esc(label)}</th><td colspan="3">${esc(to || from)}</td></tr>`).join('')}</tbody></table>`;
+        return `<p class="hxc-note">${esc(S('note-' + it.act))}${it.born ? ` <span class="muted">${esc(born(it))}</span>` : ''}</p><table class="hxc-tab"><tbody>${rows.map(([k, label, from, to]) => `<tr><th>${esc(label)}</th><td colspan="3">${esc(to || from)}</td></tr>`).join('')}</tbody></table>`;
       }
       return `<table class="hxc-tab">${head}<tbody>${it.attrs.map(([k, label, from, to]) => {
         // the plan knows today's value of an edited attribute; the collection is the element's own
@@ -510,12 +552,26 @@
       if (!byId[sel]) sel = lst[0] && lst[0].id;
       let html = '', day = '';
       for (const c of lst) { const d = dayKey(c.t); if (d !== day) { html += `<h2>${esc(dayLabel(c.t))}</h2>`; day = d; } html += li(c); }
-      M('list').innerHTML = html || `<div class="hx-empty">${esc(S('none'))} <a href="#" data-reset>${esc(S('reset'))}</a></div>`;
+      M('list').innerHTML = (html || `<div class="hx-empty">${esc(S('none'))} <a href="#" data-reset>${esc(S('reset'))}</a></div>`) + olderBtn();
+      watch();
       M('foot').textContent = tr('retention', { n: D.retention, date: fmtShort.format(oldest()) });
       M('detail').innerHTML = detail(null);
       M('ruler').innerHTML = ruler();
       M('wrap').classList.toggle('show-d', mobileDetail);
       showDetail();
+    }
+    // the "load older" button at the list's end loads by itself once it comes near (a screenful ahead) — not while
+    // a filter is set: one that finds little would load every page; then it waits for a click
+    let obs = null;
+    // the box the list scrolls in (the list itself, or <main> on a phone): on the viewport the button would count as
+    // near only once it is clipped in (tasks.js `scrollParent`)
+    const scroller = el => { for (let p = el.parentElement; p; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p; } return null; };
+    function watch() {
+      if (obs) obs.disconnect();
+      const b = $('[data-older]', M('list'));
+      if (!b || stalled || activeCount()) return;
+      obs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { obs.disconnect(); older().then(ok => { if (ok && host) { chrome(); render(); } }); } }, { root: scroller(b), rootMargin: '600px 0px' });
+      obs.observe(b);
     }
     const pick = id => { sel = id; mobileDetail = true; render(); const n = $(`.hxc-list [data-cid="${id}"]`, host); if (n) n.scrollIntoView({ block: 'nearest' }); };
     function click(e) {
@@ -533,7 +589,7 @@
       if (lst[j] && j !== i) { e.preventDefault(); pick(lst[j].id); }
     }
     function go(id) { pick(id); const n = $('.hxc-card', host); if (n) { n.classList.remove('hx-flash'); void n.offsetWidth; n.classList.add('hx-flash'); } }
-    return { mount, render, unmount: () => { host = null; }, click, key, go, added: id => { sel = id; }, onScroll: () => {} };
+    return { mount, render, unmount: () => { host = null; if (obs) obs.disconnect(); }, click, key, go, added: id => { sel = id; }, onScroll: () => {} };
   })();
 
   // ---- wiring ---------------------------------------------------------------------------------
@@ -545,7 +601,8 @@
     V().mount(R('view'));
   }
   subs.push(info => { if (info.added) V().added(info.added); chrome(); V().render(); if (info.added) requestAnimationFrame(() => V().go(info.added)); });
-  const go = id => {
+  const go = async id => {
+    if (!byId[id]) await until(() => byId[id]); // not loaded yet: older pages until it is (or none is left)
     if (!byId[id]) return;
     if (!match(byId[id])) { resetF(); if (byId[id].tech) F.tech = true; $('[data-f="q"]', root).value = ''; chrome(); V().render(); }
     V().go(id);
@@ -574,6 +631,7 @@
     const fs = t.closest('[data-fs]'); if (fs) { F.status = fs.dataset.fs; emit(); return; }
     const un = t.closest('[data-unf]'); if (un) { const k = un.dataset.unf; if (facet[k]) F[k].delete(un.dataset.v); else if (k === 'status') F.status = 'all'; else if (k === 'period') { F.period = 'all'; F.from = F.to = ''; } else if (k === 'q') { F.q = ''; $('[data-f="q"]', root).value = ''; } else if (k === 'el') F.el = null; else if (k === 'tech') F.tech = false; emit(); return; }
     if (t.closest('[data-reset]')) { e.preventDefault(); resetF(); $('[data-f="q"]', root).value = ''; emit(); return; }
+    const ob = t.closest('[data-older]'); if (ob) { ob.disabled = true; stalled = false; older().then(() => emit()); return; }
     V().click(e);
   });
   document.addEventListener('click', e => { if (!e.target.closest('.hx-filter')) $$('.hx-filter.open', root).forEach(f => f.classList.remove('open')); });
@@ -585,4 +643,7 @@
   let rt;
   document.addEventListener('rustical:change', () => { clearTimeout(rt); rt = setTimeout(async () => { if (await reload()) { chrome(); V().render(); } }, 400); });
   show();
+  // a link to one element (?el=) whose changes are older than the first page: older pages until one is there
+  const hasEl = () => log.some(c => c.items.some(i => i.el === F.el));
+  if (F.el && !hasEl() && D.more) until(hasEl).then(() => emit());
 })();

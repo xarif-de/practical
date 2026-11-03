@@ -302,6 +302,66 @@ pub fn kind(store: Store, text: &str) -> &'static str {
     }
 }
 
+/// When the object was made, as its own text says (the history shows it for objects an import or a sync round took
+/// over): iCalendar — CREATED of the first VEVENT/VTODO/VJOURNAL (not of its alarms), else its LAST-MODIFIED, else
+/// its DTSTAMP; vCard — REV. The first of them that parses ([`stamp`]); None when none does.
+pub fn born(store: Store, text: &str, tz: chrono_tz::Tz) -> Option<chrono::DateTime<chrono::Utc>> {
+    let lines = events::unfold(text);
+    if store == Store::Ab {
+        return lines.iter().filter(|l| vcard_name(l) == "REV").find_map(|l| stamp(rest(l), tz));
+    }
+    const WANT: [&str; 3] = ["CREATED", "LAST-MODIFIED", "DTSTAMP"];
+    let (mut depth, mut inside, mut found): (usize, Option<usize>, [Option<&str>; 3]) = (0, None, [None; 3]);
+    for l in &lines {
+        match prop_name(l).as_str() {
+            "BEGIN" => {
+                depth += 1;
+                if inside.is_none() && is_item(split_value(rest(l)).1.trim()) {
+                    inside = Some(depth);
+                }
+            }
+            "END" if inside == Some(depth) => break,
+            "END" => depth = depth.saturating_sub(1),
+            n if inside == Some(depth) => {
+                if let Some(i) = WANT.iter().position(|w| *w == n)
+                    && found[i].is_none()
+                {
+                    found[i] = Some(rest(l));
+                }
+            }
+            _ => {}
+        }
+    }
+    found.into_iter().flatten().find_map(|r| stamp(r, tz))
+}
+
+/// `;PARAMS:value` of a DATE-TIME property → UTC: `…Z` and offsets (`+01:00`, `+0100`) as written, a TZID in
+/// that zone, floating (no zone) in `tz`, a DATE at midnight in `tz`; basic (`20261102T100000`) and extended
+/// (`2026-11-02T10:00:00`, vCard REV) forms, fractions of a second dropped.
+fn stamp(rest: &str, tz: chrono_tz::Tz) -> Option<chrono::DateTime<chrono::Utc>> {
+    let (params, v) = split_value(rest);
+    let v = v.trim();
+    if let Ok(t) = chrono::DateTime::parse_from_rfc3339(v) {
+        return Some(t.to_utc());
+    }
+    let mut b: String = v.chars().filter(|c| !matches!(c, '-' | ':')).collect();
+    if let Some(i) = b.find(['.', ',']) {
+        let end = b[i + 1..].find(|c: char| !c.is_ascii_digit()).map_or(b.len(), |j| i + 1 + j);
+        b.replace_range(i..end, "");
+    }
+    let zone = param(params, "TZID").and_then(ical::parse_tz).unwrap_or(tz);
+    if let Some(u) = b.strip_suffix(['Z', 'z']) {
+        return NaiveDateTime::parse_from_str(u, "%Y%m%dT%H%M%S").or_else(|_| NaiveDateTime::parse_from_str(u, "%Y%m%dT%H%M")).ok().map(|t| t.and_utc());
+    }
+    if let Ok(t) = chrono::DateTime::parse_from_str(&b, "%Y%m%dT%H%M%S%z") {
+        return Some(t.to_utc());
+    }
+    if let Ok(t) = NaiveDateTime::parse_from_str(&b, "%Y%m%dT%H%M%S").or_else(|_| NaiveDateTime::parse_from_str(&b, "%Y%m%dT%H%M")) {
+        return Some(ical::to_utc(t, zone));
+    }
+    NaiveDate::parse_from_str(&b, "%Y%m%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| ical::to_utc(t, zone))
+}
+
 /// `current` with the attributes `keys` taken from `before` (undo of an edit). Everything else of
 /// `current` stays; the master's SEQUENCE grows and its DTSTAMP/LAST-MODIFIED (vCard: REV) are now.
 pub fn revert(store: Store, current: &str, before: &str, keys: &[String]) -> String {

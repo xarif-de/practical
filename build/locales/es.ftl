@@ -1767,11 +1767,15 @@ hxj-act-update = cambiado
 hxj-act-move = movido
 hxj-act-delete = borrado
 hxj-act-restore = restaurado
+hxj-act-take = incorporado
 hxj-s-undo = %who deshizo %ref
 hxj-s-bulk = %who ha %act %n %kinds
 hxj-s-event = %who ha %act el evento %title
 hxj-s-task = %who ha %act la tarea %title
 hxj-s-contact = %who ha %act el contacto %title
+hxj-s-take-event = Evento %title creado, incorporado por %who
+hxj-s-take-task = Tarea %title creada, incorporada por %who
+hxj-s-take-contact = Contacto %title creado, incorporado por %who
 hxj-undone-short = deshecho
 hxj-more = { $n ->
    *[other] y %n más
@@ -1851,6 +1855,7 @@ hxj-new = nuevo
 hxj-note-create = Creado con:
 hxj-note-delete = Se borró:
 hxj-note-restore = Se restauró:
+hxj-note-take = Se incorporó:
 hxj-same-as-after = = Después
 hxj-pv-no = No se puede deshacer
 hxj-pv-plain = Se retira el cambio.
@@ -1861,6 +1866,9 @@ hxj-back = Lista
 hxj-hist-of = Historial de «%title»
 hxj-ruler = Línea de tiempo
 hxj-none = Nada encontrado.
+hxj-born = Creado el %date
+hxj-born-k = Creado
+hxj-older = Cargar cambios anteriores
 
 # first start (domain::onboarding): the language gate and the way back to the hints
 onb-lang-title = Idioma

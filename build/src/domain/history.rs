@@ -1,5 +1,6 @@
 //! Change history: every closed change of an event, task or contact, whatever made it — a save in
-//! this UI (one change, however many fields), an import (one change for all its objects) or a DAV
+//! this UI (one change, however many fields), an import or a remote sync round (a change per object it takes
+//! over, dated when the object was made: [`takes_over`]; its updates one change) or a DAV
 //! client (read off RustiCal's change log; one change per object) — with the versions before and
 //! after, so it can be undone later. Undo is itself a change; the undone one links to it.
 //!

@@ -1,9 +1,10 @@
 //! /history — the change history (`domain::history`): the line map and the list with details are
-//! drawn in the browser (history.js) from one JSON document, which /api/history serves again after
-//! an undo or a live change. Values arrive readable (the viewer's language and zone).
+//! drawn in the browser (history.js) from a JSON document of the newest [`PAGE`] changes; /api/history
+//! serves it again after an undo or a live change, and pages of older ones as the views need them
+//! ([`Page`]). Values arrive readable (the viewer's language and zone).
 //!
-//! Routes: `/history`, `/api/history`, `/api/history/{id}/plan` (what an undo would do), `/api/history/{id}/undo`.
-//! The document's expensive part is kept per user in [`HistoryCache`].
+//! Routes: `/history`, `/api/history[?before=<id>|?from=<id>]`, `/api/history/{id}/plan` (what an undo would do),
+//! `/api/history/{id}/undo`. The first page's expensive part is kept per user in [`HistoryCache`].
 
 use crate::csrf;
 use crate::ctx::PageCtx;
@@ -16,7 +17,7 @@ use crate::state::SharedState;
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::State;
-use crate::extract::{Json, Path};
+use crate::extract::{Json, Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -39,13 +40,54 @@ pub struct HistoryPage {
     pub data_json: String,
 }
 
+/// Changes per page of the document (by time, newest first chosen).
+pub const PAGE: usize = 100;
+/// Items per change in the document: a bulk change (an import of 3 800 objects) sends these and its count `n`.
+pub const PAGE_ITEMS: usize = 100;
+
+/// Which changes a document carries, of those the user may see (`history::visible_ids`), by their place in time:
+/// (at, id), at as stored ("YYYY-MM-DD HH:MM:SS" UTC), the id breaking ties.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Page {
+    /// the newest [`PAGE`]
+    First,
+    /// the [`PAGE`] next older than this place
+    Before((String, i64)),
+    /// all from this place on (the reload of a view that loaded older pages: they stay)
+    From((String, i64)),
+}
+
+/// `before`/`from`: a document's `cursor`, "at|id"
+#[derive(serde::Deserialize, Default)]
+struct PageQuery {
+    before: Option<String>,
+    from: Option<String>,
+}
+
+fn place(s: &str) -> AppResult<(String, i64)> {
+    let (at, id) = s.rsplit_once('|').ok_or_else(|| AppError::bad("err-input-body"))?;
+    Ok((at.to_string(), id.parse().map_err(|_| AppError::bad("err-input-body"))?))
+}
+
+impl PageQuery {
+    fn page(&self) -> AppResult<Page> {
+        Ok(match (&self.before, &self.from) {
+            (Some(b), _) => Page::Before(place(b)?),
+            (None, Some(f)) => Page::From(place(f)?),
+            _ => Page::First,
+        })
+    }
+}
+
 /// The browser's document: changes (oldest first) with readable attributes and whether each can be
-/// undone now, the elements they belong to, the collections and people they name. Serialized as
-/// `Value::to_string` would (keys sorted, compact); the changes and elements come from `HistoryCache`.
-/// Fields at their default are left out (history.js `load` puts them back): a change's `dev`, `prodid`,
-/// `label`, `reverts`, `undoneBy`, `inactiveBy` when null and `tech` when false, its undo's `why`/`by`
-/// when null and `warn` when 0, an element's `deletedBy` when null (~19 % of the raw document).
-async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<String> {
+/// undone now, the elements they belong to, the collections and people they name; `more`: older visible
+/// changes exist, `cursor`: the place ("at|id") to ask the next older page before (the oldest sent; null without one).
+/// Serialized as `Value::to_string` would (keys sorted, compact); the changes and elements of the first
+/// page come from `HistoryCache`. Fields at their default are left out (history.js `load` puts them back):
+/// a change's `dev`, `prodid`, `label`, `reverts`, `undoneBy`, `inactiveBy` when null, `tech` when false and
+/// `n` (its item count) when all items are sent, its undo's `why`/`by` when null and `warn` when 0, an item's
+/// `born` when unknown, an element's `deletedBy` when null (~19 % of the raw document).
+async fn data(state: &SharedState, user: &Principal, lang: &str, page: Page) -> AppResult<String> {
     // first: a write after this read moves it, so nothing read below is stored under a later generation
     let generation = state.history.generation();
     let vc = view_ctx(state, user, lang).await?;
@@ -64,12 +106,16 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<St
     let colls = serde_json::to_string(&colls).expect("json");
     // everything the changes and elements are made of: the history tables (generation), the objects now
     // (the collections' synctokens), the collections' names and states, who may see what, language, zone
-    let key = format!("{generation}|{lang}|{}|{}|{:?}|{tokens:?}|{colls}", vc.tz, user.id, user.memberships);
-    let part = match state.caches.history.get(&user.id, &key) {
-        Some(p) => p,
-        None => {
-            let p = std::sync::Arc::new(changes_and_elements(state, user, lang, vc.tz, &colls).await?);
-            state.caches.history.put(&user.id, key, p.clone());
+    // and which page: only the first is kept, so another page is never answered from it
+    let key = format!("{page:?}|{generation}|{lang}|{}|{}|{:?}|{tokens:?}|{colls}", vc.tz, user.id, user.memberships);
+    let first = page == Page::First;
+    let part = match (first, state.caches.history.get(&user.id, &key)) {
+        (true, Some(p)) => p,
+        _ => {
+            let p = std::sync::Arc::new(changes_and_elements(state, user, lang, vc.tz, &colls, page).await?);
+            if first {
+                state.caches.history.put(&user.id, key, p.clone());
+            }
             p
         }
     };
@@ -84,10 +130,12 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<St
     let t: BTreeMap<String, Value> = state.i18n.with_prefix_json(lang, "hxj-").into_iter().map(|(k, v)| (k["hxj-".len()..].to_string(), v)).collect();
     let now = crate::clock::now().with_timezone(&vc.tz).format("%Y-%m-%dT%H:%M").to_string();
     Ok(format!(
-        "{{\"changes\":{},\"colls\":{colls},\"els\":{},\"me\":{},\"now\":{},\"people\":{},\"retention\":{},\"t\":{}}}",
+        "{{\"changes\":{},\"colls\":{colls},\"cursor\":{},\"els\":{},\"me\":{},\"more\":{},\"now\":{},\"people\":{},\"retention\":{},\"t\":{}}}",
         part.changes,
+        json!(part.cursor),
         part.els,
         json!(user.id),
+        part.more,
         json!(now),
         serde_json::to_string(&people).expect("json"),
         state.config.history_retention_days,
@@ -95,11 +143,13 @@ async fn data(state: &SharedState, user: &Principal, lang: &str) -> AppResult<St
     ))
 }
 
-/// The cached part of the document: `changes` and `els` serialized, and who made the changes.
+/// The cached part of the document: `changes` and `els` serialized, who made the changes, `more`, `cursor`.
 pub struct HistPart {
     changes: String,
     els: String,
     whos: Vec<String>,
+    more: bool,
+    cursor: Option<String>,
 }
 
 /// The history document's expensive part per user (one entry each: the last key asked for), keyed by
@@ -149,19 +199,39 @@ impl HistoryCache {
     }
 }
 
-async fn changes_and_elements(state: &SharedState, user: &Principal, lang: &str, tz: chrono_tz::Tz, colls_json: &str) -> AppResult<HistPart> {
+async fn changes_and_elements(state: &SharedState, user: &Principal, lang: &str, tz: chrono_tz::Tz, colls_json: &str, page: Page) -> AppResult<HistPart> {
     let colls: BTreeMap<String, Value> = serde_json::from_str(colls_json).expect("json");
     let t = |k: &str| state.i18n.lookup(lang, k);
     let show = Show { t: &t, lang, tz };
     let coll_name = |k: &str| colls.get(k).and_then(|c| c["name"].as_str()).map(str::to_string).unwrap_or_else(|| k.rsplit('/').next().unwrap_or(k).to_string());
-    let all = history::visible(state, user).await?;
+    // the page's places (newest first by time), then what their plans need (`visible_for`), not every change kept
+    let places = history::visible_ids(state, user).await?;
+    let chosen: Vec<(String, i64)> = match &page {
+        Page::First => places.iter().take(PAGE).cloned().collect(),
+        Page::Before(b) => places.iter().filter(|p| *p < b).take(PAGE).cloned().collect(),
+        Page::From(f) => places.iter().filter(|p| *p >= f).cloned().collect(),
+    };
+    let oldest = chosen.last().cloned().or(match &page {
+        Page::From(f) => Some(f.clone()),
+        _ => None,
+    });
+    let more = oldest.as_ref().is_some_and(|m| places.last().is_some_and(|l| l < m));
+    let cursor = oldest.map(|(at, id)| format!("{at}|{id}"));
+    let ids: Vec<i64> = chosen.iter().map(|p| p.1).collect();
+    let all = history::visible_for(state, user, &ids).await?;
+    let wanted: std::collections::HashSet<i64> = ids.iter().copied().collect();
+    // oldest first, by time
+    let mut shown: Vec<&history::Change> = all.iter().filter(|c| wanted.contains(&c.id)).collect();
+    shown.sort_by(|a, b| (&a.at, a.id).cmp(&(&b.at, b.id)));
     let alive = history::alive(state).await?;
     let mut whos: Vec<String> = vec![];
     let mut els: BTreeMap<String, Value> = BTreeMap::new();
     let mut changes = vec![];
     let mut memo = history::PlanMemo::default();
-    memo.prefetch_blobs(state, &all).await?;
-    for c in &all {
+    memo.prefetch_blobs(state, shown.iter().copied()).await?;
+    // the versions taken over (`born`) of changes the plans do not read (undone, inactive)
+    memo.prefetch(state, shown.iter().filter(|c| history::takes_over(&c.src)).flat_map(|c| c.items.iter().take(PAGE_ITEMS)).filter(|i| i.act == "create").filter_map(|i| i.after.clone())).await?;
+    for &c in &shown {
         if let Some(w) = &c.who
             && !whos.contains(w)
         {
@@ -169,7 +239,8 @@ async fn changes_and_elements(state: &SharedState, user: &Principal, lang: &str,
         }
         let plan = history::plan(state, user, c, &all, &mut memo).await?;
         let mut items = vec![];
-        for it in &c.items {
+        let at = chrono::NaiveDateTime::parse_from_str(&c.at, "%Y-%m-%d %H:%M:%S").ok().map(|t| t.and_utc());
+        for it in c.items.iter().take(PAGE_ITEMS) {
             let el = it.el();
             let coll = format!("{}/{}", it.principal, it.coll);
             let exists = alive.contains(&(it.store.tag().to_string(), it.uid.clone()));
@@ -197,9 +268,26 @@ async fn changes_and_elements(state: &SharedState, user: &Principal, lang: &str,
                     json!([k, show.label(k), f, t])
                 })
                 .collect();
-            items.push(json!({ "el": el, "kind": it.kind, "act": it.act, "coll": coll, "title": it.title, "attrs": attrs }));
+            let mut item = json!({ "el": el, "kind": it.kind, "act": it.act, "coll": coll, "title": it.title, "attrs": attrs });
+            // taken over (history.js shows such a create as `take`): when the object was made, never after the change, and
+            // only where it says more than the change's own time (a change of one object is dated so since 2026-11-03)
+            if history::takes_over(&c.src)
+                && it.act == "create"
+                && let Some(h) = &it.after
+                && let Some(text) = memo.blob(state, h).await?
+                && let Some(b) = ht::born(it.store, &text, tz)
+            {
+                let b = at.map_or(b, |at| b.min(at)).with_timezone(&tz).format("%Y-%m-%dT%H:%M").to_string();
+                if b != local(&c.at, tz) {
+                    item["born"] = json!(b);
+                }
+            }
+            items.push(item);
         }
         let mut ch = json!({ "id": c.id, "at": local(&c.at, tz), "src": c.src, "who": c.who, "items": items });
+        if c.items.len() > PAGE_ITEMS {
+            ch["n"] = json!(c.items.len());
+        }
         let dev = if c.src == "dav" { ht::device(c.device.as_deref()) } else { None };
         for (k, v) in [("dev", json!(dev)), ("prodid", json!(c.device)), ("label", json!(c.label)), ("reverts", json!(c.reverts)), ("undoneBy", json!(c.undone_by)), ("inactiveBy", json!(c.inactive_by))] {
             if !v.is_null() {
@@ -224,7 +312,7 @@ async fn changes_and_elements(state: &SharedState, user: &Principal, lang: &str,
             e["title"] = json!(el.split_once(':').map(|x| x.1).unwrap_or(el));
         }
     }
-    Ok(HistPart { changes: serde_json::to_string(&changes).expect("json"), els: serde_json::to_string(&els).expect("json"), whos })
+    Ok(HistPart { changes: serde_json::to_string(&changes).expect("json"), els: serde_json::to_string(&els).expect("json"), whos, more, cursor })
 }
 
 /// "YYYY-MM-DD HH:MM:SS" UTC → "YYYY-MM-DDTHH:MM" in the viewer's zone.
@@ -235,12 +323,12 @@ fn local(at: &str, tz: chrono_tz::Tz) -> String {
 }
 
 async fn page(State(state): State<SharedState>, user: Principal, ctx: PageCtx) -> AppResult<HistoryPage> {
-    let d = data(&state, &user, &ctx.lang).await?;
+    let d = data(&state, &user, &ctx.lang, Page::First).await?;
     Ok(HistoryPage { data_json: crate::render::script_json(d), ctx })
 }
 
-async fn api_data(State(state): State<SharedState>, user: Principal, ctx: PageCtx) -> AppResult<Response> {
-    Ok(([(axum::http::header::CONTENT_TYPE, "application/json")], data(&state, &user, &ctx.lang).await?).into_response())
+async fn api_data(State(state): State<SharedState>, user: Principal, ctx: PageCtx, Query(q): Query<PageQuery>) -> AppResult<Response> {
+    Ok(([(axum::http::header::CONTENT_TYPE, "application/json")], data(&state, &user, &ctx.lang, q.page()?).await?).into_response())
 }
 
 /// What undoing a change would do: warnings (overwritten values, later changes going inactive) and
@@ -272,7 +360,7 @@ async fn coll_names(state: &SharedState, user: &Principal) -> AppResult<HashMap<
 }
 
 async fn api_plan(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, Path(id): Path<i64>) -> AppResult<Json<Value>> {
-    let all = history::visible(&state, &user).await?;
+    let all = history::visible_for(&state, &user, &[id]).await?;
     let c = all.iter().find(|x| x.id == id).ok_or(AppError::NotFound)?;
     let p = history::plan(&state, &user, c, &all, &mut history::PlanMemo::default()).await?;
     Ok(Json(plan_json(&state, &ctx.lang, vc.tz, &coll_names(&state, &user).await?, &p)))

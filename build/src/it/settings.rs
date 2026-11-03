@@ -314,12 +314,15 @@ async fn export_and_import() {
     let more = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:neu\r\nFN:Neu Person\r\nN:Person;Neu;;;\r\nEND:VCARD\r\n";
     assert_eq!(c.post_raw(&format!("/settings/import/addressbooks/alice/{ab}"), more).await.ok().json(), json!({ "imported": 1 }));
     assert_eq!(c.get_json(&format!("/api/contacts/alice/{ab}/neu")).await.ok().json()["full_name"], "Neu Person");
-    // the import is one change in the history
+    // the history: an object an import takes over is a change of its own (the cards: no REV, so now), the import's
+    // updates one change (the copies of the calendar are dated by their texts: left out here, the date moves)
     let h = c.get_json("/api/history").await.json();
     let imports: Vec<&serde_json::Value> = h["changes"].as_array().unwrap().iter().filter(|x| x["src"] == "import").collect();
-    assert_eq!(imports.len(), 4, "{h}");
-    assert_eq!(imports[0]["label"], "Kopie");
-    assert_eq!(imports[0]["items"].as_array().unwrap().len(), 4);
+    let cards: Vec<(&str, &serde_json::Value)> = imports.iter().filter(|x| x["items"][0]["kind"] == "contact").map(|x| (x["items"][0]["title"].as_str().unwrap(), &x["label"])).collect();
+    assert_eq!(cards.len(), 3, "{h}");
+    assert!(cards.contains(&("Neu Person", &json!(""))) && cards.contains(&("Anna Schmidt", &json!("Kopie"))), "{cards:?}");
+    let upd: Vec<&&serde_json::Value> = imports.iter().filter(|x| x["items"][0]["act"] == "update").collect();
+    assert_eq!((upd.len(), upd[0]["items"].as_array().unwrap().len(), upd[0]["items"][0]["title"].as_str()), (1, 1, Some("Zahnarzt (verschoben)")));
 }
 
 #[tokio::test]

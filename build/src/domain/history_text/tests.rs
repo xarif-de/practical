@@ -173,3 +173,23 @@ fn every_edit_of_a_contact_reads_differently() {
     let back = revert(Store::Ab, &after, v, &["TEL".into()]);
     assert_eq!(attrs(Store::Ab, &back)["TEL"], a["TEL"], "{back}");
 }
+
+#[test]
+fn born_reads_the_forms_a_stamp_comes_in() {
+    let tz: chrono_tz::Tz = "Europe/Berlin".parse().unwrap();
+    let at = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M")).unwrap().and_utc();
+    let ev = |extra: &str| format!("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:u\r\n{extra}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+    assert_eq!(born(Store::Cal, &ev("CREATED:20250301T081500Z"), tz), Some(at("2025-03-01 08:15")));
+    assert_eq!(born(Store::Cal, &ev("created:20250301T081500.123Z"), tz), Some(at("2025-03-01 08:15")), "any case, a fraction");
+    assert_eq!(born(Store::Cal, &ev("CREATED:2025-03-01T08:15:00+02:00"), tz), Some(at("2025-03-01 06:15")), "an offset");
+    assert_eq!(born(Store::Cal, &ev("CREATED:20250301T091500+0100"), tz), Some(at("2025-03-01 08:15")));
+    assert_eq!(born(Store::Cal, &ev("CREATED;VALUE=DATE:20250301"), tz), Some(at("2025-02-28 23:00")), "a date: midnight in the zone");
+    assert_eq!(born(Store::Cal, &ev("CREATED:gestern\r\nDTSTAMP:20240102T030405Z"), tz), Some(at("2024-01-02 03:04:05")), "unreadable: the next one");
+    assert_eq!(born(Store::Cal, &ev("SUMMARY:x"), tz), None);
+    let todo = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:X\r\nLAST-MODIFIED:20000101T000000Z\r\nEND:VTIMEZONE\r\nBEGIN:VTODO\r\nUID:t\r\nLAST-MODIFIED:20250102T000000Z\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+    assert_eq!(born(Store::Cal, todo, tz), Some(at("2025-01-02 00:00")), "not the zone's LAST-MODIFIED");
+    let card = |rev: &str| format!("BEGIN:VCARD\r\nVERSION:4.0\r\nUID:c\r\nFN:C\r\n{rev}\r\nEND:VCARD\r\n");
+    assert_eq!(born(Store::Ab, &card("REV:20250203T040506Z"), tz), Some(at("2025-02-03 04:05:06")));
+    assert_eq!(born(Store::Ab, &card("item1.REV:2025-02-03T04:05:06Z"), tz), Some(at("2025-02-03 04:05:06")));
+    assert_eq!(born(Store::Ab, &card("NOTE:x"), tz), None);
+}

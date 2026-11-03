@@ -32,6 +32,16 @@ pub(super) struct Rec {
     pub(super) at: String,
     /// of the newer version (the older one for a delete)
     pub(super) title: String,
+    /// a create of an import or a sync round: when the object was made, as its text says (`ht::born`)
+    pub(super) born: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// An import or a remote sync round takes objects over that existed before: each one it creates is a change of its
+/// own, dated when the object was made (its own text: `ht::born`, capped at now) — the history then reads like the
+/// objects' lives, not like one moment that made thousands of them. One undo per object, not per import (the user's
+/// decision, 2026-11-03). Its other items (updates, deletes) stay one change at now.
+pub fn takes_over(src: &str) -> bool {
+    matches!(src, "import" | "sync")
 }
 
 /// (key, before, after) of the attributes of a move from text `before` to text `after`; a move adds the collection
@@ -114,6 +124,9 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
     if moved(&mut *state.db.acquire().await?).await?.is_empty() {
         return Ok(None);
     }
+    // a floating creation date is read in the server's default zone (no viewer here)
+    let (takes, zone) = (actor.is_some_and(|(a, _, _)| takes_over(a.src)), crate::domain::ical::parse_tz(&state.config.default_timezone).unwrap_or(chrono_tz::UTC));
+    let born = |store: Store, act: &str, text: &str| if takes && act == "create" { ht::born(store, text, zone) } else { None };
     let mut tx = state.db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
     let mut recs: Vec<Rec> = vec![];
     for (store, p, c, tok, cur) in moved(&mut tx).await? {
@@ -135,7 +148,7 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
                     let uid = ht::uid(&t).unwrap_or_else(|| id.clone());
                     let h = put_head(&mut tx, store, &p, &c, &id, &uid, &t).await?;
                     if mine {
-                        recs.push(Rec { store, principal: p.clone(), coll: c.clone(), object_id: id.clone(), uid, kind: ht::kind(store, &t), act: "create", from: None, before: None, after: Some(h), at: now_utc(), title: ht::title(store, &t) });
+                        recs.push(Rec { store, principal: p.clone(), coll: c.clone(), object_id: id.clone(), uid, kind: ht::kind(store, &t), act: "create", from: None, before: None, after: Some(h), at: now_utc(), title: ht::title(store, &t), born: born(store, "create", &t) });
                     }
                     after_id = id;
                 }
@@ -177,7 +190,7 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
             let uid = ht::uid(text).unwrap_or_else(|| id.clone());
             // back after a recorded delete (trash restore, undo): a restore, not a new object
             let act = if act == "create" && last_act(&mut tx, store, &uid).await?.as_deref() == Some("delete") { "restore" } else { act };
-            let (kind, title) = (ht::kind(store, text), ht::title(store, text));
+            let (kind, title, born) = (ht::kind(store, text), ht::title(store, text), born(store, act, text));
             let after = match &now {
                 Some(t) => Some(put_head(&mut tx, store, &p, &c, &id, &uid, t).await?),
                 None => {
@@ -187,7 +200,7 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
             };
             // a blob's hash is its key: the head's
             let before = before.and(head.cloned());
-            recs.push(Rec { store, principal: p.clone(), coll: c.clone(), object_id: id, uid, kind, act, from: None, before, after, at, title });
+            recs.push(Rec { store, principal: p.clone(), coll: c.clone(), object_id: id, uid, kind, act, from: None, before, after, at, title, born });
         }
         put_cursor(&mut tx, store, &p, &c, tok).await?;
     }
@@ -207,11 +220,23 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
     if let Some((a, _, _)) = actor
         && !mine.is_empty()
     {
-        let n = write_change(&mut tx, a.src, Some(&a.who), false, a.label.as_deref(), a.reverts, &now_utc(), &mine).await?;
-        if let Some(r) = a.reverts {
-            mark_reverted(&mut tx, r, n).await?;
+        // taken over (`takes_over`): a change per created object at its creation date, oldest first; one made before the
+        // retention gets none (the next purge would drop it)
+        let (taken, rest): (Vec<Rec>, Vec<Rec>) = if takes_over(a.src) { mine.into_iter().partition(|r| r.act == "create") } else { (vec![], mine) };
+        let now = crate::clock::now();
+        let cutoff = now - chrono::Duration::days(i64::from(state.config.history_retention_days));
+        let mut dated: Vec<(chrono::DateTime<chrono::Utc>, Rec)> = taken.into_iter().map(|r| (r.born.map_or(now, |b| b.min(now)), r)).filter(|(b, _)| *b >= cutoff).collect();
+        dated.sort_by_key(|(b, _)| *b);
+        for (b, r) in &dated {
+            id = Some(write_change(&mut tx, a.src, Some(&a.who), false, a.label.as_deref(), None, &b.format("%Y-%m-%d %H:%M:%S").to_string(), std::slice::from_ref(r)).await?);
         }
-        id = Some(n);
+        if !rest.is_empty() {
+            let n = write_change(&mut tx, a.src, Some(&a.who), false, a.label.as_deref(), a.reverts, &now_utc(), &rest).await?;
+            if let Some(r) = a.reverts {
+                mark_reverted(&mut tx, r, n).await?;
+            }
+            id = Some(n);
+        }
     }
     tx.commit().await?;
     state.history.moved();
@@ -232,7 +257,7 @@ fn merge_moves(recs: Vec<Rec>) -> Vec<Rec> {
     }
     for d in dels {
         // only within one principal: across principals a pairing would hand the source's whole text to the
-        // target's readers (`read::visible` shows a move's `before`), so there it stays a delete and a create
+        // target's readers (`read::assemble` shows a move's `before`), so there it stays a delete and a create
         match out.iter_mut().find(|c| c.act == "create" && c.from.is_none() && c.store == d.store && c.uid == d.uid && c.principal == d.principal && c.coll != d.coll) {
             Some(c) => {
                 c.act = "move";
@@ -330,14 +355,29 @@ async fn mark_reverted(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, r: i64, n: 
     Ok(())
 }
 
-/// Drops changes older than the retention and the versions nothing refers to any more.
+/// Drops changes older than the retention, what the history kept of collections that are gone for good, and the
+/// versions nothing refers to any more.
+///
+/// A collection purged from the trash (its row deleted; one IN the trash keeps its row, `deleted_at` set, and stays)
+/// writes nothing to its change log, so `ingest` never learns of it: its heads and cursor stayed for good, its
+/// objects counted as existing (`alive`) and their versions were never collected (2026-11-03: 15 224 heads of four
+/// purged test calendars).
 pub async fn purge(state: &AppState) -> AppResult<u64> {
     let cutoff = (crate::clock::now() - chrono::Duration::days(i64::from(state.config.history_retention_days))).format("%Y-%m-%d %H:%M:%S").to_string();
     let _lock = state.history.lock.lock().await;
     let mut tx = state.db.begin_with(rustical_store_sqlite::BEGIN_IMMEDIATE).await?;
     sqlx::query("DELETE FROM practical_history_items WHERE change_id IN (SELECT id FROM practical_history_changes WHERE at < ?)").bind(&cutoff).execute(&mut *tx).await?;
     let n = sqlx::query("DELETE FROM practical_history_changes WHERE at < ?").bind(&cutoff).execute(&mut *tx).await?.rows_affected();
-    if n > 0 {
+    let mut gone = 0;
+    for sql in [
+        "DELETE FROM practical_history_heads WHERE store = 'cal' AND NOT EXISTS (SELECT 1 FROM calendars x WHERE x.principal = practical_history_heads.principal AND x.id = practical_history_heads.coll)",
+        "DELETE FROM practical_history_cursors WHERE store = 'cal' AND NOT EXISTS (SELECT 1 FROM calendars x WHERE x.principal = practical_history_cursors.principal AND x.id = practical_history_cursors.coll)",
+        "DELETE FROM practical_history_heads WHERE store = 'ab' AND NOT EXISTS (SELECT 1 FROM addressbooks x WHERE x.principal = practical_history_heads.principal AND x.id = practical_history_heads.coll)",
+        "DELETE FROM practical_history_cursors WHERE store = 'ab' AND NOT EXISTS (SELECT 1 FROM addressbooks x WHERE x.principal = practical_history_cursors.principal AND x.id = practical_history_cursors.coll)",
+    ] {
+        gone += sqlx::query(sql).execute(&mut *tx).await?.rows_affected();
+    }
+    if n > 0 || gone > 0 {
         sqlx::query(
             "DELETE FROM practical_history_blobs WHERE hash NOT IN (SELECT hash FROM practical_history_heads)
                AND hash NOT IN (SELECT before_hash FROM practical_history_items WHERE before_hash IS NOT NULL)
@@ -347,7 +387,7 @@ pub async fn purge(state: &AppState) -> AppResult<u64> {
         .await?;
     }
     tx.commit().await?;
-    if n > 0 {
+    if n > 0 || gone > 0 {
         state.history.moved();
     }
     Ok(n)
