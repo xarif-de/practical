@@ -1779,6 +1779,8 @@ hxj-more = { $n ->
    *[other] and %n more
 }
 hxj-empty = (empty)
+hxj-coll-gone = (deleted)
+hxj-attr-occurrence = Single occurrence of a series
 hxj-st-reverts = undoes %ref
 hxj-st-undone = undone by %ref
 hxj-st-inactive = inactive · element deleted by %ref

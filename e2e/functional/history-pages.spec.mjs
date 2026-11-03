@@ -66,3 +66,20 @@ test('the list loads older changes at its end, the map those of its window, a li
   await page.goto(`/history?view=list&el=${encodeURIComponent(oldest.items[0].el)}`);
   await expect(old).toBeVisible();
 });
+
+test('the attribute filter lists the overridden occurrences of a series once, not one entry per date with its title', async ({ page }) => {
+  await page.goto('/calendar');
+  const csrf = await page.locator('meta[name=csrf]').getAttribute('content');
+  const post = ics => page.request.post(`/settings/import/calendars/${CAL}`, { data: `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//e2e//EN\r\n${ics}END:VCALENDAR\r\n`, headers: { 'Content-Type': 'text/plain', 'X-CSRF-Token': csrf, Origin: BASE } });
+  const master = 'BEGIN:VEVENT\r\nUID:occ-1@e2e\r\nDTSTAMP:20261012T000000Z\r\nCREATED:20261010T080000Z\r\nSUMMARY:F4 Serie\r\nDTSTART:20261012T100000Z\r\nDTEND:20261012T110000Z\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nEND:VEVENT\r\n';
+  const over = (d, t) => `BEGIN:VEVENT\r\nUID:occ-1@e2e\r\nDTSTAMP:20261012T000000Z\r\nRECURRENCE-ID:202610${d}T100000Z\r\nSUMMARY:${t}\r\nDTSTART:202610${d}T120000Z\r\nDTEND:202610${d}T130000Z\r\nEND:VEVENT\r\n`;
+  expect((await post(master)).ok()).toBe(true);
+  // the same series again with two moved occurrences: an update whose attributes are keyed RECURRENCE-ID:<date>
+  expect((await post(master + over('19', 'F4 Einzeln A') + over('26', 'F4 Einzeln B'))).ok()).toBe(true);
+  await page.goto('/history?view=list');
+  await page.locator('.hx-filter > button').first().click();
+  const vals = await page.locator('input[data-f="attrs"]').evaluateAll(xs => xs.map(x => x.value));
+  expect(vals).toContain('RECURRENCE-ID');
+  expect(vals.filter(v => v.startsWith('RECURRENCE-ID:'))).toEqual([]);
+  await expect(page.locator('input[data-f="attrs"][value="RECURRENCE-ID"]').locator('xpath=..')).toContainText('Einzeltermin einer Serie');
+});

@@ -221,11 +221,12 @@ pub(super) async fn ingest(state: &AppState, actor: Option<(&Actor, &HashSet<Obj
         && !mine.is_empty()
     {
         // taken over (`takes_over`): a change per created object at its creation date, oldest first; one made before the
-        // retention gets none (the next purge would drop it)
+        // retention gets none (the next purge would drop it), and neither does one without any date: it existed before
+        // the takeover, and "now" would show it as new (2026-11-03: 365 contacts without REV, all at the sync's minute)
         let (taken, rest): (Vec<Rec>, Vec<Rec>) = if takes_over(a.src) { mine.into_iter().partition(|r| r.act == "create") } else { (vec![], mine) };
         let now = crate::clock::now();
         let cutoff = now - chrono::Duration::days(i64::from(state.config.history_retention_days));
-        let mut dated: Vec<(chrono::DateTime<chrono::Utc>, Rec)> = taken.into_iter().map(|r| (r.born.map_or(now, |b| b.min(now)), r)).filter(|(b, _)| *b >= cutoff).collect();
+        let mut dated: Vec<(chrono::DateTime<chrono::Utc>, Rec)> = taken.into_iter().filter_map(|r| r.born.map(|b| (b.min(now), r))).filter(|(b, _)| *b >= cutoff).collect();
         dated.sort_by_key(|(b, _)| *b);
         for (b, r) in &dated {
             id = Some(write_change(&mut tx, a.src, Some(&a.who), false, a.label.as_deref(), None, &b.format("%Y-%m-%d %H:%M:%S").to_string(), std::slice::from_ref(r)).await?);
@@ -355,8 +356,8 @@ async fn mark_reverted(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, r: i64, n: 
     Ok(())
 }
 
-/// Drops changes older than the retention, what the history kept of collections that are gone for good, and the
-/// versions nothing refers to any more.
+/// Drops changes older than the retention, what the history kept of collections that are gone for good (heads, cursor,
+/// their changes), and the versions nothing refers to any more.
 ///
 /// A collection purged from the trash (its row deleted; one IN the trash keeps its row, `deleted_at` set, and stays)
 /// writes nothing to its change log, so `ingest` never learns of it: its heads and cursor stayed for good, its
@@ -374,6 +375,11 @@ pub async fn purge(state: &AppState) -> AppResult<u64> {
         "DELETE FROM practical_history_cursors WHERE store = 'cal' AND NOT EXISTS (SELECT 1 FROM calendars x WHERE x.principal = practical_history_cursors.principal AND x.id = practical_history_cursors.coll)",
         "DELETE FROM practical_history_heads WHERE store = 'ab' AND NOT EXISTS (SELECT 1 FROM addressbooks x WHERE x.principal = practical_history_heads.principal AND x.id = practical_history_heads.coll)",
         "DELETE FROM practical_history_cursors WHERE store = 'ab' AND NOT EXISTS (SELECT 1 FROM addressbooks x WHERE x.principal = practical_history_cursors.principal AND x.id = practical_history_cursors.coll)",
+        // and its changes: nobody can see the collection any more, nothing of it can be undone, and shown they named it by
+        // its id, coloured it grey and filled the page (2026-11-03: 13 000 of 14 500 changes, 12 collections gone)
+        "DELETE FROM practical_history_items WHERE store = 'cal' AND NOT EXISTS (SELECT 1 FROM calendars x WHERE x.principal = practical_history_items.principal AND x.id = practical_history_items.coll)",
+        "DELETE FROM practical_history_items WHERE store = 'ab' AND NOT EXISTS (SELECT 1 FROM addressbooks x WHERE x.principal = practical_history_items.principal AND x.id = practical_history_items.coll)",
+        "DELETE FROM practical_history_changes WHERE NOT EXISTS (SELECT 1 FROM practical_history_items i WHERE i.change_id = practical_history_changes.id)",
     ] {
         gone += sqlx::query(sql).execute(&mut *tx).await?.rows_affected();
     }

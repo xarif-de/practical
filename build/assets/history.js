@@ -57,7 +57,8 @@
   const isBulk = c => count(c) > 1;
   const opens = a => a === 'create' || a === 'take' || a === 'restore'; // the element is there from this stop on
   const status = c => c.undoneBy ? 'undone' : c.inactiveBy ? 'inactive' : 'active';
-  const coll = k => D.colls[k] || { name: k.split('/').pop(), color: 'var(--fg-3)' };
+  // a collection that is gone (the hourly purge drops its history; until then): never its id
+  const coll = k => D.colls[k] || { name: S('coll-gone'), color: 'var(--fg-3)' };
   const elTitle = el => (els[el] && els[el].title) || '';
   const ref = id => `<a href="#" class="hx-go" data-go="${id}">#${id}</a>`;
   const kindName = (k, n = 1) => S((n === 1 ? 'k-' : 'kp-') + k);
@@ -76,8 +77,10 @@
   const person = w => (D.people[w] || { name: w, ini: (w || '?').slice(0, 2).toUpperCase() });
   const actor = c => c.who ? person(c.who).name : srcLabel(c);
   const avatar = c => c.who ? `<span class="hx-av" title="${esc(person(c.who).name)}">${esc(person(c.who).ini)}</span>` : `<span class="hx-av dev" title="${esc(srcLabel(c))}">${ico(srcIcon(c))}</span>`;
-  const attrKeys = c => [...new Set(c.items.flatMap(it => it.attrs.map(a => a[0])))];
-  const attrLabel = k => { for (const c of log) for (const it of c.items) for (const a of it.attrs) if (a[0] === k) return a[1]; return k; };
+  // one facet for every overridden occurrence of a series (history_text keys them RECURRENCE-ID:<date>, labelled by its title)
+  const attrKey = k => k.startsWith('RECURRENCE-ID:') ? 'RECURRENCE-ID' : k;
+  const attrKeys = c => [...new Set(c.items.flatMap(it => it.attrs.map(a => attrKey(a[0]))))];
+  const attrLabel = k => { if (k === 'RECURRENCE-ID') return S('attr-occurrence'); for (const c of log) for (const it of c.items) for (const a of it.attrs) if (a[0] === k) return a[1]; return k; };
   const dayKey = practical.ymd;
   const now = () => new Date(D.now);
   const fmtTime = new Intl.DateTimeFormat(LOC, { hour: '2-digit', minute: '2-digit' }), time = t => fmtTime.format(t); // one formatter, not one per row (one per row cost 57 ms self time per load)

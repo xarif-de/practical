@@ -344,7 +344,9 @@ The server admin can change this period.
 
 When an import or a sync with a linked remote calendar brings in objects, each object becomes a change of its own. It is
 marked **taken over** rather than new, and it is dated when the object was originally created, taken from the
-object's own creation or modification date. An object created before the history's retention period gets no change.
+object's own creation or modification date. An object created before the history's retention period gets no change,
+and neither does one that carries no date at all (many contacts): it existed before, and nothing says when. Once a
+calendar or address book is deleted for good (emptied from the trash), its history goes too, within the hour.
 Because of this, you undo an import object by object, not as a whole. Updates and deletes from a sync stay one
 change at the time of the sync.
 

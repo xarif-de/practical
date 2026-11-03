@@ -144,6 +144,14 @@ async fn a_purged_calendar_leaves_nothing_behind_in_the_history() {
     crate::domain::history::poll(&s.app.state).await;
     let (privat, arbeit) = (s.privat.clone(), s.arbeit.clone());
     assert!(heads(privat.clone()).await > 0 && heads(arbeit.clone()).await > 0);
+    // a change in each, so the purge has history to drop (and to keep)
+    let d3 = ago(3);
+    for id in [&privat, &arbeit] {
+        let ics = crate::testkit::ics(&[format!("BEGIN:VEVENT\nUID:purge-{id}\nSUMMARY:purge-{id}\nDTSTART:20261110T100000Z\nDTEND:20261110T110000Z\nCREATED:{}\nEND:VEVENT\n", d3.0)].concat());
+        c.post_raw(&format!("/settings/import/calendars/alice/{id}"), &ics).await.ok();
+    }
+    let changes = |coll: String| async move { sqlx::query("SELECT count(*) AS n FROM practical_history_items WHERE coll = ?").bind(coll).fetch_one(db).await.unwrap().get::<i64, _>("n") };
+    assert!(changes(privat.clone()).await > 0 && changes(arbeit.clone()).await > 0);
     for id in [&privat, &arbeit] {
         c.post_form(&format!("/settings/calendars/alice/{id}/delete"), &[]).await;
     }
@@ -153,6 +161,10 @@ async fn a_purged_calendar_leaves_nothing_behind_in_the_history() {
     assert!(heads(arbeit.clone()).await > 0, "a calendar in the trash lost its heads");
     let cursors: i64 = sqlx::query("SELECT count(*) AS n FROM practical_history_cursors WHERE coll = ?").bind(&privat).fetch_one(db).await.unwrap().get("n");
     assert_eq!(cursors, 0);
+    assert_eq!(changes(privat.clone()).await, 0, "the purged calendar's changes stayed (shown by id, grey)");
+    assert!(changes(arbeit.clone()).await > 0, "a calendar in the trash lost its history");
+    let empty: i64 = sqlx::query("SELECT count(*) AS n FROM practical_history_changes c WHERE NOT EXISTS (SELECT 1 FROM practical_history_items i WHERE i.change_id = c.id)").fetch_one(db).await.unwrap().get("n");
+    assert_eq!(empty, 0, "a change without items stayed");
     let orphans: i64 = sqlx::query("SELECT count(*) AS n FROM practical_history_blobs WHERE hash NOT IN (SELECT hash FROM practical_history_heads) AND hash NOT IN (SELECT before_hash FROM practical_history_items WHERE before_hash IS NOT NULL) AND hash NOT IN (SELECT after_hash FROM practical_history_items WHERE after_hash IS NOT NULL)").fetch_one(db).await.unwrap().get("n");
     assert_eq!(orphans, 0, "versions nothing refers to were kept");
 }
@@ -214,16 +226,16 @@ async fn an_import_dates_each_object_it_takes_over_when_it_was_made() {
     assert!(!d.contains_key("ancient"), "{d:?}");
     assert!(c.get_json(&format!("/api/events/alice/{}/ancient", s.privat)).await.status.is_success(), "the object itself is there");
 
-    // a card: REV; without one, now
+    // a card: REV; without one, no change at all (it existed before; "now" showed 365 real contacts as new)
     c.post_raw(&format!("/settings/import/addressbooks/alice/{}", s.freunde), &format!("BEGIN:VCARD\r\nVERSION:3.0\r\nUID:rev\r\nFN:Mit Rev\r\nREV:{}\r\nEND:VCARD\r\nBEGIN:VCARD\r\nVERSION:3.0\r\nUID:norev\r\nFN:Ohne Rev\r\nEND:VCARD\r\n", d5.0)).await.ok();
     let d = dated(db).await;
     assert_eq!(d["Mit Rev"].1, d5.1);
-    assert!(d["Ohne Rev"].1 >= t0);
+    assert!(!d.contains_key("Ohne Rev"), "{d:?}");
 
     // the document: a change each, at its time, its create read as taken over; `born` only where it says more than `at`
     let h = c.get_json("/api/history").await.ok().json();
     let doc: Vec<&serde_json::Value> = h["changes"].as_array().unwrap().iter().filter(|x| x["src"] == "import").collect();
-    assert_eq!(doc.len(), 7, "{h}");
+    assert_eq!(doc.len(), 6, "{h}"); // five events and the card with REV; the card without one has no change
     assert!(doc.iter().all(|x| x["items"].as_array().unwrap().len() == 1 && x["items"][0]["act"] == "create" && x["items"][0].get("born").is_none()), "{h}");
     // listed oldest first by time, not by id
     let ats: Vec<&str> = h["changes"].as_array().unwrap().iter().map(|x| x["at"].as_str().unwrap()).collect();
