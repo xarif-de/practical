@@ -131,6 +131,7 @@ impl I18n {
 
     /// Every message whose id starts with `prefix`, formatted in `lang` — the strings app.js
     /// needs (`js-*`; build.rs `i18n_js` ships them as `/assets/i18n-<lang>.js`). Placeholders there are `%name`.
+    #[cfg(test)]
     pub fn with_prefix(&self, lang: &str, prefix: &str) -> Vec<(String, String)> {
         keys_of(SOURCES[0].1)
             .into_iter()
@@ -144,15 +145,17 @@ impl I18n {
 
     /// The same for the browser: a plural message (`plural_forms`) as an object of its forms plus `"$"`, the
     /// name of its number (app.js `tr` picks the form with Intl.PluralRules); every other one as a string.
+    /// A plural message is never formatted whole here: without its number every lookup logged a resolver warning
+    /// (6 per history document, production 2026-10-27 and every page view since).
     pub fn with_prefix_json(&self, lang: &str, prefix: &str) -> Vec<(String, serde_json::Value)> {
-        self.with_prefix(lang, prefix).into_iter().map(|(k, v)| {
+        keys_of(SOURCES[0].1).into_iter().filter(|k| k.starts_with(prefix)).map(|k| {
             let v = match self.plural_forms(lang, &k, |var| format!("%{var}")) {
                 Some((var, forms)) => {
                     let mut o: serde_json::Map<String, serde_json::Value> = forms.into_iter().map(|(c, s)| (c, serde_json::Value::String(s))).collect();
                     o.insert("$".into(), var.into());
                     serde_json::Value::Object(o)
                 }
-                None => serde_json::Value::String(v),
+                None => serde_json::Value::String(self.t(lang, &k)),
             };
             (k, v)
         }).collect()
