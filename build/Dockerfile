@@ -4,7 +4,7 @@
 # 1000 — both processes open the SAME WAL-mode SQLite file and its -wal/-shm siblings.
 
 # renovate: datasource=docker packageName=rust
-FROM rust:1.99-alpine@sha256:f432d4b8663fbc50b29e33846bf6a1fb9f17f142023598899d641cddf57c6b22 AS builder
+FROM rust:1.99-alpine@sha256:98e4492621c23872a502a7171b7d2b105fdc114276856f71051f38bf94ee26aa AS builder
 # build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls).
 # Package mirror (base/dagger-modules docs/ci.md): in CI apk reads a copy of the
 # repositories file pointing at the artifact-proxy gateway (which falls back to
