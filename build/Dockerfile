@@ -64,7 +64,7 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
  && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 cargo test --locked --target-dir /test-target
 
 # renovate: datasource=docker packageName=alpine
-FROM alpine:3.24@sha256:ce9e1e6d23f04a0b7593445a062a9fc73ed52f8260b9396f77a958295ad18ee7
+FROM alpine:3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a
 # Not `scratch` like rustical's image: the shared dagger test harness runs every
 # step through `sh -c`, and a shell also makes `kubectl exec` diagnostics possible.
 # HTTPS trust (OIDC, holidays, Web Push): the base image's ca-certificates-bundle is all rustls-native-certs reads;
