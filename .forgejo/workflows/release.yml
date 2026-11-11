@@ -18,7 +18,7 @@ jobs:
   release:
     runs-on: docker
     container:
-      image: ghcr.io/catthehacker/ubuntu:act-22.04@sha256:f5f5c29208c4fd541704fe7b8df33d3bf620ce4ac46f36853b7abeb0159705c4
+      image: ghcr.io/catthehacker/ubuntu:act-22.04@sha256:4cc7cf8329cb079840e1f16ac33fe21f76faa7786873f3b71e4b12a947dad549
     env:
       DAGGER_NO_NAG: '1'
       RELEASE_BOT_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
