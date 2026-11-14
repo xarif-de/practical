@@ -3696,8 +3696,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_dav"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "async-trait",
  "axum",
@@ -3725,8 +3725,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_dav_push"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "async-trait",
  "axum",
@@ -3751,8 +3751,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_ical"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "axum",
  "caldata",
@@ -3772,8 +3772,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_oidc"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "async-trait",
  "axum",
@@ -3789,8 +3789,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_store"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3820,8 +3820,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_store_sqlite"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "async-trait",
  "caldata",
@@ -3847,8 +3847,8 @@ dependencies = [
 
 [[package]]
 name = "rustical_xml"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "http",
  "quick-xml",
@@ -5687,8 +5687,8 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xml_derive"
-version = "0.18.0"
-source = "git+https://github.com/xarif-de/rustical?tag=v0.18.0-xarif.1#9e638a048278b8ead4a8864e4e18acd9d84adccf"
+version = "0.19.1"
+source = "git+https://github.com/xarif-de/rustical?tag=v0.19.1-xarif.1#1ddccff37693f731d7ace1bdb50b37cab634a9d7"
 dependencies = [
  "darling",
  "heck",
