@@ -31,6 +31,14 @@ ignore = [
   # unreleased). Drop when sqlx >= 0.9.1 allows libsqlite3-sys >= 0.39; RustiCal carries the
   # same ignore in its security-updates topic.
   { id = "RUSTSEC-2026-0459", reason = "sqlx 0.9.0 caps libsqlite3-sys <0.38 (no fixed release); only the own db_path + :memory: are opened, no untrusted db/-wal pair; drop on sqlx >= 0.9.1" },
+  # chrono and chrono-tz are unmaintained (informational, no vulnerability; no successor release).
+  # They cannot be dropped here: RustiCal's store/ical/dav_push API speaks chrono types, and sqlx
+  # (`chrono` feature), openidconnect, oauth2, serde_with and web-push build on chrono too. Cost of
+  # staying: chrono-tz compiles its zone rules in, so a future DST rule change needs a chrono-tz
+  # release or the move. Drop both when RustiCal has moved off chrono (then migrate to jiff, as
+  # tools/practicaluploader did).
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; RustiCal's API and sqlx/openidconnect/oauth2/web-push use it; drop when RustiCal moves off chrono" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained; zone handling shared with RustiCal (rustical_ical); drop when RustiCal moves off chrono" },
 ]
 
 [bans]
