@@ -20,6 +20,7 @@ use crate::domain::history_text::Store;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use chrono::{DateTime, Utc};
+use caldata::component::CalendarInnerData;
 use rustical_ical::CalendarObject;
 use rustical_store::auth::{AuthenticationProvider, Principal};
 use sqlx::Row;
@@ -351,8 +352,38 @@ fn check(key: &str, e: &UploadEvent) -> AppResult<CalendarObject> {
 
 /// Whether a stored object lies wholly before `start` (its last occurrence ends before that day): kept,
 /// the source's window no longer reaches it. A series without an end never does.
-fn before(obj: &CalendarObject, start: DateTime<Utc>) -> bool {
-    obj.get_inner().get_inner().get_last_occurence().map(|l| l.date_ceil()).is_some_and(|d| d <= start.date_naive())
+fn before(obj: &CalendarObject, start: DateTime<Utc>) -> bool { end_day(obj).is_some_and(|d| d <= start.date_naive()) }
+
+/// Most occurrences a closed series may have to count as ended; more → treated as without an end.
+const SERIES_MAX: u16 = 2048;
+
+/// The day after the object's last occurrence ends (`date_ceil`, as caldata's own end); None = no end.
+/// caldata's `get_last_occurence` answers None for EVERY recurring object (calendar_object.rs:132, any
+/// RRULE/RDATE/EXDATE), also for a closed set: PractiCalUploader ≥ 0.7 sends a series as DTSTART + RDATE, so each
+/// past series was deleted once Outlook's window left it (2026-11-18: 14 series, the 231 singles kept). Here a
+/// series without an end stays None: an RRULE without UNTIL or COUNT, or more than [`SERIES_MAX`] occurrences.
+fn end_day(obj: &CalendarObject) -> Option<chrono::NaiveDate> {
+    let inner = obj.get_inner().get_inner();
+    let CalendarInnerData::Event(main, overrides) = inner else { return inner.get_last_occurence().map(|l| l.date_ceil()) };
+    let main_end = match main.get_rruleset() {
+        None => main.get_last_occurence()?.date_ceil(),
+        Some(set) => {
+            if set.get_rrule().iter().any(|r| r.get_until().is_none() && r.get_count().is_none()) {
+                return None;
+            }
+            let duration = main.get_duration().unwrap_or_default();
+            let first = set.get_dt_start().clone();
+            let all = set.all(SERIES_MAX);
+            if all.limited {
+                return None;
+            }
+            let last = all.dates.into_iter().chain(std::iter::once(first)).max()?;
+            let end = last + duration;
+            end.date_naive().succ_opt().unwrap_or(end.date_naive())
+        }
+    };
+    // a moved occurrence may end later than any slot of the set
+    Some(overrides.iter().filter_map(|o| o.get_last_occurence()).map(|l| l.date_ceil()).fold(main_end, std::cmp::max))
 }
 
 /// How an entry of the upload reaches its calendar.
@@ -621,4 +652,34 @@ pub async fn delete_device(state: &AppState, user: &Principal, id: &str, trash: 
         }
     }
     forget_device(state, &d.id).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn obj(body: &str) -> CalendarObject {
+        let ics = format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\n{}END:VCALENDAR\r\n", body.replace('\n', "\r\n"));
+        CalendarObject::import(&ics, None).unwrap()
+    }
+    fn ev(extra: &str) -> String { format!("BEGIN:VEVENT\nUID:s1\nDTSTAMP:20260101T000000Z\nDTSTART:20260601T080000Z\nDTEND:20260601T090000Z\n{extra}END:VEVENT\n") }
+    fn window() -> DateTime<Utc> { "2026-08-01T00:00:00Z".parse().unwrap() }
+
+    #[test]
+    fn a_closed_series_before_the_window_is_kept() {
+        // as PractiCalUploader sends a series: DTSTART + RDATE, no RRULE
+        assert!(before(&obj(&ev("RDATE:20260608T080000Z,20260715T080000Z\n")), window()));
+        assert!(before(&obj(&ev("RRULE:FREQ=WEEKLY;UNTIL=20260720T080000Z\n")), window()));
+        assert!(before(&obj(&ev("RRULE:FREQ=WEEKLY;COUNT=4\n")), window()));
+        assert!(before(&obj(&ev("")), window()), "a single as before");
+    }
+
+    #[test]
+    fn a_series_reaching_the_window_or_without_an_end_is_not() {
+        assert!(!before(&obj(&ev("RDATE:20260608T080000Z,20260801T080000Z\n")), window()), "last slot on the window's first day");
+        assert!(!before(&obj(&ev("RRULE:FREQ=WEEKLY\n")), window()), "no UNTIL, no COUNT: no end");
+        assert!(!before(&obj(&ev("RRULE:FREQ=DAILY;COUNT=3000\n")), window()), "more than SERIES_MAX occurrences counts as no end");
+        let moved = ev("RDATE:20260608T080000Z\n") + "BEGIN:VEVENT\nUID:s1\nDTSTAMP:20260101T000000Z\nRECURRENCE-ID:20260608T080000Z\nDTSTART:20260805T080000Z\nDTEND:20260805T090000Z\nEND:VEVENT\n";
+        assert!(!before(&obj(&moved), window()), "an occurrence moved into the window");
+    }
 }
