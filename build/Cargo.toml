@@ -1,6 +1,6 @@
 [package]
 name = "practical"
-version = "0.30.19"
+version = "0.30.20"
 edition = "2024"
 rust-version = "1.98"
 authors = ["Thomas Steinbach"]
