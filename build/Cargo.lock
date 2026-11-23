@@ -3250,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "practical"
-version = "0.30.23"
+version = "0.30.24"
 dependencies = [
  "askama",
  "askama_web",
