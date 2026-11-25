@@ -4,7 +4,7 @@
 # watchexec (`mise run dev`), sqlite3 (bench), cwebp (readme-shots). glibc, not the image build's musl/alpine:
 # Playwright ships no Chromium for musl. Downloads are pinned by SHA-256.
 # renovate: datasource=docker packageName=rust
-FROM rust:1.100-bookworm@sha256:1b9dc70890ec494e466c87f5ad41ad544bfb30ea6acc99a3e068c47a4ae3f23e
+FROM rust:1.100-bookworm@sha256:75d26c23c24cc6ea1cdabf0714a6bff8fd7bf3248716043fd7ae86dac7f41b94
 ARG TARGETARCH
 ARG TOOLCHAIN
 ARG PLAYWRIGHT
