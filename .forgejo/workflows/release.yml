@@ -14,6 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       DRY_RUN: { description: '1 = report what would be released, push nothing', required: false, default: '0' }
+# One run per repo at a time; later runs queue, none is replaced
+# (base/dagger-modules docs/ci.md#one-runner-slot-per-repo).
+concurrency:
+  group: one-runner-slot-per-repo
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: docker

@@ -4,6 +4,11 @@ name: ci
 on:
   push: { branches: ['**'], tags: ['v*'] }
   workflow_dispatch:
+# One run per repo at a time; later runs queue, none is replaced
+# (base/dagger-modules docs/ci.md#one-runner-slot-per-repo).
+concurrency:
+  group: one-runner-slot-per-repo
+  cancel-in-progress: false
 jobs:
   ci:
     uses: base/dagger-modules/.forgejo/workflows/dagger-ci.yml@main
