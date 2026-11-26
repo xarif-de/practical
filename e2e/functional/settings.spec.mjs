@@ -39,30 +39,47 @@ test('language choice reloads the page in that language; none again via the seed
   await fresh.close();
 });
 
-test('vacation days and rule kinds save; the title tester marks hits', async ({ page }) => {
-  await reloadAt(page, '#vacation');
-  let j = await nextSave(page, '/settings/prefs', async () => { await page.locator('input[name=vacation_days]').fill('25'); await page.locator('input[name=vacation_days]').blur(); });
-  expect(j.ok).toBe(true);
-  j = await nextSave(page, '/settings/prefs', () => page.locator('#vacation .seg button[data-v="title"]').click());
-  expect(j.ok).toBe(true);
-  await page.locator('#vac-re').fill('urlaub');
-  await expect(page.locator('#vac-test .vac-list li.match')).toHaveCount(2);
-  await expect(page.locator('#vac-test .vac-list mark').first()).toHaveText(/urlaub/i);
-  await page.locator('#vac-test [data-show="miss"]').click();
-  await expect(page.locator('#vac-test .vac-list li.miss').first()).toBeVisible();
-  j = await nextSave(page, '/settings/prefs', () => page.locator('#vac-re').blur());
-  expect(j.ok).toBe(true);
-  // an invalid pattern blocks the autosave (field validity)
-  await page.locator('#vac-re').fill('urlaub(');
-  await expect(page.locator('#vac-test .vac-err')).toBeVisible();
-  await reloadAt(page, '#vacation');
-  await expect(page.locator('input[name=vacation_days]')).toHaveValue('25');
-  await expect(page.locator('#vacation .seg button[data-v="title"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#vac-re')).toHaveValue('urlaub');
-  await expect(page.locator('#v-vacation')).toHaveText('/urlaub/');
-  // the building blocks insert at the cursor
-  await page.locator('#vac-tools [data-tool="begin"]').click();
-  await expect(page.locator('#vac-re')).toHaveValue('^urlaub');
+test('views: a year rule with colour, icon and calendars saves and marks the year view; the old hash lands on the planner page', async ({ page }) => {
+  await page.goto('/settings');
+  const before = (await api(page, 'GET', '/api/views')).config;
+  try {
+    await reloadAt(page, '#vacation');
+    await expect(page.locator('#views-vacation')).toBeVisible();
+    await expect(page.locator('#views-vacation [data-days]')).toHaveValue('30');
+    await reloadAt(page, '#views-year');
+    await page.locator('#views-year .vw:not([aria-busy]) [data-add]').click();
+    const ed = page.locator('#views-year .vw-ed');
+    await ed.locator('[data-f=name]').fill('F4 Reise');
+    // categories: a choice of two (Urlaub from the list, Dienstreise typed in)
+    await ed.locator('[data-catm=any]').click();
+    await ed.locator('[data-catm=pick]').click();
+    await ed.locator('.vw-cats [data-cat="Urlaub"]').click();
+    await ed.locator('[data-newcat]').fill('Dienstreise');
+    await ed.locator('[data-newcat]').press('Enter');
+    await ed.locator('[data-cals=pick]').click(); // the category alone carries the rule; then one calendar
+    await ed.locator('.vw-cals label', { hasText: 'Privat' }).locator('.toggle').click();
+    await ed.locator('[data-icons]').click();
+    await page.locator('#views-year .vw-icons [data-ic=plane]').click();
+    // every change is sent on its own; the last one stored holds them all
+    const last = async () => { const r = (await api(page, 'GET', '/api/views')).config.year.rules.at(-1); return [r.name, r.categories, (r.cals || []).length, r.icon, r.id.length]; };
+    await expect.poll(last).toEqual(['F4 Reise', ['Urlaub', 'Dienstreise'], 1, 'plane', 8]);
+    await expect(page.locator('#views-year .vw-rule').last()).toContainText('Kategorien „Urlaub“, „Dienstreise“ · Privat');
+    // no category and no calendar (the rule is still open): refused in the page, nothing sent
+    await ed.locator('[data-catm=any]').click();
+    await ed.locator('.vw-cals label', { hasText: 'Privat' }).locator('.toggle').click();
+    await expect(ed.locator('.vw-err')).toBeVisible();
+    await reloadAt(page, '#views-year');
+    await expect(page.locator('#views-year .vw-rule').last()).toContainText('F4 Reise');
+    await expect(page.locator('#v-views-year')).toHaveText(/2/);
+    // move it up: the first rule decides the colour in the year view
+    await page.locator('#views-year .vw-rule').last().locator('[data-up]').click();
+    await expect.poll(async () => (await api(page, 'GET', '/api/views')).config.year.rules[0].name).toBe('F4 Reise');
+    await page.goto('/calendar?view=planner&date=2026-10-14'); await settle(page);
+    await expect(page.locator('.leg')).toContainText('F4 Reise');
+    await expect(page.locator('.c[data-date="2026-10-27"] span.u use')).toHaveAttribute('href', /#i-plane$/);
+  } finally {
+    await api(page, 'PUT', '/api/views', before);
+  }
 });
 
 test('reminder snap points: add, edit, remove, reset', async ({ page }) => {

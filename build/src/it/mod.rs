@@ -21,3 +21,4 @@ mod sharing;
 mod units;
 mod uploader;
 mod validators;
+mod views;

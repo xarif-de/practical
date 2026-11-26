@@ -3,6 +3,7 @@
 //! from `templates/editor.html`, the same dialog the calendar uses.
 //!
 //! - The island is `<script id="tasks-data">`; js/tasks.js draws the six views from it.
+//! - The view is the URL's `view=`, else the `tkview` cookie the client sets on a switch, else the groups.
 //! - The lookback (how far back completed tasks reach) is the URL's `back=`, else the `tk_back` cookie the
 //!   client sets on a change, else a month.
 
@@ -135,7 +136,8 @@ fn in_lookback(t: &Task, today: NaiveDate, days: Option<i64>) -> bool {
 }
 
 async fn page(State(state): State<SharedState>, user: Principal, PageView(ctx, vc): PageView, headers: axum::http::HeaderMap, Query(q): Query<TaskQuery>) -> AppResult<TasksPage> {
-    let view = one_of(q.view.as_ref(), VIEWS, "groups");
+    // the view last picked in this browser (app.js sets the `tkview` cookie on a switch); the URL's `view` wins
+    let view = one_of(q.view.as_ref().or(crate::extract::cookie(&headers, "tkview").as_ref()), VIEWS, "groups");
     // the lookback last picked in this browser (app.js sets the `tk_back` cookie on a change), so the page reached from
     // the navigation keeps it; a `back` in the URL wins, a search hit's `back=all` too
     let back = one_of(q.back.as_ref().or(crate::extract::cookie(&headers, "tk_back").as_ref()), LOOKBACKS, "month");

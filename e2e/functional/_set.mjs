@@ -5,8 +5,7 @@ import { BASE } from '../lib/env.mjs';
 // alice's preferences as seed/02-practical.py writes them (lang "" = none: Accept-Language decides)
 export const SEED_PREFS = {
   lang: '', scheme: 'auto', timezone: 'Europe/Berlin', holiday_color: '', school_color: '',
-  public_regions: 'DE-SN,DE-BY', school_regions: 'DE-SN', vacation_days: '30', vacation_kind: 'category', vacation_category: 'Urlaub',
-  vacation_calendar: '', vacation_title: '', alarm_snaps_start: '2 min, 5 min, 15 min, 30 min, 1 h, 3 h, 8 h, 1 d, 2 d, 3 d, 1 w, 2 w', alarm_snaps_end: '5 min, 10 min, 15 min, 30 min, 1 h',
+  public_regions: 'DE-SN,DE-BY', school_regions: 'DE-SN', alarm_snaps_start: '2 min, 5 min, 15 min, 30 min, 1 h, 3 h, 8 h, 1 d, 2 d, 3 d, 1 w, 2 w', alarm_snaps_end: '5 min, 10 min, 15 min, 30 min, 1 h',
   search_history_days: '90',
 };
 
@@ -32,9 +31,9 @@ export async function settingsForm(page, path, form = {}) {
 }
 
 
-/** The next autosave answer of the settings page (POST to `path`), parsed. */
+/** The next autosave answer of the settings page (POST or PUT to `path`), parsed. */
 export async function nextSave(page, path, action) {
-  const [r] = await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === path), action()]);
+  const [r] = await Promise.all([page.waitForResponse(r => ['POST', 'PUT'].includes(r.request().method()) && new URL(r.url()).pathname === path), action()]);
   return r.json();
 }
 

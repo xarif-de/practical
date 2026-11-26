@@ -103,7 +103,7 @@ async fn a_flash_is_never_hidden_or_repeated_by_a_304() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;
     let plain = etag(&c.get("/settings").await);
-    let r = c.post_form("/settings/prefs", &[("vacation_days", "999")]).await;
+    let r = c.post_form("/settings/prefs", &[("search_history_days", "30")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#prefs"));
     let with = get_if(&mut c, "/settings", &plain).await;
     with.ok().has("<div class=\"toast ok\" role=\"status\"><span>Gespeichert.</span>");

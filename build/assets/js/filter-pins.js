@@ -12,6 +12,15 @@
   const sync = () => $$('.qs', bar).forEach(b => { const s = starOf(b.dataset.pin); if (s) b.setAttribute('aria-pressed', $('input.eyed', s.closest('.frow')).checked); });
   const show = pins => $$('.qs', bar).forEach(b => { const on = pins.includes(b.dataset.pin); b.hidden = !on; const s = starOf(b.dataset.pin); if (s) s.setAttribute('aria-pressed', on); });
   let known = $$('.qs:not([hidden])', bar).map(b => b.dataset.pin), queue = Promise.resolve(), pending = 0;
+  // the name shows at once under the pointer or the focus (a native title waits ~1 s): the timelines' .tip, below the ribbon
+  const tip = document.createElement('div'); tip.className = 'tip below'; tip.hidden = true; document.body.appendChild(tip);
+  const tipOn = b => { const r = b.getBoundingClientRect(); tip.textContent = b.getAttribute('aria-label'); tip.style.left = `${r.left + r.width / 2}px`; tip.style.top = `${r.bottom + 6}px`; tip.hidden = false;
+    const t = tip.getBoundingClientRect(), over = t.right - (innerWidth - 8); if (over > 0) tip.style.left = `${r.left + r.width / 2 - over}px`; }; // kept inside the window
+  const tipOff = () => { tip.hidden = true; };
+  bar.addEventListener('pointerover', e => { const b = e.target.closest('.qs'); if (b && e.pointerType !== 'touch') tipOn(b); });
+  bar.addEventListener('pointerout', e => { const b = e.target.closest('.qs'); if (b && !b.contains(e.relatedTarget)) tipOff(); });
+  bar.addEventListener('focusin', e => { const b = e.target.closest('.qs'); if (b && b.matches(':focus-visible')) tipOn(b); });
+  bar.addEventListener('focusout', tipOff); bar.addEventListener('scroll', tipOff, { passive: true });
   document.addEventListener('change', e => { if (e.target.matches?.('.filter input.eyed')) sync(); });
   document.addEventListener('click', e => {
     const b = e.target.closest('.qs[data-pin]');

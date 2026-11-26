@@ -188,7 +188,7 @@ pub async fn render_view(state: &SharedState, user: &Principal, ctx: &PageCtx, v
                 }
                 // the calendar resolved once for the page (an entry of another one is no entry of this view)
                 let Some(c) = cals.iter().find(|c| c.principal == i.principal && c.id == i.cal_id) else { continue };
-                if let Ok(d) = events::event_detail(state, &c.auth, &i.object_id, vc.tz, Some(c.read_only)).await {
+                if let Ok(d) = events::event_detail(state, &c.auth, &i.object_id, vc.tz, Some(c.read_only), false).await {
                     details.insert(i.key(), d);
                 }
             }

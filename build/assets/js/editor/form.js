@@ -10,20 +10,28 @@
   function setAllDay(on) { if (!f.all_day) return; f.all_day.checked = on; $('#ed-allday').classList.toggle('on', on); f.from.disabled = on; f.to.disabled = on; $('#ed-times').hidden = on; }
   $x('#ed-allday').addEventListener('click', e => { e.preventDefault(); setAllDay(!f.all_day.checked); refresh(); });
   function syncDot() { const o = f.calendar.selectedOptions[0]; $('#ed-dot').style.background = f.color_cal.checked ? (o ? o.dataset.color : '') : f.color.value; $('#ed-sub').textContent = o ? o.textContent : ''; if (f.color_cal.checked && o) f.color.value = toHex(o.dataset.color); paintColor(); }
-  const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-pressed', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
+  const tl = $x('#ed-tl'); function setTl(on) { ed.classList.toggle('no-tl', !on); tl.setAttribute('aria-expanded', on ? 'true' : 'false'); localStorage.edtl = on ? '1' : '0'; }
   tl.onclick = () => { setTl(ed.classList.contains('no-tl')); dayline(); }; setTl(localStorage.edtl !== '0'); // shown again: drawn and centred (hidden, it was not)
   // the dialog closes only through its buttons; unsaved edits ask first (a click on the backdrop does nothing)
   function close() { ed.hidden = true; tplClose(); $('#ed-confirm').hidden = true; if (ruleMode && ruleLeave()) return; /* back on the event or task it was opened over (or leaving the page): not closed */ soloEnd(); const back = opener; opener = null; const a = document.activeElement; if (back && back.isConnected && (!a || a === document.body || ed.contains(a))) back.focus(); const h = HOST(); if (h.closed) h.closed(); }
   const dirty = () => { flush(); return form.classList.contains('mode-edit') && sig() !== baseline; };
   // while a write is pending the dialog stays (its answer closes it, or shows why not): ×, Escape and "discard" wait
-  function requestClose() { if (W.busy) return; if (dirty()) { $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else close(); }
+  /* Cancel (and Escape): an existing entry being edited goes back to its view, anything else closes; with unsaved
+     changes the "discard?" row asks first (`afterDiscard` = what its Yes does). A rule and a single card (solo) close. */
+  let afterDiscard = close;
+  const toView = () => { fill(current, openDate); $('#ed-lock').focus(); };
+  function requestClose() {
+    if (W.busy) return;
+    const go = current && form.classList.contains('mode-edit') && !ruleMode && !ed.classList.contains('solo') ? toView : close;
+    if (dirty()) { afterDiscard = go; $('#ed-confirm').hidden = false; $('#ed-back').focus(); } else go();
+  }
   /* writes (save, delete, a rule's save and delete): one at a time, Save shows the progress, a 409 asks whether the
      own version overwrites the other one (the server's ETag of now) or the other one is loaded (practical.writer) */
-  const W = practical.writer(form, { buttons: () => [$('#ed-save'), $('#ed-delete'), $('#ed-reset')], error: $('#ed-error'), idle: () => updateButtons(),
+  const W = practical.writer(form, { buttons: () => [$('#ed-save'), $('#ed-delete')], error: $('#ed-error'), idle: () => updateButtons(),
     conflict: { overwrite: async flags => { const r = await practical.req(API + '/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(flags); }, /* with what was confirmed already */
       reload: () => openEditor(f.key.value, openDate) },
     confirm: flags => put(flags) });
-  $('#ed-close').onclick = requestClose; $('#ed-back').onclick = () => { $('#ed-confirm').hidden = true; }; $('#ed-discard').onclick = () => { if (!W.busy) close(); };
-  addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) requestClose(); pk.hidden = true; } });
+  $('#ed-close').onclick = requestClose; const noDiscard = () => { $('#ed-confirm').hidden = true; $('#ed-close').focus(); }; $('#ed-back').onclick = noDiscard; $('#ed-discard').onclick = () => { if (!W.busy) { $('#ed-confirm').hidden = true; afterDiscard(); } };
+  addEventListener('keydown', e => { if (e.key === 'Escape') { if (!ed.hidden) { if (!$('#ed-confirm').hidden) noDiscard(); else requestClose(); } pk.hidden = true; } }); // Escape on the "discard?" row = No
   const fmtD = s => dfmt(parse(s.slice(0, 10)), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
   const fmtDT = s => fmtD(s) + ' ' + s.slice(11, 16);

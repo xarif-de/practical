@@ -125,6 +125,16 @@
   "class_overrides": "",
   "color": "tomato",
   "description": "Zeilen mit Umbruch\nund Sonderzeichen, Komma; Semikolon.\nZweiter Absatz.",
+  "description_rich": [
+    {
+      "html": "<p>Zeilen mit <b>Umbruch</b></p>",
+      "kind": "x-alt-desc"
+    },
+    {
+      "html": "<b>gestylt</b>",
+      "kind": "styled"
+    }
+  ],
   "end": "2026-09-22T21:30:00",
   "etag": "<etag>",
   "exdates": [

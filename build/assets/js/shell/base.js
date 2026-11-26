@@ -30,18 +30,18 @@
      "no"; Escape and a click on the backdrop resolve null (also a "no"; the conflict question tells it apart:
      back to the editing). "Yes" has the focus, so Enter confirms.
      `modal`: the backdrop does not answer — a question whose "no" still changes something (a stray click
-     must not decide it); Escape stays the explicit "no". */
-  window.askYesNo = (text, yes, no, modal) => {
-    const b = (a, t, cls, ico) => `<button class="btn${cls} icon-btn" type="button" data-a="${a}" title="${practical.esc(t)}" aria-label="${practical.esc(t)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#i-${ico}"/></svg></button>`;
-    return askBox(text, b('0', no, '', 'x') + b('1', yes, ' btn-primary', 'check'), modal).then(v => v === null ? null : v === '1');
-  };
-  /* the same box with a choice of named answers ([[value, label]…], the first one has the focus) and a cancel (×):
-     resolves the chosen value, null for cancel, Escape and (unless `modal`) the backdrop */
-  window.askChoice = (text, choices, cancel, modal) => askBox(text, `<button class="btn icon-btn" type="button" data-a="" title="${practical.esc(cancel)}" aria-label="${practical.esc(cancel)}"><svg class="ico" aria-hidden="true"><use href="${practical.sprite}#i-x"/></svg></button>` + choices.map(([v, t], i) => `<button class="btn${i ? '' : ' btn-primary'}" type="button" data-a="${practical.esc(v)}">${practical.esc(t)}</button>`).join(''), modal).then(v => v || null);
+     must not decide it); Escape stays the explicit "no". `danger`: "yes" is red, with that symbol (askDelete: trash). */
+  window.askYesNo = (text, yes, no, modal, danger) =>
+    askBox(text, practical.dbtn('second', 'x', no, 'data-a="0"', 'Esc') + practical.dbtn('btn-primary' + (danger ? ' danger' : ''), danger || 'check', yes, 'data-a="1"', '↵'), modal).then(v => v === null ? null : v === '1');
+  /* the same box with a choice of named answers ([[value, label]…]: the first is the main one, rightmost, with the
+     focus; the others rare, on the left) and a cancel: resolves the chosen value, null for cancel, Escape and (unless
+     `modal`) the backdrop */
+  window.askChoice = (text, choices, cancel, modal) => askBox(text, choices.slice(1).map(([v, t]) => practical.dbtn('ghost', 'forward', t, `data-a="${practical.esc(v)}"`)).join('') + '<span class="grow"></span><i class="dsep"></i>'
+    + practical.dbtn('second', 'x', cancel, 'data-a=""', 'Esc') + (choices.length ? practical.dbtn('btn-primary', 'check', choices[0][1], `data-a="${practical.esc(choices[0][0])}"`, '↵') : ''), modal).then(v => v || null);
   const askBox = (text, acts, modal) => new Promise(done => {
     const d = document.createElement('div');
     d.className = 'ask'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
-    d.innerHTML = `<div class="ask-box"><p></p><div class="ask-acts">${acts}</div></div>`;
+    d.innerHTML = `<div class="ask-box"><p></p><div class="ask-acts dlg-acts">${acts}</div></div>`;
     d.querySelector('p').textContent = text; d.setAttribute('aria-label', text); // the question names the dialog
     const prev = document.activeElement;
     const end = v => { removeEventListener('keydown', key, true); d.remove(); if (prev && prev.focus) prev.focus(); done(v); };
@@ -52,9 +52,24 @@
     d.querySelector('.btn-primary').focus();
   });
 
+  /* Ctrl/⌘ Enter = the main button of the dialog on top (the rightmost one of the last visible .dlg-acts: a question
+     is appended after the dialog it asks over), as its key hint says; the hint names the Mac's key or Ctrl elsewhere */
+  const shown = sel => [...document.querySelectorAll(sel)].filter(x => !x.disabled && x.getClientRects().length).pop();
+  addEventListener('keydown', e => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.defaultPrevented) return;
+    if (e.key === 'Enter') { const b = shown('.dlg-acts[data-over] .dbtn.btn-primary') || shown('.dlg-acts .dbtn.btn-primary'); if (b) { e.preventDefault(); b.click(); } }
+    /* Ctrl/⌘ Backspace (or Delete) = the dialog's delete button, which asks first; in a text field the keys keep deleting text */
+    else if ((e.key === 'Backspace' || e.key === 'Delete') && !e.target.closest('input, textarea, select, [contenteditable=""], [contenteditable=true]') && !document.querySelector('.ask')) {
+      const b = shown('.dlg-acts .dbtn[data-del]'); if (b) { e.preventDefault(); b.click(); }
+    }
+  });
+  document.documentElement.classList.toggle('mac', /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)); // css/dialog-buttons.css: ⌘ or Ctrl in a key hint
+
   // the app's own question instead of confirm(): same look everywhere, and a browser that
   // suppresses native dialogs (automation, some embedded views) cannot swallow a delete
   window.ask = text => askYesNo(text, tr('js-yes'), tr('js-no'));
+  /* a delete question: its "yes" is the red button that names the act ("Delete"), its "no" is "Cancel" */
+  window.askDelete = text => askYesNo(text, tr('js-ct-delete'), tr('js-ct-cancel'), false, 'trash');
 
   // the bottom toast (layout.html renders the server's one the same way): a success fades, an error stays until closed
   window.toast = (text, err) => {

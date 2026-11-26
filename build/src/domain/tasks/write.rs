@@ -10,6 +10,9 @@ pub struct TaskInput {
     pub summary: String,
     #[serde(default)]
     pub description: String,
+    /// The formatted note ('' = none; None = the note untouched: its stored lines stay, richtext::save)
+    #[serde(default)]
+    pub description_html: Option<String>,
     #[serde(default)]
     pub location: String,
     #[serde(default, deserialize_with = "date_or_datetime")]
@@ -162,9 +165,9 @@ pub(super) fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz
     if let Some(d) = i.due {
         l.push(stamp_line("DUE", d, i.due_all_day, tz));
     }
-    if !i.description.trim().is_empty() {
-        l.push(format!("DESCRIPTION:{}", ical::escape(i.description.trim())));
-    }
+    // the note: plain DESCRIPTION, with its formatted copies (richtext); `keep_rich`: untouched, they stay as stored
+    let (note, keep_rich) = crate::domain::richtext::save(raw.map(|r| r.props.as_slice()), uid, &i.description, i.description_html.as_deref());
+    l.extend(note);
     if !i.location.trim().is_empty() {
         l.push(format!("LOCATION:{}", ical::escape(i.location.trim())));
     }
@@ -203,6 +206,10 @@ pub(super) fn build_vtodo(uid: &str, sequence: i64, i: &TaskInput, tz: chrono_tz
         let keep: std::collections::HashSet<usize> = i.links.iter().filter(|x| x.embedded && x.keep && x.data.is_none()).filter_map(|x| x.bin_index).collect();
         let mut bin = 0usize;
         for x in r.props.iter().filter(|x| !is_managed(x)) {
+            // a written note wrote its copies anew (or none: then the stored ones are stale)
+            if !keep_rich && crate::domain::richtext::COPIES.contains(&events::prop_name(x).as_str()) {
+                continue;
+            }
             if events::prop_name(x) == "ATTACH" {
                 let n = bin;
                 bin += 1;
@@ -283,6 +290,7 @@ pub async fn set_completed(state: &AppState, user: &Principal, principal: &str, 
         cal_id: d.cal_id,
         summary: d.summary,
         description: d.description,
+        description_html: None, // the note untouched: its stored copies stay
         location: d.location,
         start: d.start,
         start_all_day: d.start_all_day,

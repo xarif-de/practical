@@ -299,7 +299,7 @@ async fn development_mode_joins_bundles_from_their_parts() {
     assert!(js.contains(&format!("{}practical.editorInit = function () {{\n{}", part("js/calendar.js"), part("js/editor/setup.js"))));
     assert!(js.contains(&format!("{}}};\npractical.editorInit();\n{}", part("js/editor/wiring.js"), part("js/search.js"))));
     let css = String::from_utf8(crate::bundle::read(&assets_dir(), "style.css").unwrap()).unwrap();
-    assert!(css.starts_with(&part("css/base.css")) && css.ends_with(&part("css/color-optimiser.css")));
+    assert!(css.starts_with(&part("css/base.css")) && css.ends_with(&part("css/dialog-buttons.css")));
 }
 
 /// The development asset watcher sees a part in a sub-directory change (tasks::asset_stamps).

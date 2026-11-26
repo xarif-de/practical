@@ -29,7 +29,7 @@
 .onb-lang:has(input:checked) { background: color-mix(in srgb, var(--accent) 9%, transparent); border-color: var(--accent); font-weight: 500; }
 .onb-lang:has(input:checked) .ico { visibility: visible; }
 .onb-lang:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn.onb-wide { width: 100%; justify-content: center; padding: 10px 16px; font-size: 14.5px; }
+.dbtn.onb-wide { width: 100%; justify-content: center; height: 40px; font-size: 14.5px; } /* the one button of a first-start dialog (css/dialog-buttons.css) */
 
 /* ---- shared by the gate and the hint ---------------------------------------------------------- */
 .onb-ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #fff; flex: none; }

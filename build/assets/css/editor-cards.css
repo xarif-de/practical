@@ -89,7 +89,7 @@
 .ed .cardform.mode-view .rfoot { display: none; } /* rule footers belong to editing */
 .ed .cardform .rfoot { margin-top: 8px; padding: 6px 0 0 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: fit-content(40%) 1fr; gap: 3px 6px; align-items: start; font-size: 11.5px; color: var(--fg-3); } /* label column as wide as the longest label (at most half, then ellipsis), chips right behind it, aligned; minmax(0, 50%) would always grow to 50% */ /* templates and locks of the card (event) / mode chips (rule editor) */
 .ed .cardform .rfoot:empty { display: none; }
-.ed .cardform header .rfoot { padding-left: 0; margin-top: 4px; border-top: 0; } /* the title's rule line sits under the title field */
+.ed .cardform .tn > .rfoot { padding-left: 0; margin-top: 4px; border-top: 0; } /* the title's rule line sits under the title field */
 .ed .cardform.rulemode.mode-edit #ed-sub { display: block !important; } /* rule mode: the rule name lives in the subtitle, the title field holds the title template */
 .ed .cardform #edh:read-only { opacity: .5; } /* title locked by a rule */
 .ed .cardform .rf-row { display: contents; } .ed .cardform .rf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 17px; } /* the label sits on the chip line; wrapped qualifier text goes below on its own */ .ed .cardform .rf-row .rb { min-width: 0; justify-content: flex-start; }
@@ -104,3 +104,41 @@ button.rbadge { cursor: pointer; border: 0; font: inherit; font-size: 10.5px; } 
 .cardform.rulemode .rule-hide, .ed.rulemode .rule-hide { display: none !important; }
 .cardform.rulemode .card[data-card="people"], .cardform.rulemode .card[data-card="cats"], .cardform.rulemode .card[data-card="note"] { display: none !important; }
 .ed.rulemode .cols3 { grid-template-columns: 1fr; } .ed.rulemode .dayline { display: none; } /* no day line in rule mode */
+
+/* ---- the title + note field (templates/editor.html .tn, js/editor/note.js): one box, the title its first line,
+   the note below (grows with its text), the format bar at its foot in edit mode */
+.ed .tn { position: relative; background: var(--card-bg, var(--tile)); border-radius: 12px; border: 1px solid transparent; margin: 0 0 14px; }
+.ed.mode-edit .tn:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ed .tn-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px 2px; }
+.ed .tn-top .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c1); flex: none; }
+.ed .cardform #edh { font: 600 20px/1.3 var(--font-display); border: 0; background: transparent; color: var(--fg); padding: 2px 0; width: 100%; min-width: 0; border-radius: 0; }
+.ed .cardform #edh:focus { outline: none; background: transparent; }
+.ed .cardform #edh::placeholder { font-style: italic; font-weight: 500; color: var(--fg-3); opacity: 1; }
+.ed .tn-sub { display: block; padding: 0 14px; color: var(--fg-3); font-size: 12px; } .ed .tn-sub:empty, .ed:not(.rulemode) .tn-sub { display: none; }
+.ed .tn > .rfoot { padding: 0 14px; }
+.ed .tn-note { padding: 4px 14px 12px 36px; min-height: 1.45em; font-size: 14.5px; line-height: 1.45; color: var(--fg); overflow-wrap: anywhere; outline: none; cursor: text; }
+.ed .tn-note[contenteditable=false] { cursor: auto; }
+.ed .tn-note.empty::before { content: attr(data-ph); color: var(--fg-3); font-style: italic; pointer-events: none; }
+.ed:not(.mode-edit) .tn-note.empty, .ed.rulemode .tn-note { display: none; }
+.ed .tn-note p, .ed .tn-note h1, .ed .tn-note h2, .ed .tn-note h3 { margin: 0; }
+.ed .tn-note h1 { font: 700 18px/1.3 var(--font-display); margin: 6px 0 2px; } .ed .tn-note h2 { font: 700 16px/1.3 var(--font-display); margin: 4px 0 2px; } .ed .tn-note h3 { font: 700 14.5px/1.35 var(--font-display); margin: 2px 0; }
+.ed .tn-note ul, .ed .tn-note ol { margin: 2px 0; padding-left: 22px; }
+.ed .tn-note a { color: var(--accent); }
+html[data-scheme=dark] .ed .tn-note span[style*="background"] { color: #1d1d1f; } /* a highlight stays readable in dark mode */
+.ed .tn-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px 8px; border-top: 1px solid var(--line); }
+.ed .tn-bar button { all: unset; box-sizing: border-box; width: 30px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--fg-2); cursor: pointer; }
+.ed .tn-bar button .ico { width: 16px; height: 16px; }
+.ed .tn-bar button:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--fg); }
+.ed .tn-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ed .tn-bar button[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.ed .tn-bar .tn-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.ed .tn > .nt-found { padding: 0 14px 8px; }
+.ed .tn > .nt-found:empty { display: none; }
+.tn-pop { padding: 6px; }
+.tn-pop .tn-h { display: block; } .tn-pop .tn-h-h1 span { font: 700 18px/1.3 var(--font-display); } .tn-pop .tn-h-h2 span { font: 700 16px/1.3 var(--font-display); } .tn-pop .tn-h-h3 span { font-weight: 700; }
+.tn-pop .tn-sw { display: flex; gap: 6px; align-items: center; }
+.tn-pop .tn-sw button { all: unset; width: 22px; height: 22px; border-radius: 50%; background: var(--c); cursor: pointer; box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 15%, transparent); }
+.tn-pop .tn-sw button.none { background: none; display: grid; place-items: center; color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--line); }
+.tn-pop .tn-sw button:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tn-pop .tn-link { display: flex; gap: 6px; align-items: center; }
+.tn-pop .tn-link input { font: inherit; font-size: 14px; color: var(--fg); background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 260px; }

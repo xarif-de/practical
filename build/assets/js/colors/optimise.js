@@ -189,7 +189,7 @@
     const manual = st => st.pins.size + st.excl.size + st.moves.size + st.off.size;
     let st = fresh(3), P = null, src = [], ro = null, preview = null;
     const w = document.createElement('div'); w.className = 'ask cfo-wrap'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-cfo-title'));
-    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span><button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}">${ico('x')}</button></div><div class="cfo-body"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}">${ico('x')}</button><button class="btn btn-primary icon-btn" type="button" data-apply>${ico('check')}<b class="n" hidden></b></button></div></div>`;
+    w.innerHTML = `<div class="ask-box cfo-dlg"><div class="cfo-dh"><span class="cfo-spark">✦</span><span><b>${esc(tr('js-cfo-title'))}</b><small>${esc(tr('js-cfo-sub-' + view))}</small></span></div><div class="cfo-body"></div><div class="ask-acts dlg-acts">${practical.dbtn('second', 'x', tr('js-ct-cancel'), 'data-x', 'Esc')}<button class="dbtn btn-primary" type="button" data-apply>${ico('check')}<span>${esc(tr('js-cfo-apply'))}</span><b class="n" hidden></b><kbd>${practical.MOD}</kbd></button></div></div>`;
     const bodyEl = $('.cfo-body', w), applyBtn = $('[data-apply]', w);
     const sw = (hex, t) => `<i class="cfo-sw" style="--x:${hex}"${t ? ` title="${esc(t)}"` : ''}></i>`;
     const cname = (hex, raw) => (raw && raw[0] !== '#' ? raw : hex);

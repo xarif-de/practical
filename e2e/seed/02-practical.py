@@ -163,9 +163,12 @@ def seed_through_http():
     # ---- preferences (autosave form; JSON answer). lang "" = none: the browser's Accept-Language picks
     # the page language, so the suite renders de and en without touching the DB.
     ok(req("POST", "/settings/prefs", accept="application/json", form={"lang": "", "scheme": "auto", "timezone": "Europe/Berlin", "holiday_color": "", "school_color": "",
-        "public_regions": "DE-SN,DE-BY", "school_regions": "DE-SN", "vacation_days": "30", "vacation_kind": "category", "vacation_category": "Urlaub",
-        "vacation_calendar": "", "vacation_title": "", "alarm_snaps_start": "2 min, 5 min, 15 min, 30 min, 1 h, 3 h, 8 h, 1 d, 2 d, 3 d, 1 w, 2 w", "alarm_snaps_end": "5 min, 10 min, 15 min, 30 min, 1 h",
+        "public_regions": "DE-SN,DE-BY", "school_regions": "DE-SN", "alarm_snaps_start": "2 min, 5 min, 15 min, 30 min, 1 h, 3 h, 8 h, 1 d, 2 d, 3 d, 1 w, 2 w", "alarm_snaps_end": "5 min, 10 min, 15 min, 30 min, 1 h",
         "search_history_days": "90"}), "prefs")
+    # ---- view configurations (settings #views): the category "Urlaub" in each view, 30 vacation days
+    urlaub = {"categories": ["Urlaub"]}
+    ok(req("PUT", "/api/views", {"year": {"rules": [{**urlaub, "color": "#32ade6"}]}, "countdown": {"rules": [{**urlaub, "icon": "luggage"}]},
+        "vacation": {"days": 30, "rules": [urlaub]}}), "views")
 
     # ---- calendars (import: object id = UID)
     demo = open(os.path.join(REPO, "build", "tests", "fixtures", "demo-event-full.ics"), "rb").read()

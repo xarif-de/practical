@@ -32,7 +32,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("js/prefetch.js"),
         File("js/req.js"),
         File("js/combo.js"),
-        Wrap(IIFE, &[File("js/shell/base.js"), File("js/shell/settings-pages.js"), File("js/shell/settings-sharing.js"), File("js/shell/settings-connect.js"), File("js/shell/popovers-stream.js")], END),
+        Wrap(IIFE, &[File("js/shell/base.js"), File("js/shell/settings-pages.js"), File("js/shell/settings-views.js"), File("js/shell/settings-sharing.js"), File("js/shell/settings-connect.js"), File("js/shell/popovers-stream.js")], END),
         Wrap(IIFE, &[File("js/colors/picker.js"), File("js/colors/fields.js"), File("js/colors/optimise.js")], END),
         File("js/calendar.js"),
         Wrap(ED_OPEN, &[
@@ -85,6 +85,7 @@ pub const BUNDLES: &[(&str, &[Part])] = &[
         File("css/onboarding.css"),
         File("css/color-picker.css"),
         File("css/color-optimiser.css"),
+        File("css/dialog-buttons.css"), // last: the dialogs' button row wins over the `.btn` rules
     ]),
 ];
 

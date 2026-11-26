@@ -248,8 +248,10 @@ def seed():
     page = ok(req("GET", "/settings", accept="text/html"), "settings")
     fx.CSRF = re.search(r'<meta name="csrf" content="([^"]+)"', page).group(1)
     ok(req("POST", "/settings/prefs", accept="application/json", form={"lang": "en", "scheme": "auto", "timezone": "Europe/Berlin", "holiday_color": "", "school_color": "",
-        "public_regions": "DE-SN", "school_regions": "DE-SN", "vacation_days": "30", "vacation_kind": "category", "vacation_category": "Vacation",
-        "vacation_calendar": "", "vacation_title": "", "alarm_snaps_start": "", "alarm_snaps_end": "", "search_history_days": "90"}), "prefs")
+        "public_regions": "DE-SN", "school_regions": "DE-SN", "alarm_snaps_start": "", "alarm_snaps_end": "", "search_history_days": "90"}), "prefs")
+    vac = {"name": "Vacation", "categories": ["Vacation"]}
+    ok(req("PUT", "/api/views", {"year": {"rules": [{**vac, "color": "#32ade6", "icon": "palm"}]}, "countdown": {"rules": [{**vac, "icon": "luggage"}]},
+        "vacation": {"days": 30, "rules": [vac]}}), "views")
 
     ev = build_events()
     ids = {}

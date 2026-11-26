@@ -56,25 +56,30 @@
 .set .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-chip); }
 /* import calendar: a file without objects says so in the foot */
 .set .foot .danger { color: var(--today); }
-/* vacation › rule: one row per kind; the title row carries building
-   blocks and a live test over the event titles */
-.set #vac-re { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 360px; }
-.set #vac-re.bad { color: var(--today); }
-.vac-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 10px; }
-.vac-tools .chip { cursor: pointer; font-size: 12px; padding: 3px 9px; }
-.vac-tools .chip:hover { border-color: var(--accent); color: var(--fg); }
-.vac-tools code { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
-.vac-test { border-top: 1px solid var(--line); padding: 8px 14px 10px; font-size: 13px; }
-.vac-th { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; color: var(--fg-2); margin-bottom: 6px; }
-.vac-th .seg button { font-size: 12px; padding: 3px 9px; min-height: 0; }
-.vac-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 260px; overflow: auto; }
-.vac-list li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.vac-list li span, .day .nline .fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vac-list li.miss span { color: var(--fg-3); }
-.vac-list small { color: var(--fg-3); flex: none; font-variant-numeric: tabular-nums; }
-.vac-list mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
-.vac-note { margin: 4px 0 0; color: var(--fg-3); }
-.vac-err { margin: 0; color: var(--today); }
+/* views › year, vacation, countdown (js/shell/settings-views.js): a row per rule (swatch = its colour, its icon), the
+   open rule's fields below it, the icon grid inline; offered rules carry the local colour/icon and the adopt switch */
+.day .nline .fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw .vw-rule .vw-sw { display: inline-grid; place-items: center; background: var(--fg-3); color: #fff; } .vw[data-view=vacation] .vw-sw:not([style]) { background: var(--c2); } .vw[data-view=countdown] .vw-sw:not([style]) { background: var(--c4); } /* no colour of its own: the view's (its row on #views) */
+.vw .vw-rule .vw-sw .ico { width: 15px; height: 15px; }
+.vw .vw-rule.bad .vw-open .sub { color: var(--today); }
+.vw .vw-open { all: unset; flex: 1; min-width: 0; cursor: pointer; display: flex; align-items: center; }
+.vw .vw-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.vw .vw-open > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vw .vw-ed { border-left: 3px solid var(--accent); } /* no tint: --fg-2 and the danger red keep their contrast on the group's own colour */
+.vw .vw-ed input[type=text] { max-width: 260px; }
+.vw .vw-cals .cell { padding-left: 28px; } .vw .vw-cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 14px 10px 28px; } .vw .vw-cats .chip { font: inherit; font-size: 13px; padding: 4px 11px; cursor: pointer; color: var(--fg-2); } .vw .vw-cats .chip[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); border-color: var(--accent); color: var(--fg); } .vw .vw-cats .vw-newcat { width: 150px; background: var(--bg); color: var(--fg); outline: none; } .vw .vw-cats .vw-newcat:focus { border-color: var(--accent); } /* categories as chips: a choice of many stays short */
+.vw .vw-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 0; }
+.vw .vw-color { width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 15%, transparent); flex: none; }
+.vw .vw-icbtn { min-width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg-2); cursor: pointer; display: inline-grid; place-items: center; flex: none; }
+.vw .vw-icbtn[aria-expanded=true] { border-color: var(--accent); color: var(--accent); }
+.vw .vw-rule .val { gap: 8px; }
+.vw .vw-icons { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 14px 10px; border-top: 1px solid var(--line); }
+.vw .vw-icons button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--fg-2); cursor: pointer; display: grid; place-items: center; }
+.vw .vw-icons button:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.vw .vw-icons button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.vw .vw-err { margin: 0; padding: 4px 14px; color: var(--today); font-size: 13px; }
+.vw .vw-acts { padding: 8px 14px 10px; }
+.vw .label.sub-label { text-transform: none; letter-spacing: 0; }
 /* reminders › snap points: the lists drawn as the event editor's strip (ordinal, one zone per point); labels
    alternate above and below the axis, a "+" per gap shows on hover or focus (always on touch); a point opens
    .snp-edit below. Narrow screens scroll the strip sideways (31 px per zone: two zones hold one label) */
@@ -131,8 +136,8 @@
 .day > .hday { display: block; margin: 0 0 2px; }
 
 /* tints mix into the page background, not the grey tile: lighter and warmer; a public holiday wins */
-.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
-.day.hol { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
+.day.fer, .dayblock.fer { background: color-mix(in srgb, var(--fer) var(--fer-tint, 7%), var(--bg)); }
+.day.hol { background: color-mix(in srgb, var(--hol) var(--hol-tint, 6%), var(--bg)); }
 .lrow.fer:not(.today) { background: color-mix(in srgb, var(--fer) 7%, var(--bg)); }
 .lrow.hol:not(.today) { background: color-mix(in srgb, var(--hol) 6%, var(--bg)); }
 .fname { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--fer) var(--fer-mix), var(--fg)); letter-spacing: 0; text-transform: none; }
@@ -197,7 +202,7 @@
 .rm-dlg .rm-dlg-list .ico { width: 15px; height: 15px; flex: none; }
 .rm-dlg .rm-dlg-list li.bad { color: var(--today); }
 .rm-dlg .rm-dlg-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
-.rm-dlg .rm-dlg-foot:not(:has(.btn:not([hidden]))) { display: none; }
+.rm-dlg .rm-dlg-foot:not(:has(.dbtn:not([hidden]))) { display: none; }
 /* the bar: full width, and the browser's own look replaced so it matches the rest */
 .rm-dlg .rm-dlg-bar { display: block; width: 100%; height: 6px; border: 0; border-radius: 999px; background: var(--bg-3); appearance: none; }
 .rm-dlg .rm-dlg-bar::-webkit-progress-bar { background: var(--bg-3); border-radius: 999px; }

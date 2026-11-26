@@ -172,8 +172,7 @@ async fn preferences_form() {
     let mut c = s.app.login("alice").await;
     let fields = [
         ("lang", "en"), ("scheme", "dark"), ("timezone", " America/New_York "), ("holiday_color", "#AA0000"), ("school_color", "red"),
-        ("public_regions", "de-sn, DE-SN,de-by,bad code,x"), ("school_regions", ""), ("vacation_days", "30"), ("vacation_kind", "title"),
-        ("vacation_title", "^Urlaub"), ("alarm_snaps_start", "5 min, 1 h"), ("alarm_snaps_end", ""), ("search_history_days", "30"),
+        ("public_regions", "de-sn, DE-SN,de-by,bad code,x"), ("school_regions", ""), ("alarm_snaps_start", "5 min, 1 h"), ("alarm_snaps_end", ""), ("search_history_days", "30"),
     ];
     let r = c.post_form_json("/settings/prefs", &fields).await;
     let answer = r.ok().json();
@@ -187,8 +186,6 @@ async fn preferences_form() {
     assert_eq!(p.timezone.as_deref(), Some("America/New_York"));
     assert_eq!((p.holiday_color.as_deref(), p.school_color.as_deref()), (Some("#aa0000"), None));
     assert_eq!((p.public_regions.as_deref(), p.school_regions.as_deref()), (Some("DE-SN,DE-BY"), Some("")));
-    assert_eq!(p.vacation_days, Some(30));
-    assert_eq!(p.vacation_rule_json.as_deref(), Some(r#"{"v":2,"kind":"title","value":"^Urlaub"}"#));
     assert_eq!(p.alarm_snaps_json.as_deref(), Some(r#"{"start":[5,60],"end":[]}"#));
     assert_eq!(p.search_history_days, Some(30));
     assert_eq!(p.holiday_css(), ":root{--hol:#aa0000;}");
@@ -198,12 +195,9 @@ async fn preferences_form() {
     let ev = c.get_json("/api/events?start=2026-10-14&end=2026-10-15").await.json();
     assert_eq!(ev[0]["start"], "2026-10-14T03:00:00", "the standup at 09:00 Berlin is 03:00 in New York");
 
-    // bad values: the snap point names the token, a title pattern must parse; nothing is saved
-    let r = c.post_form_json("/settings/prefs", &[("alarm_snaps_start", "5 min, soon")]).await;
+    // a bad value: the snap point names the token; nothing is saved
+    let r = c.post_form_json("/settings/prefs", &[("lang", "de"), ("alarm_snaps_start", "5 min, soon")]).await;
     assert_eq!(r.json(), json!({ "ok": false, "msg": "snap point: soon" }));
-    let r = c.post_form_json("/settings/prefs", &[("lang", "de"), ("vacation_kind", "title"), ("vacation_title", "(Urlaub")]).await;
-    assert_eq!(r.json()["ok"], false);
-    assert!(r.json()["msg"].as_str().unwrap().contains("regex parse error"), "{}", r.body);
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().lang.as_deref(), Some("en"));
     // an unknown language, scheme and zone fall back; an empty start list is the built-in one, an
     // empty end list stays empty (so it is stored), the built-in pair is stored as NULL
@@ -213,9 +207,8 @@ async fn preferences_form() {
     c.post_form("/settings/prefs", &[("alarm_snaps_start", ""), ("alarm_snaps_end", "5, 10, 15, 30, 60")]).await;
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().alarm_snaps_json, None);
     // a form post (no JSON) redirects with a flash
-    let r = c.post_form("/settings/prefs", &[("vacation_days", "999")]).await;
+    let r = c.post_form("/settings/prefs", &[("search_history_days", "30")]).await;
     assert_eq!(r.location().as_deref(), Some("/settings#prefs"));
-    assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().vacation_days, None, "outside 0..=366");
     // the preference went back to "automatic" (NULL): the browser's language (none sent: the default,
     // German) at once — in the answer of that save too — not the "en" saved earlier
     c.get("/settings").await.has("<html lang=\"de\"").has("<div class=\"toast ok\" role=\"status\"><span>Gespeichert.</span>");
@@ -324,22 +317,6 @@ async fn export_and_import() {
     assert_eq!((upd.len(), upd[0]["items"].as_array().unwrap().len(), upd[0]["items"][0]["title"].as_str()), (1, 1, Some("Zahnarzt (verschoben)")));
 }
 
-#[tokio::test]
-async fn settings_page_reflects_the_vacation_rule() {
-    let s = seed().await;
-    let mut c = s.app.login("alice").await;
-    // no rule stored: the legacy default "Urlaub" is a category in use → category
-    c.get("/settings").await.ok().has("„Urlaub“");
-    c.post_form("/settings/prefs", &[("vacation_kind", "calendar"), ("vacation_calendar", &format!("alice/{}", s.privat))]).await;
-    c.get("/settings").await.ok().has("„Privat“");
-    c.post_form("/settings/prefs", &[("vacation_kind", "calendar"), ("vacation_calendar", "alice/gone")]).await;
-    c.get("/settings").await.ok().has("„alice/gone“");
-    // the vacation planner follows the rule: by calendar, everything in Privat counts
-    c.post_form("/settings/prefs", &[("vacation_kind", "category"), ("vacation_category", "Urlaub"), ("vacation_days", "30")]).await;
-    let v = c.get("/calendar?view=vacation&date=2026-10-14").await;
-    v.ok().has("title=\"Urlaub Ostsee: 26.10. – 30.10.\"").has("Kategorie „Urlaub“");
-}
-
 // ---- small helpers on the state, for read-backs ----
 
 impl crate::state::AppState {
@@ -390,12 +367,12 @@ async fn filter_pins_are_saved_one_key_at_a_time_and_drawn_on_their_page() {
     assert_eq!(prefs::get(&s.app.state.db, "alice").await.unwrap().pins(), [cal.clone(), ab.clone()]);
     // each page draws its own rows' switches and stars, nothing of the other page's
     let page = c.get("/calendar").await;
-    page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{cal}\" style=\"--c:#0a84ff\" aria-pressed=\"true\" title=\"Arbeit\" aria-label=\"Arbeit\">"));
+    page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{cal}\" style=\"--c:#0a84ff\" aria-pressed=\"true\" aria-label=\"Arbeit\">"));
     page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"{cal}\" aria-pressed=\"true\""));
     page.has(&format!("<button class=\"pinstar\" type=\"button\" data-pin=\"cal:alice/{}\" aria-pressed=\"false\"", s.privat));
     // every row has its switch, hidden unless pinned (the star shows or hides it in place)
-    assert!(!page.body.contains(&ab) && page.body.matches("<button class=\"qs\" ").count() == page.body.matches("\" hidden title=").count() + 1, "{}", page.body);
-    page.has(&format!("data-pin=\"cal:alice/{}\" style=\"--c:#30b46c\" aria-pressed=\"true\" hidden title=\"Privat\"", s.privat));
+    assert!(!page.body.contains(&ab) && page.body.matches("<button class=\"qs\" ").count() == page.body.matches("\" hidden aria-label=").count() + 1, "{}", page.body);
+    page.has(&format!("data-pin=\"cal:alice/{}\" style=\"--c:#30b46c\" aria-pressed=\"true\" hidden aria-label=\"Privat\"", s.privat));
     let page = c.get("/contacts").await;
     page.ok().has(&format!("<button class=\"qs\" type=\"button\" data-pin=\"{ab}\" style=\"--c:#ff2d55\""));
     assert!(!page.body.contains(&cal));

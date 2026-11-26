@@ -144,8 +144,8 @@
     const w = document.createElement('div'); w.className = 'ask cpk-ask'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', tr('js-color-new'));
     w.innerHTML = `<div class="ask-box cpk-dlg"><div class="cpk-dh"><span><b>${esc(tr('js-color-new'))}</b><small>${esc(tr('js-color-for', { what: o.what || o.title }))}</small></span>
       <span class="seg"><button type="button" data-t="fan">${ico('palette')}<span>${esc(tr('js-color-tab-fan'))}</span></button><button type="button" data-t="field">${ico('eyedropper')}<span>${esc(tr('js-color-tab-field'))}</span></button></span>
-      <button class="btn icon-btn" type="button" data-x aria-label="${esc(tr('js-color-close'))}">${ico('x')}</button></div>
-      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts"><button class="btn icon-btn" type="button" data-x title="${esc(tr('js-ct-cancel'))}" aria-label="${esc(tr('js-ct-cancel'))}">${ico('x')}</button><button class="btn btn-primary icon-btn" type="button" data-ok title="${esc(tr('js-color-apply'))}" aria-label="${esc(tr('js-color-apply'))}">${ico('check')}</button></div></div>`;
+</div>
+      <div class="cpk-body"></div><div class="cpk-near"></div><div class="ask-acts dlg-acts">${practical.dbtn('second', 'x', tr('js-ct-cancel'), 'data-x', 'Esc')}${practical.dbtn('btn-primary', 'check', tr('js-color-apply'), 'data-ok', '↵')}</div></div>`;
     const pv = preview(o.title); $('.cpk-near', w).after(pv.el);
     const body = $('.cpk-body', w), near = $('.cpk-near', w);
     const showNear = () => {

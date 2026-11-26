@@ -26,7 +26,7 @@
 .cd .ic .ico { width: 20px; height: 20px; }
 .rrbottom .pillbtn .ico { width: 14px; height: 14px; }
 .tkmain .sheet th .a .ico { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; } .tkmain .sheet th .a.asc { --sort-down: .3; } .tkmain .sheet th .a.desc { --sort-up: .3; } /* i-sort: the arrow of the other direction dims */
-.btn[aria-pressed=true], .ed header .tlt[aria-pressed=true], .ed .cardform .apre button[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.btn[aria-pressed=true], .ed .cardform .apre button[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 
 .btn.icon-btn { padding: 6px 9px; }
 

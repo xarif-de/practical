@@ -32,7 +32,7 @@ fn foreign_event_data_stays_text() {
     };
     let link = |uri: &str| Link { kind: "url".into(), uri: uri.into(), label: x.into(), ..Default::default() };
     let det = EventDetail {
-        principal: "p".into(), cal_id: "c".into(), object_id: i.object_id.clone(), uid: x.into(), summary: x.into(), location: x.into(), description: x.into(),
+        principal: "p".into(), cal_id: "c".into(), object_id: i.object_id.clone(), uid: x.into(), summary: x.into(), location: x.into(), description: x.into(), description_rich: vec![],
         start: i.start, end: i.end, all_day: false, rrule: None, rrule_until: None, exdates: vec![], rdates: vec![], organizer: None, attendees: vec![], alarms: vec![],
         categories: vec![x.into()], status: String::new(), transp: String::new(), class: String::new(), class_overrides: String::new(), priority: None, color: String::new(), geo: None,
         links: vec![link("javascript:alert(1)"), link(" JAVA\tSCRIPT:alert(1)"), link("data:text/html,<script>alert(1)</script>"), link("https://example.org/?a=1&b=2")],

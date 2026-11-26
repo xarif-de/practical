@@ -18,7 +18,7 @@ function done() {
       <span class="onb-gate-ic">${ico('check')}</span>
       <h2 class="onb-h" id="onb-fin-h">${esc(tr('js-onb-done-title'))}</h2>
       <p class="onb-body">${esc(tr('js-onb-done-body'))}</p>
-      <button type="button" class="btn btn-primary onb-wide" data-close>${esc(tr('js-onb-done-go'))}</button>
+      <div class="dlg-acts">${practical.dbtn('btn-primary onb-wide', 'check', tr('js-onb-done-go'), 'data-close', '↵')}</div>
     </div>`;
   document.body.appendChild(host);
   const btn = $('[data-close]', host);

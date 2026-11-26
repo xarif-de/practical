@@ -29,7 +29,11 @@
   const $ = (s, r = document) => r.querySelector(s), ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   let slideT = null; // the running view-switch slide (practical.slide)
   const pad = n => String(n).padStart(2, '0'), SPRITE = ($('meta[name=icons]') || {}).content || '';
+  /* a dialog button (css/dialog-buttons.css): kind 'btn-primary' (rightmost: go on), 'second' (left of it: back),
+     'ghost' (rare, left; + ' danger'); `key` = the key hint beside the word; `attrs` = raw attributes */
+  const dbtn = (kind, ico, label, attrs, key) => `<button class="dbtn ${kind}" type="button" ${attrs || ''}><svg class="ico" aria-hidden="true"><use href="${window.practical.sprite}#i-${ico}"/></svg><span>${window.practical.esc(label)}</span>${key ? `<kbd>${key}</kbd>` : ''}</button>`;
   window.practical = {
+    dbtn, MOD: '<span class="k-mac">⌘</span><span class="k-ctl">Ctrl </span>↵', // the key hint of Ctrl/⌘ Enter (shell/base.js)
     $, $$: (s, r = document) => [...r.querySelectorAll(s)],
     csrf: () => ($('meta[name=csrf]') || {}).content || '',
     // HTML text and double-quoted attributes: `esc` prints null as "null"; escN prints '' for null/undefined; escQ also escapes '

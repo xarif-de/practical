@@ -92,8 +92,6 @@ button.rbadge:hover	hover: no state hovers it
 .tkdl .ri.sel	no dark state reaches it
 .tksent	no dark state reaches it
 .set .cell.link:hover, .set :is(button, summary, label, a).cell.btnrow:hover	hover: no state hovers it
-.vac-tools .chip:hover	hover: no state hovers it
-.vac-note	no dark state reaches it
 .snp-es .snp-plus:hover, .snp-plus:focus-visible	hover: no state hovers it
 .set .snp-edit .snp-err	no dark state reaches it
 .set .toggle input:focus-visible + i	keyboard focus: no state focuses it

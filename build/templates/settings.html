@@ -34,7 +34,7 @@
   <p class="foot" id="v-sources">{{ self.sources_text() }}</p>
   <div class="label">{{ ctx.t("calendars") }}</div>
   <div class="group">
-    {% call m::nav_cell("#vacation", "var(--c1)", "briefcase") %}<span>{{ ctx.t("set-vacation") }}</span><span class="val">{% if let Some(v) = prefs.vacation_days %}{{ ctx.tn("set-days", "n", **v) }} · {% endif %}<span id="v-vacation">{{ vacation_summary }}</span>{% endcall %}
+    {% call m::nav_cell("#views", "var(--c1)", "layers") %}<span>{{ ctx.t("set-views") }}</span><span class="val"><span id="v-views">{{ ctx.tn("set-views-rules", "n", (views_counts.0 + views_counts.1 + views_counts.2) as i64) }}</span>{% endcall %}
     {% call m::nav_cell("#alarms", "var(--c4)", "bell") %}<span>{{ ctx.t("pref-sec-alarms") }}</span><span class="val"><span id="v-snaps">{{ ctx.tn("set-snaps", "n", alarm_snaps_start.split(',').count() as i64) }}</span>{% endcall %}
   </div>
   <div class="label">{{ ctx.t("set-data") }}</div>
@@ -54,22 +54,6 @@
   <p class="foot">{{ ctx.t("onb-reopen-hint") }}</p>
 </section>
 
-<section class="page" id="vacation">
-  {{ m::back("#", ctx.t("nav-settings")) }}
-  <h1>{{ ctx.t("set-vacation") }}</h1>
-  <div class="group">
-    <label class="cell noic"><span>{{ ctx.t("pref-vacation-days") }}</span><span class="val"><input type="number" name="vacation_days" min="0" max="366" value="{% if let Some(v) = prefs.vacation_days %}{{ v }}{% endif %}" placeholder="–"></span></label>
-    <div class="cell noic"><span>{{ ctx.t("vacation-rule") }}</span><span class="val"><input type="hidden" name="vacation_kind" value="{{ vacation_kind }}"><span class="seg" data-field="vacation_kind"><button type="button" data-v="category" aria-pressed="{{ vacation_kind == "category" }}">{{ m::ico("tag") }}<span>{{ ctx.t("vacation-kind-category") }}</span></button><button type="button" data-v="calendar" aria-pressed="{{ vacation_kind == "calendar" }}">{{ m::ico("calendar") }}<span>{{ ctx.t("vacation-kind-calendar") }}</span></button><button type="button" data-v="title" aria-pressed="{{ vacation_kind == "title" }}">{{ m::ico("regex") }}<span>{{ ctx.t("vacation-kind-title") }}</span></button></span></span></div>
-    <label class="cell noic vac-k" data-k="category"{% if vacation_kind != "category" %} hidden{% endif %}><span>{{ ctx.t("vacation-kind-category") }}</span><span class="val"><select name="vacation_category" id="vac-cat"><option value="{{ vacation_category }}" selected>{% if vacation_category.is_empty() %}–{% else %}{{ vacation_category }}{% endif %}</option></select></span></label>
-    <label class="cell noic vac-k" data-k="calendar"{% if vacation_kind != "calendar" %} hidden{% endif %}><span>{{ ctx.t("vacation-kind-calendar") }}</span><span class="val"><select name="vacation_calendar" id="vac-cal">{% if vacation_calendar.is_empty() %}<option value="" selected>–</option>{% endif %}{% for (key, name) in vacation_calendars %}<option value="{{ key }}"{% if *key == vacation_calendar %} selected{% endif %}>{{ name }}</option>{% endfor %}{% if vacation_calendar_unknown %}<option value="{{ vacation_calendar }}" selected>{{ vacation_calendar }}</option>{% endif %}</select></span></label>
-    <div class="vac-k vac-re" data-k="title"{% if vacation_kind != "title" %} hidden{% endif %}>
-      <label class="cell noic"><span>{{ ctx.t("vacation-kind-title") }}</span><span class="val"><input type="text" name="vacation_title" id="vac-re" value="{{ vacation_title }}" maxlength="200" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="^Urlaub\b"></span></label>
-      <div class="vac-tools" id="vac-tools"></div>
-      <div class="vac-test" id="vac-test" aria-live="polite"></div>
-    </div>
-  </div>
-  <p class="foot">{{ ctx.t("vacation-rule-hint") }}</p>
-</section>
 
 <section class="page" id="alarms">
   {{ m::back("#", ctx.t("nav-settings")) }}
@@ -130,7 +114,34 @@
     {%- endif %}{% endfor %}
   </div>
   <p class="foot">{{ ctx.t("privacy-vis-hint") }} <a href="#collections">{{ ctx.t("tab-collections") }} ›</a></p>
+  {#- what the view configurations offer the people who see the user's calendars: set per view on its page -#}
+  <div class="label">{{ ctx.t("set-views") }}</div>
+  <div class="group">
+    {% call m::nav_cell("#views", "var(--c1)", "layers") %}<span>{{ ctx.t("privacy-views") }}</span><span class="val">{% endcall %}
+  </div>
+  <p class="foot">{{ ctx.t("privacy-views-hint") }}</p>
 </section>
+
+{#- view configurations (domain::views, js/shell/settings-views.js): the three pages are filled from GET /api/views and
+    save through PUT /api/views after every change -#}
+<section class="page" id="views">
+  {{ m::back("#", ctx.t("nav-settings")) }}
+  <h1>{{ ctx.t("set-views") }}</h1>
+  <div class="group">
+    {% call m::nav_cell("#views-year", "var(--c6)", "table") %}<span>{{ ctx.t("set-views-year") }}</span><span class="val"><span id="v-views-year">{{ ctx.tn("set-views-rules", "n", views_counts.0 as i64) }}</span>{% endcall %}
+    {% call m::nav_cell("#views-vacation", "var(--c2)", "palm") %}<span>{{ ctx.t("set-views-vacation") }}</span><span class="val"><span id="v-views-vacation">{{ ctx.tn("set-views-rules", "n", views_counts.1 as i64) }}</span>{% endcall %}
+    {% call m::nav_cell("#views-countdown", "var(--c4)", "cal-clock") %}<span>{{ ctx.t("set-views-countdown") }}</span><span class="val"><span id="v-views-countdown">{{ ctx.tn("set-views-rules", "n", views_counts.2 as i64) }}</span>{% endcall %}
+  </div>
+  <p class="foot">{{ ctx.t("set-views-hint") }}</p>
+</section>
+{%- for (id, title, hint) in [("year", "set-views-year", "set-views-year-hint"), ("vacation", "set-views-vacation", "set-views-vacation-hint"), ("countdown", "set-views-countdown", "set-views-countdown-hint")] %}
+<section class="page" id="views-{{ id }}">
+  {{ m::back("#views", ctx.t("set-views")) }}
+  <h1>{{ ctx.t(title) }}</h1>
+  <p class="foot vw-intro">{{ ctx.t(hint) }}</p>
+  <div class="vw" data-view="{{ id }}" aria-busy="true"></div>
+</section>
+{%- endfor %}
 
 
 {# region lists: rows drawn by app.js from the hidden fields above; + opens the pickers (#pick-country-KIND) #}
@@ -739,7 +750,7 @@
   <progress class="rm-dlg-bar"></progress>
   <p class="rm-dlg-now" aria-live="polite"></p>
   <ul class="rm-dlg-list"></ul>
-  <div class="rm-dlg-foot"><button type="button" class="btn rm-dlg-close" hidden>{{ ctx.t("js-close") }}</button></div>
+  <div class="rm-dlg-foot dlg-acts"><button type="button" class="dbtn btn-primary rm-dlg-close" hidden>{{ m::ico("check") }}<span>{{ ctx.t("js-close") }}</span>{{ m::kbd("enter") }}</button></div>
 </dialog>
 </div>
 {% endblock %}

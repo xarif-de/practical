@@ -59,8 +59,7 @@ test('delete asks first; "no" keeps, "yes" removes', async ({ page }) => {
   await page.goto('/calendar?view=month&date=2026-11-06');
   const key = await createApi(page, { summary: 'F2 Löschen', start: '2026-11-06T09:00:00', end: '2026-11-06T10:00:00' });
   await openEdit(page, key, '2026-11-06', { edit: false });
-  await expect(page.locator('#ed-delete')).toBeDisabled(); // view mode: unlock first
-  await page.locator('#ed-lock').click();
+  await expect(page.locator('#ed-delete')).toBeEnabled(); // in view mode too
   await page.locator('#ed-delete').click();
   await answer(page, false);
   await expect(page.locator('#ed')).toBeVisible();
@@ -173,12 +172,12 @@ test('links, related event, categories typeahead, location, note mention, status
   await addCard(page, 'where');
   await page.locator('#ed-locin').fill('Altmarkt 1, 01067 Dresden');
   await page.locator('#edh').focus();
-  // note: an @ mention picked from the suggestions
-  await addCard(page, 'note');
-  const note = page.locator('textarea[name="description"]');
+  // note (below the title, in the same field): an @ mention picked from the suggestions
+  const note = page.locator('#ed-note');
+  await note.click();
   await note.pressSequentially('Mit @Ann');
   await page.locator('.rrpop .lk-hit', { hasText: 'Anna Albrecht' }).click();
-  await expect(note).toHaveValue(/@Anna Albrecht/);
+  await expect(note).toContainText('@Anna Albrecht');
   await expect(page.locator('#ed-note-found [data-nt]').first()).toBeVisible();
   // status: a tile's popover sets "tentative"
   await addCard(page, 'status');
@@ -282,8 +281,11 @@ test('rule mode from an event: stacks over it and returns to it, on the calendar
     await expect(page.locator('#ed-ct-rows .chip')).toHaveText(['Arbeit']);
     expect(page.url()).toBe(url);
     expect(await page.evaluate(() => document.querySelectorAll('#ed-host').length)).toBe(0); // the page's own dialog
-    await page.locator('#ed-close').click(); // the event's unsaved title: discarded
+    await page.locator('#ed-close').click(); // the event's unsaved title: discarded, back to its view
     await page.locator('#ed-discard').click();
+    await expect(page.locator('#edform')).toHaveClass(/\bmode-view\b/);
+    await expect(page.locator('#edh')).toHaveValue('F2 Stapel');
+    await page.locator('#ed-close').click();
     await expect(page.locator('#ed')).toBeHidden();
     // the tasks page: the same detour, the editor as a dialog (board) and docked beside the list (groups: closing the
     // rule must not reach tasks.js rusticalHost.closed, which turns the pane to the new-task form)
@@ -332,7 +334,7 @@ test('template suggestion fills a new event from a past one', async ({ page }) =
   expect(d.rrule).toBeNull();
 });
 
-test('unsaved changes: back keeps editing, discard drops; Esc closes a clean dialog', async ({ page }) => {
+test('unsaved changes: No/Esc keep editing, Yes drops them and goes back to the view; Esc closes a clean dialog', async ({ page }) => {
   await page.goto('/calendar?view=month&date=2026-11-18');
   const key = await createApi(page, { summary: 'F2 Ungesichert', start: '2026-11-18T09:00:00', end: '2026-11-18T10:00:00' });
   await openEdit(page, key, '2026-11-18', { edit: false });
@@ -346,14 +348,17 @@ test('unsaved changes: back keeps editing, discard drops; Esc closes a clean dia
   await expect(page.locator('#ed-confirm')).toBeHidden();
   await expect(page.locator('#edh')).toHaveValue('F2 Geändert');
   await page.locator('#ed-close').click();
-  await page.locator('#ed-discard').click();
+  await expect(page.locator('#ed-confirm')).toBeVisible();
+  await page.keyboard.press('Escape'); // Esc = No
+  await expect(page.locator('#ed-confirm')).toBeHidden();
+  await expect(page.locator('#edform')).toHaveClass(/\bmode-edit\b/);
+  await page.locator('#ed-close').click();
+  await page.keyboard.press('ControlOrMeta+Enter'); // = Yes: back to the stored values, in view mode
+  await expect(page.locator('#edform')).toHaveClass(/\bmode-view\b/);
+  await expect(page.locator('#edh')).toHaveValue('F2 Ungesichert');
+  await page.locator('#ed-close').click();
   await expect(page.locator('#ed')).toBeHidden();
   expect((await detail(page, key)).summary).toBe('F2 Ungesichert');
-  // reset puts the stored values back
-  await openEdit(page, key, '2026-11-18');
-  await page.locator('#edh').fill('F2 Zurück');
-  await page.locator('#ed-reset').click();
-  await expect(page.locator('#edh')).toHaveValue('F2 Ungesichert');
 });
 
 test('view mode of seeded events: day line, people, attachment download, copy', async ({ page }) => {
@@ -363,13 +368,13 @@ test('view mode of seeded events: day line, people, attachment download, copy', 
   // (other spec files may add events on this day: the seeded ones must be there)
   for (const t of ['Team-Standup', 'Kundentermin', 'Mittagessen mit Bob', 'Zahnarzt Dr. Weiß']) await expect(page.locator('#ed-dayline .blk', { hasText: t })).toHaveCount(1);
   // overlapping events (review 10:00-11:30, Kundentermin 10:30-12:15) run on their own tracks; the lines carry the
-  // event's colour (Zahnarzt: COLOR:tomato), the event at hand keeps the accent; no title covers another
+  // event's colour (Zahnarzt: COLOR:tomato), the event at hand its own (the title's dot: Arbeit's blue); no title covers another
   const lines = page.locator('#ed-dayline .ln');
   const lefts = await lines.evaluateAll(l => l.map(i => [i.classList.contains('me'), i.style.top, i.style.left]));
   const me = lefts.find(x => x[0]), kunde = lefts.find(x => !x[0] && Math.abs(parseFloat(x[1]) - 10.5 * 36) < 0.5); // 36 px an hour from 0:00
   expect(me && kunde && me[2] !== kunde[2], JSON.stringify(lefts)).toBe(true);
   await expect(page.locator('#ed-dayline .ln[style*="--c:tomato"]')).toHaveCount(1);
-  await expect(page.locator('#ed-dayline .ln.me')).not.toHaveAttribute('style', /--c:/);
+  await expect(page.locator('#ed-dayline .ln.me')).toHaveAttribute('style', /--c:rgb\(10, 132, 255\)/);
   // the whole day (0-24 h) scrolls inside the box, the event at hand (10:00-11:30) in its middle
   const dl = await page.locator('#ed-dayline').evaluate(b => { const r = b.getBoundingClientRect(), m = b.querySelector('.ln.me').getBoundingClientRect(); return { sh: b.scrollHeight, ch: b.clientHeight, off: (m.top + m.bottom) / 2 - (r.top + r.bottom) / 2 }; });
   expect(dl.sh).toBeGreaterThanOrEqual(24 * 36); // more only for titles pushed past 24:00
@@ -454,9 +459,61 @@ test('note view: links and mentions render once, never nested', async ({ page })
   const { id } = await api(page, 'POST', '/api/events', { principal, cal_id, summary: 'F2 Notizlinks', start: '2026-11-09T09:00:00', end: '2026-11-09T10:00:00', all_day: false,
     description: 'Siehe https://x.example/q@b.de/#tag und #Arbeit, Mail anna@example.org' });
   await openEdit(page, `${principal}/${cal_id}/${id}`, '2026-11-09', { edit: false });
-  const view = page.locator('#ed-note-view');
+  const view = page.locator('#ed-note');
   await expect(view.locator('a')).toHaveCount(2);
   expect(await view.locator('a').evaluateAll(as => as.map(a => a.getAttribute('href')))).toEqual(['https://x.example/q@b.de/#tag', 'mailto:anna@example.org']);
   await expect(view.locator('.nt-m')).toHaveText(['Arbeit']);
   await expect(view.locator('a a, a .nt-m')).toHaveCount(0);
+});
+
+test('formatted note: typed, saved as every app reads it, shown again; untouched it stays, a plain edit drops the copies', async ({ page }) => {
+  await openNew(page, '2026-11-10');
+  await fillWhen(page, { title: 'F2 Formatiert', from: '09:00', to: '10:00', cal: CAL.privat });
+  await page.locator('#edh').press('Enter'); // the title's Enter goes down into the note
+  await expect(page.locator('#ed-note')).toBeFocused();
+  await page.keyboard.type('Vorher ');
+  await page.locator('#ed-tnbar [data-fmt=bold]').click();
+  await page.keyboard.type('wichtig');
+  await page.locator('#ed-tnbar [data-fmt=bold]').click();
+  await page.keyboard.press('Enter');
+  await page.locator('#ed-tnbar [data-fmt=ul]').click();
+  await page.keyboard.type('Punkt');
+  await save(page);
+  const e = await one(page, '2026-11-10', 'F2 Formatiert'), key = keyOf(e);
+  let d = await detail(page, key);
+  expect(d.description).toBe('Vorher wichtig\n- Punkt');
+  expect(d.description_rich.map(r => r.kind)).toEqual(['altrep', 'x-alt-desc', 'styled']);
+  expect(d.description_rich[0].html).toBe('Vorher <b>wichtig</b><ul><li>Punkt</li></ul>');
+  await openEdit(page, key, '2026-11-10', { edit: false });
+  await expect(page.locator('#ed-note b')).toHaveText('wichtig');
+  await expect(page.locator('#ed-note li')).toHaveText(['Punkt']);
+  // another field changed, the note untouched: its copies stay as they were
+  await page.locator('#ed-lock').click();
+  await page.locator('#edh').fill('F2 Formatiert 2');
+  await save(page);
+  d = await detail(page, key);
+  expect(d.description_rich.map(r => r.kind)).toEqual(['altrep', 'x-alt-desc', 'styled']);
+  // an app without formatting changes the text (API without description_html): the copies are stale and go
+  await api(page, 'PUT', `/api/events/${key}`, { ...d, description: 'Anderer Text', description_html: undefined });
+  d = await detail(page, key);
+  expect([d.description, d.description_rich]).toEqual(['Anderer Text', []]);
+});
+
+test('a plain note stays plain after view mode: its links and phone numbers are shown, never stored as formatting', async ({ page }) => {
+  await openNew(page, '2026-11-12');
+  await fillWhen(page, { title: 'F2 Schlicht', from: '09:00', to: '10:00', cal: CAL.privat });
+  await page.locator('#edh').press('Enter');
+  await page.keyboard.type('- Anruf 0351 123456 https://example.org');
+  await save(page);
+  const key = keyOf(await one(page, '2026-11-12', 'F2 Schlicht'));
+  await openEdit(page, key, '2026-11-12', { edit: false });
+  await expect(page.locator('#ed-note a[href^="tel:"]')).toHaveCount(1); // the view decorates
+  await page.locator('#ed-lock').click();
+  await expect(page.locator('#ed-note a')).toHaveCount(0); // edit mode is the note itself again
+  await page.locator('#ed-note').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('!');
+  await save(page);
+  const d = await detail(page, key);
+  expect([d.description, d.description_rich]).toEqual(['- Anruf 0351 123456 https://example.org!', []]);
 });

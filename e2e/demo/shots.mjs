@@ -232,7 +232,7 @@ const SHOTS = [
   ['month-dark', 'Month view (dark)', 'The month view in dark mode.', async p => {
     await calView(p, 'month'); }, 'dark'],
   // taken mainly for docs/features.md; in the gallery under "Settings and more" (GROUPS)
-  ['settings', 'Settings', 'The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups.', async p => {
+  ['settings', 'Settings', 'The settings start page: language, colour scheme, holiday regions, views, reminders, calendars, categories and groups.', async p => {
     await p.goto('/settings'); await p.locator('#home').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['category-rule', 'Category rule', 'The rule of the category "Work": every event with this category gets a 15-minute reminder and the office as its location.', async p => {
     await p.goto('/calendar?rule=Work&back=%2Fsettings%23categories'); await p.locator('#ed:not([hidden])').waitFor(); }, 'light'],

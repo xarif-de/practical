@@ -2,14 +2,16 @@
 //! fed with real instances, holidays and birthdays.
 //!
 //! A year of instances per calendar is kept in [`YearCache`]. Vacation and bridge days count by the user's own
-//! region: the first region of the public-holiday list ([`crate::domain::prefs`]).
+//! region: the first region of the public-holiday list ([`crate::domain::prefs`]). Which events the year view marks,
+//! which count as vacation and which the countdown wall shows: the view configurations ([`crate::domain::views`]),
+//! applied per request (the cache keeps raw instances, so a changed rule shows at once).
 
 use crate::ctx::PageCtx;
 use crate::domain::collections::{self, CalInfo};
 use crate::domain::contacts::{self, Contact};
 use crate::domain::events::{self, Instance};
 use crate::domain::holidays::{self, Holiday};
-use crate::domain::prefs;
+use crate::domain::views::{self, CalKeys};
 use crate::error::AppResult;
 use crate::render::{self, L, e};
 use crate::routes::calendar::ViewCtx;
@@ -28,12 +30,39 @@ pub struct YearData {
     pub school: Vec<Holiday>,
     /// public holidays of the user's own region: what makes a day off (vacation days, bridge days)
     pub own: Vec<Holiday>,
+    /// the year view's active rules (own, then adopted) and the instances they mark with the first rule's index
+    pub marks: Vec<MarkInfo>,
+    pub marked: Vec<Instance>,
+    pub mark_of: HashMap<(String, NaiveDateTime), usize>,
+    /// the user's vacations, entitlement and rules (their labels, for the planner's foot)
     pub vacations: Vec<Instance>,
-    pub birthdays: Vec<Contact>,
     pub vacation_days: Option<i64>,
     pub vacation_rule: String,
+    /// the vacations of the people who share them and whom the user chose (`views::Vacation::people`)
+    pub others: Vec<OtherVacation>,
+    /// the countdown wall's events: (instance, the rule's icon)
+    pub countdown: Vec<(Instance, String)>,
+    pub birthdays: Vec<Contact>,
     /// the school holidays' regions ("DE-SN, DE-BY") for the legends
     pub school_regions: String,
+}
+
+/// A year-view rule as the planner shows it (cell tint, icon, legend)
+pub struct MarkInfo {
+    pub label: String,
+    pub color: String,
+    pub icon: Option<String>,
+    /// the person who offers it
+    pub by: Option<String>,
+}
+
+/// Another person's vacations as the planner shows them: only from events of theirs the user sees, counted by their
+/// own region's public holidays
+pub struct OtherVacation {
+    pub label: String,
+    pub days: Option<i64>,
+    pub vacations: Vec<Instance>,
+    pub own: Vec<Holiday>,
 }
 
 /// One calendar's instances of one year as the five views read them (summary, categories, the event's own
@@ -50,6 +79,8 @@ struct YearObj {
     summary: events::Text,
     color: String,
     categories: Vec<String>,
+    /// STATUS:CANCELLED: no view configuration counts it (views::Rule)
+    cancelled: bool,
 }
 
 /// (calendar + view + path: `state::Authorized::cache_key`, synctoken, zone, year)
@@ -72,14 +103,14 @@ impl YearPart {
         let mut items = Vec::with_capacity(instances.len());
         for i in instances {
             let o = *ids.entry(i.object_id.as_str()).or_insert_with(|| {
-                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone() });
+                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone(), cancelled: i.cancelled });
                 objs.len() as u32 - 1
             });
             // an override (RECURRENCE-ID) may carry another title or colour than its series
-            let o = if objs[o as usize].summary == i.summary && objs[o as usize].color == i.color && objs[o as usize].categories == i.categories {
+            let o = if objs[o as usize].summary == i.summary && objs[o as usize].color == i.color && objs[o as usize].categories == i.categories && objs[o as usize].cancelled == i.cancelled {
                 o
             } else {
-                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone() });
+                objs.push(YearObj { object_id: i.object_id.clone(), summary: i.summary.clone(), color: i.color.clone(), categories: i.categories.clone(), cancelled: i.cancelled });
                 objs.len() as u32 - 1
             };
             items.push((i.start, i.end, i.all_day, o));
@@ -178,7 +209,7 @@ async fn year_instances(state: &SharedState, cals: &[CalInfo], (start, end): (Na
                 alarm_minutes: None,
                 alarms: vec![],
                 is_group: cal.is_group,
-                cancelled: false,
+                cancelled: o.cancelled,
             }
         }));
     }
@@ -187,7 +218,8 @@ async fn year_instances(state: &SharedState, cals: &[CalInfo], (start, end): (Na
     Ok(out)
 }
 
-pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, year: i32, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<YearData> {
+/// `view`: which of the five views it is for — each reads only its own parts (the others stay empty)
+pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, year: i32, cals: &[CalInfo], vc: &ViewCtx, view: &str) -> AppResult<YearData> {
     let (Some(start), Some(end)) = (NaiveDate::from_ymd_opt(year, 1, 1).filter(|d| crate::domain::ical::year_ok(*d)), NaiveDate::from_ymd_opt(year + 1, 1, 1)) else { return Err(crate::error::AppError::bad("err-date-range")) };
     let instances = year_instances(state, cals, (start, end), year, vc.tz).await?;
     let p = &vc.prefs;
@@ -198,11 +230,59 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         Some(r) => holidays::for_regions(state, "public", &[r], year, &ctx.lang).await?,
         None => vec![],
     };
-    let rule = prefs::VacationRule::of(p);
-    let is_vacation = rule.matcher();
-    let vacations: Vec<Instance> = instances.iter().filter(|i| is_vacation(&format!("{}/{}", i.principal, i.cal_id), &i.categories, &i.summary)).cloned().collect();
-    let abs = collections::addressbooks_for(state, user, false).await?;
-    let birthdays: Vec<Contact> = contacts::contacts_for(state, &abs).await?.into_iter().filter(|c| !c.birthday.is_empty()).collect();
+    // the view configurations, only for the view that shows them: the planner's marks, the vacation planner's own and
+    // shared vacations, the countdown's events; rules over all calendars the user has (`cals` may be the filter's subset)
+    let (planner, vac, cd) = (view == "planner", view == "vacation", view == "countdown");
+    let (mut marks, mut marked, mut mark_of, mut vacations, mut others, mut countdown) = (vec![], vec![], HashMap::new(), vec![], vec![], vec![]);
+    let mut cfg = views::ViewConfig::default();
+    let mut names: HashMap<String, String> = HashMap::new();
+    if planner || vac || cd {
+        cfg = views::load(&state.db, &user.id).await?;
+        let all = collections::calendars_for(state, user, false).await?;
+        let keys = CalKeys::of(&all);
+        // by the canonical key, and by the path a former calendar setting stored
+        names = all.iter().flat_map(|c| [(views::canonical(c), c.displayname.clone()), (format!("{}/{}", c.principal, c.id), c.displayname.clone())]).collect();
+        let people = views::shared_with(state, &user.id, &all).await?;
+        if planner {
+            let rules = views::active(&cfg.year, &people.iter().map(|s| (s, s.offer.year.as_slice())).collect::<Vec<_>>(), &names);
+            marks = rules.iter().map(|a| MarkInfo { label: a.label.clone(), color: a.color.clone().unwrap_or_else(|| "#32ade6".into()), icon: a.icon.clone(), by: a.by.as_ref().map(|b| b.1.clone()) }).collect();
+            for i in &instances {
+                if let Some(n) = rules.iter().position(|a| a.matches(i, &keys)) {
+                    mark_of.insert((i.key(), i.start), n);
+                    marked.push(i.clone());
+                }
+            }
+        }
+        if vac {
+            vacations = instances.iter().filter(|i| cfg.vacation.rules.iter().any(|r| r.applies(i, &keys, None))).cloned().collect();
+            for s in people.iter().filter(|s| cfg.vacation.people.get(&s.id).copied().unwrap_or(false)) {
+                let Some((days, rules)) = &s.offer.vacation else { continue };
+                let v = instances.iter().filter(|i| rules.iter().any(|r| r.applies(i, &keys, Some(&s.id)))).cloned().collect();
+                let own = match &s.own_region {
+                    Some(r) => holidays::for_regions(state, "public", std::slice::from_ref(r), year, &ctx.lang).await?,
+                    None => vec![],
+                };
+                others.push(OtherVacation { label: s.label.clone(), days: *days, vacations: v, own });
+            }
+        }
+        if cd {
+            let rules = views::active(&cfg.countdown, &people.iter().map(|s| (s, s.offer.countdown.as_slice())).collect::<Vec<_>>(), &names);
+            // up to a year ahead: next year's instances too (its own cache entries)
+            let ahead = match (NaiveDate::from_ymd_opt(year + 1, 1, 1), NaiveDate::from_ymd_opt(year + 2, 1, 1)) {
+                (Some(a), Some(b)) if crate::domain::ical::year_ok(a) => year_instances(state, cals, (a, b), year + 1, vc.tz).await?,
+                _ => vec![],
+            };
+            let horizon = vc.today + Duration::days(365);
+            countdown = instances.iter().chain(&ahead).filter(|i| i.start_date() <= horizon).filter_map(|i| rules.iter().find(|a| a.matches(i, &keys)).map(|a| (i.clone(), a.icon.clone().unwrap_or_else(|| views::COUNTDOWN_ICON.into())))).collect();
+        }
+    }
+    // birthdays: the countdown's and the numbers' only
+    let birthdays: Vec<Contact> = if cd || view == "numbers" {
+        let abs = collections::addressbooks_for(state, user, false).await?;
+        contacts::contacts_for(state, &abs).await?.into_iter().filter(|c| !c.birthday.is_empty()).collect()
+    } else {
+        vec![]
+    };
     Ok(YearData {
         year,
         today: vc.today,
@@ -210,22 +290,17 @@ pub async fn year_data(state: &SharedState, user: &Principal, ctx: &PageCtx, yea
         public,
         school,
         own,
+        marks,
+        marked,
+        mark_of,
         vacations,
+        vacation_days: cfg.vacation.days,
+        vacation_rule: cfg.vacation.rules.iter().map(|r| r.label(&names)).collect::<Vec<_>>().join(", "),
+        others,
+        countdown,
         birthdays,
-        vacation_days: p.vacation_days,
-        vacation_rule: vacation_rule_text(&rule, ctx, cals),
         school_regions: school_regions.join(", "),
     })
-}
-
-/// The rule as the planner's legend names it: "Kategorie „Urlaub“", "Kalender „Privat“", "Titel /^Urlaub/"
-fn vacation_rule_text(rule: &prefs::VacationRule, ctx: &PageCtx, cals: &[CalInfo]) -> String {
-    match rule.kind.as_str() {
-        "calendar" => format!("{} „{}“", ctx.t("vacation-kind-calendar"), cals.iter().find(|c| format!("{}/{}", c.principal, c.id) == rule.value).map_or(rule.value.as_str(), |c| c.displayname.as_str())),
-        _ if rule.legacy() => format!("{} „{}“", ctx.t("vacation-kind-legacy"), rule.value),
-        "title" => format!("{} /{}/", ctx.t("vacation-kind-title"), rule.value),
-        _ => format!("{} „{}“", ctx.t("vacation-kind-category"), rule.value),
-    }
 }
 
 fn in_hol(h: &[Holiday], d: NaiveDate) -> Option<&Holiday> {
@@ -236,10 +311,25 @@ fn workday(d: NaiveDate, public: &[Holiday]) -> bool {
     d.weekday().num_days_from_monday() < 5 && in_hol(public, d).is_none()
 }
 
+/// The workdays of `year` that vacations take (weekends and the region's public holidays excluded), each day once
+fn used_days(vacs: &[(String, NaiveDate, NaiveDate)], year: i32, public: &[Holiday]) -> i64 {
+    let mut days: std::collections::BTreeSet<NaiveDate> = Default::default();
+    for (_, a, b) in vacs {
+        let mut d = *a;
+        while d <= *b {
+            if d.year() == year && workday(d, public) {
+                days.insert(d);
+            }
+            d += Duration::days(1);
+        }
+    }
+    days.len() as i64
+}
+
 pub fn planner(y: &YearData, l: &L) -> String {
     let (jan1, next) = (NaiveDate::from_ymd_opt(y.year, 1, 1).unwrap_or_default(), NaiveDate::from_ymd_opt(y.year + 1, 1, 1).unwrap_or_default());
     let idx = render::by_day(&y.instances, jan1, next);
-    let vac = render::by_day(&y.vacations, jan1, next);
+    let marked = render::by_day(&y.marked, jan1, next);
     let mut cols = String::new();
     for mi in 1..=12u32 {
         let mut rows = String::new();
@@ -250,9 +340,10 @@ pub fn planner(y: &YearData, l: &L) -> String {
             };
             let hol = in_hol(&y.public, d);
             let fer = in_hol(&y.school, d);
-            let u = vac.get(&d).and_then(|v| v.first().map(|i| i.summary.to_string()));
-            let ev = idx.get(&d).and_then(|v| v.iter().find(|i| !y.vacations.iter().any(|x| x.key() == i.key() && x.start == i.start)).map(|i| i.summary.to_string()));
-            let txt = hol.map(Holiday::label).or(u.clone()).or(ev).unwrap_or_default();
+            // the day's mark: the first rule that marks one of its events (lowest index), with that event's title
+            let u = marked.get(&d).and_then(|v| v.iter().filter_map(|i| y.mark_of.get(&(i.key(), i.start)).map(|n| (*n, i))).min_by_key(|(n, _)| *n)).map(|(n, i)| (n, i.summary.to_string()));
+            let ev = idx.get(&d).and_then(|v| v.iter().find(|i| !y.mark_of.contains_key(&(i.key(), i.start))).map(|i| i.summary.to_string()));
+            let txt = hol.map(Holiday::label).or(u.as_ref().map(|u| u.1.clone())).or(ev).unwrap_or_default();
             let mut cls = String::from("c");
             if d.weekday().num_days_from_monday() >= 5 {
                 cls.push_str(" we");
@@ -267,16 +358,22 @@ pub fn planner(y: &YearData, l: &L) -> String {
                 cls.push_str(" t");
             }
             let kw = if d.weekday() == Weekday::Mon { format!("<i>{}</i>", d.iso_week().week()) } else { String::new() };
-            let _ = write!(rows, "<div class=\"{cls}\" data-date=\"{d}\" title=\"{}\"><b>{day}</b><s>{}</s>{kw}<span class=\"{}\">{}</span></div>", e(&txt), l.dow(d).chars().next().unwrap_or(' '), if u.is_some() { "u" } else { "" }, e(&txt));
+            let span = match u.and_then(|(n, _)| y.marks.get(n)) {
+                Some(m) => format!("<span class=\"u\" style=\"--u:{}\">{}{}</span>", m.color, m.icon.as_deref().map(render::ico).unwrap_or_default(), e(&txt)),
+                None => format!("<span>{}</span>", e(&txt)),
+            };
+            let _ = write!(rows, "<div class=\"{cls}\" data-date=\"{d}\" title=\"{}\"><b>{day}</b><s>{}</s>{kw}{span}</div>", e(&txt), l.dow(d).chars().next().unwrap_or(' '));
         }
         let _ = write!(cols, "<div class=\"mcol\"><h3>{}</h3>{rows}</div>", l.mon(mi));
     }
+    // one legend entry per rule that marks a day this year: its tint, icon, label and, for an adopted one, whose it is
+    let used: std::collections::HashSet<usize> = y.mark_of.values().copied().collect();
+    let marks: String = y.marks.iter().enumerate().filter(|(n, _)| used.contains(n)).map(|(_, m)| format!("<span><i style=\"background:color-mix(in srgb,{} 35%,var(--bg))\"></i>{}{}{}</span>", m.color, m.icon.as_deref().map(render::ico).unwrap_or_default(), e(&m.label), m.by.as_deref().map(|b| format!(" <small>({})</small>", e(b))).unwrap_or_default())).collect();
     format!(
-        "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--fer) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--hol) 22%,var(--bg))\"></i>{}</span><span><i style=\"background:color-mix(in srgb,var(--c6) 35%,var(--bg))\"></i>{}</span><span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· {} {} · {}</span></div>",
+        "<div class=\"planner\">{cols}</div><div class=\"leg\"><span><i style=\"background:color-mix(in srgb,var(--fer) 18%,var(--bg))\"></i>{} {}</span><span><i style=\"background:color-mix(in srgb,var(--hol) 22%,var(--bg))\"></i>{}</span>{marks}<span><i style=\"background:var(--tile-weekend)\"></i>{}</span> <span class=\"sub\">· {} {} · {}</span></div>",
         l.t("v-school-holidays"),
         e(&y.school_regions),
         l.t("v-public-holiday"),
-        l.t("v-vacation"),
         l.t("v-weekend"),
         l.t("v-week-abbr"),
         l.t("v-top-right-on-mondays"),
@@ -342,7 +439,9 @@ pub fn vacation(y: &YearData, l: &L) -> String {
     }
     let tod = if y.today.year() == y.year { format!("<div class=\"todaymark\" style=\"grid-column:{}\"></div>", col(y.today)) } else { String::new() };
     let mut hol = String::new();
-    for h in &y.public {
+    let mut hol_seen = std::collections::HashSet::new();
+    // a holiday of several of the user's regions is one bar (its days once: the lane stays one row)
+    for h in y.public.iter().filter(|h| hol_seen.insert((h.start, h.end))) {
         let _ = write!(hol, "<div class=\"bar hol\" style=\"grid-column:{} / {}\" title=\"{}\"></div>", col(h.start), col(h.end) + 1, e(&h.label()));
     }
     let bars = |items: &[(String, NaiveDate, NaiveDate)], cls: &str| {
@@ -353,20 +452,21 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         out
     };
     let school: Vec<(String, NaiveDate, NaiveDate)> = y.school.iter().map(|h| (h.label(), h.start, h.end)).collect();
-    let vacs: Vec<(String, NaiveDate, NaiveDate)> = y.vacations.iter().map(|i| (i.summary.to_string(), i.start_date(), i.last_date())).collect();
-    // workdays used by vacation instances (weekends + public holidays excluded)
-    let mut used_days: std::collections::BTreeSet<NaiveDate> = Default::default();
-    for (_, a, b) in &vacs {
-        let mut d = *a;
-        while d <= *b {
-            if d.year() == y.year && workday(d, &y.own) {
-                used_days.insert(d);
-            }
-            d += Duration::days(1);
-        }
-    }
-    let used = used_days.len() as i64;
+    let spans = |v: &[Instance]| -> Vec<(String, NaiveDate, NaiveDate)> { v.iter().map(|i| (i.summary.to_string(), i.start_date(), i.last_date())).collect() };
+    let vacs = spans(&y.vacations);
+    let used = used_days(&vacs, y.year, &y.own);
     let remaining = y.vacation_days.map(|v| (v - used).to_string()).unwrap_or_else(|| "–".into());
+    // the people who share their vacations: a lane each, and their numbers (from the events the user sees)
+    let mut other_lanes = String::new();
+    let mut other_rows = String::new();
+    for o in &y.others {
+        let v = spans(&o.vacations);
+        let n = used_days(&v, y.year, &o.own);
+        let _ = write!(other_lanes, "<div class=\"lane\" data-l=\"{} · {}\">{}</div>", l.t("v-vacation"), e(&o.label), bars(&v, "u o"));
+        let rest = match o.days { Some(d) => l.tn("v-remaining-of", d - n), None => l.ta("v-remaining-of", &[("n", "–".into())]) };
+        let _ = write!(other_rows, "<li><b>{}</b> — {n} {} · {} {} {}</li>", e(&o.label), l.tn("v-vacation-days-planned", n), o.days.map(|d| (d - n).to_string()).unwrap_or_else(|| "–".into()), rest, o.days.map(|d| d.to_string()).unwrap_or_else(|| "?".into()));
+    }
+    let others_box = if other_rows.is_empty() { String::new() } else { format!("<div class=\"ybox oth\"><h2 class=\"yh\">{}</h2><ul>{other_rows}</ul><p class=\"sub\">{}</p></div>", l.t("v-shared-vacations"), l.t("v-shared-vacations-hint")) };
     // bridge days: a public holiday on Tue → Mon off, Thu → Fri off (the own region's: a day off is one's own)
     let mut bridge = String::new();
     for h in &y.own {
@@ -385,9 +485,9 @@ pub fn vacation(y: &YearData, l: &L) -> String {
         bridge = format!("<li class=\"muted\">{}</li>", l.t("v-no-bridge-days-this-year"));
     }
     format!(
-        "<div class=\"gantt\"><div class=\"g\">{months}</div><div class=\"lane\" data-l=\"{}\">{we}{tod}</div><div class=\"lane\" data-l=\"{}\">{hol}</div><div class=\"lane\" data-l=\"{} {}\">{}</div><div class=\"lane\" data-l=\"{}\">{}</div></div>\
+        "<div class=\"gantt\"><div class=\"g\">{months}</div><div class=\"lane\" data-l=\"{}\">{we}{tod}</div><div class=\"lane\" data-l=\"{}\">{hol}</div><div class=\"lane\" data-l=\"{} {}\">{}</div><div class=\"lane\" data-l=\"{}\">{}</div>{other_lanes}</div>\
 <div class=\"grid2\"><div class=\"kpi\"><div><b>{used}</b><span>{}</span></div><div><b>{remaining}</b><span>{} {}</span></div><div><b>{}</b><span>{}</span></div></div>\
-<div class=\"ybox brg\"><h2 class=\"yh\">{}</h2><ul>{bridge}</ul></div></div><p class=\"sub\">{} <code>{}</code> · {}</p>",
+<div class=\"ybox brg\"><h2 class=\"yh\">{}</h2><ul>{bridge}</ul></div></div>{others_box}<p class=\"sub\">{} <code>{}</code> · <a href=\"/settings#views-vacation\">{}</a></p>",
         l.t("v-weekends"),
         l.t("v-holidays"),
         l.t("v-school-holidays"),
@@ -412,8 +512,10 @@ pub fn countdown(y: &YearData, l: &L) -> String {
     struct Item {
         date: NaiveDate,
         label: String,
-        icon: &'static str,
+        icon: String,
         over: bool,
+        /// a birthday: a passed one asks whether it was congratulated
+        bday: bool,
     }
     let mut items = vec![];
     for c in &y.birthdays {
@@ -423,36 +525,50 @@ pub fn countdown(y: &YearData, l: &L) -> String {
         let age = |yr: i32| by.map(|b| format!(" · {}", yr - b)).unwrap_or_default();
         let ago = (y.today - this).num_days();
         if ago > 0 && ago <= 30 {
-            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake", over: true });
+            items.push(Item { date: this, label: format!("{}{}", c.full_name, age(this.year())), icon: "cake".into(), over: true, bday: true });
         }
-        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake", over: false });
+        items.push(Item { date: nd, label: format!("{}{}", c.full_name, age(nd.year())), icon: "cake".into(), over: false, bday: true });
     }
-    for v in &y.vacations {
+    // the configured events (views::Marks of the countdown), titled as they are (the icon names the rule): a series
+    // counts once — its next start, or, with none ahead, its last end up to 30 days ago
+    let ahead: std::collections::HashSet<String> = y.countdown.iter().filter(|(v, _)| v.start_date() >= y.today).map(|(v, _)| v.key()).collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut last_over: HashMap<String, usize> = HashMap::new();
+    for (v, icon) in &y.countdown {
         if v.start_date() >= y.today {
-            items.push(Item { date: v.start_date(), label: format!("{} {}", l.t("v-vacation"), v.summary), icon: "luggage", over: false });
-        } else {
+            if seen.insert(v.key()) {
+                items.push(Item { date: v.start_date(), label: v.summary.to_string(), icon: icon.clone(), over: false, bday: false });
+            }
+        } else if !ahead.contains(&v.key()) {
             let ago = (y.today - v.last_date()).num_days();
             if ago > 0 && ago <= 30 {
-                items.push(Item { date: v.last_date(), label: format!("{} {} {}", l.t("v-vacation"), v.summary, l.t("v-over")), icon: "luggage", over: true });
+                let it = Item { date: v.last_date(), label: format!("{} {}", v.summary, l.t("v-over")), icon: icon.clone(), over: true, bday: false };
+                match last_over.get(&v.key()) {
+                    Some(&n) => items[n] = it,
+                    None => {
+                        last_over.insert(v.key(), items.len());
+                        items.push(it);
+                    }
+                }
             }
         }
     }
     for h in &y.public {
         if h.start >= y.today {
-            items.push(Item { date: h.start, label: h.label(), icon: "party", over: false });
+            items.push(Item { date: h.start, label: h.label(), icon: "party".into(), over: false, bday: false });
         }
     }
-    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party", over: false });
+    items.push(Item { date: NaiveDate::from_ymd_opt(y.today.year() + 1, 1, 1).unwrap(), label: l.t("v-new-year").into(), icon: "party".into(), over: false, bday: false });
     items.sort_by_key(|i| i.date);
     let tile = |i: &Item| {
         if i.over {
             let ago = (y.today - i.date).num_days();
             let pct = 100 - ago * 100 / 30;
-            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {} · {}</span></div></div>", l.tn("v-days", ago), crate::render::ico(i.icon), e(&i.label), l.t("v-was"), l.long_date(i.date), l.t("v-not-congratulated-yet"))
+            format!("<div class=\"cd over\"><div class=\"ring\" style=\"--p:{pct}\"><b>−{ago}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{} {}{}</span></div></div>", l.tn("v-days", ago), crate::render::ico(&i.icon), e(&i.label), l.t("v-was"), l.long_date(i.date), if i.bday { format!(" · {}", l.t("v-not-congratulated-yet")) } else { String::new() })
         } else {
             let left = (i.date - y.today).num_days();
             let pct = (100 - left * 100 / 365).clamp(0, 100);
-            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.tn("v-days", left), crate::render::ico(i.icon), e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
+            format!("<div class=\"cd\"><div class=\"ring\" style=\"--p:{pct}\"><b>{left}</b><small>{}</small></div><div><div class=\"ic\">{}</div><h3>{}</h3><span>{}{}</span></div></div>", l.tn("v-days", left), crate::render::ico(&i.icon), e(&i.label), l.long_date(i.date), if i.date.year() != y.today.year() { format!(" {}", i.date.year()) } else { String::new() })
         }
     };
     let over: Vec<&Item> = items.iter().filter(|i| i.over).collect();
@@ -512,7 +628,7 @@ pub fn numbers(y: &YearData, l: &L) -> String {
 }
 
 pub async fn render(state: &SharedState, user: &Principal, ctx: &PageCtx, view: &str, date: NaiveDate, cals: &[CalInfo], vc: &ViewCtx) -> AppResult<(String, String)> {
-    let y = year_data(state, user, ctx, date.year(), cals, vc).await?;
+    let y = year_data(state, user, ctx, date.year(), cals, vc, view).await?;
     let l = &vc.l;
     let (label, _) = crate::routes::calendar::view_label(view, l);
     let body = match view {

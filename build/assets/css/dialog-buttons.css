@@ -1,0 +1,30 @@
+/* css/dialog-buttons.css — the one button row of every dialog (`.dlg-acts`, built by practical.dbtn or the templates'
+   m::dbtn). Fixed places, the same in every dialog: rightmost = go on/confirm (`.btn-primary`), left of it = back/cancel
+   (`.second`), then a separator (`.dsep`), and left of everything the rare or dangerous ones (`.ghost`, `.ghost.danger`),
+   pushed left by `.dlg-acts > .grow`. Symbol + word on each; `kbd` = the key that does the same (hidden without a mouse).
+   Last in style.css: it must win over `.btn` rules (it does not use `.btn` at all, so their `:has(> .ico)` look stays out). */
+.dlg-acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.dlg-acts > .grow { flex: 1 1 0; min-width: 0; }
+.dlg-acts > .dsep { flex: 0 0 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+.dlg-acts > .dsep:first-child, .dlg-acts > .grow:first-child + .dsep { display: none; } /* nothing rare on the left: no separator */
+.dbtn { box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 13.5px/1 var(--font, inherit); cursor: pointer; white-space: nowrap; background: none; color: var(--fg); }
+.dbtn > .ico { width: 16px; height: 16px; }
+html:not(.mac) .dbtn > kbd > .k-mac, html.mac .dbtn > kbd > .k-ctl { display: none; } /* the modifier of the main key: m::kbd_mod, practical.MOD */
+.dbtn > kbd { font: 500 10.5px/1 var(--font, inherit); border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 4px; padding: 2px 4px; margin-left: 2px; } /* the text in the button's own colour (a faded one failed axe colour contrast on every variant, 2026-11-26); only the frame is faint */
+.dbtn.btn-primary { background: var(--accent); color: var(--accent-fg); }
+.dbtn.btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.dbtn.btn-primary.danger { background: var(--today); color: #fff; } /* a confirmation whose "yes" deletes */
+.dbtn.btn-primary.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--today) 88%, #000); }
+.dbtn.second { background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line); }
+.dbtn.second:hover:not(:disabled) { background: var(--bg-3); }
+.dbtn.ghost { color: var(--accent); padding: 0 10px; }
+.dbtn.ghost.danger { color: var(--today); }
+.dbtn.ghost:hover:not(:disabled) { background: color-mix(in srgb, currentColor 9%, transparent); }
+.dbtn:disabled { opacity: .4; cursor: default; }
+.dbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dbtn.btn-primary:focus-visible { outline-color: color-mix(in srgb, var(--accent) 60%, var(--fg)); }
+@media (hover: none), (max-width: 520px) { .dbtn > kbd { display: none; } }
+/* narrow: the rare ones keep only their symbol (the word stays the name: aria-label), the two on the right their word */
+@media (max-width: 520px) { .dlg-acts .dbtn.ghost > span:not(.n) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } /* icon only, the word still its name (axe button-name) */ .dlg-acts .dbtn.ghost { padding: 0 9px; } .dbtn { padding: 0 12px; } }
+.dbtn > .n { min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px; border-radius: 999px; background: var(--accent-fg); color: var(--accent); font: 700 11px/18px var(--font, inherit); text-align: center; } /* a count on the main button (colour optimiser: changes) */
+.dlg-acts[data-over]:not([hidden]) ~ footer .dbtn > kbd { visibility: hidden; } /* a row over the dialog (the "discard?" one) takes the keys: its hints only */

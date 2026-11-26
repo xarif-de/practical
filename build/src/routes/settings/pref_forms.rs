@@ -19,16 +19,6 @@ pub(super) struct PrefsForm {
     pub(super) public_regions: Option<String>,
     pub(super) school_regions: Option<String>,
     #[serde(default)]
-    vacation_days: String,
-    #[serde(default)]
-    pub(super) vacation_kind: String,
-    #[serde(default)]
-    pub(super) vacation_category: String,
-    #[serde(default)]
-    pub(super) vacation_calendar: String,
-    #[serde(default)]
-    pub(super) vacation_title: String,
-    #[serde(default)]
     pub(super) alarm_snaps_start: String,
     #[serde(default)]
     pub(super) alarm_snaps_end: String,
@@ -66,17 +56,6 @@ pub(super) async fn prefs_save(State(state): State<SharedState>, user: Principal
             p.school_regions = Some(regions(v));
         }
         mirror_first_region(&state, &user.id, &mut p, had).await?;
-        p.vacation_days = f.vacation_days.trim().parse::<i64>().ok().filter(|d| (0..=366).contains(d));
-        // vacation rule: the chosen kind with its own field; a title pattern must parse
-        let (kind, value) = match f.vacation_kind.as_str() {
-            "calendar" => ("calendar", f.vacation_calendar.trim()),
-            "title" => ("title", f.vacation_title.trim()),
-            _ => ("category", f.vacation_category.trim()),
-        };
-        if kind == "title" && !value.is_empty() {
-            prefs::VacationRule::title_regex(value).map_err(|e| AppError::bad1("err-vacation-title", "detail", e))?;
-        }
-        p.vacation_rule_json = Some(serde_json::to_string(&prefs::VacationRule { v: 2, kind: kind.into(), value: value.into() }).unwrap());
         // reminder strip snap points: an empty list falls back to the built-in one; a bad token rejects the form
         let start = events::parse_offsets(&f.alarm_snaps_start).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;
         let end = events::parse_offsets(&f.alarm_snaps_end).map_err(|t| AppError::bad1("err-snap-point", "token", t))?;

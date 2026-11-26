@@ -65,7 +65,8 @@ through the days it lasts.
 
 <img src="images/03-month.webp" alt="October at a glance: work, personal, sports and the shared family calendar, holidays and an all-day trip." width="100%">
 
-The month view shows all your calendars at once, together with holidays and events that last several days.
+The month view shows all your calendars at once, together with holidays and events that last several days. Each week's
+first day carries its calendar week ("KW 46") beside the number, faint until the pointer rests on the month.
 
 When a day has more events than fit, it says "+N more". Point at the day, move the keyboard focus to it, or tap
 "+N more", and the day opens over its neighbours to show all of them. It grows downwards. Near the bottom of the month
@@ -77,8 +78,8 @@ still easy to pick. Bars of events that last several days open wherever you clic
 
 <img src="images/04-year-planner.webp" alt="The whole year on one page: public and school holidays, vacations and the first event of every day." width="100%">
 
-The year planner fits the whole year on one page. It shows public and school holidays, vacations and the first
-event of every day.
+The year planner fits the whole year on one page. It shows public and school holidays, the events your view rules
+mark (each rule with its colour and icon, see [Views](#views)) and the first event of every day.
 
 ### Move an event to another day
 
@@ -115,13 +116,14 @@ holiday makes longer shows as a long weekend.
 <img src="images/06-vacation-planner.webp" alt="Vacations against school and public holidays, with planned and remaining vacation days." width="100%">
 
 The **vacation planner** counts your vacation days against your yearly entitlement. Weekends and public holidays do
-not count. In the settings, you set the entitlement and how PractiCal recognises a vacation: by a category, by a
-calendar or by a title pattern.
+not count. Which events are vacations and how many days you have is set under [Views](#views). People who share
+their calendars and their vacation with you appear in lanes of their own, with their planned and remaining days.
 
 <img src="images/07-countdown.webp" alt="Days until the next birthdays, vacations and holidays." width="100%">
 
-The **countdown wall** shows how many days are left until the next birthdays, vacations and holidays. The birthdays
-come from your contacts.
+The **countdown wall** shows how many days are left until the next birthdays, holidays and the events your countdown
+rules pick, each with the rule's icon, up to a year ahead. The birthdays come from your contacts. A series counts
+once, at its next date.
 
 <img src="images/08-year-in-numbers.webp" alt="Statistics of the year: events per calendar, load per week, busy evenings and weekends." width="100%">
 
@@ -154,13 +156,31 @@ seconds. You do not need to reload the page.
 ## The editor for events and tasks
 
 Events and tasks open in the same editor. It opens in **view mode**, so you cannot change anything by accident. To
-edit, select the lock button.
+edit, select **Edit**.
+
+Every dialog has its buttons in the same places: the main action (Edit, Save, Create, Apply) on the far right, Close
+or Cancel left of it, and rare or dangerous actions such as Delete on the left. Cancel asks before it drops changes; on an entry
+you are editing it goes back to view mode. On a computer, Esc is Cancel, ⌘ Enter (Ctrl Enter) is the main action and
+⌘ Backspace (Ctrl Backspace) is Delete, which asks first; each button shows its key.
 
 Beside an event, the editor shows its whole day as a small metro map that you can scroll, from midnight to
 midnight. It opens with the event in the middle. Each timed event of the day is a line in its calendar's colour, from
 its start to its end. Events at the same time get their own lines. Each title stands at its start, in the event's
-colour, and no title covers another. The event you have open is in the accent colour. Calendars that you hide in the
-filter are left out, except the calendar of the event you have open. The button at the top left hides the day.
+colour, and no title covers another. The event you have open is drawn bolder and follows its date and times as you
+type them, a new event too; events that overlap it stand beside it. Calendars that you hide in the filter are left
+out, except the calendar of the event you have open. The narrow bar between the day and the cards hides the day («)
+and shows it again (»).
+
+The title and the note share one field at the top. The first line is the title; Enter goes down into the note, and
+Backspace at the start of the note goes back up. The note can be formatted as in Outlook: bold, italic, underline,
+strikethrough, headings, lists, links, text colour and highlight, from the bar at the bottom of the field or with
+⌘ B, ⌘ I and ⌘ U. Text you paste keeps that formatting; anything else is removed.
+
+Other calendar apps store formatted notes in different ways, and PractiCal reads and writes all of them: Outlook
+and Evolution, Thunderbird, Google, and the iCalendar standard for formatted text (RFC 9073). Every app also gets the
+note as plain text, so apps without formatting (Apple, Android) show it too. If such an app changes the note, PractiCal
+shows the new text and drops the old formatting the next time you save the note. A note you do not change stays
+exactly as it was, even when you change something else in the event.
 
 <img src="images/17-event-view.webp" alt="An event opened read-only: its day beside it, time, location, people, a reminder and a note." width="100%">
 
@@ -184,7 +204,8 @@ are the cards:
   for an event that is private or confidential. In a calendar that is shared, a line below the slider says what the
   people it is shared with see of this event. If you write through a share and would afterwards see the event only
   shortened or not at all, the editor asks before it saves. A task has the slider in its general card.
-- **Notes**: free text with mentions. Type `@` for a contact, `#` for a category and `!` for an event.
+
+In the note, type `@` for a contact, `#` for a category and `!` for an event; PractiCal suggests them as you type.
 
 PractiCal keeps every iCalendar property that it does not show. If another calendar app wrote extra data into an
 event, that data is still there after you edit the event in PractiCal.
@@ -357,14 +378,37 @@ end of the list, when the map's time window reaches further back, or when a link
 
 The settings hold your personal preferences. They are also where you manage calendars, address books and groups.
 
-<img src="images/27-settings.webp" alt="The settings start page: language, colour scheme, holiday regions, vacation, reminders, calendars, categories and groups." width="100%">
+<img src="images/27-settings.webp" alt="The settings start page: language, colour scheme, holiday regions, views, reminders, calendars, categories and groups." width="100%">
 
 The start page has four sections:
 
 - **General**: language, colour scheme, the colour manager and the search history.
 - **Region**: public holidays, school holidays and your time zone.
-- **Calendars**: your vacation entitlement and the reminder strip.
+- **Calendars**: views and the reminder strip.
 - **Data**: calendars and address books, categories, groups and the trash.
+
+### Views
+
+**Views** decide which events three views pick out. A **rule** names one or more categories, a choice of calendars,
+or both. Without a choice of calendars, a rule covers all your own calendars, including your groups' calendars;
+calendars that others share with you count only when you pick them, or through the rules those people share.
+Cancelled events never count.
+
+| View | A matching event | Extra |
+|---|---|---|
+| Year view | tints its days in the rule's colour, with an optional icon | — |
+| Vacation planner | counts as vacation | your vacation days per year |
+| Countdown wall | appears with the rule's icon | — |
+
+When an event matches several rules, the topmost rule applies. Use the arrow to move a rule up. The year view's
+legend lists the rules that mark at least one day of the year.
+
+**Sharing.** If you switch it on per view, people who see your calendars can adopt your year and countdown rules, and
+see your vacation days and rules. A shared rule only ever applies to your calendars that the person already sees. In turn,
+you can adopt the rules of people who share calendars with you, give them your own colour and icon (only you see that
+choice), and pick whose vacations the vacation planner shows.
+
+Your former vacation setting became one rule in each view.
 
 ### Groups
 

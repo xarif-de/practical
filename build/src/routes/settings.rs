@@ -82,18 +82,8 @@ pub struct SettingsPage {
     pub picker_json: String,
     /// `:root { --hol; --fer }` from the user's holiday colours ("" = the theme's)
     pub holiday_css: String,
-    /// the vacation rule as the page edits it: its kind and one value per kind (the other two are
-    /// the defaults the page offers when the kind is switched)
-    pub vacation_kind: String,
-    pub vacation_category: String,
-    pub vacation_calendar: String,
-    pub vacation_title: String,
-    /// the calendars a rule can name: "principal/id" and the name
-    pub vacation_calendars: Vec<(String, String)>,
-    /// the rule names a calendar the user no longer sees: kept as an option so a save does not change it
-    pub vacation_calendar_unknown: bool,
-    /// the rule in the overview row: „Urlaub“, „Privat“ (a calendar's name), /^Urlaub/
-    pub vacation_summary: String,
+    /// the view configurations' own rules: (year view, vacation planner, countdown wall) — the `#views` rows
+    pub views_counts: (usize, usize, usize),
     /// reminder strip snap points as the server writes them ("2 min, 1 h, …"), and the built-in lists
     pub alarm_snaps_start: String,
     pub alarm_snaps_end: String,
@@ -177,20 +167,6 @@ pub struct RemoteLinkRow {
     pub err: String,
     /// who set it up, when that was another member of the collection's group ("" = the user)
     pub by: String,
-}
-
-/// The rule as the page edits it: (kind, value). A rule from before v2 ("category or title word")
-/// becomes the category when one of that name is in use, else the whole word in the title.
-async fn vacation_rule(state: &SharedState, user: &Principal, p: &Prefs) -> AppResult<(String, String)> {
-    let r = prefs::VacationRule::of(p);
-    if !r.legacy() {
-        return Ok((if matches!(r.kind.as_str(), "calendar" | "title") { r.kind } else { "category".into() }, r.value));
-    }
-    let v = r.value.trim();
-    if let Some((name, _)) = events::category_counts(state, user, "event", chrono_tz::UTC).await?.into_iter().find(|(c, _)| c.to_lowercase() == v.to_lowercase()) {
-        return Ok(("category".into(), name));
-    }
-    Ok(("title".into(), if v.is_empty() { String::new() } else { format!(r"\b{}\b", regex::escape(v)) }))
 }
 
 impl SettingsPage {
@@ -347,12 +323,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         }
     }
     let cals_all = collections::calendars_for(&state, &user, false).await?;
-    let (vac_kind, vac_value) = vacation_rule(&state, &user, &p).await?;
-    let vac_summary = match vac_kind.as_str() {
-        "title" => format!("/{vac_value}/"),
-        "calendar" => format!("„{}“", cals_all.iter().find(|c| format!("{}/{}", c.principal, c.id) == vac_value).map_or(vac_value.as_str(), |c| c.displayname.as_str())),
-        _ => format!("„{vac_value}“"),
-    };
+    let vc = crate::domain::views::load(&state.db, &user.id).await?;
     let abs_all = collections::addressbooks_for(&state, &user, false).await?;
     let remote_links = remote_rows(&state, &user).await?;
     let davx5_books: Vec<String> = abs_all.iter().map(|a| a.displayname.clone()).collect();
@@ -395,13 +366,7 @@ async fn page(State(state): State<SharedState>, user: Principal, session: Sessio
         school_regions: school_regions.join(","),
         region_names,
         holiday_css: p.holiday_css(),
-        vacation_summary: vac_summary,
-        vacation_kind: vac_kind.clone(),
-        vacation_category: if vac_kind == "category" { vac_value.clone() } else { String::new() },
-        vacation_title: if vac_kind == "title" { vac_value.clone() } else if vac_kind == "category" && !vac_value.is_empty() { format!(r"\b{}\b", regex::escape(&vac_value)) } else { r"\bUrlaub\b".into() },
-        vacation_calendar_unknown: vac_kind == "calendar" && !vac_value.is_empty() && !cals_all.iter().any(|c| format!("{}/{}", c.principal, c.id) == vac_value),
-        vacation_calendar: if vac_kind == "calendar" { vac_value } else { String::new() },
-        vacation_calendars: cals_all.iter().filter(|c| c.components.is_empty() || c.components.iter().any(|x| x == "VEVENT")).map(|c| (format!("{}/{}", c.principal, c.id), c.displayname.clone())).collect(),
+        views_counts: (vc.year.rules.len(), vc.vacation.rules.len(), vc.countdown.rules.len()),
         ctx,
     };
     // a password or a device secret shown once (new_token, new_uploader) never goes into a browser's cache: the default

@@ -64,7 +64,7 @@
 .c b { font-weight: 600; } .c s { text-decoration: none; color: var(--fg-3); } .c i { position: absolute; right: 2px; top: 2px; font-size: 8px; color: var(--fg-3); font-style: normal; } .c span { overflow: hidden; text-overflow: ellipsis; }
 .c.we { background: var(--tile-weekend); } .c.fer { background: color-mix(in srgb, var(--fer) 18%, transparent); } .c.hol { background: color-mix(in srgb, var(--hol) 22%, transparent); } .c.t { outline: 2px solid var(--today); outline-offset: -2px; }
 .planner .c.sel { box-shadow: inset 0 0 0 40px color-mix(in srgb, var(--accent) 24%, transparent); } .planner .c[data-date]:not(.sel):hover { box-shadow: inset 0 0 0 40px color-mix(in srgb, var(--accent) 9%, transparent); } /* the picked day (app.js markPicked) tints over the weekend/holiday shade */
-.c span.u { background: color-mix(in srgb, var(--c6) 35%, transparent); border-radius: 3px; padding: 0 3px; } .c.x { background: transparent; border: 0; }
+.c span.u { background: color-mix(in srgb, var(--u, var(--c6)) 35%, transparent); border-radius: 3px; padding: 0 3px; } .c span.u:has(.ico) { display: flex; align-items: center; gap: 2px; min-width: 0; } .c span.u .ico { width: 9px; height: 9px; flex: none; } .leg > span:has(.ico) { display: inline-flex; align-items: center; } .leg .ico { width: 12px; height: 12px; flex: none; margin-right: 3px; } /* a year-view rule (views::Rule): its colour, its icon (more.rs planner) */ .c.x { background: transparent; border: 0; }
 .leg { display: flex; gap: 14px; font-size: 12px; color: var(--fg-2); margin: 8px 4px; flex-wrap: wrap; } .leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
 @media print { .topbar, .tabbar, .tl, .toolbar, .fab { display: none !important; } .planner { font-size: 8px; } }
 .wes { display: grid; grid-template-columns: repeat(13, 1fr); gap: 6px; }
@@ -74,11 +74,11 @@
 .kpi { display: flex; gap: 16px; margin: 0 0 12px; flex-wrap: wrap; } .kpi div { background: var(--tile); border-radius: 12px; padding: 10px 14px; } .kpi b { font-size: 22px; display: block; letter-spacing: -.02em; } .kpi span { font-size: 12px; color: var(--fg-3); }
 @media (max-width: 899px) { .wes { grid-template-columns: repeat(4, 1fr); } .planner { grid-template-columns: repeat(3, 1fr); } }
 .gantt { overflow-x: auto; background: var(--tile); border-radius: 14px; padding: 12px; } .g { display: grid; grid-template-columns: repeat(366, minmax(3px, 1fr)); gap: 0; position: relative; }
-.mh { font-size: 11px; color: var(--fg-3); border-left: 1px solid var(--line); padding-left: 4px; height: 18px; } .lane { display: grid; grid-template-columns: repeat(366, minmax(3px, 1fr)); height: 26px; align-items: center; margin-top: 6px; position: relative; }
+.mh { font-size: 11px; color: var(--fg-3); border-left: 1px solid var(--line); padding-left: 4px; height: 18px; } .lane { display: grid; grid-template-columns: repeat(366, minmax(3px, 1fr)); grid-auto-rows: 20px; grid-auto-flow: row dense; row-gap: 3px; min-height: 26px; align-content: center; align-items: center; margin-top: 6px; position: relative; } /* overlapping bars (two trips at once) take a row more instead of covering the next lane */ .lane + .lane { margin-top: 18px; }
 .lane::before { content: attr(data-l); position: absolute; left: 0; top: -14px; font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
-.bar { height: 20px; border-radius: 5px; font-size: 11px; padding: 0 6px; line-height: 20px; white-space: nowrap; overflow: hidden; background: color-mix(in srgb, var(--c4) 30%, var(--bg)); } .bar.u { background: color-mix(in srgb, var(--c6) 40%, var(--bg)); } .bar.hol { background: var(--c3); opacity: .7; padding: 0; }
+.bar { height: 20px; border-radius: 5px; font-size: 11px; padding: 0 6px; line-height: 20px; white-space: nowrap; overflow: hidden; background: color-mix(in srgb, var(--c4) 30%, var(--bg)); } .bar.u { background: color-mix(in srgb, var(--c6) 40%, var(--bg)); } .bar.u.o { background: color-mix(in srgb, var(--c5) 30%, var(--bg)); } /* another person's vacation */ .bar.hol { background: var(--c3); opacity: .7; padding: 0; }
 .wd { background: var(--tile-weekend); height: 100%; } .todaymark { background: var(--today); width: 2px; height: 100%; }
-.grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 12px; } .brg li { margin: 4px 0; font-size: 13px; } .brg small { color: var(--fg-3); }
+.grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 12px; } .brg li { margin: 4px 0; font-size: 13px; } .brg small { color: var(--fg-3); } .ybox.oth { margin-top: 12px; } .oth li { margin: 4px 0; font-size: 13px; } .oth ul { margin: 0 0 6px; padding-left: 18px; }
 @media (max-width: 899px) { .grid2 { grid-template-columns: 1fr; } }
 .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; } .cd { background: var(--tile); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 86px 1fr; gap: 14px; align-items: center; }
 .ring { width: 86px; height: 86px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--line) 0); display: grid; place-items: center; position: relative; } .ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--tile); }
@@ -93,6 +93,7 @@
 
 /* immediate custom tooltip for the timelines */
 .tip { position: fixed; z-index: 60; pointer-events: none; background: var(--fg); color: var(--bg); font: 500 12px/1.2 var(--font); padding: 5px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-100%, -50%); margin-left: -10px; box-shadow: 0 4px 14px rgba(0,0,0,.2); max-width: 60vw; }
+.tip.below { transform: translateX(-50%); margin-left: 0; } /* the quick switches' names (js/filter-pins.js): centred under the ribbon */
 /* real titles are long: never let a nowrap label widen the grid */ .ev { max-width: 100%; }
 .tkpage, .contacts, .placeholder { align-content: start; }
 

@@ -37,7 +37,7 @@
 .ed .cardform .rr .pickmsg .btn { grid-column: 2; justify-self: end; padding: 4px 10px; font-size: 13px; } /* the narrow card: the button goes under the text */
 .ed .cardform .rr .rrraw { padding: 4px 0 0 26px; } .ed .cardform .rr .rrraw input { font-family: ui-monospace, monospace; font-size: 12.5px; }
 /* picking the end date: everything but the strip and the prompt is dimmed and inert */
-.ed.picking header, .ed.picking footer, .ed.picking .dayline, .ed.picking .addmenu, .ed.picking .card:not([data-card=repeat]), .ed.picking .card[data-card=repeat] > :not(.rr), .ed.picking .rr > :not(.calstrip):not(.pickmsg) { opacity: .3; pointer-events: none; filter: grayscale(1); }
+.ed.picking .tn, .ed.picking footer, .ed.picking .dayline, .ed.picking .addmenu, .ed.picking .card:not([data-card=repeat]), .ed.picking .card[data-card=repeat] > :not(.rr), .ed.picking .rr > :not(.calstrip):not(.pickmsg) { opacity: .3; pointer-events: none; filter: grayscale(1); }
 /* the popover of the pills (interval, end, number entry) */
 .rrpop { position: absolute; z-index: 60; padding: 6px; min-width: 150px; }
 .rrpop button { all: unset; display: block; width: 100%; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; box-sizing: border-box; white-space: nowrap; }

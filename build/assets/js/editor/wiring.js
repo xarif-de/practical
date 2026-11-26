@@ -9,46 +9,72 @@
     if (b.dataset.add) { const l = b.dataset.add; const r = l === 'alarms' ? alarmAdd() : addDate(l, ''); const i = $('input:not([hidden]), select', r); if (i) i.focus(); refresh(); return; }
     if (b.hasAttribute('data-rm')) { b.closest('.row').remove(); refresh(); return; }
     if (b.dataset.cardAdd) { const c = addCard(b.dataset.cardAdd); b.closest('.addmenu').classList.remove('open'); if (ruleMode) { if (b.dataset.cardAdd === 'where') RM.location = 'default'; if (b.dataset.cardAdd === 'repeat') RM.rrule = 'default'; rulesApply('change'); } /* a one-setting rule card starts as template */ if (b.dataset.cardAdd === 'alarm') $('[data-add=alarms]', c).click(); else if (b.dataset.cardAdd === 'links') $('#ed-lk-url').focus(); else if (b.dataset.cardAdd === 'where') { locInit(); locin.focus(); } else if (b.dataset.cardAdd === 'repeat') { rrFocus = null; rrRender(); } else { const i = $('input:not([type=hidden]), select, textarea', c); if (i) i.focus(); } refresh(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!await ask(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') { if (c.contains(f.class)) f.class.value = ''; stRender(); } if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode) { SCALARS.filter(k => CARD_OF(k) === c.dataset.card).forEach(k => { RM[k] = 'off'; }); rulesApply('change'); } /* a removed rule card is off */ delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!await askDelete(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => i.value = ''); $$('select.dat', c).forEach(s => s.value = ''); $$('.rows .row, .tags .chip', c).forEach(x => x.remove()); if (c.dataset.card === 'where') locInit(); if (c.dataset.card === 'alarm') alarmsInit([]); if (c.dataset.card === 'repeat') rrInit(null, null, [], []); if (c.dataset.card === 'status') { if (c.contains(f.class)) f.class.value = ''; stRender(); } if (c.dataset.card === 'links') linksInit([], []); if (c.dataset.card === 'note') { ntRender(); ntFound.innerHTML = ''; } if (c.dataset.card === 'cats') { catsInit([]); rulesApply('change'); } if (ruleMode) { SCALARS.filter(k => CARD_OF(k) === c.dataset.card).forEach(k => { RM[k] = 'off'; }); rulesApply('change'); } /* a removed rule card is off */ delete c.dataset.added; c.hidden = true; cards(); refresh(); return; }
     if (b.dataset.geo === 'swap') { locSwap(); return; }
     if (b.dataset.geo === 'map') { openMap(); return; }
     if (b.dataset.act) { const row = b.closest('.row'); const v = row ? (w(row, 'email') || w(row, 'uri')).value : f.location.value, open_ = u => window.open(u, '_blank', 'noopener'), g = geoOf(); if (b.dataset.act === 'osm') open_(g ? `https://www.openstreetmap.org/?mlat=${g[0]}&mlon=${g[1]}#map=17/${g[0]}/${g[1]}` : 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(v)); else if (b.dataset.act === 'gmaps') open_('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(g ? g.join(',') : v)); else if (b.dataset.act === 'mailto') location.href = 'mailto:' + v; else if (b.dataset.act === 'open') open_(/^[a-z]+:/i.test(v) ? v : 'https://' + v); else practical.copy(v).then(ok => { if (!ok) return; b.title = D.tCopied; b.style.color = 'var(--accent)'; setTimeout(() => b.style.color = '', 800); }); }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); refresh(); } });
   $('#ed-lock').onclick = () => { mode('edit'); f.summary.focus(); };
-  $('#ed-reset').onclick = () => { if (ruleMode) openRuleEditor(ruleMode); else fill(current, openDate); };
   /* the day line, drawn like a metro map: each timed event of the day is a line in its calendar's colour from its start
      to its end station (.ln); events at the same time take their own track (greedy, at most 5); the titles (.blk, in
      the event's colour) stand at their start station, pushed down so none covers another. The whole day, 0-24 h at
      DL_H px an hour, scrolls inside the box (.dl-in); opening puts the event at hand (else the form's start, an all-day
      one 8:00) in the middle. An event from the night before starts at 0:00. A hidden day line (#ed-tl, form.js) asks for
      nothing; showing it draws it. Only the newest call draws (dlSeq): a date typed digit by digit asks once per digit */
-  const DL_H = 36; let dlSeq = 0;
+  const DL_H = 36; let dlSeq = 0, dlDay = '', dlEvs = []; // the day's events as fetched (dlDay: for which day)
+  const hm = t => +t.slice(0, 2) * 60 + +t.slice(3, 5), py = m => Math.min(24 * DL_H, Math.max(0, m / 60 * DL_H));
+  /* the event at hand as the form has it NOW (also a new one, also unsaved times), on the drawn day: [start, end] in
+     minutes, or null (all day, not on that day, no valid time). Its stored copy among the fetched ones is left out */
+  function dlMe(day) {
+    if (TASK || ruleMode || !f.date || !f.from || (f.all_day && f.all_day.checked)) return null;
+    const d0 = f.date.value, d1 = f.end_date.value || d0; if (!/^\d\d:\d\d/.test(f.from.value) || day < d0 || day > d1) return null;
+    const s = day > d0 ? 0 : hm(f.from.value), e = day < d1 ? 1440 : /^\d\d:\d\d/.test(f.to.value) ? hm(f.to.value) : s;
+    return e > s || day === d0 ? [s, Math.max(s, e)] : null;
+  }
+  /* fetches the day's events (once per day and filter), then draws; `dlDraw` alone redraws from what was fetched,
+     on every change of the form (refresh): the event at hand follows its times as they are typed */
   async function dayline() {
     const seq = ++dlSeq, box = $('#ed-dayline'), day = f.date ? f.date.value : ''; if (!box || !day || ed.classList.contains('no-tl')) return; // (counted first: an older call still in flight must not draw either)
-    const py = m => Math.min(24 * DL_H, Math.max(0, m / 60 * DL_H)), hm = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
-    let h = ''; for (let i = 1; i < 24; i++) h += `<span class="h" style="top:${i * DL_H}px">${i}:00</span>`;
-    let mid = !(f.all_day && f.all_day.checked) && /^\d\d:\d\d/.test(f.from ? f.from.value : '') ? hm(f.from.value) : 8 * 60, low = 24 * DL_H;
+    let evs = [];
     try {
       const end = addDays(day, 1);
       // the page's calendar filter (state.cals: '' = all, '-' = none), plus the calendar of the event at hand
       const own = f.key.value.split('/').slice(0, 2).join('/'), cs = state.cals && own && !state.cals.split(',').includes(own) ? (state.cals === '-' ? own : state.cals + ',' + own) : state.cals;
-      const r = await practical.req(`/api/events?start=${day}&end=${end}${cs ? '&cals=' + encodeURIComponent(cs) : ''}`); if (seq !== dlSeq) return; const evs = r.ok ? r.data : [];
-      const L = evs.filter(ev => !ev.all_day).map(ev => { const s = ev.start.slice(0, 10) < day ? 0 : hm(ev.start.slice(11)); return { ev, s, e: ev.end.slice(0, 10) > day ? 1440 : Math.max(s, hm(ev.end.slice(11))), me: f.key.value === `${ev.principal}/${ev.cal_id}/${ev.object_id}` }; })
-        .filter(x => x.e > x.s || x.ev.start.slice(0, 10) === day).sort((a, b) => a.s - b.s || b.e - a.e); // (one that ended at 0:00 is not on the day)
-      let run = [], until = -1; // the cluster of events that overlap one another, and where it ends
-      for (const x of L) { if (x.s >= until) run = []; const used = run.filter(o => o.e > x.s).map(o => o.col); let c = 0; while (used.includes(c) && c < 4) c++; x.col = c; run.push(x); until = Math.max(until, x.e); }
-      const tracks = Math.max(1, ...L.map(x => x.col + 1)), lx = 40 + tracks * 11; let last = -99;
-      for (const x of L) {
-        const c = x.ev.color && !x.me && CSS.supports('color', x.ev.color) ? `--c:${esc(x.ev.color)}` : '', y = Math.max(0, py(x.s) - 7, last + 14), tip = `${x.ev.start.slice(11, 16)}–${x.ev.end.slice(11, 16)} ${x.ev.summary}`; last = y;
-        if (x.me) mid = (x.s + x.e) / 2; low = Math.max(low, y + 14);
-        h += `<i class="ln${x.me ? ' me' : ''}" style="top:${py(x.s)}px;height:${py(x.e) - py(x.s)}px;left:${38 + x.col * 11}px;${c}"></i><div class="blk${x.me ? ' me' : ''}" style="top:${y}px;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(0, 10) < day ? '←' : ''}${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`; // ← from the night before, drawn from 0:00
-      }
+      const r = await practical.req(`/api/events?start=${day}&end=${end}${cs ? '&cals=' + encodeURIComponent(cs) : ''}`); if (seq !== dlSeq) return; evs = r.ok ? r.data : [];
     } catch (_) {}
+    dlDay = day; dlEvs = evs; dlDraw(true);
+  }
+  /* `centre`: put the event at hand (else the form's start, else 8:00) in the middle — on opening and on a new day,
+     not while typing (the box would jump). An overlap shows as lines side by side; the event at hand is drawn in its
+     own colour, bolder (.me) */
+  function dlDraw(centre) {
+    const box = $('#ed-dayline'), day = f.date ? f.date.value : ''; if (!box || ed.classList.contains('no-tl')) return;
+    if (day !== dlDay) return; // another day: its fetch (dayline, on the date's change) draws
+    let h = ''; for (let i = 1; i < 24; i++) h += `<span class="h" style="top:${i * DL_H}px">${i}:00</span>`;
+    let mid = !(f.all_day && f.all_day.checked) && /^\d\d:\d\d/.test(f.from ? f.from.value : '') ? hm(f.from.value) : 8 * 60, low = 24 * DL_H;
+    const me = dlMe(day), key = f.key.value;
+    const L = dlEvs.filter(ev => !ev.all_day && `${ev.principal}/${ev.cal_id}/${ev.object_id}` !== key).map(ev => { const s = ev.start.slice(0, 10) < day ? 0 : hm(ev.start.slice(11)); return { ev, s, e: ev.end.slice(0, 10) > day ? 1440 : Math.max(s, hm(ev.end.slice(11))) }; })
+      .filter(x => x.e > x.s || x.ev.start.slice(0, 10) === day); // (one that ended at 0:00 is not on the day)
+    if (me) {
+      const t = (f.summary.value || '').trim() || f.summary.placeholder || '';
+      L.push({ me: true, s: me[0], e: me[1], ev: { start: `${f.date.value}T${f.from.value.slice(0, 5)}`, end: `${f.end_date.value || f.date.value}T${(f.to.value || f.from.value).slice(0, 5)}`, summary: t, color: getComputedStyle($('#ed-dot')).backgroundColor } }); // its colour: the title's dot (syncDot)
+    }
+    L.sort((a, b) => a.s - b.s || b.e - a.e);
+    let run = [], until = -1; // the cluster of events that overlap one another, and where it ends
+    for (const x of L) { if (x.s >= until) run = []; const used = run.filter(o => o.e > x.s).map(o => o.col); let c = 0; while (used.includes(c) && c < 4) c++; x.col = c; run.push(x); until = Math.max(until, x.e); }
+    const tracks = Math.max(1, ...L.map(x => x.col + 1)), lx = 40 + tracks * 11; let last = -99;
+    for (const x of L) {
+      const c = x.ev.color && CSS.supports('color', x.ev.color) ? `--c:${esc(x.ev.color)}` : '', y = Math.max(0, py(x.s) - 7, last + 14), tip = `${x.ev.start.slice(11, 16)}–${x.ev.end.slice(11, 16)} ${x.ev.summary}`; last = y;
+      const cls = x.me ? ' me' : '';
+      if (x.me) mid = (x.s + x.e) / 2; low = Math.max(low, y + 14);
+      h += `<i class="ln${cls}" style="top:${py(x.s)}px;height:${py(x.e) - py(x.s)}px;left:${38 + x.col * 11}px;${c}"></i><div class="blk${cls}" style="top:${y}px;left:${lx}px;${c}" title="${esc(tip)}"><time>${x.ev.start.slice(0, 10) < day ? '←' : ''}${x.ev.start.slice(11, 16)}</time> ${esc(x.ev.summary)}</div>`; // ← from the night before, drawn from 0:00
+    }
     box.innerHTML = `<div class="dl-in" style="height:${low}px">${h}</div>`; // (titles pushed past 24:00 still inside)
+    if (!centre) return;
     // centred once laid out (a dialog that is still hidden has no height yet)
-    const centre = () => { box.scrollTop = py(mid) - box.clientHeight / 2; };
-    if (box.clientHeight) centre(); else requestAnimationFrame(centre);
+    const go = () => { box.scrollTop = py(mid) - box.clientHeight / 2; };
+    if (box.clientHeight) go(); else requestAnimationFrame(go);
   }
   /* the save request of the dialog as it is now (also the conflict's "overwrite", with the ETag it fetched; extra:
      confirm_visibility once the writer asked) */
@@ -66,7 +92,7 @@
     flush();
     W.run(ruleMode ? ruleSave : put);
   });
-  $('#ed-delete').onclick = async () => { if (W.busy) return; if (ruleMode) { if (await ask(T.delRule)) W.run(ruleDelete); return; } if (!await ask(TASK ? T.delTask : T.del)) return;
+  $('#ed-delete').onclick = async () => { if (W.busy) return; if (ruleMode) { if (await askDelete(T.delRule)) W.run(ruleDelete); return; } if (!await askDelete(TASK ? T.delTask : T.del)) return;
     W.run(async () => { const r = await practical.req(API + '/' + f.key.value, { method: 'DELETE' }); if (r.ok) { close(); load(false); } return r; }); };
   /* a session that ended while the dialog held unsaved work (practical.authLost): after the login the page comes back here, and so does
      the work — an event or task, or a rule (as it would be saved, with the event it was opened from and its way back). The page is told

@@ -16,27 +16,22 @@ shot('settings home @main', async (page, snap) => {
   await snap('set-home');
 });
 
-shot('settings vacation + title tester', async (page, snap) => {
-  await fakePrefsSave(page);
-  await page.goto('/settings#vacation');
-  await snap('set-vacation');
-  await keepToasts(page); // the "saved" toast of the kind switch stays in every following state
-  await page.locator('#vacation .seg button[data-v="calendar"]').click();
-  await snap('set-vacation-calendar', { segments: 0 });
-  await page.locator('#vacation .seg button[data-v="title"]').click();
-  await page.locator('#vac-test .vac-note').waitFor();
-  await snap('set-vacation-title-empty', { segments: 0 });
-  await page.locator('#vac-re').fill('urlaub|messe');
-  await page.locator('#vac-test .vac-th').waitFor();
-  await snap('set-vacation-title-match');
-  await page.locator('#vac-test [data-show="miss"]').click();
-  await snap('set-vacation-title-miss', { segments: 0 });
-  await page.locator('#vac-re').fill('(?=x)');
-  await page.locator('#vac-test .vac-err').waitFor();
-  await snap('set-vacation-title-unsupported', { segments: 0 });
-  await page.locator('#vac-re').fill('urlaub(');
-  await page.locator('#vac-test .vac-err').waitFor();
-  await snap('set-vacation-title-invalid', { segments: 0 });
+shot('settings views: the three pages, a rule open, the icon grid', async (page, snap) => {
+  await page.goto('/settings#views');
+  await snap('set-views');
+  for (const v of ['year', 'vacation', 'countdown']) {
+    await page.goto('/settings#views-' + v);
+    await page.locator(`#views-${v} .vw:not([aria-busy]) .vw-rule`).first().waitFor();
+    await snap('set-views-' + v);
+  }
+  // opening a rule and its icon grid saves nothing (the page is read-only here)
+  await page.goto('/settings#views-year');
+  await page.locator('#views-year .vw:not([aria-busy]) .vw-open').first().click();
+  await page.locator('#views-year .vw-ed').waitFor();
+  await snap('set-views-year-edit');
+  await page.locator('#views-year [data-icons]').click();
+  await page.locator('#views-year .vw-icons').waitFor();
+  await snap('set-views-year-icons', { segments: 0 });
 });
 
 shot('settings alarms + snap edit row', async (page, snap) => {

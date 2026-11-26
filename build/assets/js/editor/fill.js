@@ -7,17 +7,16 @@
     // share's access change reloads it): no page reload needed. The server checks every write anyway.
     const roList = $('.toolbar[data-ro]'); if (roList) { const ro = new Set(roList.dataset.ro.split(',')); [...f.calendar.options].forEach(o => { o.disabled = ro.has(o.value); }); }
     f.key.value = old ? `${d.principal}/${d.cal_id}/${d.object_id}` : ''; f.etag.value = old ? d.etag : '';
-    form.classList.toggle('new', !old); form.classList.toggle('ro', !!(old && d.read_only)); f.summary.placeholder = old ? D.tTitle : D.tNewtitle;
-    const b = $('#ed-save'); b.title = old ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
+    form.classList.toggle('new', !old); form.classList.toggle('ro', !!(old && d.read_only)); f.summary.placeholder = D.tTitle; if (!d) ntSet('', null);
     if (d && TASK) {
-      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
+      f.summary.value = d.summary; f.location.value = d.location; ntSet(d.description, d.description_rich, d.description_touched); catsInit(d.categories);
       f.calendar.value = `${d.principal}/${d.cal_id}`;
       setStamp('start', d.start, d.start_all_day); setStamp('due', d.due, d.due_all_day); setStamp('completed', d.completed_at, false);
       f.status.value = d.status; f.percent.value = d.percent == null ? 0 : d.percent; pctOut();
       if (d.priority != null) setSel(f.priority, d.priority); clsSet(d.class);
       alarmsInit(d.alarms); linksInit(d.links, d.related); setColor(d.color); stRender();
     } else if (d) {
-      f.summary.value = d.summary; f.location.value = d.location; f.description.value = d.description; catsInit(d.categories);
+      f.summary.value = d.summary; f.location.value = d.location; ntSet(d.description, d.description_rich, d.description_touched); catsInit(d.categories);
       f.calendar.value = `${d.principal}/${d.cal_id}`; f.date.value = d.start.slice(0, 10); f.end_date.value = d.all_day ? lastDay(d) : d.end.slice(0, 10);
       f.from.value = d.start.slice(11, 16); f.to.value = d.end.slice(11, 16); setAllDay(d.all_day);
       alarmsInit(d.alarms); peopleInit(d.organizer, d.attendees);
@@ -29,7 +28,9 @@
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
       stRender();
     } else {
-      f.date.value = date || state.date; f.end_date.value = f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(false); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); linksInit([], []); $('#ed-hint').textContent = '';
+      // `date`: a day (the + buttons, a double click) or { from, to } (days swept in the grid: an all-day event over them)
+      const days = date && typeof date === 'object' ? date : null;
+      f.date.value = (days ? days.from : date) || state.date; f.end_date.value = days ? days.to : f.date.value; f.from.value = '09:00'; f.to.value = '10:00'; setAllDay(!!days); rrInit(null, null, [], []); setColor(''); alarmsInit([]); peopleInit(null, []); stRender(); linksInit([], []); $('#ed-hint').textContent = '';
       if (state.cals) { const first = state.cals.split(',')[0]; if ([...f.calendar.options].some(o => o.value === first)) f.calendar.value = first; }
     }
     if (!old && f.calendar.selectedOptions[0] && f.calendar.selectedOptions[0].disabled) { const o = [...f.calendar.options].find(x => !x.disabled); if (o) f.calendar.value = o.value; } // a new entry never lands in a read-only calendar

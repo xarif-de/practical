@@ -32,10 +32,15 @@ fn year(today: &str) -> YearData {
         own: public.clone(),
         public,
         school,
+        marks: vec![MarkInfo { label: "Urlaub".into(), color: "#32ade6".into(), icon: None, by: None }],
+        mark_of: [&sommer, &urlaub].iter().map(|i| ((i.key(), i.start), 0)).collect(),
+        marked: vec![sommer.clone(), urlaub.clone()],
+        countdown: vec![(sommer.clone(), "luggage".into()), (urlaub.clone(), "luggage".into())],
+        others: vec![],
         vacations: vec![sommer, urlaub],
         birthdays: vec![person("anna", "Anna Schmidt", "1985-10-20"), person("ben", "Ben", "--10-02"), person("leap", "Lea Schaltjahr", "--02-29"), person("bad", "Ohne Datum", "irgendwann")],
         vacation_days: Some(30),
-        vacation_rule: "Kategorie „Urlaub“".into(),
+        vacation_rule: "Urlaub".into(),
         school_regions: "DE-SN".into(),
         instances,
     }
@@ -49,7 +54,17 @@ fn planner_golden() {
     assert_eq!(html.matches("<div class=\"c x\"></div>").count(), 31 * 12 - 365, "the days a month lacks");
     // a holiday names the cell before a vacation, a vacation before an event
     assert!(html.contains("<div class=\"c we hol\" data-date=\"2026-10-31\" title=\"Reformationstag (SN)\">"), "{html}");
-    assert!(html.contains("data-date=\"2026-10-27\" title=\"Urlaub Ostsee\"><b>27</b><s>D</s><span class=\"u\">Urlaub Ostsee</span>"), "{html}");
+    assert!(html.contains("data-date=\"2026-10-27\" title=\"Urlaub Ostsee\"><b>27</b><s>D</s><span class=\"u\" style=\"--u:#32ade6\">Urlaub Ostsee</span>"), "{html}");
+    // the legend: one entry per rule; an adopted one names whose it is, an icon leads
+    assert!(html.contains("<span><i style=\"background:color-mix(in srgb,#32ade6 35%,var(--bg))\"></i>Urlaub</span>"), "{html}");
+    let mut y = year("2026-10-14");
+    y.marks.push(MarkInfo { label: "Reise".into(), color: "#ff9f0a".into(), icon: Some("plane".into()), by: Some("Anna".into()) });
+    y.marks.push(MarkInfo { label: "Nichts davon".into(), color: "#123456".into(), icon: None, by: None });
+    y.mark_of.insert((y.marked[1].key(), y.marked[1].start), 1);
+    let html = planner(&y, &lang("de"));
+    assert!(html.contains("i-plane\"/></svg>Reise <small>(Anna)</small></span>"), "{html}");
+    assert!(!html.contains("Nichts davon"), "a rule that marks no day this year stays out of the legend");
+    assert!(html.contains("data-date=\"2026-10-27\" title=\"Urlaub Ostsee\"><b>27</b><s>D</s><span class=\"u\" style=\"--u:#ff9f0a\"><svg"), "the event's rule tints its days: {html}");
     assert!(html.contains("<div class=\"c t fer\"") || html.contains("<div class=\"c fer t\""), "today is marked");
 }
 
@@ -76,7 +91,14 @@ fn vacation_golden() {
     // summer: 06.07.–17.07. = 10 workdays; autumn: 26.10.–01.11. = 5 (the 31st is a Saturday anyway)
     assert!(html.contains("<div class=\"kpi\"><div><b>15</b><span>Urlaubstage geplant</span></div><div><b>15</b><span>Resturlaub von 30</span></div><div><b>2</b><span>Reisen</span></div></div>"), "{html}");
     // bridge days: Himmelfahrt (Thursday) lies before today → skipped; none after today in 2026
-    assert!(html.contains("Kategorie „Urlaub“"));
+    assert!(html.contains("<code>Urlaub</code> · <a href=\"/settings#views-vacation\">"), "{html}");
+    assert!(!html.contains("class=\"ybox oth\""), "no shared vacations, no box");
+    // a person who shares their vacation: a lane and their numbers by their own region (no holidays here: 26.10.–01.11. = 5)
+    let mut y = year("2026-10-14");
+    y.others.push(OtherVacation { label: "Anna".into(), days: Some(28), vacations: vec![y.vacations[1].clone()], own: vec![] });
+    let html = vacation(&y, &lang("de"));
+    assert!(html.contains("<div class=\"lane\" data-l=\"Urlaub · Anna\"><div class=\"bar u o\""), "{html}");
+    assert!(html.contains("<li><b>Anna</b> — 5 Urlaubstage geplant · 23 Resturlaub von 28</li>"), "{html}");
     let early = vacation(&year("2026-01-02"), &lang("de"));
     assert!(early.contains("Christi Himmelfahrt"), "before the day the bridge day is offered: {early}");
     let none = vacation(&YearData { own: vec![], ..year("2026-10-14") }, &lang("en"));

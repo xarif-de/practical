@@ -67,7 +67,8 @@ quick-xml = "0.42"
 chacha20poly1305 = "0.11"
 web-push = { git = "https://github.com/lennart-k/rust-web-push" }
 openidconnect = "4.0"
-regex = "1.13"
+# formatted notes: the one allowlist every HTML copy of a note passes (domain/richtext.rs)
+ammonia = "4.2"
 vtimezones-rs = "0.3"
 # RustiCal's own password hashing (same features): a failed login for an unknown user name checks a dummy
 # argon2 hash, so the answer time does not tell which names exist (auth.rs post_login)
@@ -104,6 +105,8 @@ mimalloc = { version = "0.1", default-features = false }
 # Tests only (testkit.rs, it/http.rs: `ServiceExt::oneshot` drives the router without a socket); in axum's graph.
 [dev-dependencies]
 tower = "=0.5.3"
+# tests only: it::assets scans the sources for icon names
+regex = "1.13"
 # its `test` feature: resolved collections for unit tests that need no store (never in a release build)
 rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.19.2-xarif.2", features = ["test"] }
 

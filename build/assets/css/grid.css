@@ -4,10 +4,14 @@
 .cal { grid-template-columns: 1fr; padding: 0 var(--pad) var(--pad); gap: var(--gap); display: none; min-width: 0; }
 .month { display: grid; grid-template-rows: auto; grid-auto-rows: 1fr; border: 0; background: transparent; border-radius: 0; gap: 4px; overflow: visible; grid-template-columns: repeat(7, minmax(0, 1fr)); } /* minmax(0, …): a nowrap event title never widens the grid */
 .month .dow { padding: 6px 4px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; background: transparent; border: 0; color: var(--fg-3); font-weight: 600; }
-.day { display: flex; flex-direction: column; gap: 2px; overflow: visible; background: var(--tile); border: 0; border-radius: 10px; padding: 6px; min-height: 86px; position: relative; min-width: 0; }
+.day { display: flex; flex-direction: column; gap: 2px; overflow: visible; background: var(--day-bg, var(--tile)); border: 0; border-radius: 10px; padding: 6px; min-height: 86px; position: relative; min-width: 0; }
 .day > * { flex: none; }
+/* the ISO week on the week's first tile (render/month.rs): barely there, clearer while the grid is hovered; not on narrow screens */
+.day .kw { flex: none; font-style: normal; font-size: 11px; font-weight: 400; color: var(--fg-3); opacity: .3; transition: opacity .15s; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.month:hover .day .kw { opacity: .85; }
+@media (max-width: 720px) { .day .kw { display: none; } }
 .day:nth-child(7n+7) { border-right: 0; }
-.day .n { color: var(--fg-2); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 500; }
+.day .n { color: var(--fg-2); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 700; }
 .ev { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .more { font-size: 11px; color: var(--fg-3); padding-left: 5px; position: relative; display: inline-flex; }
 /* a tile's singles past its "+N" (.xt, month.rs/calendar.js dayFit) and the "+N"; .open = unfolded over its neighbours (calendar.js
@@ -104,7 +108,7 @@
 
 /* Apple typography + Immich-like tiles; events as colour bar + text, all-day as tinted bar. */
 /* tiles */
-.day.other { background:var(--tile-other); color:var(--fg-3); }
+.day.other { background:var(--day-other, var(--tile-other)); color:var(--fg-3); }
 /* controls — Apple segmented */
 .seg button { border-radius:6px; padding:5px 10px; }
 .seg button[aria-pressed=true] { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px rgba(0,0,0,.18); }
@@ -116,8 +120,8 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 /* all-day events: full tinted bar (no left border), colour dot kept for the legend */
 .ev.allday { border-left: 0; padding-left: 6px; background: color-mix(in srgb, var(--c, var(--c1)) 20%, transparent) !important; }
 /* weekend tiles, minimally darker */
-.day:nth-child(7n+6), .day:nth-child(7n+7) { background: var(--tile-weekend); }
-.day.other:nth-child(7n+6), .day.other:nth-child(7n+7) { background: var(--tile-other); }
+.day:nth-child(7n+6), .day:nth-child(7n+7) { background: var(--day-we, var(--tile-weekend)); }
+.day.other:nth-child(7n+6), .day.other:nth-child(7n+7) { background: var(--day-other, var(--tile-other)); }
 .day.today { box-shadow: inset 0 0 0 1.5px var(--today); }
 .day.today .n { background: transparent; color: var(--today); font-weight: 700; }
 /* drag and drop of an entry (calendar.js): the days it would cover, its own chips dimmed, the ghost at the pointer,
@@ -125,6 +129,9 @@ html[data-scheme=dark] .seg button[aria-pressed=true] { background:#2c313b; }
 #viewroot .day.drop-on, #viewroot .dayblock.drop-on { /* the id: over :hover, .sel, holiday and weekend tiles */ background: color-mix(in srgb, var(--dc) 16%, var(--bg)); box-shadow: inset 0 0 0 2px var(--dc); }
 .drop-from { opacity: .35; }
 body.ev-drag, body.ev-drag * { cursor: grabbing !important; user-select: none; }
+/* days swept for a new event (calendar.js `sweep`): the accent, as the picked day */
+#viewroot .new-on { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); box-shadow: inset 0 0 0 2px var(--accent); }
+body.new-drag, body.new-drag * { cursor: cell !important; user-select: none; }
 .ev-ghost { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; display: grid; max-width: 260px; padding: 4px 8px; border-radius: 6px; border-left: 3px solid var(--c); background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; line-height: 1.35; }
 .ev-ghost b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev-ghost small { color: var(--fg-2); white-space: nowrap; }

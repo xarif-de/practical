@@ -28,7 +28,7 @@ test('save: a double click and Enter are one write; Save waits disabled, the dia
   const g = await gate(page, '**/api/events', 'POST');
   await page.locator('#ed-save').dblclick();
   await g.first;
-  await page.locator('#edh').press('Enter');
+  await page.locator('#edh').press('ControlOrMeta+Enter'); // (Enter in the title goes down into the note)
   await expect(page.locator('#ed-save')).toBeDisabled();
   await expect(page.locator('#edform')).toHaveAttribute('data-state', 'saving');
   await expect(page.locator('#edform')).toHaveAttribute('aria-busy', 'true');

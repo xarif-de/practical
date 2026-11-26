@@ -12,6 +12,8 @@ pub struct EventDetail {
     pub summary: String,
     pub location: String,
     pub description: String,
+    /// the stored formatted copies of the note (richtext::stored), first = preferred
+    pub description_rich: Vec<crate::domain::richtext::Copy>,
     pub start: NaiveDateTime,
     pub end: NaiveDateTime,
     pub all_day: bool,
@@ -52,12 +54,13 @@ pub struct EventDetail {
 /// and it is looked up (`collections::is_read_only`).
 pub async fn get_event(state: &AppState, user: &Principal, principal: &str, cal_id: &str, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
     let auth = collections::ensure_calendar(state, user, principal, cal_id, Need::Read).await?;
-    event_detail(state, &auth, object_id, tz, read_only).await
+    event_detail(state, &auth, object_id, tz, read_only, true).await
 }
 
 /// [`get_event`] in a calendar already resolved for this user (the day view holds its `CalInfo`s: one
-/// resolution per page, not one per entry)
-pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>) -> AppResult<EventDetail> {
+/// resolution per page, not one per entry). `rich`: read the note's formatted copies (`richtext::stored`, up to three
+/// sanitiser runs): the editor's detail needs them, the day view's document does not.
+pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, object_id: &str, tz: chrono_tz::Tz, read_only: Option<bool>, rich: bool) -> AppResult<EventDetail> {
     let (principal, cal_id) = (auth.home(), auth.name());
     let obj = state.collections().object(auth, object_id).await?;
     let CalendarInnerData::Event(main, overrides) = obj.get_inner().get_inner() else {
@@ -80,6 +83,7 @@ pub async fn event_detail(state: &AppState, auth: &crate::state::Authorized, obj
         summary: ical::text(main, "SUMMARY").unwrap_or_else(|| "(ohne Titel)".into()),
         location: ical::text(main, "LOCATION").unwrap_or_default(),
         description: ical::text(main, "DESCRIPTION").unwrap_or_default(),
+        description_rich: if rich { crate::domain::richtext::stored(&raw.props, main.get_uid()) } else { vec![] },
         start: i.start,
         end: i.end,
         all_day: i.all_day,
@@ -117,6 +121,9 @@ pub struct EventInput {
     pub location: String,
     #[serde(default)]
     pub description: String,
+    /// The formatted note ('' = none; None = the note untouched: its stored lines stay, richtext::save)
+    #[serde(default)]
+    pub description_html: Option<String>,
     pub start: NaiveDateTime,
     pub end: NaiveDateTime,
     #[serde(default)]

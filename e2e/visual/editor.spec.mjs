@@ -61,7 +61,7 @@ shot('editor new: empty, add-card menu, every card', async (page, snap, testInfo
   await page.locator('.addmenu .add').click();
   await page.locator('.addmenu.open').waitFor();
   await ds(page, snap)('ed-new-addmenu');
-  for (const c of ['where', 'alarm', 'repeat', 'status', 'links', 'note']) {
+  for (const c of ['where', 'alarm', 'repeat', 'status', 'links']) {
     if (!(await page.locator('.addmenu.open').count())) await page.locator('.addmenu .add').click();
     await page.locator(`.addmenu [data-card-add="${c}"]`).click();
   }
@@ -135,10 +135,10 @@ shot('editor edit: alarm details, people, status, links, categories, note', asyn
   await ds(page, snap)('ed-review-cats-typeahead');
   await page.locator('#ed-ct-in').fill('');
   // note mentions
-  await edScrollTo(page, '#ed-note-card');
-  const note = page.locator('#ed-note-card textarea[name="description"]');
+  await edScrollTo(page, '#ed-tn');
+  const note = page.locator('#ed-note');
   await note.click();
-  await note.press('End');
+  await note.press('ControlOrMeta+End');
   await note.pressSequentially(' @Ann');
   await page.locator('.rrpop .lk-hit').first().waitFor();
   await ds(page, snap)('ed-review-note-mention');

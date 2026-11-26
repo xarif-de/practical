@@ -33,11 +33,6 @@ fn derived_values() {
     assert_eq!((none.own_region(), none.home_country(&cfg)), (None, "DE".to_string()),
         "without a region the address search still prefers the configured country");
     assert!(is_hex_color("#a1B2c3") && !is_hex_color("#a1b2c") && !is_hex_color("a1b2c3d") && !is_hex_color("#gggggg"));
-    // the rule of before v2 and its legacy flag
-    assert_eq!(VacationRule::of(&d), VacationRule { v: 0, kind: "category".into(), value: "Urlaub".into() });
-    assert!(VacationRule::of(&d).legacy());
-    assert!(!VacationRule { v: 0, kind: "calendar".into(), value: String::new() }.legacy());
-    assert_eq!(VacationRule::of(&Prefs { vacation_rule_json: Some("broken".into()), ..Default::default() }).value, "Urlaub");
 }
 
 #[tokio::test]
@@ -48,7 +43,7 @@ async fn stored_round_trip() {
     let p = Prefs {
         lang: Some("fr".into()), scheme: Some("dark".into()), timezone: Some("Asia/Tokyo".into()), holidays_enabled: false, school_holidays_enabled: true,
         holiday_country: Some("AT".into()), holiday_subdivision: Some("AT-9".into()), public_regions: Some("AT-9".into()), school_regions: Some(String::new()),
-        holiday_color: Some("#111111".into()), school_color: None, vacation_days: Some(25), vacation_rule_json: Some("{}".into()), contact_columns_json: Some("[]".into()),
+        holiday_color: Some("#111111".into()), school_color: None, contact_columns_json: Some("[]".into()),
         contact_list_fields_json: Some("[\"note\"]".into()), alarm_presets_json: Some("[]".into()), alarm_snaps_json: None, task_columns_json: Some("[\"due\"]".into()), search_history_days: Some(-1),
         filter_pins_json: Some("[\"hol:public\"]".into()), unlisted_by_id: true, unlisted_by_email: false,
     };

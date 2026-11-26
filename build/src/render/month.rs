@@ -145,7 +145,9 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
                 let school = joined(fer_at.get(d).into_iter().flatten().copied()).into_iter().map(|n| format!("<b class=\"fname\" title=\"{0}\">{0}</b>", e(&n)));
                 public.chain(school).collect()
             };
-            let num = if fer.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{fer}</span>", d.day()) };
+            // the week's first tile: its ISO week, faint beside the number (clearer while the grid is hovered)
+            let kw = if *d == w[0] { format!("<i class=\"kw\">{}</i>", e(&l.week_short(d.iso_week().week()))) } else { String::new() };
+            let num = if fer.is_empty() && kw.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{kw}{fer}</span>", d.day()) };
             let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{add}<div class=\"dots\">");
             for i in evs.iter().take(4) {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", E(&i.color));

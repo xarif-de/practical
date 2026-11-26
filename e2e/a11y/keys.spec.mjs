@@ -83,7 +83,7 @@ test('the question: focus on "yes", named by its text, trapped, Escape gives the
   await tabTo(page, 'article.lnk[data-key]', { n: 200 }); // the day ledger is one stop
   await page.keyboard.press('Enter');
   await page.locator('#ed:not([hidden])').waitFor();
-  await page.keyboard.press('Enter'); // the unlock button has the focus: edit mode, where delete is enabled
+  await page.keyboard.press('Enter'); // the unlock button has the focus: edit mode
   await page.locator('#edform.mode-edit').waitFor();
   await tabTo(page, '#ed-delete');
   await page.keyboard.press('Enter');

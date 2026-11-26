@@ -92,6 +92,8 @@ pub struct TaskDetail {
     pub uid: String,
     pub summary: String,
     pub description: String,
+    /// the stored formatted copies of the note (richtext::stored), first = preferred
+    pub description_rich: Vec<crate::domain::richtext::Copy>,
     pub location: String,
     pub start: Option<NaiveDateTime>,
     pub start_all_day: bool,
@@ -347,6 +349,7 @@ pub async fn get_task(state: &AppState, user: &Principal, principal: &str, cal_i
         uid: t.get_uid().to_string(),
         summary: text_of(p, "SUMMARY"),
         description: text_of(p, "DESCRIPTION"),
+        description_rich: crate::domain::richtext::stored(p, t.get_uid()),
         location: text_of(p, "LOCATION"),
         start,
         start_all_day,

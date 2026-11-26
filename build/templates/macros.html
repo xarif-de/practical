@@ -4,6 +4,8 @@
 
 {#- a symbol of the icon sprite (assets/icons.svg) as an inline icon; `ico_c` adds classes (only-new/only-edit, the scheme states) -#}
 {%- macro ico(name) -%}<svg class="ico" aria-hidden="true"><use href="{{ ctx.icons()|safe }}#i-{{ name }}"/></svg>{%- endmacro -%}
+{#- the key hint in a dialog button (css/dialog-buttons.css): "esc", "enter", "mod" (Ctrl/⌘ Enter) or "del" (Ctrl/⌘ Backspace; both shell/base.js) -#}
+{%- macro kbd(k) -%}<kbd>{% if k == "esc" %}Esc{% else if k == "enter" %}↵{% else if k == "del" %}<span class="k-mac">⌘</span><span class="k-ctl">Ctrl </span>⌫{% else %}<span class="k-mac">⌘</span><span class="k-ctl">Ctrl </span>↵{% endif %}</kbd>{%- endmacro -%}
 {%- macro ico_c(name, cls) -%}<svg class="ico {{ cls }}" aria-hidden="true"><use href="{{ ctx.icons()|safe }}#i-{{ name }}"/></svg>{%- endmacro -%}
 
 {#- a show/hide switch's state after its `input.eyed` checkbox (filters, task columns; chrome.css `.eye`) -#}
@@ -14,7 +16,7 @@
     `hidden` while not pinned, so a star only shows or hides it); js/filter-pins.js -#}
 {%- macro pin_key(kind, owner, id) -%}{{ kind }}:{% if !owner.is_empty() %}{{ owner }}/{% endif %}{{ id }}{%- endmacro -%}
 {%- macro pin_star(kind, owner, id) -%}<button class="pinstar" type="button" data-pin="{{ pin_key(kind, owner, id) }}" aria-pressed="{{ crate::domain::prefs::pinned(pins, kind, owner, id) }}" title="{{ ctx.t("filter-pin") }}" aria-label="{{ ctx.t("filter-pin") }}">{{ ico("star-h") }}</button>{%- endmacro -%}
-{%- macro pin_btn(kind, owner, id, color, name) -%}<button class="qs" type="button" data-pin="{{ pin_key(kind, owner, id) }}" style="--c:{{ color }}" aria-pressed="true"{% if !crate::domain::prefs::pinned(pins, kind, owner, id) %} hidden{% endif %} title="{{ name }}" aria-label="{{ name }}"></button>{%- endmacro -%}
+{%- macro pin_btn(kind, owner, id, color, name) -%}<button class="qs" type="button" data-pin="{{ pin_key(kind, owner, id) }}" style="--c:{{ color }}" aria-pressed="true"{% if !crate::domain::prefs::pinned(pins, kind, owner, id) %} hidden{% endif %} aria-label="{{ name }}"></button>{%- endmacro -%}
 {%- macro cal_pins() -%}{% for c in calendars %}{{ pin_btn("cal", c.principal, c.id, c.color, c.displayname) }}{% endfor %}{%- endmacro -%}
 
 {%- macro csrf() -%}<input type="hidden" name="csrf" value="{{ ctx.csrf }}">{%- endmacro -%}

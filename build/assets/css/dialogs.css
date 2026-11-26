@@ -4,15 +4,13 @@
 #ed-host { display: contents; } /* the dialog loaded into a page later (routes/editor.rs): no box of its own in the page's grid */
 /* the yes/no question (window.askYesNo): above every dialog, the same backdrop */
 .ask { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; }
-.ask-box { width: min(400px, 100%); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 18px 18px 14px; }
+.ask-box { width: min(480px, 100%); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.3); padding: 18px 18px 14px; }
 .ask-box p { margin: 0 0 16px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
 .ask-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .ask .btn:disabled, .ed .cardform .aldet .pset:disabled { opacity: .4; cursor: default; }
 .ask-type { display: block; margin: 0 0 16px; font-size: 13px; color: var(--fg-2); } .ask-type b { color: var(--fg); overflow-wrap: anywhere; }
 .ask-type input { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; font: inherit; font-size: 14px; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; }
 .ed .box { max-height: calc(100dvh - 32px); overflow: auto; background: var(--bg); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); border: 1px solid var(--line); width: min(900px, 100%); }
-.ed header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; } /* above the sticky month head of the repeat strip (z 1) */
-.ed header .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c1); }
 .ed .body { padding: 16px 18px 8px; }
 .ed footer { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: var(--bg); z-index: 2; }
 .ed input[type=text], .ed input[type=date], .ed input[type=time], .ed select, .ed textarea { font: inherit; color: var(--fg); background: var(--tile); border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; width: 100%; }
@@ -35,7 +33,7 @@
 .ed .dayline .ln { position: absolute; width: 4px; background: var(--c, var(--c1)); }
 .ed .dayline .ln::before, .ed .dayline .ln::after { content: ""; position: absolute; left: -3px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--tile); border: 2.5px solid var(--c, var(--c1)); box-sizing: border-box; }
 .ed .dayline .ln::after { top: auto; bottom: -4px; left: -2px; width: 8px; height: 8px; border-width: 2px; }
-.ed .dayline .ln.me { --c: var(--accent); } .ed .dayline .ln.me::before { left: -4.5px; top: -6.5px; width: 13px; height: 13px; background: var(--accent); }
+.ed .dayline .ln.me { width: 5px; } .ed .dayline .ln.me::before { left: -4px; top: -6.5px; width: 13px; height: 13px; background: var(--c, var(--accent)); } /* the event at hand: its colour (inline --c), a filled start */
 .ed .dayline .blk { position: absolute; right: 4px; font-size: 11px; line-height: 14px; color: color-mix(in srgb, var(--c, var(--c1)) 60%, #000); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html[data-scheme=dark] .ed .dayline .blk { color: var(--c, var(--c1)); }
 @supports (color: oklch(from red l c h)) {
@@ -43,13 +41,18 @@ html[data-scheme=dark] .ed .dayline .blk { color: var(--c, var(--c1)); }
   html[data-scheme=dark] .ed .dayline .blk { color: oklch(from var(--c, var(--c1)) max(l, .62) c h); }
 }
 .ed .dayline .blk time { color: var(--fg-3); font-weight: 600; font-variant-numeric: tabular-nums; }
-.ed .dayline .blk.me { --c: var(--accent); font-weight: 700; }
+.ed .dayline .blk.me { font-weight: 700; }
 @media (max-width: 720px) { .ed .box { border-radius: 14px; } }
 /* contacts editor additions */
 .detail .field select { font: inherit; border: 0; background: transparent; color: var(--fg); width: 100%; }
 .detail .photo { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; } .detail .photo .av { width: 48px; height: 48px; border-radius: 14px; color: #fff; display: grid; place-items: center; font-weight: 600; }
 
 /* ---- editor final layout: collapsible day timeline | content | side card ---- */
-.ed .cols3 { display: grid; gap: 18px; grid-template-columns: 190px 1fr; } .ed.no-tl .dayline { display: none; }
-.ed header .sub { margin-right: auto; }
+.ed .cols3 { display: grid; gap: 4px; grid-template-columns: 190px 14px 1fr; } .ed.no-tl .dayline { display: none; }
+/* the day line's toggle (#ed-tl, form.js setTl): a full-height bar between it and the cards, seen on hover; « hides the day, » (turned) shows it */
+.ed .dl-bar { all: unset; box-sizing: border-box; align-self: stretch; display: grid; place-items: center; border-radius: 6px; color: var(--fg-3); cursor: pointer; opacity: .55; transition: background .15s, opacity .15s; }
+.ed .dl-bar .ico { width: 14px; height: 14px; transition: transform .2s; }
+.ed .dl-bar:hover, .ed .dl-bar:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); opacity: 1; color: var(--fg-2); }
+.ed .dl-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ed.no-tl .dl-bar .ico { transform: rotate(180deg); }
 @media (max-width: 900px) { .ed .dayline { min-height: 240px; } }

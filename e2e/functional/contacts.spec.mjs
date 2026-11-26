@@ -86,10 +86,12 @@ test('edit a contact: unlock, change, save; reset discards', async ({ page }) =>
   await expect(page.locator('#ctform.mode-view')).toBeVisible();
   await page.click('#ct-lock');
   await expect(page.locator('#ctform.mode-edit')).toBeVisible();
-  // reset brings the stored values back
+  // cancel asks, then brings the stored values back (view mode)
   await page.fill('#ctform input[name=nickname]', 'verworfen');
   await expect(page.locator('#ct-save')).toBeEnabled();
-  await page.click('#ct-reset');
+  await page.click('#ct-cancel');
+  await page.click('.ask [data-a="1"]');
+  await expect(page.locator('#ctform.mode-view')).toBeVisible();
   await expect(page.locator('#ctform input[name=nickname]')).toHaveValue('');
   await page.click('#ct-lock');
   await page.fill('#ctform input[name=family]', 'Bearbeitet');
@@ -109,8 +111,7 @@ test('delete a contact (asks first; "no" keeps it)', async ({ page }) => {
   const key = await seedContact(page, 'F3 Dieter', 'Delete');
   await list(page);
   await openContact(page, 'F3 Dieter Delete');
-  await expect(page.locator('#ct-delete')).toBeDisabled(); // view mode
-  await page.click('#ct-lock');
+  await expect(page.locator('#ct-delete')).toBeEnabled(); // in view mode too
   await page.click('#ct-delete');
   await expect(page.locator('.ask')).toBeVisible();
   await page.click('.ask [data-a="0"]');

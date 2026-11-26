@@ -139,7 +139,7 @@
 .ed.solo .box { width: min(560px, 100%); }
 .ed.solo .cardform .cards { columns: 1; }
 .ed.solo .card:not(.solo-on), .ed.solo .addmenu, .ed.solo #ed-delete { display: none !important; }
-.ed.solo header .names input { pointer-events: none; border-bottom-color: transparent; }
+.ed.solo #edh { pointer-events: none; border-bottom-color: transparent; }
 /* the lookback picker sits in the page toolbar, where `.sel` is not otherwise used */
 .toolbar .sel { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 9px; font-size: 13px; color: var(--fg-2); }
 .toolbar .sel select { border: 0; background: transparent; font: inherit; color: var(--fg); outline: none; }

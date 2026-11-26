@@ -76,11 +76,10 @@
 .geomap footer .col { display: grid; gap: 4px; min-width: 0; }
 .geomap footer .val { font-size: 12px; color: var(--fg-3); min-height: 15px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .geomap footer .val.unknown { color: var(--err); }
-.geomap .btn .ico { width: 15px; height: 15px; vertical-align: -3px; margin-right: 4px; }
-.geomap .btn.hot { background: var(--err); color: #fff; border-color: transparent; }
-.geomap .btn:disabled, .cfo-dlg .btn[disabled] { opacity: .45; cursor: default; }
+.cfo-dlg .btn[disabled] { opacity: .45; cursor: default; }
+.geomap footer > .dlg-acts { align-self: center; }
 .geomap .confirm, .ed .confirm { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: color-mix(in srgb, var(--err) 10%, var(--bg)); font-size: 13.5px; }
-.geomap .confirm span, .ed .confirm span { flex: 1; }
+.geomap .confirm > span, .ed .confirm > span { flex: 1; }
 .ed .confirm { position: sticky; bottom: 58px; z-index: 2; border-top: 1px solid var(--line); }
 .leaflet-control-attribution { font-size: 10px; }
 /* location: one primary field, the other part derived and shown as a chip below; errors in red */
@@ -96,7 +95,6 @@
 .ed .cardform .locsub .chip.err { color: var(--err); border-color: var(--err); }
 .ed .cardform .locsub .errtxt { font-size: 11.5px; color: var(--err); }
 .ed .cardform .act.map.hot { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
-.geomap .btn.good { background: #34c759; color: #fff; border-color: transparent; }
 /* view mode: the address in lines (split at commas), a line too long for the card shrinks its text */
 .ed .cardform .addr-lines { font-size: 15px; line-height: 1.35; padding: 2px 0; }
 .ed .cardform .addr-lines .ln { display: block; white-space: nowrap; overflow: hidden; }

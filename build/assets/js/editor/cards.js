@@ -9,7 +9,7 @@
     if (pc && !pc.dataset.added) pc.hidden = !(f.status.value && f.status.value !== 'NEEDS-ACTION') && !(+f.percent.value > 0) && !f.completed_date.value; /* data-always-edit: the categories card is the quick pick while editing, in view mode only with data */ $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden || (b.dataset.cardAdd === 'alarm' && alShared())); alShareSync(); soloCards(); }
   function addCard(name) { const c = $(`.card[data-card="${name}"]`, form); c.dataset.added = '1'; c.hidden = false; cards(); return c; }
   const serialize = () => $$('input:not([type=hidden]):not(.mirror), select, textarea', form).map(e => e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.value).join('|') + '|' + chips().join(',');
-  function updateButtons() { const changed = sig() !== baseline, busy = W.busy; $('#ed-save').disabled = !changed || busy; $('#ed-reset').disabled = (!changed && form.classList.contains('new')) || busy; $('#ed-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new') || busy; }
+  function updateButtons() { const changed = sig() !== baseline, busy = W.busy; $('#ed-save').disabled = !changed || busy; $('#ed-delete').disabled = form.classList.contains('new') || busy; }
   function taskLine() {
     const [start] = getStamp('start'), [due] = getStamp('due');
     const box = $('#ed-whenline');
@@ -27,9 +27,9 @@
     pctOut();
   }
   function whenLine() { if (TASK) return taskLine(); const s = f.date.value; if (!s) return; const e = f.end_date.value || s, multi = e > s; const t = f.all_day.checked ? (multi ? `${fmtD(s)} – ${fmtD(e)}` : fmtD(s)) + ' · ' + D.tAllday : multi ? `${fmtD(s)} ${f.from.value} – ${fmtD(e)} ${f.to.value}` : `${fmtD(s)} · ${f.from.value} – ${f.to.value}`; $('#ed-whenline').textContent = t; }
-  const grow = () => { const t = f.description; t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }; // the note shows its whole text in both modes
-  function refresh() { if (refreshQ) { cancelAnimationFrame(refreshQ); refreshQ = 0; } whenLine(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
-  function mode(m) { if (m === 'edit' && form.classList.contains('ro')) m = 'view'; /* a read-only calendar's entry (d.read_only): view mode only */ form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); visRender(); /* the slider is disabled in view mode, hidden there without a CLASS */ cards(); lkRender(); ntClosePop(); if (m === 'view') ntRender(); else { grow(); ntDetect(); } if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
+  const grow = () => {}; // (the note grows by itself: a contenteditable, note.js)
+  function refresh() { if (refreshQ) { cancelAnimationFrame(refreshQ); refreshQ = 0; } whenLine(); dlDraw(); rrSync(); grow(); alTimeline(); if (ruleMode || Object.keys(RFX).length || RFXL.alarms.length || RFXL.links.length) { if (ruleMode) { ALARMS.forEach(a => { a._mode ||= 'default'; }); LK.links.forEach(l => { l._mode ||= 'default'; }); } rulesMark(); } /* footers follow added or removed entries */ soloCards(); updateButtons(); }
+  function mode(m) { if (m === 'edit' && form.classList.contains('ro')) m = 'view'; /* a read-only calendar's entry (d.read_only): view mode only */ form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); ed.classList.toggle('mode-edit', m === 'edit'); visRender(); /* the slider is disabled in view mode, hidden there without a CLASS */ cards(); lkRender(); ntMode(m); if (m === 'edit') rrRender(); /* the strip measures itself: it must be visible */ refresh(); requestAnimationFrame(fitAddrLines); }
   // all-day: the API end is the exclusive DTEND; the editor shows the last day (empty = one day)
   const addDays = (s, n) => { const e = new Date(s + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate() + n); return e.toISOString().slice(0, 10); }; // UTC arithmetic: no zone shift
   const lastDay = d => { const s = addDays(d.end.slice(0, 10), -1); return s > d.start.slice(0, 10) ? s : ''; };
@@ -51,7 +51,7 @@
     const [principal, cal_id] = f.calendar.value.split('/');
     const [start, startAll] = getStamp('start'), [due, dueAll] = getStamp('due'), [done] = getStamp('completed');
     return {
-      principal, cal_id, summary: f.summary.value, description: f.description.value, location: f.location.value,
+      principal, cal_id, summary: f.summary.value, ...ntBody(), location: f.location.value,
       start, start_all_day: startAll, due, due_all_day: dueAll,
       status: f.status ? f.status.value : '', percent: f.percent ? +f.percent.value : null, completed_at: done,
       priority: f.priority && f.priority.value ? +f.priority.value : null, class: f.class ? f.class.value : '',

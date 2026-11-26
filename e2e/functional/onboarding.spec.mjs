@@ -33,8 +33,7 @@ const confirmStep = (page, step) => api(page, 'POST', '/settings/onboarding/conf
 /** The settings form writes every field it carries, so a test can hand a preference back. */
 const savePrefs = (page, fields) => post(page, '/settings/prefs', {
   lang: 'de', scheme: 'auto', timezone: '', holiday_color: '', school_color: '',
-  public_regions: '', school_regions: '', vacation_days: '30', vacation_kind: 'category',
-  vacation_category: 'Urlaub', vacation_calendar: '', vacation_title: '',
+  public_regions: '', school_regions: '',
   alarm_snaps_start: '5 min', alarm_snaps_end: '', search_history_days: '90', ...fields,
 });
 

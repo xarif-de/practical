@@ -150,9 +150,9 @@ pub(super) fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chr
     if !input.location.trim().is_empty() {
         l.push(format!("LOCATION:{}", ical::escape(input.location.trim())));
     }
-    if !input.description.trim().is_empty() {
-        l.push(format!("DESCRIPTION:{}", ical::escape(input.description.trim())));
-    }
+    // the note: plain DESCRIPTION, with its formatted copies (richtext); `keep_rich`: untouched, they stay as stored
+    let (note, keep_rich) = crate::domain::richtext::save(raw.map(|r| r.props.as_slice()), uid, &input.description, input.description_html.as_deref());
+    l.extend(note);
     let cats: Vec<String> = input.categories.iter().map(|c| c.trim()).filter(|c| !c.is_empty()).map(ical::escape).collect();
     if !cats.is_empty() {
         l.push(format!("CATEGORIES:{}", cats.join(",")));
@@ -197,12 +197,10 @@ pub(super) fn build_vevent(uid: &str, sequence: i64, input: &EventInput, tz: chr
         // binary ATTACHs are kept only when the client sent them back with `keep` (else: removed)
         let keep: HashSet<usize> = input.links.iter().filter(|x| x.embedded && x.keep && x.data.is_none()).filter_map(|x| x.bin_index).collect();
         let mut bin = 0usize;
-        // a changed DESCRIPTION makes Outlook's X-ALT-DESC (and STYLED-DESCRIPTION) stale: drop them then
-        let stored = r.props.iter().find(|x| prop_name(x) == "DESCRIPTION").map(|x| ical::unescape(ical::split_line(x).2.trim())).unwrap_or_default();
-        let desc_changed = stored.trim() != input.description.trim();
         for x in r.props.iter().filter(|x| !is_managed(x)) {
             let name = prop_name(x);
-            if desc_changed && (name == "X-ALT-DESC" || name == "STYLED-DESCRIPTION") {
+            // a written note wrote its copies anew (or none: then the stored ones are stale)
+            if !keep_rich && crate::domain::richtext::COPIES.contains(&name.as_str()) {
                 continue;
             }
             if name == "ATTACH" && is_binary_attach(&ical::split_line(x).1) {

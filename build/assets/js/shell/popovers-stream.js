@@ -35,7 +35,7 @@
 
   // "/" focuses the search
   const q = $('#q');
-  if (q) addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); } });
+  if (q) addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q && !/input|textarea|select/i.test(document.activeElement.tagName) && !document.activeElement.isContentEditable) { e.preventDefault(); q.focus(); } });
 
   // live updates: server-sent changes → custom event for the views. A hidden tab keeps its stream for
   // HIDE_GRACE, then closes it (no keep-alive every 15 s, no redraws nobody sees); a change that arrives

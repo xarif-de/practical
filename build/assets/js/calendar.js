@@ -580,13 +580,42 @@
   });
   addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.id) dragEnd(); }); addEventListener('blur', dragDrop);
   addEventListener('keydown', e => { const d = drag; if (e.key === 'Escape' && d && d.on && !d.dead) { e.preventDefault(); e.stopPropagation(); d.dead = true; d.to = null; dragOff(d); } }, true); // Escape drops nothing
-  document.addEventListener('selectstart', e => { if (drag) e.preventDefault(); });
+  document.addEventListener('selectstart', e => { if (drag || sweep) e.preventDefault(); });
   document.addEventListener('rustical:change', () => { clearTimeout(load._t); load._t = setTimeout(() => load(false), 800); });
   /* an entry's data for the editor, on the intent to open it: started before the click, the answer is processed before the
      click instead of after the next frame (Chromium defers network tasks after an input until a frame is drawn: a ~9 vs
      ~23 ms bimodal editor open, 2026-10-07 trace, gone with --disable-features=DeferRendererTasksAfterInput) */
   practical.intentIn(root, '[data-key]', el => ['/api/events/' + el.dataset.key], 'application/json');
   $('#fab').onclick = () => edOpen(null, state.date);
+  /* ---- new events from the grid: wherever the + button creates one, a double click on a free spot of a day does too, and
+     a press on a free spot swept across several days creates an all-day event over them (from the first to the last day
+     marked, either direction). Free = not an entry, a link or a button (a ledger row is a link, but a free one). The
+     double click is judged where the pointer is at its end: a first click that picked a month day redrew the grid. Mouse
+     and pen only, as the drag of an entry: a finger scrolls. ---- */
+  const NEW_CELLS = '.v-month > .month > .day[data-date], .v-week .dayblock[data-date], .planner .c[data-date], .lrow[data-date]';
+  const newCell = t => { const c = t && t.closest && t.closest(NEW_CELLS); return c && root.contains(c) && !t.closest('[data-key], button, input, select, textarea, a:not(.lrow), .dmore') ? c : null; };
+  let sweep = null; // { id, a, b, x0, y0, on }
+  const sweepMark = () => { $$('.new-on', root).forEach(x => x.classList.remove('new-on')); if (!sweep || !sweep.on) return;
+    const [a, b] = sweep.a <= sweep.b ? [sweep.a, sweep.b] : [sweep.b, sweep.a]; $$(NEW_CELLS, root).forEach(c => { if (c.dataset.date >= a && c.dataset.date <= b) c.classList.add('new-on'); }); };
+  const sweepEnd = () => { const s = sweep; sweep = null; document.body.classList.remove('new-drag'); $$('.new-on', root).forEach(x => x.classList.remove('new-on')); return s; };
+  root.addEventListener('dblclick', e => { const c = newCell(document.elementFromPoint(e.clientX, e.clientY)); if (!c) return; e.preventDefault(); getSelection().removeAllRanges(); edOpen(null, c.dataset.date); });
+  root.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.ctrlKey || e.pointerType === 'touch' || drag || sweep) return;
+    const c = newCell(e.target); if (c) sweep = { id: e.pointerId, a: c.dataset.date, b: c.dataset.date, x0: e.clientX, y0: e.clientY, on: false };
+  });
+  addEventListener('pointermove', e => {
+    const s = sweep; if (!s || e.pointerId !== s.id) return; if (!(e.buttons & 1)) { sweepEnd(); return; }
+    if (!s.on) { if (Math.hypot(e.clientX - s.x0, e.clientY - s.y0) < DRAG_MIN) return; s.on = true; document.body.classList.add('new-drag'); getSelection().removeAllRanges(); $$('.day.open', root).forEach(dayClose); }
+    const t = document.elementFromPoint(e.clientX, e.clientY), c = t && t.closest(NEW_CELLS);
+    if (c && root.contains(c) && c.dataset.date !== s.b) { s.b = c.dataset.date; sweepMark(); } else if (!root.querySelector('.new-on')) sweepMark();
+  });
+  addEventListener('pointerup', e => {
+    if (!sweep || e.pointerId !== sweep.id) return; const s = sweepEnd(); if (!s.on) return;
+    const eat = ev => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener('click', eat, true); setTimeout(() => removeEventListener('click', eat, true)); // the release is no click on the day
+    const [a, b] = s.a <= s.b ? [s.a, s.b] : [s.b, s.a]; edOpen(null, a === b ? a : { from: a, to: b });
+  });
+  addEventListener('pointercancel', e => { if (sweep && e.pointerId === sweep.id) sweepEnd(); }); addEventListener('blur', () => { if (sweep) sweepEnd(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && sweep && sweep.on) { e.preventDefault(); e.stopPropagation(); sweepEnd(); } }, true);
 
   // ---- orbit picker ----
   const pk = $('#picker');

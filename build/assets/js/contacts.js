@@ -168,8 +168,8 @@
   function cards() { const edit = form.classList.contains('mode-edit'); $$('.card', form).forEach(c => { c.hidden = !(c.hasAttribute('data-always') || hasData(c) || (edit && c.dataset.added)); }); $$('.addmenu [data-card-add]', form).forEach(b => b.disabled = !$(`.card[data-card="${b.dataset.cardAdd}"]`, form).hidden); }
   function mode(m) { if (m === 'edit' && form.classList.contains('ro')) m = 'view'; /* a read-only address book's contact (c.read_only): view mode only */ form.classList.toggle('mode-view', m === 'view'); form.classList.toggle('mode-edit', m === 'edit'); cards(); markEmpty(); $$('.pdate', form).forEach(dateInfo); updateButtons(); }
   const serialize = () => [...form.querySelectorAll('input:not([type=hidden]), select, textarea')].filter(e => !e.closest('template')).map(e => e.value).join('|') + '|' + chips().join(',') + '|' + $$('.pref[aria-pressed=true]', form).length;
-  function updateButtons() { const changed = serialize() !== baseline, busy = W.busy; $('#ct-save').disabled = !changed || busy; $('#ct-reset').disabled = (!changed && form.classList.contains('new')) || busy; $('#ct-delete').disabled = form.classList.contains('mode-view') || form.classList.contains('new') || busy; }
-  const W = practical.writer(form, { buttons: () => [$('#ct-save'), $('#ct-delete'), $('#ct-reset')], error: $('#ct-error'), idle: () => updateButtons(),
+  function updateButtons() { const changed = serialize() !== baseline, busy = W.busy; $('#ct-save').disabled = !changed || busy; $('#ct-delete').disabled = form.classList.contains('new') || busy; }
+  const W = practical.writer(form, { buttons: () => [$('#ct-save'), $('#ct-delete')], error: $('#ct-error'), idle: () => updateButtons(),
     conflict: { overwrite: async () => { const r = await practical.req('/api/contacts/' + f.key.value); if (!r.ok) return r; f.etag.value = r.data.etag; return put(); }, reload: () => open(f.key.value) } });
   const dirty = () => !det.hidden && form.classList.contains('mode-edit') && serialize() !== baseline;
   practical.guard(dirty);
@@ -196,7 +196,6 @@
     $('#ct-av').textContent = c ? initials(c.full_name || '?') : '?'; $('#ct-av').style.background = c ? `var(--c${1 + (c.uid.length % 6)})` : 'var(--accent)';
     $('#ct-sub').textContent = c ? [c.org, c.categories.join(', ')].filter(Boolean).join(' · ') : '';
     form.classList.toggle('new', !c); f.full_name.placeholder = c ? D.tDisplay : D.tNewtitle;
-    const b = $('#ct-save'); b.title = c ? D.tSave : D.tCreate; b.setAttribute('aria-label', b.title);
     mode(c ? 'view' : 'edit'); baseline = serialize(); updateButtons();
     det.hidden = false; det.classList.add('on');
     activeKey = c ? KEY(c) : null; markRow(activeKey);
@@ -242,7 +241,7 @@
     if (b.classList.contains('pref')) { const list = b.closest('[data-list]'); const on = b.getAttribute('aria-pressed') === 'true'; $$('.pref', list).forEach(p => p.setAttribute('aria-pressed', p === b && !on ? 'true' : 'false')); updateButtons(); return; }
     if (b.hasAttribute('data-more')) { $('.morenames', form).hidden = false; b.hidden = true; return; }
     if (b.dataset.cardAdd) { const c = $(`.card[data-card="${b.dataset.cardAdd}"]`, form); c.dataset.added = '1'; c.hidden = false; b.disabled = true; b.closest('.addmenu').classList.remove('open'); if (b.dataset.cardAdd === 'email') addRow('emails', { kind: 'home' }); if (b.dataset.cardAdd === 'adr') addRow('addresses', { kind: 'home' }); const i = $('input:not([type=hidden]), textarea', c); if (i && !i.closest('template')) i.focus(); return; }
-    if (b.hasAttribute('data-card-rm')) { if (!await ask(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => { if (!i.closest('template')) i.value = ''; }); $$('.rows .row', c).forEach(x => x.remove()); $$('.chip', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); updateButtons(); return; }
+    if (b.hasAttribute('data-card-rm')) { if (!await askDelete(D.tRmcard)) return; const c = b.closest('.card'); $$('input:not([type=hidden]), textarea', c).forEach(i => { if (!i.closest('template')) i.value = ''; }); $$('.rows .row', c).forEach(x => x.remove()); $$('.chip', c).forEach(x => x.remove()); delete c.dataset.added; c.hidden = true; cards(); updateButtons(); return; }
     if (b.dataset.act) { action(b); return; }
   });
   form.addEventListener('click', e => { const x = e.target.closest('.chip b'); if (x && form.contains(x)) { x.closest('.chip').remove(); updateButtons(); } });
@@ -267,8 +266,8 @@
     }
   }
   $('#ct-lock').onclick = () => mode('edit');
-  $('#ct-reset').onclick = () => show(current);
-  $('#ct-cancel').onclick = () => { if (wrap.classList.contains('dlg')) dlgClose(); else if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
+  // edit mode: back to the contact's view, its changes dropped after asking (as the event editor); a new one or the view: away
+  $('#ct-cancel').onclick = async () => { if (current && form.classList.contains('mode-edit')) { if (!dirty() || await askYesNo(tr('js-discard-ask'), tr('js-yes'), tr('js-no'), false, 'check')) show(current); } else if (wrap.classList.contains('dlg')) dlgClose(); else if (wide()) show(null); else { det.classList.remove('on'); det.hidden = true; } };
   $('#ct-vcf').onclick = () => { if (f.key.value) location.href = '/api/contacts/' + f.key.value + '/vcf'; };
   // reveal a contact (a search hit, a #key link): the table marks and scrolls to its row, the list opens it and scrolls its entry into view
   function markRow(key) { let hit = null; $$('.sheet tr[data-key]', wrap).forEach(r => { const on = r.dataset.key === key; r.classList.toggle('on', on); if (on) hit = r; }); return hit; }
@@ -280,7 +279,7 @@
   window.rusticalContacts = { reveal };
   // the work an ended session left unsaved (practical.keep above) comes back before anything else is opened
   const kept = practical.unstash('ct');
-  if (kept) { show(kept.d); if (kept.isNew) { f.key.value = f.etag.value = ''; form.classList.add('new'); const b = $('#ct-save'); b.title = D.tCreate; b.setAttribute('aria-label', b.title); } mode('edit'); baseline = ''; updateButtons(); toast(tr('js-req-restored')); }
+  if (kept) { show(kept.d); if (kept.isNew) { f.key.value = f.etag.value = ''; form.classList.add('new'); } mode('edit'); baseline = ''; updateButtons(); toast(tr('js-req-restored')); }
   else if (location.hash.length > 1) {
     // a link to one contact opens the list — also where the remembered view is the table (?view=table shows it there)
     const key = decodeURIComponent(location.hash.slice(1));
@@ -304,7 +303,7 @@
     return r;
   }
   form.addEventListener('submit', e => { e.preventDefault(); W.run(put); });
-  $('#ct-delete').onclick = async () => { if (W.busy || !await ask(T.del)) return; W.run(async () => { const r = await practical.req('/api/contacts/' + f.key.value, { method: 'DELETE' }); if (r.ok) { location.hash = ''; practical.leaving = true; location.reload(); } return r; }); };
+  $('#ct-delete').onclick = async () => { if (W.busy || !await askDelete(T.del)) return; W.run(async () => { const r = await practical.req('/api/contacts/' + f.key.value, { method: 'DELETE' }); if (r.ok) { location.hash = ''; practical.leaving = true; location.reload(); } return r; }); };
   // table inline edit: fetch → patch one field → PUT
   const before = new WeakMap(), editable = e => e.target.closest && e.target.closest('[contenteditable][data-f]');
   tbody.addEventListener('focusin', e => { const cell = editable(e); if (cell) before.set(cell, cell.textContent); });

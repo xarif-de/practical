@@ -17,7 +17,6 @@
     $('#gm-ok-txt').textContent = determine ? b.dataset.tDetermine : b.dataset.tApply;
     $('#gm-ok-ico').setAttribute('href', practical.sprite + (determine ? '#i-pin' : '#i-check'));
     const changed = LOC.addr ? gmMoved : (map ? coordsChanged() : false);
-    b.classList.toggle('hot', determine); b.classList.toggle('good', !determine && changed);
     b.disabled = gmBusy || (!determine && !changed);
   }
   let gmBusy = false;

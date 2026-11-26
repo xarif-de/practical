@@ -40,7 +40,7 @@ async fn density_follows_writes_the_zone_and_the_filter() {
     app.put_ics("alice", &b, "b2", &vevent("b2", "Silvester", "DTSTART:20261231T233000Z\nDTEND:20261231T234500Z")).await;
     assert_eq!(c.get_json("/api/density?year=2026").await.ok().json(), density([0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 0]));
     assert_eq!(c.get_json("/api/density?year=2027").await.ok().json(), density([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-    c.post_form("/settings/prefs", &[("lang", "de"), ("timezone", "America/New_York"), ("vacation_kind", "title"), ("vacation_title", "Urlaub")]).await;
+    c.post_form("/settings/prefs", &[("lang", "de"), ("timezone", "America/New_York")]).await;
     assert_eq!(c.get_json("/api/density?year=2026").await.ok().json(), density([0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 1]));
     assert_eq!(c.get_json("/api/density?year=2027").await.ok().json(), density([0; 12]));
 }
@@ -119,7 +119,7 @@ async fn mention_events_follow_writes_and_the_zone() {
     // 23:30 UTC the day after tomorrow is the next day in Berlin, the same day in New York
     app.put_ics("alice", &a, "m3", &vevent("m3", "Spät", &format!("DTSTART:{}T233000Z", at(2)))).await;
     assert_eq!(events(c.get_json("/api/mentions").await.ok().json()), [format!("Kino {}", d(1)), format!("Spät {}", d(3))]);
-    c.post_form("/settings/prefs", &[("lang", "de"), ("timezone", "America/New_York"), ("vacation_kind", "title"), ("vacation_title", "Urlaub")]).await;
+    c.post_form("/settings/prefs", &[("lang", "de"), ("timezone", "America/New_York")]).await;
     let ny_today = crate::clock::today_in(&chrono_tz::America::New_York);
     let got = events(c.get_json("/api/mentions").await.ok().json());
     assert_eq!(got.last().unwrap(), &format!("Spät {}", today + chrono::Duration::days(2)), "{got:?} (New York today {ny_today})");

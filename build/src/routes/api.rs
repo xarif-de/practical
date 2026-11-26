@@ -35,6 +35,7 @@ use tower_sessions::Session;
 
 mod event_api;
 mod category_api;
+mod views_api;
 mod contact_api;
 mod task_api;
 mod search_api;
@@ -140,6 +141,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/colors/{kind}/{*key}", axum::routing::put(color_put))
         .route("/api/category-rules", get(category_rules_get))
         .route("/api/category-rules/{name}", axum::routing::put(category_rule_put).delete(category_rule_delete))
+        .route("/api/views", get(views_api::views_get).put(views_api::views_put))
         .route("/api/push/key", get(push_key))
         .route("/api/push/subscriptions", get(push_list).post(push_subscribe).delete(push_unsubscribe))
         .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)) // embedded files ride in the JSON body as base64

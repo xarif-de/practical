@@ -35,6 +35,16 @@ a11y('settings: home, colours, collections, a calendar, groups and the typed que
     await page.locator(`section.page${hash}`).waitFor();
     await check(name);
   }
+  // the view configurations: filled from /api/views, one rule open with its icon grid
+  for (const v of ['year', 'vacation', 'countdown']) {
+    await page.goto('/settings#views-' + v);
+    await page.locator(`#views-${v} .vw:not([aria-busy]) .vw-rule`).first().waitFor();
+    await check('set-views-' + v);
+  }
+  await page.locator('#views-countdown .vw-open').first().click();
+  await page.locator('#views-countdown [data-icons]').click();
+  await page.locator('#views-countdown .vw-icons').waitFor();
+  await check('set-views-edit');
   await page.goto('/settings#groups');
   await page.locator('#groups details.danger-zone summary').first().click();
   await page.locator('.ask .ask-type').waitFor();

@@ -121,7 +121,7 @@ fn day_view_and_rows_golden() {
     let mut details = HashMap::new();
     let d = EventDetail {
         principal: "alice".into(), cal_id: "b".into(), object_id: "tomato".into(), uid: "tomato".into(), summary: "Zahnarzt".into(),
-        location: "Praxis, Hauptstr. 1".into(), description: String::new(), start: v[11].start, end: v[11].end, all_day: false,
+        location: "Praxis, Hauptstr. 1".into(), description: String::new(), description_rich: vec![], start: v[11].start, end: v[11].end, all_day: false,
         rrule: Some("FREQ=MONTHLY;BYDAY=3FR;COUNT=4".into()), rrule_until: None, exdates: vec![], rdates: vec![], organizer: None, attendees: vec![],
         alarms: vec![], categories: vec!["Gesundheit".into()], status: "TENTATIVE".into(), transp: "TRANSPARENT".into(), class: "CONFIDENTIAL".into(), class_overrides: String::new(),
         priority: Some(2), color: "tomato".into(), geo: Some((51.0504, 13.7373)),

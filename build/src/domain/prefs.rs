@@ -2,11 +2,10 @@
 //!
 //! - [`get`] and [`set`] read and write the whole row. Hold [`Guards::prefs`](crate::state::Guards::prefs)
 //!   from `get` until after `set`, or two saves at once lose one.
-//! - [`VacationRule`] (`{"v":2,kind,value}`): a category, a calendar or a title regex (Rust `regex`, at most
-//!   [`TITLE_PATTERN_MAX`] characters, no look-around; the settings page tests it live through
-//!   `/api/titles`). A legacy rule without `v` means the category OR the word in the title.
 //! - The user's own region is the first region of the public-holiday list: vacation and bridge days count
 //!   by it.
+//! - The former vacation setting's columns (`vacation_days`, `vacation_rule_json`) are no longer read or written
+//!   here: [`crate::domain::views`] reads them once as a user's default.
 
 use sqlx::{Row, SqlitePool};
 
@@ -27,8 +26,6 @@ pub struct Prefs {
     /// colours of public holidays / school holidays in the views (`#rrggbb`; NULL = the theme's)
     pub holiday_color: Option<String>,
     pub school_color: Option<String>,
-    pub vacation_days: Option<i64>,
-    pub vacation_rule_json: Option<String>,
     pub contact_columns_json: Option<String>,
     pub contact_list_fields_json: Option<String>,
     /// reminder presets of the event editor (`Vec<events::AlarmPreset>` as JSON)
@@ -112,7 +109,7 @@ pub fn pinned(pins: &[String], kind: &str, owner: &str, id: &str) -> bool {
 /// and after a column was dropped from the live table `SELECT *` read past the end of the shorter
 /// row — the panic that ended the push reminder loop on 2026-10-05 (perf-baseline.md §0).
 pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error> {
-    let row = sqlx::query("SELECT lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email FROM practical_user_settings WHERE principal = ?")
+    let row = sqlx::query("SELECT lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email FROM practical_user_settings WHERE principal = ?")
         .bind(principal)
         .fetch_optional(db)
         .await?;
@@ -130,8 +127,6 @@ pub async fn get(db: &SqlitePool, principal: &str) -> Result<Prefs, sqlx::Error>
             school_regions: r.get("school_regions"),
             holiday_color: r.get("holiday_color"),
             school_color: r.get("school_color"),
-            vacation_days: r.get("vacation_days"),
-            vacation_rule_json: r.get("vacation_rule_json"),
             contact_columns_json: r.get("contact_columns_json"),
             contact_list_fields_json: r.get("contact_list_fields_json"),
             alarm_presets_json: r.get("alarm_presets_json"),
@@ -167,14 +162,13 @@ pub struct Look {
 
 pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO practical_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, vacation_days, vacation_rule_json, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        "INSERT INTO practical_user_settings (principal, lang, scheme, timezone, holidays_enabled, school_holidays_enabled, holiday_country, holiday_subdivision, public_regions, school_regions, holiday_color, school_color, contact_columns_json, contact_list_fields_json, alarm_presets_json, alarm_snaps_json, task_columns_json, search_history_days, filter_pins_json, unlisted_by_id, unlisted_by_email, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(principal) DO UPDATE SET lang=excluded.lang, scheme=excluded.scheme, timezone=excluded.timezone,
            holidays_enabled=excluded.holidays_enabled, school_holidays_enabled=excluded.school_holidays_enabled,
            holiday_country=excluded.holiday_country, holiday_subdivision=excluded.holiday_subdivision,
            public_regions=excluded.public_regions, school_regions=excluded.school_regions,
-           holiday_color=excluded.holiday_color, school_color=excluded.school_color, vacation_days=excluded.vacation_days,
-           vacation_rule_json=excluded.vacation_rule_json,
+           holiday_color=excluded.holiday_color, school_color=excluded.school_color,
            contact_columns_json=excluded.contact_columns_json, contact_list_fields_json=excluded.contact_list_fields_json,
            alarm_presets_json=excluded.alarm_presets_json, alarm_snaps_json=excluded.alarm_snaps_json, task_columns_json=excluded.task_columns_json, search_history_days=excluded.search_history_days, filter_pins_json=excluded.filter_pins_json, unlisted_by_id=excluded.unlisted_by_id, unlisted_by_email=excluded.unlisted_by_email, updated_at=CURRENT_TIMESTAMP",
     )
@@ -190,8 +184,6 @@ pub async fn set(db: &SqlitePool, principal: &str, p: &Prefs) -> Result<(), sqlx
     .bind(&p.school_regions)
     .bind(&p.holiday_color)
     .bind(&p.school_color)
-    .bind(p.vacation_days)
-    .bind(&p.vacation_rule_json)
     .bind(&p.contact_columns_json)
     .bind(&p.contact_list_fields_json)
     .bind(&p.alarm_presets_json)
@@ -217,90 +209,5 @@ pub fn is_hex_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit())
 }
 
-/// How vacation days are found (`vacation_rule_json`). A `v: 2` rule names one kind: `category`
-/// (the CATEGORIES value, any case), `calendar` ("principal/id") or `title` (a regex over the
-/// title, any case). Older rules have no `v`: their `category` meant the category OR the word in
-/// the title; they count that way until the user's next save turns them into a `v: 2` rule.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct VacationRule {
-    #[serde(default)]
-    pub v: u8,
-    #[serde(default)]
-    pub kind: String,
-    #[serde(default)]
-    pub value: String,
-}
-
-/// the longest title pattern the settings accept
-pub const TITLE_PATTERN_MAX: usize = 200;
-
-impl VacationRule {
-    pub fn of(p: &Prefs) -> Self {
-        p.vacation_rule_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or(Self { v: 0, kind: "category".into(), value: "Urlaub".into() })
-    }
-    pub fn legacy(&self) -> bool {
-        self.v < 2 && self.kind != "calendar"
-    }
-    /// A title pattern as the rule uses it; the error is the parser's message.
-    pub fn title_regex(pattern: &str) -> Result<regex::Regex, String> {
-        if pattern.chars().count() > TITLE_PATTERN_MAX {
-            return Err(format!("longer than {TITLE_PATTERN_MAX} characters"));
-        }
-        regex::RegexBuilder::new(pattern).case_insensitive(true).size_limit(1 << 20).build().map_err(|e| e.to_string())
-    }
-    /// The test for one event (`key` = "principal/calendar"). A title rule whose pattern does not
-    /// parse, and an empty value, match nothing.
-    pub fn matcher(&self) -> impl Fn(&str, &[String], &str) -> bool + use<> {
-        let (kind, value, legacy) = (self.kind.clone(), self.value.trim().to_string(), self.legacy());
-        let re = (kind == "title" && !legacy && !value.is_empty()).then(|| Self::title_regex(&value).ok()).flatten();
-        let low = value.to_lowercase();
-        move |key: &str, cats: &[String], summary: &str| {
-            if value.is_empty() {
-                return false;
-            }
-            let cat = || cats.iter().any(|c| c.trim().to_lowercase() == low);
-            match kind.as_str() {
-                "calendar" => key == value,
-                // before v2: the category OR the word in the title (many clients never write CATEGORIES)
-                _ if legacy => cat() || summary.to_lowercase().split(|c: char| !c.is_alphanumeric()).any(|w| w == low),
-                "title" => re.as_ref().is_some_and(|r| r.is_match(summary)),
-                _ => cat(),
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod pinned;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn rule(j: &str) -> VacationRule {
-        VacationRule::of(&Prefs { vacation_rule_json: Some(j.into()), ..Default::default() })
-    }
-
-    #[test]
-    fn vacation_rules() {
-        let cats = |c: &[&str]| c.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        // no rule yet: the old default, category or title word "Urlaub"
-        let m = VacationRule::of(&Prefs::default()).matcher();
-        assert!(m("a/b", &cats(&["urlaub"]), "PARIS") && m("a/b", &[], "Urlaub Heimreise") && !m("a/b", &[], "Winterurlaub"));
-        // v2 category: the category only, any case
-        let m = rule(r#"{"v":2,"kind":"category","value":"Urlaub"}"#).matcher();
-        assert!(m("a/b", &cats(&[" URLAUB "]), "PARIS") && !m("a/b", &[], "Urlaub"));
-        // v2 title: a regex, any case
-        let m = rule(r#"{"v":2,"kind":"title","value":"^urlaub\\b"}"#).matcher();
-        assert!(m("a/b", &[], "Urlaub Heimreise") && !m("a/b", &[], "August Urlaub beantragen") && !m("a/b", &cats(&["Urlaub"]), "PARIS"));
-        // a pattern that does not parse, an empty value: nothing
-        assert!(!rule(r#"{"v":2,"kind":"title","value":"(urlaub"}"#).matcher()("a/b", &[], "(urlaub"));
-        assert!(!rule(r#"{"v":2,"kind":"category","value":""}"#).matcher()("a/b", &cats(&[""]), ""));
-        // calendar: the key, before and after v2
-        assert!(rule(r#"{"kind":"calendar","value":"a/b"}"#).matcher()("a/b", &[], "x"));
-        assert!(!rule(r#"{"v":2,"kind":"calendar","value":"a/b"}"#).matcher()("a/c", &[], "x"));
-        // the parser's limits
-        assert!(VacationRule::title_regex(&"a".repeat(TITLE_PATTERN_MAX + 1)).is_err());
-        assert!(VacationRule::title_regex("(?<=x)y").is_err(), "no look-around in the regex crate");
-    }
-}

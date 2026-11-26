@@ -94,7 +94,7 @@ if [ -n "$SERVE" ]; then
   fi
   # shellcheck disable=SC2086 # split on purpose
   exec docker run --rm --init $TTY --name "$NAME-serve" -p "127.0.0.1:$SERVE:$SERVE" --ulimit nofile=65536:65536 \
-    --shm-size=1g $OPTS $ENVS -w "$WD" "$IMAGE" sh -c 'ln -sfn "/vol/targets/$0" /target && exec "$@"' "$NAME" "$@"
+    --shm-size=1g $OPTS $ENVS -w "$WD" "$IMAGE" sh -c 'mkdir -p "/vol/targets/$0" && ln -sfn "/vol/targets/$0" /target && exec "$@"' "$NAME" "$@"
 fi
 
 SPEC="$(printf '%s\n' "$IMAGE" $OPTS | shasum | cut -c1-12)"

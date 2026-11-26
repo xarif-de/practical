@@ -26,6 +26,7 @@ a11y('editor: view, edit, new, the delete question, the colour popover', async (
   await page.keyboard.press('Escape');
   await page.locator('#ed-close').click();
   if (await page.locator('#ed-confirm:not([hidden])').count()) await page.locator('#ed-discard').click();
+  if (await page.locator('#ed').isVisible()) await page.locator('#ed-close').click(); // edit mode went back to the view
   await page.locator('#ed').waitFor({ state: 'hidden' });
   if (phone(testInfo)) await page.locator('#fab').click(); // the desktop's "+" of a day
   else { const h2 = page.locator('.doc h2'); await h2.hover(); await h2.locator('.add').click(); }

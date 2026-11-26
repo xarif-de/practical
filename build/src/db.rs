@@ -390,6 +390,14 @@ CREATE TABLE practical_holidays (
         "ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_id INTEGER NOT NULL DEFAULT 0;
          ALTER TABLE practical_user_settings ADD COLUMN unlisted_by_email INTEGER NOT NULL DEFAULT 0;",
     ),
+    (
+        27,
+        // the view configurations (`domain::views::ViewConfig` as JSON): year-view marks, vacation planner,
+        // countdown wall. A table of its own: the preferences form rewrites its whole row on every autosave.
+        // `practical_user_settings.vacation_days` / `vacation_rule_json` stay, read once as the default of a
+        // user without a row here (`views::load`).
+        "CREATE TABLE practical_view_config (principal TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);",
+    ),
 ];
 
 /// Whether a repair migration has anything to repair (inside its transaction); every other one always runs.

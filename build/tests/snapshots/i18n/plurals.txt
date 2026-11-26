@@ -122,6 +122,14 @@ de js-snp-w 0: %n Wochen
 de js-snp-w 1: %n Woche
 de js-snp-w 2: %n Wochen
 de js-snp-w 5: %n Wochen
+de js-vw-days-n 0: %n Urlaubstage
+de js-vw-days-n 1: %n Urlaubstag
+de js-vw-days-n 2: %n Urlaubstage
+de js-vw-days-n 5: %n Urlaubstage
+de js-vw-rules 0: %n Regeln
+de js-vw-rules 1: %n Regel
+de js-vw-rules 2: %n Regeln
+de js-vw-rules 5: %n Regeln
 de n-addressbooks 0: 0 Adressbücher
 de n-addressbooks 1: 1 Adressbuch
 de n-addressbooks 2: 2 Adressbücher
@@ -138,6 +146,10 @@ de set-snaps 0: 0 Rastpunkte
 de set-snaps 1: 1 Rastpunkt
 de set-snaps 2: 2 Rastpunkte
 de set-snaps 5: 5 Rastpunkte
+de set-views-rules 0: 0 Regeln
+de set-views-rules 1: 1 Regel
+de set-views-rules 2: 2 Regeln
+de set-views-rules 5: 5 Regeln
 de trash-retention 0: Im Papierkorb bleibt alles 0 Tage wiederherstellbar.
 de trash-retention 1: Im Papierkorb bleibt alles 1 Tag wiederherstellbar.
 de trash-retention 2: Im Papierkorb bleibt alles 2 Tage wiederherstellbar.
@@ -334,6 +346,14 @@ en js-snp-w 0: %n weeks
 en js-snp-w 1: %n week
 en js-snp-w 2: %n weeks
 en js-snp-w 5: %n weeks
+en js-vw-days-n 0: %n vacation days
+en js-vw-days-n 1: %n vacation day
+en js-vw-days-n 2: %n vacation days
+en js-vw-days-n 5: %n vacation days
+en js-vw-rules 0: %n rules
+en js-vw-rules 1: %n rule
+en js-vw-rules 2: %n rules
+en js-vw-rules 5: %n rules
 en n-addressbooks 0: 0 address books
 en n-addressbooks 1: 1 address book
 en n-addressbooks 2: 2 address books
@@ -350,6 +370,10 @@ en set-snaps 0: 0 snap points
 en set-snaps 1: 1 snap point
 en set-snaps 2: 2 snap points
 en set-snaps 5: 5 snap points
+en set-views-rules 0: 0 rules
+en set-views-rules 1: 1 rule
+en set-views-rules 2: 2 rules
+en set-views-rules 5: 5 rules
 en trash-retention 0: Everything in the trash stays restorable for 0 days.
 en trash-retention 1: Everything in the trash stays restorable for 1 day.
 en trash-retention 2: Everything in the trash stays restorable for 2 days.
@@ -542,6 +566,14 @@ fr js-snp-w 0: %n semaine
 fr js-snp-w 1: %n semaine
 fr js-snp-w 2: %n semaines
 fr js-snp-w 5: %n semaines
+fr js-vw-days-n 0: %n jour de congé
+fr js-vw-days-n 1: %n jour de congé
+fr js-vw-days-n 2: %n jours de congé
+fr js-vw-days-n 5: %n jours de congé
+fr js-vw-rules 0: %n règle
+fr js-vw-rules 1: %n règle
+fr js-vw-rules 2: %n règles
+fr js-vw-rules 5: %n règles
 fr n-addressbooks 0: 1 carnet d'adresses
 fr n-addressbooks 1: 1 carnet d'adresses
 fr n-addressbooks 2: 2 carnets d'adresses
@@ -558,6 +590,10 @@ fr set-snaps 0: 0 point d'accroche
 fr set-snaps 1: 1 point d'accroche
 fr set-snaps 2: 2 points d'accroche
 fr set-snaps 5: 5 points d'accroche
+fr set-views-rules 0: 0 règle
+fr set-views-rules 1: 1 règle
+fr set-views-rules 2: 2 règles
+fr set-views-rules 5: 5 règles
 fr trash-retention 0: Tout ce qui est dans la corbeille reste restaurable pendant 0 jour.
 fr trash-retention 1: Tout ce qui est dans la corbeille reste restaurable pendant 1 jour.
 fr trash-retention 2: Tout ce qui est dans la corbeille reste restaurable pendant 2 jours.
@@ -758,6 +794,14 @@ es js-snp-w 0: %n semanas
 es js-snp-w 1: %n semana
 es js-snp-w 2: %n semanas
 es js-snp-w 5: %n semanas
+es js-vw-days-n 0: %n días de vacaciones
+es js-vw-days-n 1: %n día de vacaciones
+es js-vw-days-n 2: %n días de vacaciones
+es js-vw-days-n 5: %n días de vacaciones
+es js-vw-rules 0: %n reglas
+es js-vw-rules 1: %n regla
+es js-vw-rules 2: %n reglas
+es js-vw-rules 5: %n reglas
 es n-addressbooks 0: 0 libretas de direcciones
 es n-addressbooks 1: 1 libreta de direcciones
 es n-addressbooks 2: 2 libretas de direcciones
@@ -774,6 +818,10 @@ es set-snaps 0: 0 puntos de ajuste
 es set-snaps 1: 1 punto de ajuste
 es set-snaps 2: 2 puntos de ajuste
 es set-snaps 5: 5 puntos de ajuste
+es set-views-rules 0: 0 reglas
+es set-views-rules 1: 1 regla
+es set-views-rules 2: 2 reglas
+es set-views-rules 5: 5 reglas
 es trash-retention 0: Todo lo que está en la papelera se puede restaurar durante 0 días.
 es trash-retention 1: Todo lo que está en la papelera se puede restaurar durante 1 día.
 es trash-retention 2: Todo lo que está en la papelera se puede restaurar durante 2 días.

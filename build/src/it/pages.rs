@@ -177,6 +177,18 @@ async fn task_lookback_comes_from_the_query_then_the_cookie() {
 }
 
 #[tokio::test]
+async fn task_view_comes_from_the_query_then_the_cookie() {
+    let s = seed().await;
+    let mut c = s.app.login("alice").await;
+    c.get("/tasks").await.ok().has("data-view=\"groups\"");
+    c.cookie("tkview", "board");
+    c.get("/tasks").await.ok().has("data-view=\"board\"");
+    c.get("/tasks?view=deck").await.ok().has("data-view=\"deck\"");
+    c.cookie("tkview", "bogus");
+    c.get("/tasks").await.ok().has("data-view=\"groups\"");
+}
+
+#[tokio::test]
 async fn history_settings_and_login_pages() {
     let s = seed().await;
     let mut c = s.app.login("alice").await;
