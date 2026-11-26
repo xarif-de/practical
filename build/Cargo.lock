@@ -3332,7 +3332,7 @@ dependencies = [
 
 [[package]]
 name = "practical"
-version = "0.30.27"
+version = "0.31.0"
 dependencies = [
  "ammonia",
  "askama",
