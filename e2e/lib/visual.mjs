@@ -33,12 +33,12 @@ export function shot(title, body) {
       return route.abort('blockedbyclient');
     });
     const names = new Set();
-    const snap = async name => {
+    const snap = async (name, opts = {}) => { // opts: toHaveScreenshot's (mask: what changes on its own, e.g. the version)
       if (names.has(name)) throw new Error(`duplicate state name ${name}`);
       names.add(name);
       await page.mouse.move(1, 1); // no hover state
       await settle(page);
-      await expect(page).toHaveScreenshot(`${name}.png`);
+      await expect(page).toHaveScreenshot(`${name}.png`, opts);
     };
     await body(page, snap, testInfo);
     if (page.__dialogs.length) throw new Error(`unexpected dialogs: ${page.__dialogs.join(' | ')}`);
