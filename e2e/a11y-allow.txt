@@ -31,15 +31,4 @@ color-contrast	light #d4d1cf on #fffbf5	P5 the month grid's week number (.kw), f
 color-contrast	light #d4d4d6 on #ffffff	P5 the month grid's week number (.kw), faint on purpose (user's pick 2026-11-26, opacity .3; .85 while the grid is hovered); the week also heads the week view
 scrollable-region-focusable	.calscroll	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
 scrollable-region-focusable	.tl	Chromium and Firefox make a scroller without focusable content a Tab stop themselves (the Tab walk stops on div.tl); Safari does not
-target-size	.cancelled	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.cur	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.day > .mid	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.dmore	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.end	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.ev	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.mid	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.row > .typ	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	.start	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	button	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	div.ev	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
-target-size	select.typ	P5 WCAG 2.5.8: under 24 px with too little space around (day chips, rail letters, row selects) — bigger targets change the layout
+target-size	div.ev	P5 only with the search popover open over the month grid: a chip at its edge sits next to its results (the grid behind a popup); the grid alone passes (20 px chips, 4.5 px apart, user pick A2 2026-11-27)

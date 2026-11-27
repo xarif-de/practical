@@ -54,5 +54,5 @@ shot('tasks, settings, history, login', async (page, snap) => {
   await snap('history');
   await page.goto(`${LOGIN_BASE}/login`);
   await page.locator('form.pwform').waitFor();
-  await snap('login');
+  await snap('login', { mask: [page.locator('p.muted.small', { hasText: 'PractiCal' })] }); // the footer names the version: every release would differ
 });
