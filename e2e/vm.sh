@@ -1,6 +1,6 @@
 #!/bin/sh
 # vm.sh <command> [args…]: runs a command of this checkout in its Linux container in the colima/Docker VM. Every local
-# build and test goes through here (the mise tasks; cargo.sh, build-server.sh, gate.sh, baseline.sh and seed.sh
+# build and test goes through here (the mise tasks; cargo.sh, build-server.sh, gate.sh and seed.sh
 # re-exec themselves through it): never cargo or Playwright on the macOS host — Microsoft Defender scans every new
 # host file (CPU), and a target dir is 1.6-4 GB of them.
 #   vm.sh --serve <port> <command> [args…]: a throwaway container of the same image that publishes 127.0.0.1:<port>
@@ -9,7 +9,7 @@
 # and after a change of one of them (former tags no container uses are removed). Container practical-vm-<checkout dir
 # name>: kept between runs (warm), `--init` (reaps orphans), recreated when image or mounts change. Same paths as on
 # the host, so every printed path and every report is valid there:
-#   <checkout> rw · git common dir (worktrees) ro · ~/.cache/practical-e2e rw (baselines, bench dirs, bench DBs).
+#   <checkout> rw · git common dir (worktrees) ro · ~/.cache/practical-e2e rw (bench dirs, bench DBs).
 #   Ref/out dirs elsewhere are not seen: an absolute path argument outside these fails here.
 # Fleet cache layout (ai/skills building-rust-projects scripts/rust-dev-container.sh): volumes rust-dev-cargo (cargo
 # registry) + rust-dev-mbx (/vol: mbx store /vol/mbx, this checkout's target /vol/targets/<container> = /target);
@@ -23,7 +23,7 @@
 # Interrupt: Ctrl-C reaches the command through the TTY; without one, SIGINT/TERM/HUP here stops the command's process
 # group in the container.
 # E2E_NATIVE=1: the command runs on the host instead (lock still held). Diagnosis only, never routine: it builds
-# natively, and its baselines and bench numbers are not comparable with the VM's.
+# natively, and its screenshots and bench numbers are not comparable with the VM's.
 set -eu
 [ -z "${E2E_VM_INSIDE:-}" ] || exec "$@" # already in the container (or native)
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"

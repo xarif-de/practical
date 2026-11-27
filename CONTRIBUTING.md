@@ -134,15 +134,20 @@ These suites drive a real browser with Playwright against a build of your checko
 | `mise run chaos` | A seeded "monkey" that clicks around at random while the network misbehaves. It finds crashes that no scripted test thinks of. |
 | `mise run a11y` | Accessibility: axe-core over fixed UI states, plus keyboard flows (about 30 seconds). |
 
-### Visual comparison
+### Visual check
 
-A **baseline** is a snapshot of every UI state: a screenshot, the DOM and the computed styles. Comparing two
-baselines shows exactly which states look different.
+The visual check compares the key screens of every page with reference screenshots kept in the repository
+(`e2e/visual/__screenshots__`), on a desktop and on a phone. It takes a few seconds and shows whether anything looks
+different that should not.
 
 | Command | What it does |
 | --- | --- |
-| `mise run e2e-baseline -- <dir>` | Takes a baseline of this checkout. |
-| `mise run e2e-compare -- <dirA> <dirB>` | Compares two baselines pixel by pixel, and the DOM and styles. Exits with 1 on any difference. |
+| `mise run visual` | Compares the key screens with their references. Fails on any pixel that differs. |
+| `mise run visual -- --update-snapshots` | Takes new references, after a change that is meant to look different. Review the changed PNGs and commit them with the change. |
+
+> [!note]
+> Screenshots depend on the fonts and the browser build. Take references only in the container (`mise run visual`
+> does), never directly on macOS.
 
 ### Gates: the checks before a commit
 
@@ -151,16 +156,7 @@ A **gate** runs several of the checks above in a row and stops at the first fail
 | Command | What it runs | When to use it |
 | --- | --- | --- |
 | `mise run gate-quick` | `cargo test`, the API documentation, the docs link check, a server build and the functional suite | Every commit (about 90 seconds when the build is warm). |
-| `mise run gate` | `gate-quick`, then the chaos monkey and the accessibility checks | Before most commits. Needs nothing prepared. |
-| `mise run gate-visual -- <ref-dir>` | `gate`, then a visual baseline of your checkout, a comparison against `<ref-dir>` and the dark-theme coverage check | Opt-in. Use it for a rewrite that must change no pixel. It also needs a reference baseline of the commit you started from, built in a second worktree (`mise run e2e-baseline -- <dir>`), which takes about as long again. While you are designing a surface, every state differs on purpose and the comparison only produces noise. |
-
-`<ref-dir>` is a baseline of the commit that your change starts from. Every difference that the gate reports must
-be one that you intended.
-
-> [!note]
-> Screenshots depend on the fonts and the browser build. Compare only baselines that were taken in the container.
-> Baselines and benchmark results made directly on macOS (all from before November 2026) are no longer valid, and
-> `gate-visual` refuses them as a reference.
+| `mise run gate` | `gate-quick`, then the chaos monkey, the accessibility checks and the visual check | Before most commits. Needs nothing prepared. |
 
 ### Performance
 

@@ -1,7 +1,6 @@
 // axe-core (pinned devDependency) in a page: the WCAG 2.2 A/AA rules + axe's best practices. The source is evaluated
 // through Playwright (Runtime.evaluate), not a <script>: the server's CSP forbids inline scripts, and an evaluation is
-// exempt from it. Used by the a11y suite (e2e/a11y, gated against e2e/a11y-allow.txt) and, with E2E_AXE=1, by every
-// visual state (lib/capture.mjs: <state>.axe.json next to the PNG — an audit of all of them).
+// exempt from it. Used by the a11y suite (e2e/a11y, gated against e2e/a11y-allow.txt).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';

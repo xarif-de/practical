@@ -25,9 +25,9 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
   (e2e/vm/Dockerfile: rust:<channel>-bookworm + toolchain of rust-toolchain.toml, Node 24.7.0, Playwright's Chromium
   + OS deps, fonts-inter, mbx, watchexec; built on first use ~2 min); container `practical-vm-<checkout dir>` (warm,
   kept); volumes `rust-dev-cargo`, `rust-dev-mbx` (fleet layout: mbx store + target `/vol/targets/practical-vm-<dir>`
-  = `/target`). Mounted at host paths: checkout, git common dir (ro), `~/.cache/practical-e2e` → reports, baselines,
+  = `/target`). Mounted at host paths: checkout, git common dir (ro), `~/.cache/practical-e2e` → reports and
   bench dirs land there; ref/out dirs elsewhere fail. The mise tasks delegate; cargo.sh, build-server.sh, gate.sh,
-  baseline.sh, seed.sh (stage 1 = docker on the host first), bench.mjs re-exec themselves; global-setup.mjs refuses a
+  seed.sh (stage 1 = docker on the host first), bench.mjs re-exec themselves; global-setup.mjs refuses a
   host Playwright. Ports are the container's own (no clash between worktrees, none published). Every vm.sh run holds
   `~/.cache/practical-e2e/heavy.lock` (host flock) → runs of all worktrees queue host-wide.
 - `e2e/cargo.sh <sub> [args]` (= `mise run test` for `test`): toolchain from `build/rust-toolchain.toml` (cargo.sh
@@ -39,8 +39,8 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
 |---|---|---|
 | `mise run gate-quick` | cargo test → API doc (`mise run doc`: rustdoc, `-D warnings`) → docs-nav + site link check (`node site/build.mjs --check`) → server build (`e2e` profile) → functional suite | every commit (VM, 2026-11-03: 86 s warm, 117 s after an image rebuild; native was ~80-120 s) |
 | `mise run a11y` | axe over 77 fixed states (desktop light/dark, phone light) vs `e2e/a11y-allow.txt` + 9 keyboard flows → a11y-check.mjs (~35 s) | part of `gate`; alone after UI/ARIA/focus edits |
-| `mise run gate` | quick → chaos → a11y | before most commits; no reference baseline needed (VM: 163-175 s, 7× green in a row 2026-11-03). A chaos failure keeps its trace: `.work/test-results-<port>/…/trace.zip` |
-| `mise run gate-visual -- <ref-dir>` | gate → visual baseline → compare vs `<ref-dir>` → theme-cover | OPT-IN, for a refactoring whose point is that nothing looks different. While surfaces are being designed every state differs on purpose, so the comparison only reports noise and costs a reference baseline of the base commit too (VM: 110 s; native was 161-262 s) |
+| `mise run visual` | 11 key screens × desktop/phone (light, de) vs `e2e/visual/__screenshots__` (~4 s) | part of `gate`; an intended look change: `mise run visual -- --update-snapshots`, review the PNG diff, commit it |
+| `mise run gate` | quick → chaos → a11y → visual | before most commits (VM: 163-175 s, 7× green in a row 2026-11-03, before visual). A chaos failure keeps its trace: `.work/test-results-<port>/…/trace.zip` |
 | `mise run bench-compare -- <bench-dir>` | A/B perf bench vs the ref binary, interleaved | changes that can cost time, memory or bytes; exit 0 ok, 1 regression (names metrics), 4 power state changed → rerun |
 | `E2E_PROFILE=release <any of the above>` | the shipped profile | release candidates, Cargo profile changes, binary size |
 
@@ -48,17 +48,16 @@ Where code lives: the Rust API doc (`mise run doc`, starts at `build/src/main.rs
   (dagger-ci.yaml). Measured 2026-10-09, `mise run pipeline` after a one-line change: 2m41s with `release`,
   33.9 s with `e2e`; the first build on the new profile is a cold 4m39s.
 
-- References come from the base commit: `mise run e2e-baseline -- <dir>` / `mise run bench` in a worktree of it, or an
-  existing `~/.cache/practical-e2e/<…>-<base-sha>` made in the VM. Everything made natively (all before 2026-11-03)
-  is invalid: macOS fonts/raster differ (gate visual refuses a `.e2e-baseline` without `env practical-e2e-vm:…`), a
-  native bench dir holds a macOS binary the VM cannot run. VM bench (proc.py Linux): CPU = threads' schedstat ns,
+- Bench references come from the base commit: `mise run bench` in a worktree of it, or an existing
+  `~/.cache/practical-e2e/bench-<base-sha>` made in the VM (a native bench dir holds a macOS binary the VM cannot run). VM bench (proc.py Linux): CPU = threads' schedstat ns,
   wakeups = voluntary context switches, instructions null (Colima VM has no PMU: no srv.inst.*/idle.inst), no power
   state (exit 4 never fires). A/A 2026-11-03 (2 runs, host load 4-7): 0 alarms, worst ratios srv.lat 1.052, srv.cpu
   1.032, ui.busy 1.137, ui.cpu4 1.118, idle.cpu 0.70-0.90; thresholds kept. A rise from a reference of 0 counts.
-- VM visual repeatability: two baselines of one commit = 0 of 1135 states differ (2026-11-03), needs Chromium's
-  `--disable-font-subpixel-positioning` on Linux (playwright.config.mjs; without it 61 phone states varied).
-- Visual rule (`gate-visual` only): every state it reports as different must map to one intended change of yours,
-  named per state in the commit/report; unmapped difference = failure (default target: 0 states with differences).
+- Visual: pixel-exact (`maxDiffPixels: 0`); repeatable only in the VM with Chromium's `--disable-font-subpixel-positioning`
+  (playwright.config.mjs; 0 of 1135 states differed between two runs 2026-11-03, 2× identical 2026-11-27) — bless in the
+  VM only. Rule: every screen it reports must be an intended change of yours, re-blessed in the same commit; else a
+  regression. Replaced the 1135-state baseline/compare/theme-cover suite 2026-11-27 (user: UI changes are frequent and
+  intended; only unintended ones matter; must run in seconds).
 - a11y rule: a new axe finding fails (fix it, or add `<rule>⇥<key>⇥<reason>` to e2e/a11y-allow.txt); a line no state
   shows any more is STALE and fails — delete it: the list only shrinks. Icon-only controls need aria-label/title.
 - CI (dagger) runs cargo-deny, `cargo test` inside the image build step (build/Dockerfile: after the release build,

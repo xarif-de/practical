@@ -26,5 +26,3 @@ export const FIXTURE = process.env.E2E_FIXTURE || path.join(WORK, 'fixture.sqlit
 export const RUN_DIR = path.join(WORK, `run-${PORT}`);
 // the server build of the run (global-setup.mjs) + build.rs' minified assets next to it (<BIN>.assets)
 export const BIN = path.join(WORK, `run-${FIRST_PORT}`, 'practical');
-// where the visual suite writes PNG + DOM + style artifacts (mise e2e-baseline sets it)
-export const OUT = process.env.E2E_OUT || path.join(WORK, 'out');

@@ -122,13 +122,15 @@ npx playwright install chromium >/dev/null
 exec npx playwright test "$@"' sh
 '''
 
-[tasks.e2e-baseline]
-description = "Visual baseline (PNG + DOM + computed style of every UI state) in the VM container (e2e/vm.sh): mise run e2e-baseline -- [outdir], default ~/.cache/practical-e2e/<sha>; outdir under ~/.cache/practical-e2e or the checkout"
-run = "e2e/baseline.sh"
-
-[tasks.e2e-compare]
-description = "Diff two baselines (pixels, DOM, computed style) in the VM container: mise run e2e-compare -- <dirA> <dirB>; exit 1 on any difference"
-run = "e2e/vm.sh node e2e/compare.mjs"
+[tasks.visual]
+description = "The visual check alone: the key screens (desktop + phone, light, de) against the reference screenshots in e2e/visual/__screenshots__ (seconds), in the VM container (e2e/vm.sh); part of `gate`. An intended look change: mise run visual -- --update-snapshots, then review the PNG diff"
+run = '''
+exec e2e/vm.sh sh -ec '
+cd e2e
+[ -d node_modules ] || npm ci --no-fund --no-audit
+npx playwright install chromium >/dev/null
+E2E_SUITE=visual exec npx playwright test "$@"' sh
+'''
 
 [tasks.bench]
 description = "Performance bench of this checkout on the synthetic big DB (e2e/bench), in the VM container (e2e/vm.sh): server latency/RSS/idle CPU, wire bytes, UI interaction times, sizes → mise run bench -- [--out dir], default ~/.cache/practical-e2e/bench-<sha>"
@@ -160,13 +162,10 @@ exec node a11y-check.mjs' sh
 '''
 
 [tasks.gate-quick]
-description = "The cheapest gate, in the VM container (e2e/vm.sh, heavy lock): cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos and a11y"
+description = "The cheapest gate, in the VM container (e2e/vm.sh, heavy lock): cargo test → API doc (rustdoc -D warnings) → docs/site links → server build → functional suite (e2e/gate.sh). `gate` adds chaos, a11y and visual"
 run = "e2e/gate.sh quick"
 
 [tasks.gate]
-description = "Gate of an ordinary change: gate-quick + chaos + a11y. No reference baseline, no image comparison (that is `gate-visual`)"
+description = "Gate of an ordinary change: gate-quick + chaos + a11y + visual (the key screens against their reference screenshots)"
 run = "e2e/gate.sh full"
 
-[tasks.gate-visual]
-description = "Gate of a change that must look identical: gate + visual baseline + compare against a reference baseline of the base commit + theme-cover: mise run gate-visual -- <ref-dir> (or E2E_REF). Opt-in — only for a refactoring whose point is that no pixel moves"
-run = "e2e/gate.sh visual"

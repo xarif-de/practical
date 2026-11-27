@@ -2,16 +2,13 @@
   "name": "practical-e2e",
   "private": true,
   "type": "module",
-  "description": "PractiCal end-to-end safety net: functional suite + visual/DOM/style baselines (see CONTRIBUTING.md, mise e2e-* tasks)",
+  "description": "PractiCal end-to-end safety net: functional, chaos, a11y and visual suites (see CONTRIBUTING.md, mise tasks)",
   "scripts": {
     "functional": "playwright test",
-    "baseline": "./baseline.sh",
-    "compare": "node compare.mjs"
+    "visual": "E2E_SUITE=visual playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
-    "axe-core": "4.14.1",
-    "pixelmatch": "8.0.0",
-    "pngjs": "7.0.0"
+    "axe-core": "4.14.1"
   }
 }

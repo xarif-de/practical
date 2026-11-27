@@ -1,15 +1,14 @@
 // PractiCal e2e. Projects:
 //   functional            — e2e/functional, desktop, de; spec files in parallel (E2E_WORKERS, default 4), the tests of
 //                           a file in order on one worker, each file on fresh servers + DB copies (lib/test.mjs)
-//   visual-<vp>-<scheme>  — e2e/visual, every surface; de; desktop 1440×900 / phone 390×844 × light / dark
-//   visual-en-*           — the @main states again in en (desktop light, phone light)
+//   visual-desktop, visual-phone — e2e/visual: the key screens against reference screenshots in the repo; de, light
 //   chaos                 — e2e/chaos, the seeded UI monkey with network chaos (Tier 1), one worker, desktop, de
 //   a11y-<vp>-<scheme>    — e2e/a11y: axe over fixed states (desktop light + dark, phone light) and the keyboard
 //                           flows (desktop light); each file on fresh servers like the functional suite
 // E2E_SUITE=visual selects the visual projects, E2E_SUITE=chaos the chaos one, E2E_SUITE=a11y the a11y ones, otherwise
 // the functional one runs.
 // global-setup.mjs builds the server and starts the visual/perf suites' shared pair (the functional workers start
-// their own); artifacts of the visual suite go to E2E_OUT.
+// their own).
 import { defineConfig } from '@playwright/test';
 import { BASE, FIRST_PORT, TZ } from './lib/env.mjs';
 
@@ -23,17 +22,13 @@ const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 const launchOptions = { args: ['--disable-gpu', '--disable-partial-raster', ...(process.platform === 'linux' ? ['--disable-font-subpixel-positioning'] : [])] };
 const common = { baseURL: BASE, timezoneId: TZ, reducedMotion: 'reduce', serviceWorkers: 'block', browserName: 'chromium', permissions: ['clipboard-read', 'clipboard-write'], launchOptions };
 
-const visual = [];
-for (const [vp, dev] of [['desktop', desktop], ['phone', phone]])
-  for (const scheme of ['light', 'dark'])
-    visual.push({ name: `visual-${vp}-${scheme}`, testDir: './visual', use: { ...common, ...dev, colorScheme: scheme, locale: 'de-DE' } });
-// no en-desktop-dark: its checks = en text (en-desktop-light) × dark colours (desktop-dark); en and de share the element
-// skeleton and no CSS depends on the language — 0 of 45 mutants were caught by it alone (mutation study, 2026-10-06)
-for (const [vp, dev, scheme] of [['desktop', desktop, 'light'], ['phone', phone, 'light']])
-  visual.push({ name: `visual-en-${vp}-${scheme}`, testDir: './visual', grep: /@main/, use: { ...common, ...dev, colorScheme: scheme, locale: 'en-GB' } });
+// pixel-exact: two runs in the VM container gave identical screenshots (with the raster flags above); a reference
+// taken elsewhere (macOS fonts) differs everywhere — bless in the container only
+const visual = [['desktop', desktop], ['phone', phone]].map(([vp, dev]) =>
+  ({ name: `visual-${vp}`, testDir: './visual', use: { ...common, ...dev, colorScheme: 'light', locale: 'de-DE' } }));
 
 // no phone-dark: its contrast pairs are desktop-dark's (one palette per scheme), its layout phone-light's — over the
-// full visual suite (E2E_AXE=1, 2026-10-07) it showed no finding the three projects here do not
+// former full visual suite (E2E_AXE=1, 2026-10-07) it showed no finding the three projects here do not
 const a11y = [['desktop', desktop, 'light'], ['desktop', desktop, 'dark'], ['phone', phone, 'light']].map(([vp, dev, scheme]) =>
   ({ name: `a11y-${vp}-${scheme}`, testDir: './a11y', testIgnore: vp === 'desktop' && scheme === 'light' ? undefined : /keys\.spec/, use: { ...common, ...dev, colorScheme: scheme, locale: 'de-DE' } }));
 
@@ -41,7 +36,8 @@ export default defineConfig({
   globalSetup: './global-setup.mjs',
   globalTeardown: './global-teardown.mjs',
   timeout: 60_000,
-  expect: { timeout: 10_000 },
+  expect: { timeout: 10_000, toHaveScreenshot: { maxDiffPixels: 0, animations: 'disabled', caret: 'hide', scale: 'device' } },
+  snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',
   retries: 0, // a flaky test is fixed, never retried away
   forbidOnly: true,
   reporter: [['list'], ['json', { outputFile: `.work/last-run-${FIRST_PORT}.json` }]],

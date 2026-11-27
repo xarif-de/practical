@@ -109,7 +109,7 @@ test('live: a change made elsewhere appears without a reload', async ({ page, br
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   test('the filter popover opens inside the screen, without a resize first', async ({ page }) => {
-    // a phone sends `resize` at random (visual/history.spec.mjs), and a resize used to fit the popover: none here
+    // a phone sends `resize` at random, and a resize used to fit the popover: none here
     await page.addInitScript(() => addEventListener('resize', e => e.stopImmediatePropagation(), true));
     await page.goto('/history');
     await page.locator('.hx-filter > button').click();
