@@ -31,7 +31,7 @@ pipeline live there. This file covers only what rustdoc does not. Line 1 of ever
 |---|---|
 | Cargo.toml | deps (policy: a RustiCal crate, in RustiCal's graph, or a one-line reason); profiles release / dist / e2e |
 | build.rs | `RUSTICAL_TAG` (one tag for all rustical_* crates = the Dockerfile's RustiCal image tag); assets: join per src/bundle.rs → oxc minify (JS, ES2020) / src/css_min.rs → gzip-9 + brotli-11 → `OUT_DIR/assets.rs`; `i18n-<lang>.js` from the .ftl (js-* keys + plural forms); regions.json → 2 gzip name tables |
-| Dockerfile | rust-alpine builder (cache mounts, `touch` all = no stale-mtime binary) → alpine + /practical + RustiCal's binary (same tag) |
+| Dockerfile | rust-bookworm builder → static musl (xarif-cargo cache mounts, `touch` all = no stale-mtime binary) → alpine + /practical + RustiCal's binary (same tag) |
 | deny.toml, rust-toolchain.toml | cargo-deny config (`mise run deny`, CI); toolchain = the builder image's Rust (one Renovate group) |
 | e2e/nextcloud-dev.sh | a throwaway Nextcloud (the version plan.xarif.de runs) for developing the remote import and sync: two users, own and shared calendars/address books, one event per `CLASS`, a webcal subscription, a deleted calendar. `up`/`down`/`reseed` |
 | .cargo/config.toml | target dir outside build/ (dagger uploads build/); SHARED by worktrees → never used locally: the VM container sets `CARGO_TARGET_DIR=/target` (e2e/vm.sh) |

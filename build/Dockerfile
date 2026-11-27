@@ -1,18 +1,28 @@
-# Static musl binary on a minimal Alpine, WITH RustiCal's own binary next to it: the
+# Static musl binary (built on Debian, see the builder) on a minimal Alpine, WITH RustiCal's own binary next to it: the
 # pod's two containers (rustical, practical) both run this image, so the CalDAV
 # server and the UI built on its crates are always the same release. Runs as uid
 # 1000 — both processes open the SAME WAL-mode SQLite file and its -wal/-shm siblings.
 
 # renovate: datasource=docker packageName=rust
-FROM rust:1.100-alpine@sha256:8d0e82abfdf9a38071e07cabc5afba4ddbe077631a80e4e742a760c38beadc33 AS builder
-# build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls); curl/zstd for xarif-cargo's archive tier.
-# Package mirror (base/dagger-modules docs/ci.md): in CI apk reads a copy of the
-# repositories file pointing at the artifact-proxy gateway (which falls back to
-# dl-cdn itself); the image keeps its own file. Locally the arg is unset.
-ARG XARIF_APK_MIRROR
-RUN sed "s#https*://dl-cdn.alpinelinux.org/alpine#${XARIF_APK_MIRROR:-&}#" /etc/apk/repositories > /tmp/apk-repos \
- && apk add --repositories-file /tmp/apk-repos --no-cache build-base perl make curl zstd \
- && rm /tmp/apk-repos
+FROM rust:1.100-bookworm@sha256:75d26c23c24cc6ea1cdabf0714a6bff8fd7bf3248716043fd7ae86dac7f41b94 AS builder
+# Debian, not rust:alpine: Alpine ships the musl-HOSTED rustc, built without jemalloc, ThinLTO and PGO
+# (base/dagger-modules docs/rust-functions.md "Static musl binaries"): the e2e build of this crate took
+# 1003-1216 s there vs 382-392 s here (runner, cold, 2026-11-27). The binary is still static musl for the
+# Alpine runtime: musl-tools gives musl-gcc for the C dependencies (bundled SQLite, aws-lc-rs), the target
+# follows the host (uname -m below); perl/make/cc come with the image; zstd for xarif-cargo's archive tier.
+# Package mirror (base/dagger-modules docs/ci.md): in CI apt fetches through the artifact-proxy gateway; the
+# original sources are restored right after. Locally the arg is unset.
+ARG XARIF_DEBIAN_MIRROR
+RUN if [ -n "${XARIF_DEBIAN_MIRROR:-}" ]; then cp -a /etc/apt /tmp/apt.orig && \
+      for f in /etc/apt/sources.list.d/*.sources /etc/apt/sources.list; do [ -f "$f" ] && sed -i \
+        -e "s#https*://deb.debian.org/debian-security#$XARIF_DEBIAN_MIRROR/security#" \
+        -e "s#https*://deb.debian.org/debian#$XARIF_DEBIAN_MIRROR#" "$f"; done; fi; \
+    apt-get update && apt-get install -y --no-install-recommends musl-tools zstd \
+ && rm -rf /var/lib/apt/lists/* \
+ && if [ -n "${XARIF_DEBIAN_MIRROR:-}" ]; then rm -rf /etc/apt && mv /tmp/apt.orig /etc/apt; fi
+ENV CC_x86_64_unknown_linux_musl=musl-gcc CC_aarch64_unknown_linux_musl=musl-gcc
+# rustup (the musl target below) through the package gateway in CI; unset locally
+ARG RUSTUP_DIST_SERVER
 WORKDIR /src
 
 # Package mirror (base/dagger-modules docs/ci.md): in CI crates come through the
@@ -68,10 +78,11 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=practical-mbx,target=/mbx,sharing=locked \
     find . -type f -exec touch {} + \
+ && t="$(uname -m)-unknown-linux-musl" && rustup target add "$t" \
  && export XARIF_CACHE_KEY=practical \
- && CARGO_INCREMENTAL=1 xarif-cargo build --profile "$CARGO_PROFILE" --locked \
- && cp "/mbx/target/$CARGO_PROFILE/practical" /practical \
- && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 xarif-cargo test --locked \
+ && CARGO_INCREMENTAL=1 xarif-cargo build --profile "$CARGO_PROFILE" --locked --target "$t" \
+ && cp "/mbx/target/$t/$CARGO_PROFILE/practical" /practical \
+ && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 xarif-cargo test --locked --target "$t" \
  && xarif-cargo --archive
 
 # renovate: datasource=docker packageName=alpine
