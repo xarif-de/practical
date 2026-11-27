@@ -178,11 +178,20 @@
       const REST_MS = 200; let held = false, restT = 0; const rest = () => { clearTimeout(restT); restT = setTimeout(() => { held = false; }, REST_MS); };
       // every wheel event of the page keeps the hold, and a sideways one is the hold's (no scroll, no back/forward swipe):
       // while the view slides in, Safari sends them to the document, not into `area` (recorded 2026-11-27, swipe.spec.mjs)
-      addEventListener('wheel', e => { if (!held) return; rest(); if (e.cancelable && Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault(); }, { passive: false, capture: true });
-      area.addEventListener('wheel', P.wheelPages(dir => { if (held) return; held = true; rest(); go(dir); }, (e, g) => {
+      const hold = e => { if (!held) return; rest(); if (e.cancelable && Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault(); };
+      addEventListener('wheel', hold, { passive: false, capture: true });
+      let last = null; // the latest wheel event's target in `area`
+      const turn = P.wheelPages(dir => { if (held) return; held = true; rest(); keep(last); go(dir); }, (e, g) => {
         if (g.n !== tn && g.dx) { tn = g.n; const dir = Math.sign(g.dx); took = off(e.target) || scrolls(e.target, dir); if (!took) P.intend(target(dir)); }
         return g.n !== tn || took;
-      }, 'x'), { passive: false });
+      }, 'x');
+      area.addEventListener('wheel', e => { last = e.target; turn(e); }, { passive: false });
+      /* Safari sends the wheel events of the next swipes to the element its gesture began on until the pointer moves, also
+         once a view switch has taken that element out of the page: they reached no listener, and the next swipe did nothing
+         until the mouse moved (user report 2026-11-27). So the elements under the pointer at a switch keep listening; the
+         root of the subtree the switch removed (no parent any more) takes such an event as the page would. */
+      const keep = el => { for (let p = el; p && p !== area; p = p.parentElement) if (!p.swipeKept) { p.swipeKept = true;
+        p.addEventListener('wheel', e => { if (e.currentTarget.parentNode) return; hold(e); turn(e); }, { passive: false }); } };
       let t0 = null; const sel = () => String(getSelection());
       area.addEventListener('touchstart', e => { t0 = null; if (e.touches.length !== 1 || off(e.target)) return; const p = e.touches[0];
         t0 = { x: p.clientX, y: p.clientY, sel: sel(), hint: 0, r: scrolls(e.target, 1), l: scrolls(e.target, -1) }; }, { passive: true });

@@ -101,6 +101,20 @@ test.describe('desktop wheel', () => {
     await expect(calView(page)).toHaveAttribute('data-view', 'month');
   });
 
+  test('Safari: the next swipe without a pointer move goes to the switched-out element, and still switches', async ({ page }) => {
+    await page.goto(cal('day'));
+    await over(page, '#viewroot');
+    const swipe = () => page.evaluate(() => { for (let i = 0; i < 6; i++) window.__el.dispatchEvent(new WheelEvent('wheel', { deltaX: 20, bubbles: true, cancelable: true })); });
+    await page.evaluate(() => { window.__el = document.elementFromPoint(innerWidth / 2, innerHeight / 2); });
+    await swipe();
+    await expect(calView(page)).toHaveAttribute('data-view', 'week');
+    await settle(page);
+    expect(await page.evaluate(() => window.__el.isConnected)).toBe(false); // the switch took it out of the page
+    await rest(page);
+    await swipe(); // as Safari does until the pointer moves: at the element the gesture began on
+    await expect(calView(page)).toHaveAttribute('data-view', 'month');
+  });
+
   test('tasks: sideways steps through the switch in order; not from inside the docked editor', async ({ page }) => {
     await page.goto('/tasks?view=groups&back=all');
     const on = page.locator('#tk-views button[aria-pressed=true]');
