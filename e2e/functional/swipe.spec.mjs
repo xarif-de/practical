@@ -82,6 +82,22 @@ test.describe('desktop wheel', () => {
     expect(qp(page, 'view')).toBe('month');
   });
 
+  test('a coast that reads as new touches (Safari: gaps over 150 ms) switches one view, and the next swipe after a rest one more', async ({ page }) => {
+    await page.goto(cal('day'));
+    await over(page, '#viewroot');
+    // six chunks of 100 px each, 170 ms apart: every chunk a fresh touch to practical.wheelTouch, but the wheel never rests
+    await page.evaluate(() => new Promise(done => {
+      const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2); let k = 0;
+      const chunk = () => { for (let i = 0; i < 5; i++) el.dispatchEvent(new WheelEvent('wheel', { deltaX: 20, bubbles: true, cancelable: true })); if (++k < 6) setTimeout(chunk, 170); else done(); };
+      chunk();
+    }));
+    await settle(page);
+    expect(qp(page, 'view')).toBe('week');
+    await rest(page); await over(page, '#viewroot');
+    await page.mouse.wheel(120, 0);
+    await expect(calView(page)).toHaveAttribute('data-view', 'month');
+  });
+
   test('tasks: sideways steps through the switch in order; not from inside the docked editor', async ({ page }) => {
     await page.goto('/tasks?view=groups&back=all');
     const on = page.locator('#tk-views button[aria-pressed=true]');

@@ -106,7 +106,7 @@ Dragging works with a mouse or a pen. On a touch screen, a finger scrolls the vi
 ### Move through time with a swipe
 
 On a trackpad or a touch screen, one swipe moves one month in the month view and one year in the year view. A
-sideways swipe switches between views.
+sideways swipe switches to the next view, one view per swipe: the next switch waits until the swipe has come to rest.
 
 ### Extra views under "More"
 

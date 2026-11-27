@@ -160,7 +160,9 @@
        that scrolls sideways comes first: a touch whose scroller (between the target and `area`) could still move its
        way when it began is that scroller's, all of it, momentum included.
        Wheel (trackpads, tilt wheels, Shift+wheel): wheelPages on 'x', one switch per touch; its events are cancelled,
-       which also keeps the browser's back/forward swipe off the page. Touch: passive listeners (vertical scrolling,
+       which also keeps the browser's back/forward swipe off the page. After a switch the wheel switches no further
+       until it has rested REST_MS (a timer, not the events' stamps): Safari's coast after a light swipe read as new
+       touches and ran through several views (user report 2026-11-27), and the switch itself blocks the thread. Touch: passive listeners (vertical scrolling,
        taps, long-press selection stay native), decided on touchend: ≥ 60 px sideways at more than twice the vertical
        travel, one finger throughout, no drag (dragstart) and no selection change in between. */
     swipeViews: (area, views, at, busy) => {
@@ -172,7 +174,9 @@
         || P.$$('[aria-modal="true"]').some(d => d.getClientRects().length) || !!P.$('.filter.open, .more.open') || (window.visualViewport && visualViewport.scale > 1.01) || !!(busy && busy());
       const scrolls = (el, dir) => { for (let p = el; p && p !== area.parentElement; p = p.parentElement) { const o = getComputedStyle(p).overflowX, max = p.scrollWidth - p.clientWidth; if ((o === 'auto' || o === 'scroll') && max > 1 && (dir > 0 ? p.scrollLeft < max - 1 : p.scrollLeft > 1)) return true; } return false; };
       let tn = -1, took = false; // the wheel touch decided last, and whether the content (or a reason above) has it
-      area.addEventListener('wheel', P.wheelPages(go, (e, g) => {
+      const REST_MS = 200; let held = false, restT = 0; const rest = () => { clearTimeout(restT); restT = setTimeout(() => { held = false; }, REST_MS); };
+      area.addEventListener('wheel', () => { if (held) rest(); }, { passive: true }); // every wheel event keeps the hold (before the turning listener)
+      area.addEventListener('wheel', P.wheelPages(dir => { if (held) return; held = true; rest(); go(dir); }, (e, g) => {
         if (g.n !== tn && g.dx) { tn = g.n; const dir = Math.sign(g.dx); took = off(e.target) || scrolls(e.target, dir); if (!took) P.intend(target(dir)); }
         return g.n !== tn || took;
       }, 'x'), { passive: false });
