@@ -144,9 +144,11 @@
        rest of the page stays live and the attribute that turns the names on (html[data-slide]) is gone once it
        ends. Without the API or with prefers-reduced-motion, swap() runs at once. → updateCallbackDone (swap's
        errors reject it). A second switch during the slide skips the first to its end (the API's own rule). */
-    slide: (dir, swap) => {
+    // WebKit (Safari, every iOS browser) switches without the slide: in about every third transition it painted the first
+    // frame with neither the snapshots nor the page under the top bar — a blank flash (user's 60 fps recording, 2026-11-27)
+    slide: (dir, swap, webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium/.test(navigator.userAgent)) => {
       const d = document.documentElement;
-      if (!dir || !document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { try { swap(); return Promise.resolve(); } catch (e) { return Promise.reject(e); } }
+      if (!dir || !document.startViewTransition || webkit || matchMedia('(prefers-reduced-motion: reduce)').matches) { try { swap(); return Promise.resolve(); } catch (e) { return Promise.reject(e); } }
       d.dataset.slide = dir > 0 ? 'next' : 'prev';
       const t = slideT = document.startViewTransition(swap);
       t.ready.catch(() => {}); t.finished.finally(() => { if (slideT === t) { slideT = null; delete d.dataset.slide; } }).catch(() => {}); // a failed swap is told by updateCallbackDone
