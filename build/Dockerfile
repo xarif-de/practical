@@ -5,13 +5,13 @@
 
 # renovate: datasource=docker packageName=rust
 FROM rust:1.100-alpine@sha256:8d0e82abfdf9a38071e07cabc5afba4ddbe077631a80e4e742a760c38beadc33 AS builder
-# build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls).
+# build-base = C toolchain for the bundled SQLite; perl/make for aws-lc-rs (rustls); curl/zstd for xarif-cargo's archive tier.
 # Package mirror (base/dagger-modules docs/ci.md): in CI apk reads a copy of the
 # repositories file pointing at the artifact-proxy gateway (which falls back to
 # dl-cdn itself); the image keeps its own file. Locally the arg is unset.
 ARG XARIF_APK_MIRROR
 RUN sed "s#https*://dl-cdn.alpinelinux.org/alpine#${XARIF_APK_MIRROR:-&}#" /etc/apk/repositories > /tmp/apk-repos \
- && apk add --repositories-file /tmp/apk-repos --no-cache build-base perl make \
+ && apk add --repositories-file /tmp/apk-repos --no-cache build-base perl make curl zstd \
  && rm /tmp/apk-repos
 WORKDIR /src
 
@@ -24,23 +24,33 @@ RUN if [ -n "$XARIF_CARGO_REGISTRY" ]; then mkdir -p "${CARGO_HOME:-$HOME/.cargo
       printf '[source.crates-io]\nreplace-with = "xarif"\n[source.xarif]\nregistry = "%s"\n' \
         "$XARIF_CARGO_REGISTRY" >> "${CARGO_HOME:-$HOME/.cargo}/config.toml"; fi
 
+# Shared Rust build cache (base/dagger-modules docs/rust-functions.md "xarif-cargo"): in CI `ci` passes the xarif-cargo
+# script (a download lock shared by concurrent builds; the mr-boxington store restores unchanged crates despite the
+# `touch` below; a Storage Box archive brings the cache back after an evicted mount or a node reboot). Locally the
+# args are unset and the fallback is plain cargo with the same target dir.
+ARG XARIF_CARGO XARIF_CI_CACHE XARIF_GENERIC_MIRROR
+RUN if [ -n "$XARIF_CARGO" ]; then printf '%s\n' "$XARIF_CARGO"; \
+    else printf '#!/bin/sh\nexport CARGO_TARGET_DIR=/mbx/target\ncase "$1" in --archive) exit 0;; --run) shift; exec "$@";; esac\nexec cargo "$@"\n'; fi > /usr/local/bin/xarif-cargo \
+ && chmod 755 /usr/local/bin/xarif-cargo
+
 # e2e (every build) or dist (release tags: dagger-ci.yaml release-build-args); see the profiles in Cargo.toml. e2e
 # since 2026-10-09: it is `release` plus incremental compilation, and a `main` image is a test artefact that is never
 # deployed (CONTRIBUTING.md). `mise run pipeline` after a one-line change: 33.9 s vs 2m41s on release, both warm;
 # the first build on a profile is cold once (4m39s).
 ARG CARGO_PROFILE=e2e
-# Cached build (base/dagger-modules docs/rust-functions.md): registry + target/ in BuildKit cache mounts, so only
-# changed crates rebuild (a dummy-main.rs layer rebuilt every dependency on each Cargo.lock bump); arm64 8 CPUs,
-# release, 2026-10-02: cold 290 s, a CSS change 115 s. The binary is copied out in the same RUN (a cache mount is no
-# layer). `touch`: cargo judges path crates by mtime, and a tree older than the cache got the previous binary
-# (ai/panelist 2026-10-01).
+# Cached build (base/dagger-modules docs/rust-functions.md): registry + the target dir (/mbx/target, xarif-cargo) in
+# BuildKit cache mounts, so only changed crates rebuild (a dummy-main.rs layer rebuilt every dependency on each
+# Cargo.lock bump); arm64 8 CPUs, release, 2026-10-02: cold 290 s, a CSS change 115 s. The binary is copied out in the
+# same RUN (a cache mount is no layer). `touch`: cargo judges path crates by mtime, and a tree older than the cache got
+# the previous binary (ai/panelist 2026-10-01). CARGO_INCREMENTAL=1: xarif-cargo defaults to 0, but incremental is
+# what makes the e2e profile fast (above); its state stays in the mount.
 COPY Cargo.toml Cargo.lock build.rs askama.toml ./
 COPY src ./src
 COPY assets ./assets
 COPY locales ./locales
 COPY templates ./templates
-# `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): same step, AFTER the release build, own
-# target/ (dev profile, own cache id). Not a stage: dagger v0.21.10 evaluates stages one after another anyway. Not
+# `cargo test` gates the image (CI, `mise run pipeline`, `mise run image`): same step, AFTER the release build, same
+# target dir (dev profile output beside the build profile's). Not a stage: dagger v0.21.10 evaluates stages one after another anyway. Not
 # beside the build: the two compiles' memory would add up, and in the CI dind (12 GiB, shared by up to two CI jobs
 # since 2026-10-28) an OOM wipes the whole engine cache. CARGO_BUILD_JOBS=2 bounds the cold test compile (at 4 its
 # own memory reached the release build's peak: no margin; 2 only slows a cold run). Measured at 4 jobs 2026-10-07,
@@ -56,12 +66,13 @@ COPY LICENSE ./
 COPY LICENSE /
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=practical-target,target=/src/target,sharing=locked \
-    --mount=type=cache,id=practical-test-target,target=/test-target,sharing=locked \
-    find . -path ./target -prune -o -type f -exec touch {} + \
- && cargo build --profile "$CARGO_PROFILE" --locked \
- && cp "target/$CARGO_PROFILE/practical" /practical \
- && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 cargo test --locked --target-dir /test-target
+    --mount=type=cache,id=practical-mbx,target=/mbx,sharing=locked \
+    find . -type f -exec touch {} + \
+ && export XARIF_CACHE_KEY=practical \
+ && CARGO_INCREMENTAL=1 xarif-cargo build --profile "$CARGO_PROFILE" --locked \
+ && cp "/mbx/target/$CARGO_PROFILE/practical" /practical \
+ && CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=2 xarif-cargo test --locked \
+ && xarif-cargo --archive
 
 # renovate: datasource=docker packageName=alpine
 FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
