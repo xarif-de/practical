@@ -128,12 +128,14 @@
        swipeViews ('x'). */
     wheelPages: (turn, pass, axis = 'y') => {
       const gesture = window.practical.wheelAxis(); let acc = 0, done = false;
-      return e => {
+      const l = e => {
         const g = gesture(e); if (g.fresh) { acc = 0; done = false; }
         if (g.lean !== axis || (pass && pass(e, g))) return;
         e.preventDefault(); if (done) return;
         acc += axis === 'x' ? g.dx : g.dy; if (Math.abs(acc) >= 60) { done = true; turn(acc > 0 ? 1 : -1); }
       };
+      l.restart = () => { acc = 0; done = false; }; // the caller knows a new touch began (swipeViews: a swipe in a coast)
+      return l;
     },
     /* a view switch slides: slide(dir, swap) runs swap() (the DOM change) inside a same-document view transition in
        which `.main` (the page under the top bar, clipped there; its toolbar with the view switch is captured on its own
@@ -175,13 +177,26 @@
         || P.$$('[aria-modal="true"]').some(d => d.getClientRects().length) || !!P.$('.filter.open, .more.open') || (window.visualViewport && visualViewport.scale > 1.01) || !!(busy && busy());
       const scrolls = (el, dir) => { for (let p = el; p && p !== area.parentElement; p = p.parentElement) { const o = getComputedStyle(p).overflowX, max = p.scrollWidth - p.clientWidth; if ((o === 'auto' || o === 'scroll') && max > 1 && (dir > 0 ? p.scrollLeft < max - 1 : p.scrollLeft > 1)) return true; } return false; };
       let tn = -1, took = false; // the wheel touch decided last, and whether the content (or a reason above) has it
-      const REST_MS = 200; let held = false, restT = 0; const rest = () => { clearTimeout(restT); restT = setTimeout(() => { held = false; }, REST_MS); };
+      const REST_MS = 200, SLIDE_MS = 350; let held = false, restT = 0, heldAt = 0, lo = Infinity, prev = 0, rise = 0;
+      const rest = () => { clearTimeout(restT); restT = setTimeout(() => { held = false; }, REST_MS); };
       // every wheel event of the page keeps the hold, and a sideways one is the hold's (no scroll, no back/forward swipe):
       // while the view slides in, Safari sends them to the document, not into `area` (recorded 2026-11-27, swipe.spec.mjs)
-      const hold = e => { if (!held) return; rest(); if (e.cancelable && Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault(); };
+      /* macOS coasts on for a second or more after a swipe (1-2 px a step at the end): waiting for its rest made a quick
+         second swipe do nothing (user 2026-11-27). A coast only slows down; a new swipe starts slow and speeds up. So the
+         hold ends early on two growing steps in a row to at least twice the slowest one since the slide (and ≥ 4 px);
+         the first SLIDE_MS after the switch are not read: while the view slides in, Safari's steps jump (53 → 119 → 56). */
+      const hold = e => {
+        if (!held) return;
+        const a = Math.abs(e.deltaX);
+        if (e.timeStamp - heldAt >= SLIDE_MS) {
+          rise = a > prev ? rise + 1 : 0; prev = a; lo = Math.min(lo, a);
+          if (rise >= 2 && a >= Math.max(4, 2 * lo)) { held = false; clearTimeout(restT); turn.restart(); return; } // the new swipe is the turning listener's
+        }
+        rest(); if (e.cancelable && a > Math.abs(e.deltaY)) e.preventDefault();
+      };
       addEventListener('wheel', hold, { passive: false, capture: true });
       let last = null; // the latest wheel event's target in `area`
-      const turn = P.wheelPages(dir => { if (held) return; held = true; rest(); keep(last); go(dir); }, (e, g) => {
+      const turn = P.wheelPages(dir => { if (held) return; held = true; heldAt = performance.now(); lo = Infinity; prev = 0; rise = 0; rest(); keep(last); go(dir); }, (e, g) => {
         if (g.n !== tn && g.dx) { tn = g.n; const dir = Math.sign(g.dx); took = off(e.target) || scrolls(e.target, dir); if (!took) P.intend(target(dir)); }
         return g.n !== tn || took;
       }, 'x');

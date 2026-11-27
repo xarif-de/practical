@@ -101,6 +101,25 @@ test.describe('desktop wheel', () => {
     await expect(calView(page)).toHaveAttribute('data-view', 'month');
   });
 
+  test('Safari, recorded: a second swipe while the first one still coasts switches one more view at once', async ({ page }) => {
+    const { ev } = JSON.parse(fs.readFileSync(new URL('./wheel-safari.json', import.meta.url)));
+    const end = ev[ev.length - 1][0];
+    // the recorded swipe and its coast, then straight on (no rest, 17 ms steps) a new swipe: slow, then faster
+    const next = [1, 2, 4, 7, 11, 16, 22, 28, 30, 30].map((dx, i) => [end + 17 * (i + 1), dx, 0, 1, 0]);
+    await page.goto(cal('day'));
+    await over(page, '#viewroot');
+    await page.evaluate(ev => new Promise(done => {
+      const inside = () => document.elementFromPoint(innerWidth / 2, innerHeight / 2), t0 = performance.now();
+      ev.forEach(([t, dx, dy, cancelable, outside], k) => setTimeout(() => {
+        (outside ? document.documentElement : inside()).dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: !!cancelable }));
+        if (k === ev.length - 1) done();
+      }, Math.max(0, t0 + t - performance.now())));
+    }), ev.concat(next));
+    await expect(calView(page)).toHaveAttribute('data-view', 'month');
+    await settle(page);
+    expect(qp(page, 'view')).toBe('month'); // not on to the year: the second swipe's own coast is held again
+  });
+
   test('Safari: the next swipe without a pointer move goes to the switched-out element, and still switches', async ({ page }) => {
     await page.goto(cal('day'));
     await over(page, '#viewroot');
