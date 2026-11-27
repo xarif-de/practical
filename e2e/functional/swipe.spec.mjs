@@ -82,19 +82,22 @@ test.describe('desktop wheel', () => {
     expect(qp(page, 'view')).toBe('month');
   });
 
-  test('a coast that reads as new touches (Safari: gaps over 150 ms) switches one view, and the next swipe after a rest one more', async ({ page }) => {
+  test('Safari, recorded: one light swipe whose coast runs on through the slide switches one view', async ({ page }) => {
+    const { ev } = JSON.parse(fs.readFileSync(new URL('./wheel-safari.json', import.meta.url)));
     await page.goto(cal('day'));
     await over(page, '#viewroot');
-    // six chunks of 100 px each, 170 ms apart: every chunk a fresh touch to practical.wheelTouch, but the wheel never rests
-    await page.evaluate(() => new Promise(done => {
-      const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2); let k = 0;
-      const chunk = () => { for (let i = 0; i < 5; i++) el.dispatchEvent(new WheelEvent('wheel', { deltaX: 20, bubbles: true, cancelable: true })); if (++k < 6) setTimeout(chunk, 170); else done(); };
-      chunk();
-    }));
+    // at the recorded times; an event Safari sent while the new view slid in goes to the document, not the calendar
+    await page.evaluate(ev => new Promise(done => {
+      const inside = () => document.elementFromPoint(innerWidth / 2, innerHeight / 2), t0 = performance.now();
+      ev.forEach(([t, dx, dy, cancelable, outside], k) => setTimeout(() => {
+        (outside ? document.documentElement : inside()).dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: !!cancelable }));
+        if (k === ev.length - 1) done();
+      }, Math.max(0, t0 + t - performance.now())));
+    }), ev);
     await settle(page);
     expect(qp(page, 'view')).toBe('week');
     await rest(page); await over(page, '#viewroot');
-    await page.mouse.wheel(120, 0);
+    await page.mouse.wheel(120, 0); // the next swipe, after a rest: one more
     await expect(calView(page)).toHaveAttribute('data-view', 'month');
   });
 
