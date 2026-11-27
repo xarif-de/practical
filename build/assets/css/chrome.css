@@ -144,7 +144,9 @@ html[data-scheme=dark] .dayblock { --la: 30%; }
 .add { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; --pl: 10px; background: linear-gradient(#fff, #fff) center / var(--pl) 2px no-repeat, linear-gradient(#fff, #fff) center / 2px var(--pl) no-repeat, var(--accent); color: #fff; font-size: 0; opacity: 0; transition: opacity .12s; cursor: pointer; } /* the + is drawn: the glyph sat low in its line box */ .day:hover .add, .dayblock:hover .add, .lrow:hover .add, .doc h2:hover .add { opacity: 1; transition-delay: .5s; } /* shown after a short hover, hidden at once */
 .lrow { position: relative; display: grid; grid-template-columns: 34px 26px minmax(0, 1fr); grid-template-areas: "d w t" "d w bar"; column-gap: 8px; row-gap: 2px; align-items: center; padding: 6px 12px 5px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; } .lrow .add { top: 50%; transform: translateY(-50%); }
 .doc h2 { position: relative; padding-right: 40px; font-size: 34px; letter-spacing: -.03em; margin: 0; } .doc h2 .add { top: 50%; transform: translateY(-50%); width: 26px; height: 26px; --pl: 12px; }
-@media (hover: none) { .add { opacity: .9; } }
+/* touch (no hover): only the picked day has its +, which a second tap on the day does too (calendar.js); the round + goes */
+@media (hover: none) { .day .add, .dayblock .add, .lrow .add { display: none; } .day.sel .add, .month:not(:has(.day.sel)) .day.today .add, .dayblock.sel .add, .lrow.sel .add { display: block; } .add { opacity: 1; } #viewroot ~ #fab { display: none; } }
+@media (hover: none) and (max-width: 720px) { .day .add { top: auto; bottom: 4px; right: 4px; width: 18px; height: 18px; --pl: 8px; } }
 
 /* the date picker (#picker) */
 .picker { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(8px); z-index: 40; display: grid; place-items: center; }

@@ -26,8 +26,13 @@
 .day.open .dmore { position: absolute; opacity: 0; pointer-events: none; }
 @media (max-width: 720px) {
   .ev { display: none; }
-  .day .dots { display: flex; gap: 3px; justify-content: center; }
-  .day .dots i { width: 5px; height: 5px; border-radius: 50%; }
+  /* a dot per event over every row the tile has; its bottom strip keeps the "+x" of those past them (calendar.js dotFit)
+     and the picked day's + (chrome.css) */
+  .day { padding-bottom: 22px; }
+  .day .dots { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .day .dots i { width: 5px; height: 5px; border-radius: 50%; } .day .dots i.xt { display: none; }
+  .day .dmore { display: none; }
+  .day .dplus { position: absolute; left: 5px; bottom: 5px; font-size: 11px; line-height: 14px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
   .agenda { display: block; }
 }
 @media (min-width: 721px) { .day .dots { display: none; } .agenda { display: none; } }

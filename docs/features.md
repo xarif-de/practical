@@ -71,7 +71,11 @@ first day carries its calendar week ("KW 46") beside the number, faint until the
 When a day has more events than fit, it says "+N more". Point at the day, move the keyboard focus to it, or tap
 "+N more", and the day opens over its neighbours to show all of them. It grows downwards. Near the bottom of the month
 it grows upwards too, and then lists its events from the top in order of time. Bars of events that last several days
-keep their place, so they stay unbroken. On a phone, "+N more" picks the day, and the list below shows all of them.
+keep their place, so they stay unbroken.
+
+On a phone, every event of a day is a dot in its colour, over all the rows the day has; "+N" counts the ones past
+them. A tap picks the day, and the list below shows all of its events. The picked day shows a + button: tap it, or
+tap the day once more, to create an event there.
 
 A click on an event's title opens it. A click on the empty space after the title picks the day, so a full day is
 still easy to pick. Bars of events that last several days open wherever you click them.

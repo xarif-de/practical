@@ -251,7 +251,6 @@ const SHOTS = [
     await p.locator('#import-calendar .imp-file').setInputFiles({ name: 'school-year.ics', mimeType: 'text/calendar', buffer: Buffer.from(IMPORT_ICS) });
     await p.locator('#import-calendar .imp-fields:not([hidden])').waitFor(); }, 'light', { device: 'settings', fit: true }],
   ['phone', 'Phone layout', 'The same app on a phone: the address book, the task list and an event.', null, 'light', { phones: [
-    // calendar views on a phone show a + on every day (chrome.css `hover: none`): the contacts stand in for them
     async p => { await ctList(p); },
     async p => { await tkView(p, 'groups', 'month'); },
     async p => { await openEvent(p, 'Q4 roadmap workshop', D); },

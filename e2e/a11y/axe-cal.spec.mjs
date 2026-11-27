@@ -28,8 +28,7 @@ a11y('editor: view, edit, new, the delete question, the colour popover', async (
   if (await page.locator('#ed-confirm:not([hidden])').count()) await page.locator('#ed-discard').click();
   if (await page.locator('#ed').isVisible()) await page.locator('#ed-close').click(); // edit mode went back to the view
   await page.locator('#ed').waitFor({ state: 'hidden' });
-  if (phone(testInfo)) await page.locator('#fab').click(); // the desktop's "+" of a day
-  else { const h2 = page.locator('.doc h2'); await h2.hover(); await h2.locator('.add').click(); }
+  const h2 = page.locator('.doc h2'); if (!phone(testInfo)) await h2.hover(); await h2.locator('.add').click(); // a phone shows it without hover
   await page.locator('#ed:not([hidden])').waitFor();
   await check('ed-new');
 });

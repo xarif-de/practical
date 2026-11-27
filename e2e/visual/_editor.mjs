@@ -29,11 +29,11 @@ export async function unlock(page) {
   await page.locator('#edh').blur();
 }
 
-/** New event: desktop through a month day's add button, phone through the FAB (day = today). */
+/** New event: desktop through a month day's add button, phone through the picked day's (the only one it shows). */
 export async function openNew(page, phone, date = '2026-10-16') {
   if (phone) {
     await page.goto('/calendar?view=month&date=2026-10-14');
-    await page.locator('#fab').click();
+    await page.locator('.v-month .day.sel .add').click();
   } else {
     await page.goto(`/calendar?view=month&date=${date}`);
     const day = page.locator(`.v-month .day[data-date="${date}"]`);

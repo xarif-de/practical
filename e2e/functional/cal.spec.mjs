@@ -272,11 +272,13 @@ test('a month tile with more than fits unfolds in place: down where there is roo
   await expect(u).toHaveClass(/\bopen\b/);
   await page.locator('.toolbar [data-nav="today"]').focus();
   await expect(u).not.toHaveClass(/\bopen\b/);
-  // the phone grid shows dots, not chips: there the "+N" picks the day (its agenda lists them all) and unfolds nothing
+  // the phone grid shows dots, not chips, and no "+N more" (its dots count the rest): a click on the day picks it (its
+  // agenda lists them all) and unfolds nothing
   await page.setViewportSize({ width: 390, height: 800 });
   await open(page, cal('month'));
   const p = page.locator('.v-month .day[data-date="2026-10-19"]');
-  await p.locator('.dmore').click();
+  await expect(p.locator('.dmore')).toBeHidden();
+  await p.locator('.n').click();
   await expect(p).toHaveClass(/\bsel\b/);
   await expect(p).not.toHaveClass(/\bopen\b/);
   await expect(page.locator('.agenda')).toContainText('Termin 5');
@@ -579,6 +581,51 @@ test('FAB and a day\'s add button open a new event on that day', async ({ page }
   await page.locator('.lrow[data-date="2026-10-20"] .add').click();
   await expect(page.locator('#ed')).toBeVisible();
   await expect(page.locator('#edform [name="date"]')).toHaveValue('2026-10-20');
+});
+
+test.describe('phone touch', () => {
+  test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const pluses = page => page.locator('.day .add:visible, .dayblock .add:visible, .lrow .add:visible');
+  const newOn = async (page, date) => { await expect(page.locator('#edform [name="date"]')).toHaveValue(date); await page.locator('#ed-close').click(); await expect(page.locator('#ed')).toBeHidden(); };
+  test('only the picked day shows its +; a second tap on the day creates there, as the + does', async ({ page }) => {
+    await open(page, cal('month'));
+    await expect(page.locator('#fab')).toBeHidden();
+    await expect(pluses(page)).toHaveCount(1);
+    await expect(page.locator(`.v-month .day[data-date="${D}"] .add`)).toBeVisible();
+    await page.locator('.v-month .day[data-date="2026-10-21"] .n').tap();
+    await expect(page.locator('.v-month .day[data-date="2026-10-21"] .add')).toBeVisible();
+    await expect(pluses(page)).toHaveCount(1);
+    await expect(page.locator('#ed')).toBeHidden();
+    await page.locator('.v-month .day[data-date="2026-10-21"] .n').tap();
+    await newOn(page, '2026-10-21');
+    await page.locator('.v-month .day[data-date="2026-10-21"] .add').tap();
+    await newOn(page, '2026-10-21');
+    await open(page, cal('week'));
+    await page.locator('.dayblock[data-date="2026-10-16"] .dl').tap();
+    await expect(page.locator('.dayblock[data-date="2026-10-16"] .add')).toBeVisible();
+    await expect(page.locator('#ed')).toBeHidden();
+    await page.locator('.dayblock[data-date="2026-10-16"] .dl').tap();
+    await newOn(page, '2026-10-16');
+    await open(page, cal('day'));
+    await page.locator('.lrow[data-date="2026-10-20"] b').tap();
+    await expect.poll(() => qp(page, 'date')).toBe('2026-10-20');
+    await expect(page.locator('#ed')).toBeHidden();
+    await page.locator('.lrow[data-date="2026-10-20"] b').tap();
+    await newOn(page, '2026-10-20');
+  });
+  test('month: a dot per event over the tile\'s rows, "+x" for the ones past them', async ({ page }) => {
+    await open(page, cal('month'));
+    const tiles = () => page.evaluate(() => [...document.querySelectorAll('.v-month .day')].map(d => [d.querySelectorAll('.dots i').length, d.querySelectorAll('.dots i:not(.xt)').length, d.querySelector('.dplus')?.textContent ?? '']));
+    for (const [all, shown, x] of await tiles()) expect(x).toBe(all > shown ? `+${all - shown}` : '');
+    // one day with far more events than rows: as many as fit, the rest counted
+    await page.evaluate(() => { const d = document.querySelector('.v-month .day[data-date="2026-10-21"] .dots'); for (let k = 0; k < 40; k++) d.append(document.createElement('i')); dispatchEvent(new Event('resize')); });
+    await expect(page.locator('.v-month .day[data-date="2026-10-21"] .dplus')).toHaveText(/^\+\d+$/);
+    const [all, shown, x] = await page.evaluate(() => { const d = document.querySelector('.v-month .day[data-date="2026-10-21"]'); return [d.querySelectorAll('.dots i').length, d.querySelectorAll('.dots i:not(.xt)').length, d.querySelector('.dplus').textContent]; });
+    expect(shown).toBeGreaterThan(8);
+    expect(x).toBe(`+${all - shown}`);
+    const [dots, strip] = await page.evaluate(() => { const d = document.querySelector('.v-month .day[data-date="2026-10-21"]'), v = [...d.querySelectorAll('.dots i:not(.xt)')].pop(); return [v.getBoundingClientRect().bottom, d.querySelector('.dplus').getBoundingClientRect().top]; });
+    expect(dots).toBeLessThanOrEqual(strip);
+  });
 });
 
 test('live update: an event bob adds to the shared calendar appears for alice without reload', async ({ page, browser }) => {

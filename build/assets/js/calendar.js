@@ -110,6 +110,7 @@
   const FLIP_MS = 480, FLIP_STEP = 90, FLIP_MAX = 1500, FLIP_EASE = 'cubic-bezier(.65,0,.35,1)', FLIP_GAP = 24, FLIP_FETCH = 12; // ms for one page, ms per further page, cap; px between pages
   let flip = null;
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const touch = () => matchMedia('(hover: none)').matches; // a second tap on the picked day creates there (the + it shows, chrome.css), not a double click
   const localIso = ymd;
   function monthsBetween(a, b) { const out = [], d = parse(a.slice(0, 7) + '-01'), dir = b > a ? 1 : -1; for (;;) { d.setMonth(d.getMonth() + dir); const m = localIso(d); if (m.slice(0, 7) === b.slice(0, 7)) return out; out.push(m); } } // first days of the months strictly between, in travel order
   const monthUrl = (m, s) => { const u = url(true, s); u.searchParams.set('month', m.slice(0, 7)); return u; };
@@ -399,14 +400,22 @@
       if (!b) { b = document.createElement('button'); b.className = 'dmore'; b.type = 'button'; b.setAttribute('aria-expanded', 'false'); d.append(b); }
       b.hidden = false; b.textContent = `+${c - k} ${grid.dataset.plus}`; });
   }
-  let fitQ = 0; addEventListener('resize', () => { if (!fitQ) fitQ = requestAnimationFrame(() => { fitQ = 0; $$('.day.open', root).forEach(dayClose); dayFit(root); }); }); // an open tile (focus keeps it) would keep its old size
+  // the phone grid's dots (month.rs, one per event): those past the tile's rows go, a "+x" counts them; measured first, then written
+  function dotFit(scope) {
+    const boxes = $$('.v-month > .month > .day > .dots', scope); boxes.forEach(b => $$('.xt', b).forEach(i => i.classList.remove('xt')));
+    const over = boxes.map(b => { const end = b.offsetTop + b.clientHeight; return b.clientHeight ? [...b.children].filter(i => i.offsetTop + i.offsetHeight > end) : []; });
+    boxes.forEach((b, k) => { over[k].forEach(i => i.classList.add('xt')); const d = b.parentNode; let x = $(':scope > .dplus', d);
+      if (!over[k].length) { if (x) x.remove(); return; }
+      if (!x) { x = document.createElement('span'); x.className = 'dplus'; x.setAttribute('aria-hidden', 'true'); d.append(x); } x.textContent = '+' + over[k].length; });
+  }
+  let fitQ = 0; addEventListener('resize', () => { if (!fitQ) fitQ = requestAnimationFrame(() => { fitQ = 0; $$('.day.open', root).forEach(dayClose); dayFit(root); dotFit(root); }); }); // an open tile (focus keeps it) would keep its old size
   /* a month tile with more singles than fit (the "+N" .dmore, month.rs) unfolds over its neighbours while hovered, focused
      inside or after a click on the "+N": downwards while the grid and the window have room, else upwards too; then the
      earliest singles move above the multi-day bars (flex order) by whole rows, so each bar keeps its place in its band
      across the week. Negative margins keep the grid row as it was; too many for the whole grid: the tile scrolls. */
-  // the "+N" (Enter, a touch: no hover) folds and unfolds; the phone grid (dots, no chips) picks the day instead, its agenda lists them all
+  // the "+N" (Enter, a touch: no hover) folds and unfolds; the phone grid (dots, no chips) has none (dotFit's "+x" instead)
   root.addEventListener('click', e => { const b = e.target.closest && e.target.closest('.v-month .dmore'); if (!b) return; const d = b.closest('.day');
-    if (d.classList.contains('open')) dayClose(d); else if (shows(d)) dayOpen(d); else if (d.dataset.date !== state.date) pickDay(d.dataset.date); });
+    if (d.classList.contains('open')) dayClose(d); else if (shows(d)) dayOpen(d); });
   const shows = d => { const x = $(':scope > .ev:not(.xt)', d); return !!x && x.getClientRects().length > 0; };
   function dayOpen(el) {
     if (!el || el.classList.contains('open') || !shows(el)) return;
@@ -453,11 +462,10 @@
   function wireItems(scope) { // everything a fetched week block or a rebuilt heat grid brings along; assignments only, so a second call is harmless
     $$('.heat i[data-date], .we[data-date]', scope).forEach(el => el.onclick = () => state.view === 'week' ? goWeek(el.dataset.date) : go('day', el.dataset.date));
     $$('.planner .c[data-date]', scope).forEach(el => el.onclick = () => { if (el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the year planner picks the day; the view stays
-    $$('.lrow[data-date]', scope).forEach(el => { el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); ledPin = true; go('day', el.dataset.date); }; el.tabIndex = -1; const a = $('.add', el); if (a) a.tabIndex = -1; }); // picking in the ledger leaves it exactly where it is
+    $$('.lrow[data-date]', scope).forEach(el => { el.onclick = e => { if (e.target.classList.contains('add')) return; e.preventDefault(); if (touch() && el.dataset.date === state.date) { edOpen(null, el.dataset.date); return; } ledPin = true; go('day', el.dataset.date); }; el.tabIndex = -1; const a = $('.add', el); if (a) a.tabIndex = -1; }); // picking in the ledger leaves it exactly where it is
     ledgerStop();
-    dayFit(scope);
-    $$('.v-month > .month > .day[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); });
-    $$('.dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (!e.defaultPrevented && !e.target.closest('a, button, .ev') && el.dataset.date !== state.date) pickDay(el.dataset.date); }); // the date label picks too, it no longer opens the day view
+    dayFit(scope); dotFit(scope);
+    $$('.v-month > .month > .day[data-date], .dayblock[data-date]', scope).forEach(el => el.onclick = e => { if (e.defaultPrevented || e.target.closest('a, button, .ev')) return; if (el.dataset.date !== state.date) pickDay(el.dataset.date); else if (touch()) edOpen(null, el.dataset.date); }); // the date label picks too, it no longer opens the day view
     markPicked();
     $$('[data-key]', scope).forEach(el => {
       el.onclick = e => { e.stopPropagation(); if (offText(el, e)) { const d = el.closest('.day'); if (d.dataset.date !== state.date) pickDay(d.dataset.date); return; } edOpen(el.dataset.key, (el.closest('[data-date]') || el).dataset.date); }; // a week entry on its start day: the day block's date
@@ -598,7 +606,7 @@
   const sweepMark = () => { $$('.new-on', root).forEach(x => x.classList.remove('new-on')); if (!sweep || !sweep.on) return;
     const [a, b] = sweep.a <= sweep.b ? [sweep.a, sweep.b] : [sweep.b, sweep.a]; $$(NEW_CELLS, root).forEach(c => { if (c.dataset.date >= a && c.dataset.date <= b) c.classList.add('new-on'); }); };
   const sweepEnd = () => { const s = sweep; sweep = null; document.body.classList.remove('new-drag'); $$('.new-on', root).forEach(x => x.classList.remove('new-on')); return s; };
-  root.addEventListener('dblclick', e => { const c = newCell(document.elementFromPoint(e.clientX, e.clientY)); if (!c) return; e.preventDefault(); getSelection().removeAllRanges(); edOpen(null, c.dataset.date); });
+  root.addEventListener('dblclick', e => { if (touch()) return; const c = newCell(document.elementFromPoint(e.clientX, e.clientY)); if (!c) return; e.preventDefault(); getSelection().removeAllRanges(); edOpen(null, c.dataset.date); });
   root.addEventListener('pointerdown', e => {
     if (e.button !== 0 || e.ctrlKey || e.pointerType === 'touch' || drag || sweep) return;
     const c = newCell(e.target); if (c) sweep = { id: e.pointerId, a: c.dataset.date, b: c.dataset.date, x0: e.clientX, y0: e.clientY, on: false };

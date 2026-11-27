@@ -149,7 +149,8 @@ pub fn month_grid(year: i32, month: u32, today: NaiveDate, instances: &[Instance
             let kw = if *d == w[0] { format!("<i class=\"kw\">{}</i>", e(&l.week_short(d.iso_week().week()))) } else { String::new() };
             let num = if fer.is_empty() && kw.is_empty() { format!("<span class=\"n\">{}</span>", d.day()) } else { format!("<span class=\"nline\"><span class=\"n\">{}</span>{kw}{fer}</span>", d.day()) };
             let _ = write!(out, "<div class=\"{cls}\" data-date=\"{d}\">{num}{add}<div class=\"dots\">");
-            for i in evs.iter().take(4) {
+            // a dot per event (the phone grid): the tile shows as many as it has rows for, calendar.js dotFit the rest as "+x"
+            for i in &evs {
                 let _ = write!(out, "<i style=\"--c:{}\"></i>", E(&i.color));
             }
             out.push_str("</div>");
