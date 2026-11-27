@@ -405,8 +405,8 @@ fn expand_object(obj: &CalendarObject, cal: &CalInfo, id: &str, tz: chrono_tz::T
     let master_alarms = alarm_offsets(main);
     let light = if recurring && heavy_bytes(main) > light_min { light_master(&obj.get_ics()) } else { None };
     let expanded = match light.as_ref().map(|l| l.get_inner().get_inner()) {
-        Some(CalendarInnerData::Event(lm, lov)) => lm.expand_recurrence(Some(ws), Some(we), lov),
-        _ => main.expand_recurrence(Some(ws), Some(we), overrides),
+        Some(CalendarInnerData::Event(lm, lov)) => expand_series(lm, ws, we, lov),
+        _ => expand_series(main, ws, we, overrides),
     };
     let master_text = light.is_some().then(|| MasterText::of(main));
     for ev in &expanded {
@@ -422,6 +422,28 @@ fn expand_object(obj: &CalendarObject, cal: &CalInfo, id: &str, tz: chrono_tz::T
             }
         }
     }
+}
+
+/// caldata's `expand_recurrence`, with the whole-day overrides applied: caldata 0.18.0 never applies one (the
+/// RECURRENCE-ID it generates is `CalDate(d, Tz::utc())`, event/mod.rs:212, a parsed one `CalDate(d, Tz::Local)`,
+/// told apart by the derived `PartialEq`), so another client's moved or renamed occurrence of an all-day series
+/// stayed the series' (test `allday_date_override_replaces_its_occurrence`). Each such override (RANGE=THIS; a
+/// THISANDFUTURE one stays caldata's) replaces the generated occurrence of its date, as caldata does for a
+/// date-time one: only beside that occurrence, so an override whose own date is outside the window is not shown.
+fn expand_series(main: &IcalEvent, ws: chrono::DateTime<chrono::Utc>, we: chrono::DateTime<chrono::Utc>, overrides: &[IcalEvent]) -> Vec<IcalEvent> {
+    let rid = |e: &IcalEvent| e.get_property("RECURRENCE-ID").and_then(|r| match When::parse(&r.value) { Some(When::Date(d)) if r.params.get_param("RANGE").is_none_or(|x| !x.eq_ignore_ascii_case("THISANDFUTURE")) => Some(d), _ => None });
+    let (dated, rest): (Vec<&IcalEvent>, Vec<&IcalEvent>) = overrides.iter().partition(|o| rid(o).is_some());
+    if dated.is_empty() {
+        return main.expand_recurrence(Some(ws), Some(we), overrides);
+    }
+    let rest: Vec<IcalEvent> = rest.into_iter().cloned().collect();
+    let mut out = main.expand_recurrence(Some(ws), Some(we), &rest);
+    for ev in &mut out {
+        if let Some(o) = rid(ev).and_then(|d| dated.iter().find(|o| rid(o) == Some(d))) {
+            *ev = (*o).clone().to_utc_or_local();
+        }
+    }
+    out
 }
 
 /// One object's instances touching [start, end), read as `expand` reads them (window clamped, a panic of the

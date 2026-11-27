@@ -23,7 +23,7 @@ pub enum When {
 }
 
 impl When {
-    fn parse(v: &str) -> Option<When> {
+    pub(crate) fn parse(v: &str) -> Option<When> {
         let v = v.trim();
         if let Some(u) = v.strip_suffix(['Z', 'z']) {
             return NaiveDateTime::parse_from_str(u, "%Y%m%dT%H%M%S").ok().map(When::Utc);
@@ -317,7 +317,7 @@ fn new_override(master: &Block, rid: When, days: i64, dur: Duration, tz: chrono_
     Ok(out)
 }
 
-/// A whole-day series' occurrence `from` on `to` instead, through the master's EXDATE/RDATE: caldata 0.17.3 never
+/// A whole-day series' occurrence `from` on `to` instead, through the master's EXDATE/RDATE: caldata (0.17.3, 0.18.0) never
 /// applies a DATE override (its generated RECURRENCE-ID is `CalDate(d, Tz::utc())`, a parsed one `CalDate(d, Tz::Local)`,
 /// compared with the derived `PartialEq`: the override was dropped and the occurrence stayed; test
 /// `all_day_occurrence_moves_by_exdate_and_rdate`). An RDATE occurrence moves its RDATE; a day the rule makes but an

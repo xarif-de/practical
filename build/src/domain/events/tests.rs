@@ -373,3 +373,18 @@ fn light_expansion_equals_the_full_one() {
     assert_eq!(light_taken, files.len(), "every light copy parsed");
     assert!(files.len() > 60);
 }
+
+/// An all-day series' occurrence another client moved or renamed (RECURRENCE-ID;VALUE=DATE, as Apple,
+/// Google and Thunderbird write it) replaces that occurrence: shown on its own day with its own title,
+/// the series' one of that date gone — in every zone the user may have.
+#[test]
+fn allday_date_override_replaces_its_occurrence() {
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//t//EN\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTAMP:20260101T000000Z\r\nSUMMARY:Serie\r\nDTSTART;VALUE=DATE:20261007\r\nDTEND;VALUE=DATE:20261008\r\nRRULE:FREQ=WEEKLY;COUNT=5\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTAMP:20260101T000000Z\r\nRECURRENCE-ID;VALUE=DATE:20261021\r\nSUMMARY:Verschoben\r\nDTSTART;VALUE=DATE:20261022\r\nDTEND;VALUE=DATE:20261023\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTAMP:20260101T000000Z\r\nRECURRENCE-ID;VALUE=DATE:20261028\r\nSUMMARY:Umbenannt\r\nDTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    let obj = CalendarObject::from_ics(ics.to_string()).unwrap();
+    let ci = CalInfo { principal: "p".into(), id: "c".into(), components: vec!["VEVENT".into()], ..CalInfo::bare(crate::state::Authorized::test_own("p", "c")) };
+    for zone in ["Europe/Berlin", "UTC", "America/Los_Angeles", "Pacific/Auckland"] {
+        let tz: chrono_tz::Tz = zone.parse().unwrap();
+        let got: Vec<String> = object_instances(&obj, &ci, "o", NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 11, 30).unwrap(), tz).iter().map(|i| format!("{} {} {}", i.start.date(), i.all_day, i.summary)).collect();
+        assert_eq!(got, ["2026-10-07 true Serie", "2026-10-14 true Serie", "2026-10-22 true Verschoben", "2026-10-28 true Umbenannt", "2026-11-04 true Serie"], "{zone}");
+    }
+}
