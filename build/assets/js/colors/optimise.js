@@ -161,7 +161,7 @@
       if (C.contrast(F.to, DARK) < 1.8) notes.push({ warn: true, F, text: tr('js-cfo-n-dark', { a: F.head }) });
       if (F.inc.some(g => g.kind === 'calendar' && g.editable && g.hex !== F.to)) notes.push({ warn: false, F, text: tr('js-cfo-n-cal-' + view, { a: F.head }) });
     }
-    for (const F of list) if (F.cats.size > 1 && F.groups.some(g => g.moved)) notes.push({ warn: false, F, text: tr('js-cfo-n-cats', { list: [...F.cats].map(c => '„' + c + '“').join(', ') }) });
+    for (const F of list) if (F.cats.size > 1 && F.groups.some(g => g.moved)) notes.push({ warn: false, F, text: tr('js-cfo-n-cats', { list: [...F.cats].map(c => tr('js-quoted', { t: c })).join(', ') }) });
     // lanes: every family that would change something, or that the user touched
     const lanes = [];
     for (const F of list) {

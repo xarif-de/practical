@@ -99,7 +99,7 @@
   // why a hit was found (domain::search Why): per field its text around the match and how each word matched
   const how = h => h.k === 'typo' ? tr('js-search-k-typo', { m: h.m }) : tr('js-search-k-' + h.k);
   const typos = x => (x.why || []).flatMap(w => w.hits.filter(h => h.m).map(h => fold(h.m)));
-  const why = (x, ws) => x.why && x.why.length ? `<span class="why"><b>${esc(T.why)}</b>${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws.concat(typos(x)))} <i>(${esc(w.hits.map(h => (h.k === 'date' ? '' : '„' + h.w + '“ ') + how(h)).join(', '))})</i></span>`).join('')}</span>` : '';
+  const why = (x, ws) => x.why && x.why.length ? `<span class="why"><b>${esc(T.why)}</b>${x.why.map(w => `<span><em>${esc(tr('js-search-f-' + w.f))}:</em> ${snip(w.s, ws.concat(typos(x)))} <i>(${esc(w.hits.map(h => (h.k === 'date' ? '' : tr('js-quoted', { t: h.w }) + ' ') + how(h)).join(', '))})</i></span>`).join('')}</span>` : '';
   // the drop-down's short form: only what the row does not show — a field it hides, a typo
   const whySm = x => {
     const loose = h => h.k === 'typo' || h.k === 'gaps';

@@ -768,6 +768,11 @@ ct-bday = Geburtstag
 ct-anniv = Jahrestag
 ct-date-label = Bezeichnung, z. B. Namenstag
 ct-year-optional = Jahr optional
+# the contact date fields (day · month · year, in this order) and the mark between them
+ct-ph-d = TT
+ct-ph-m = MM
+ct-ph-y = JJJJ
+ct-date-sep = .
 ct-card-name = Name
 ct-card-tel = Telefon
 ct-card-email = E-Mail
@@ -1518,6 +1523,8 @@ js-cfo-n-excl = (ausgenommen)
 js-cfo-n-light = Deine Farbe für „%a“ ist auf hellem Hintergrund kaum zu sehen.
 js-cfo-n-dark = Deine Farbe für „%a“ ist auf dunklem Hintergrund kaum zu sehen.
 js-cfo-n-cats = Die Kategorien %list teilen sich danach eine Farbe.
+# a quoted text in this language's marks (search hits, reminder text, colour notes)
+js-quoted = „%t“
 js-cfo-n-cal-event = Die Farbe des Kalenders „%a“ ändert sich damit auch auf der Aufgaben-Seite.
 js-cfo-n-cal-task = Die Farbe des Kalenders „%a“ ändert sich damit auch in der Kalenderansicht.
 js-cfo-ask-level = Von Hand geändert: %n (Farben gewählt, Elemente verschoben oder ausgenommen). Mit dem Umfang „%level“ wird alles neu berechnet, und diese Änderungen gehen verloren.
@@ -1850,6 +1857,7 @@ hxj-s-take-event = Termin %title erstellt, von %who übernommen
 hxj-s-take-task = Aufgabe %title erstellt, von %who übernommen
 hxj-s-take-contact = Kontakt %title erstellt, von %who übernommen
 hxj-undone-short = rückgängig
+hxj-quoted = „%t“
 hxj-more = { $n ->
    *[other] und %n weitere
 }

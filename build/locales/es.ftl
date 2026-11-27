@@ -771,6 +771,11 @@ ct-bday = Cumpleaños
 ct-anniv = Aniversario
 ct-date-label = Etiqueta, p. ej. santo
 ct-year-optional = año opcional
+# the contact date fields (day · month · year, in this order) and the mark between them
+ct-ph-d = DD
+ct-ph-m = MM
+ct-ph-y = AAAA
+ct-date-sep = /
 ct-card-name = Nombre
 ct-card-tel = Teléfono
 ct-card-email = Correo
@@ -1523,6 +1528,8 @@ js-cfo-n-excl = (excluido)
 js-cfo-n-light = Tu color para «%a» apenas se ve sobre fondo claro.
 js-cfo-n-dark = Tu color para «%a» apenas se ve sobre fondo oscuro.
 js-cfo-n-cats = Las categorías %list compartirán un color.
+# a quoted text in this language's marks (search hits, reminder text, colour notes)
+js-quoted = «%t»
 js-cfo-n-cal-event = Esto también cambia el color del calendario «%a» en la página de tareas.
 js-cfo-n-cal-task = Esto también cambia el color del calendario «%a» en la vista de calendario.
 js-cfo-ask-level = Cambiado a mano: %n (colores elegidos, elementos movidos o excluidos). Con el alcance «%level» todo se recalcula y estos cambios se pierden.
@@ -1855,6 +1862,7 @@ hxj-s-take-event = Evento %title creado, incorporado por %who
 hxj-s-take-task = Tarea %title creada, incorporada por %who
 hxj-s-take-contact = Contacto %title creado, incorporado por %who
 hxj-undone-short = deshecho
+hxj-quoted = «%t»
 hxj-more = { $n ->
    *[other] y %n más
 }

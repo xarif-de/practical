@@ -64,7 +64,7 @@
   const kindName = (k, n = 1) => S((n === 1 ? 'k-' : 'kp-') + k);
   const bulkTitle = c => {
     const l = c.label || '';
-    if (l.startsWith('colors:')) return tr('bulk-colors', { name: l.slice(7) || '…' }).replace(' („…“)', '').replace(' ("…")', '');
+    if (l.startsWith('colors:')) return tr('bulk-colors', { name: l.slice(7) || '…' }).replace(` (${tr('quoted', { t: '…' })})`, '');
     if (c.src === 'import') return l ? tr('bulk-import-name', { name: l }) : S('bulk-import');
     return `${count(c)} ${kindName(kindOf(c), 2)}`;
   };
@@ -97,7 +97,7 @@
     const who = `<b>${esc(actor(c))}</b>`, a = actOf(c), k = kindOf(c);
     if (c.src === 'undo') return tr('s-undo', { who, ref: ref(c.reverts) }) + ` <span class="muted">(${esc(isBulk(c) ? bulkTitle(c) : title(c))} ${esc(actWord(a))})</span>`;
     if (isBulk(c)) return tr('s-bulk', { who, n: count(c), kinds: esc(kindName(k, 2)), act: esc(actWord(a)) }) + (c.label !== null ? ` <span class="muted">· ${esc(bulkTitle(c))}</span>` : '');
-    const tt = link ? `<a href="#" class="hx-el" data-el="${esc(c.items[0].el)}">„${esc(title(c))}“</a>` : `„${esc(title(c))}“`;
+    const tt = link ? `<a href="#" class="hx-el" data-el="${esc(c.items[0].el)}">${tr('quoted', { t: esc(title(c)) })}</a>` : tr('quoted', { t: esc(title(c)) });
     // a take is dated at the object's creation, not at the takeover: the sentence says both
     return tr((a === 'take' ? 's-take-' : 's-') + k, { who, title: tt, act: esc(actWord(a)) });
   };
@@ -236,7 +236,7 @@
     for (const [k, name] of FACETS) for (const v of F[k]) out.push(`<button class="hx-chip" type="button" data-unf="${k}" data-v="${esc(v)}">${esc(name)}: ${esc(facetLabel(k, v))} ×</button>`);
     if (F.status !== 'all') out.push(`<button class="hx-chip" type="button" data-unf="status">${esc(S('st-only-' + F.status))} ×</button>`);
     if (F.period !== 'all') out.push(`<button class="hx-chip" type="button" data-unf="period">${esc(F.period === 'custom' ? `${F.from || '…'} – ${F.to || '…'}` : periodName(F.period))} ×</button>`);
-    if (F.q) out.push(`<button class="hx-chip" type="button" data-unf="q">„${esc(F.q)}“ ×</button>`);
+    if (F.q) out.push(`<button class="hx-chip" type="button" data-unf="q">${tr('quoted', { t: esc(F.q) })} ×</button>`);
     if (F.el) out.push(`<button class="hx-chip el" type="button" data-unf="el">${esc(tr('only-el', { title: elTitle(F.el) || '…' }))} ×</button>`);
     if (F.tech) out.push(`<button class="hx-chip" type="button" data-unf="tech">${esc(S('with-tech'))} ×</button>`);
     return out.join('');

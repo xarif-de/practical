@@ -185,7 +185,7 @@ fn rrule_sentences() {
         ("de", "", "Serie"),
         ("en", "FREQ=WEEKLY;BYDAY=MO,WE;COUNT=10", "Weekly on Monday, Wednesday, 10 times"),
         ("en", "FREQ=MONTHLY;BYDAY=-1FR", "Monthly on the last Friday"),
-        ("en", "FREQ=YEARLY;UNTIL=20300101", "Yearly on October 14, until 2030-01-01"),
+        ("en", "FREQ=YEARLY;UNTIL=20300101", "Yearly on 14 October, until 01/01/2030"),
         ("fr", "FREQ=WEEKLY;INTERVAL=2", "Toutes les 2 semaines"),
         ("es", "FREQ=DAILY", "Cada día"),
     ] {
@@ -222,7 +222,7 @@ fn small_helpers() {
     let d = date("2026-03-05");
     assert_eq!((de.long_date(d), de.dm(d), de.date(d), de.week_title(d), de.week_short(10)), ("Donnerstag, 5. März".to_string(), "5.3.".to_string(), "05.03.2026".to_string(), "KW 10 2026".to_string(), "KW 10".to_string()));
     let en = lang("en");
-    assert_eq!((en.long_date(d), en.dm(d), en.date(d), en.mon3(3)), ("Thursday, March 5".to_string(), "3/5".to_string(), "2026-03-05".to_string(), "Mar".to_string()));
+    assert_eq!((en.long_date(d), en.dm(d), en.date(d), en.mon3(3)), ("Thursday 5 March".to_string(), "5/3".to_string(), "05/03/2026".to_string(), "Mar".to_string()));
     // by_day: every touched day, an end at midnight is exclusive
     let v = vec![instance("a", "x", "X", "2026-10-09T22:00", "2026-10-11T00:00"), instance("a", "y", "Y", "2026-10-09T10:00", "2026-10-09T10:00")];
     let idx = by_day(&v, date("2026-01-01"), date("2027-01-01"));

@@ -15,7 +15,6 @@ impl Show<'_> {
         let wd = self.s(&format!("dow-{}", d.weekday().number_from_monday()));
         let (y, m, day) = (d.year(), d.month(), d.day());
         match self.lang {
-            "en" => format!("{wd} {m}/{day}/{y}"),
             "de" => format!("{wd} {day}.{m}.{y}"),
             _ => format!("{wd} {day}/{m}/{y}"),
         }
@@ -272,7 +271,7 @@ impl Show<'_> {
             if let Some((_, v)) = get(n) {
                 let t = ical::unescape(v).trim().to_string();
                 if !t.is_empty() && !titles.contains(&t.as_str()) {
-                    out.push(format!("„{t}“"));
+                    out.push(self.s("hxj-quoted").replace("%t", &t));
                 }
             }
         }

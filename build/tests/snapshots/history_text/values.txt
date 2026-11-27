@@ -22,19 +22,19 @@ en Attachment = File
 en Attendees = Anna <anna@example.org> (accepted, optional)
 en Categories = Chor / Musik
 en Visibility = private
-en End = Wed 10/14/2026 21:00
-en Timestamp = Tue 9/1/2026 12:00
-en Start = Wed 10/14/2026 19:00
+en End = Wed 14/10/2026 21:00
+en Timestamp = Tue 1/9/2026 12:00
+en Start = Wed 14/10/2026 19:00
 en Coordinates = 51.05, 13.74
 en Location = Aula
 en Organizer = leitung@example.org
 en Priority = high (1)
-en Repeat = every 2 weeks, Tue Thu, until Thu 12/31/2026 23:59
+en Repeat = every 2 weeks, Tue Thu, until Thu 31/12/2026 23:59
 en Status = tentative
 en Title = Probe
 en Reminder = 90 min before · Display
 en X-MOZ-GENERATION = 3
 en Calendar / address book = <alice/cal>
-en Occurrence on Wed 10/21/2026 19:00
+en Occurrence on Wed 21/10/2026 19:00
 en raw = a,b
 ;X=1:c
