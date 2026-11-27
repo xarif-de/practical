@@ -11,6 +11,6 @@
     "check": "node build.mjs --check"
   },
   "dependencies": {
-    "marked": "18.2.1"
+    "marked": "18.3.0"
   }
 }
