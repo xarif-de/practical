@@ -173,15 +173,14 @@ ST.openSteps = () => (ST.view ? ST.STEPS.filter(s => ST.view.open.includes(s.id)
 /**
  * Which step to guide: the user's position decides. Walking into the pages of another open step
  * adopts that step, because the only alternative would be sending them back up, and that is the
- * order-forcing this must not do. Otherwise the current step stands, or the first open one.
+ * order-forcing this must not do; the same with no current step yet (a reload on such a page).
+ * Otherwise the current step stands, or the first open one.
  */
 ST.pick = () => {
   const cur = ST.step(ST.cur), w = where();
-  if (!cur || !ST.isOpen(cur.id)) return (ST.openSteps()[0] || {}).id || null;
-  if (w && w !== 'home' && !cur.mine(w)) {
-    const other = ST.openSteps().find(s => s.mine(w));
-    if (other) return other.id;
-  }
+  const here = w && w !== 'home' ? ST.openSteps().find(s => s.mine(w)) : null;  // also with no step yet (a reload on a sub-page)
+  if (!cur || !ST.isOpen(cur.id)) return (here || ST.openSteps()[0] || {}).id || null;
+  if (here && !cur.mine(w)) return here.id;
   return cur.id;
 };
 

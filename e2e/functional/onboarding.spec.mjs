@@ -269,6 +269,18 @@ test('the order is free: walking into another point adopts it', async ({ page })
   await andBack(page);
 });
 
+test('a reload on another point\'s page takes that point, not "go back up"', async ({ page }) => {
+  await asFresh(page);
+  await hash(page, '#collections');
+  await page.evaluate(() => sessionStorage.removeItem('onbSeen')); // as a fresh tab: no point guided yet
+  await page.reload();
+  await page.locator('.onb-tip').waitFor();
+  await settle(page);
+  await expect(head(page)).toHaveText('Kalender');
+  expect(await aims(page)).not.toEqual(['#']);
+  await andBack(page);
+});
+
 test('every hint has a drawn icon on a coloured tile', async ({ page }) => {
   await asFresh(page);
   // a colour that does not resolve leaves the tile blank: that is how a point once lost its own
