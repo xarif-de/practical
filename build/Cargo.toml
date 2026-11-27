@@ -106,7 +106,7 @@ mimalloc = { version = "0.1", default-features = false }
 [dev-dependencies]
 tower = "=0.5.3"
 # tests only: it::assets scans the sources for icon names
-regex = "1.13"
+regex = "=1.13.2"
 # its `test` feature: resolved collections for unit tests that need no store (never in a release build)
 rustical_store = { git = "https://github.com/xarif-de/rustical", tag = "v0.19.2-xarif.2", features = ["test"] }
 
