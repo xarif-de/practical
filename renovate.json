@@ -27,6 +27,13 @@
       "groupName": "rust toolchain"
     },
     {
+      "description": "caldata is the rustical_* crates' iCal/vCard library: PractiCal hands its types to and from them (rustical_ical::CalendarObject), so it stays on the version the fork's tag uses (one caldata in Cargo.lock) and moves with a rustical fork bump, by hand. A separate update cannot compile (PR #119, caldata 0.19: changed API, 2026-11-27).",
+      "matchDepNames": [
+        "caldata"
+      ],
+      "enabled": false
+    },
+    {
       "description": "build/rust-toolchain.toml is read by the custom regex manager below (docker datasource, same versions and timing as the builder image) instead of Renovate's rust-toolchain manager, whose timestamped datasource makes it lag the image.",
       "matchManagers": [
         "rust-toolchain"
